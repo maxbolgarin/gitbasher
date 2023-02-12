@@ -11,7 +11,6 @@ declare -A scripts=(
     ["ver"]="${FOLDER}/ver.sh"
     ["changelog"]="${FOLDER}/changelog.sh"
     ["commit"]="${FOLDER}/commit.sh"
-    ["ezcommit"]="${FOLDER}/commit_easy.sh"
     ["push"]="${FOLDER}/push.sh"
     ["release"]="${FOLDER}/release.sh"
 )

@@ -7,31 +7,56 @@ GREEN="\e[32m"
 YELLOW="\e[33m"
 ENDCOLOR="\e[0m"
 
+# f: fast commit (not force!)
+
+while getopts f flag; do
+    case "${flag}" in
+        f) fast="true";;
+    esac
+done
+
 echo "********************************"
-echo "COMMIT MANAGER v1.0"
+if [ -n "${fast}" ]; then
+    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} FAST MODE v1.0"
+else
+    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} v1.0"
+fi
 echo
-git status
+
+if [ -z "${fast}" ]; then
+   git status
+fi
+
+is_clean=$(git status | tail -n 1)
+if [ "$is_clean" = "nothing to commit, working tree clean" ]; then
+    return
+fi
 
 # Step 1: add fields to commit
+if [ -n "${fast}" ]; then
+    git add .
+    git_add="."
+else
+    echo
+    echo -e "${YELLOW}Step 1.${ENDCOLOR} List the files that need to be added."
+    echo "You can specify entire folders, or use a '.' if you want to add everything."
+    echo "Leave it blank if you want to exit."
 
-echo
-echo -e "${YELLOW}Step 1.${ENDCOLOR} List the files that need to be added."
-echo "You can specify entire folders, or use a '.' if you want to add everything."
-echo "Leave it blank if you want to exit."
+    while [ true ]; do
+        read -e -p "git add " git_add
 
-while [ true ]; do
-    read -e -p "git add " git_add
+        if [ -z $git_add ]; then
+            exit
+        fi
 
-    if [ -z $git_add ]; then
-        exit
-    fi
-
-    git_add=${git_add##*( )}
-    git add $git_add
-    if [ $? -eq 0 ]; then
-        break
-    fi
-done
+        git_add=${git_add##*( )}
+        git add $git_add
+        if [ $? -eq 0 ]; then
+            break
+        fi
+    done
+    echo
+fi
 
 echo "Staged files:"
 staged=$(git diff --name-only --cached)
@@ -52,9 +77,13 @@ declare -A types=(
 )
 
 echo
-echo -e "${YELLOW}Step 2.${ENDCOLOR} What type of change do you want to commit?"
-echo "1. [FIX]:       bug fix"
-echo "2. [FEAT]:      new feature"
+step="2"
+if [ -n "${fast}" ]; then
+    step="1"
+fi
+echo -e "${YELLOW}Step ${step}.${ENDCOLOR} What type of change do you want to commit?"
+echo "1. [FIX]:       fixes, eg. bug fix or small changes"
+echo "2. [FEAT]:      new feature or logic changes"
 echo "3. [REFACT]:    code change that neither fixes a bug nor adds a feature"
 echo "4. [PERF]:      code change that improves performance"
 echo "5. [TEST]:      adding missing tests or correcting existing tests"
@@ -85,8 +114,12 @@ commit="$commit_type"
 # Step 3: enter commit message
 
 touch commitmsg
+step="3"
+if [ -n "${fast}" ]; then
+    step="2"
+fi
 echo """
-### Step 3. Write about your changes.
+### Step ${step}. Write about your changes.
 ###
 ### General commit message template:
 ### [<type>][<JIRA>] <subject>
@@ -105,7 +138,8 @@ commit_message=$(cat commitmsg | sed '/^#/d')
 rm commitmsg
 
 if [ -z "$commit_message" ]; then
-    echo "Commit message cannot be empty!"
+    echo
+    echo -e "${YELLOW}Commit message cannot be empty!${ENDCOLOR}"
     git restore --staged $git_add
     exit
 fi
@@ -119,9 +153,11 @@ echo
 git commit -m """$commit"""
 
 echo
-echo -e "${YELLOW}Successfull commit!${ENDCOLOR}"
+echo -e "${GREEN}Successfull commit!${ENDCOLOR}"
 
-echo "Use 'git push origin $(git branch --show-current)' to push your changes."
-echo "Use 'git reset HEAD^' to undo commit."
-echo "Add some files to prev commit (ONLY LOCAL): 'git add <files> && git commit --amend --no-edit'"
-echo "Change last commit message (ONLY LOCAL): 'git commit --amend'"
+if [ -z "${fast}" ]; then
+    echo "Use 'git push origin $(git branch --show-current)' to push your changes."
+    echo "Use 'git reset HEAD^' to undo commit."
+    echo "Add some files to prev commit (ONLY LOCAL): 'git add <files> && git commit --amend --no-edit'"
+    echo "Change last commit message (ONLY LOCAL): 'git commit --amend'"
+fi

@@ -65,10 +65,10 @@ ver:
 commit: ver
 	${SFOLDER}/s.sh -r commit
 
-ez-commit: ver
-	${SFOLDER}/s.sh -r ezcommit
+fast-commit: ver
+	${SFOLDER}/s.sh -r commit -a "-f"
 
-ez-commit-push: ez-commit
+fast-commit-push: fast-commit
 	${SFOLDER}/s.sh -r push -a '-f'
 	echo "${REPO_URL}" > /dev/null
 

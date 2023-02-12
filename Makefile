@@ -7,7 +7,7 @@ APP_NAME=gitbasher
 FULL_NAME=${APP_NAME}
 
 SFOLDER=scripts
-URL_PREFIX="https://github.com/maxbolgarin"
+URL_PREFIX=https://github.com/maxbolgarin
 MAIN_BRANCH=main
 
 ### TODO FIELDS ABOVE ###

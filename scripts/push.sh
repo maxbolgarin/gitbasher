@@ -47,7 +47,8 @@ echo -e "Do you want to push it to ${YELLOW}origin/${branch}${ENDCOLOR} (y/n)?"
 while [ true ]; do
     read -n 1 -s choice
     if [ "$choice" == "y" ]; then
-        echo "Pushing..."
+        echo -e "${YELLOW}Pushing...${ENDCOLOR}"
+        echo
         break
     fi
     if [ "$choice" == "n" ]; then

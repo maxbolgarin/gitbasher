@@ -3,11 +3,13 @@
 ### Script for pushing commits in git repository
 
 ### Options
-# f: fast push (not force!)
+# y: fast push (answer 'yes')
+# r: repo url to print after push
 
-while getopts fb:u: flag; do
+while getopts yr:b:u: flag; do
     case "${flag}" in
-        f) fast="true";;
+        y) fast="true";;
+        r) repo=${OPTARG};;
 
         b) main_branch=${OPTARG};;
         u) utils=${OPTARG};;
@@ -54,3 +56,9 @@ while [ true ]; do
 done
  
 git push origin ${branch} 
+
+if [ $? -eq 0 ] ; then 
+    echo
+    echo -e "${GREEN}Successful push!${ENDCOLOR}"
+    echo -e "${YELLOW}Repo: ${ENDCOLOR}${repo}"
+fi

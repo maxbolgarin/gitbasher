@@ -59,9 +59,9 @@ last-commit:
 	git add . 
 	git commit --amend --no-edit
 
+# Push all your comits to current branch
 push:
-	${SFOLDER}/s.sh -r push
-	@echo "${GIT_URL}"
+	${SFOLDER}/s.sh -r push -a "-r ${GIT_URL}"
 
 fast-commit-push: fast-commit
 	${SFOLDER}/s.sh -r push -a '-f'

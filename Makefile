@@ -15,6 +15,7 @@ VERSION_FILE ?= scripts/VERSION
 
 ##### END OF FIELDS TO CHANGE #####
 
+MAKEFLAGS += --silent
 
 ### Git things
 # Pull current branch
@@ -60,7 +61,7 @@ last-commit:
 
 push:
 	${SFOLDER}/s.sh -r push
-	echo "${REPO_URL}" > /dev/null
+	@echo "${GIT_URL}"
 
 fast-commit-push: fast-commit
 	${SFOLDER}/s.sh -r push -a '-f'

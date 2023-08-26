@@ -99,7 +99,10 @@ fi
 utils=$( prepare_path "${GITBASHER_DIR}/${SCRIPTS_DIR}/utils.sh" )
 scr=$( prepare_path "${GITBASHER_DIR}/${script_name} ${args} -u ${utils}" )
 $scr
+scr_code=$?
 
 if [ -f commitmsg ]; then 
     rm commitmsg
 fi
+
+exit $scr_code

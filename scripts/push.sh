@@ -1,22 +1,36 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-YELLOW="\e[33m"
-ENDCOLOR="\e[0m"
+### Script for pushing commits in git repository
 
+### Options
 # f: fast push (not force!)
 
-while getopts f flag; do
+while getopts fb:u: flag; do
     case "${flag}" in
         f) fast="true";;
+
+        b) main_branch=${OPTARG};;
+        u) utils=${OPTARG};;
     esac
 done
+
+if [ -z "$main_branch" ]; then
+    main_branch="main"
+fi
+
+source $utils
+
+### TODO: pull and merge
+
+echo -e "${YELLOW}PUSH MANAGER${ENDCOLOR} v1.0"
+echo
 
 branch=$(git branch --show-current)
 push_log=$(git --no-pager log --pretty=format:"\t%h - %an, %ar:\t%s\n" origin/${branch}..HEAD)
 
 if [ -z "$push_log" ]; then
     echo "Nothing to push"
-    exit 1
+    exit
 fi
 
 echo -e "${YELLOW}Commit history:${ENDCOLOR}"
@@ -24,7 +38,7 @@ echo -e $push_log
 
 if [ -n "${fast}" ]; then
     git push origin ${branch}
-    exit 0
+    exit
 fi
 
 echo -e "Do you want to push it to ${YELLOW}origin/${branch}${ENDCOLOR} (y/n)?"
@@ -35,7 +49,7 @@ while [ true ]; do
         break
     fi
     if [ "$choice" == "n" ]; then
-        exit 1
+        exit
     fi
 done
  

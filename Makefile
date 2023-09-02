@@ -18,7 +18,7 @@ YELLOW := $(shell tput setaf 184)
 END := $(shell tput sgr0)
 
 ### Git things
-# Pull current branch
+# Pull current brancha
 pull:
 	git pull origin $(shell git branch --show-current)
 

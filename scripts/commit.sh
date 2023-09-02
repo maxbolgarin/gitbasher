@@ -258,9 +258,9 @@ current_branch=$(git branch --show-current)
 commit_hash=$(git rev-parse HEAD)
 echo -e "${BLUE}[$current_branch $commit_hash]${ENDCOLOR}"
 printf "$commit\n"
-echo
 
 if [ -z "${fast}" ]; then
+    echo
     echo -e "Push your changes: ${YELLOW}make push${ENDCOLOR}"
     echo -e "Undo commit: ${YELLOW}make undo-commit${ENDCOLOR}"
     echo -e "Update this commit: ${YELLOW}make commit-amend${ENDCOLOR}"

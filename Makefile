@@ -49,6 +49,7 @@ push:
 # Run Commit Manager to build conventional commit message in fast mode (git add .)
 commit-fast-push:
 	${SFOLDER}/s.sh -r commit -a "-b ${MAIN_BRANCH} -f"
+	echo
 	${SFOLDER}/s.sh -r push -a "-r ${GIT_URL} -y"
 
 # Undo previous commit (move HEAD pointer up for one record)

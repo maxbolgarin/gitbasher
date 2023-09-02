@@ -22,7 +22,7 @@ END := $(shell tput sgr0)
 pull:
 	git pull origin $(shell git branch --show-current)
 
-# Pull taags
+# Pull tags
 pull-tags:
 	git pull --tags origin $(shell git branch --show-current)
 

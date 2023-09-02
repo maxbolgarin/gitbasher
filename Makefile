@@ -42,6 +42,15 @@ commit-fast:
 commit-amend:
 	${SFOLDER}/s.sh -r commit -a "-b ${MAIN_BRANCH} -a"
 
+# Push all your comits to current branch
+push:
+	${SFOLDER}/s.sh -r push -a "-r ${GIT_URL}"
+
+# Run Commit Manager to build conventional commit message in fast mode (git add .)
+commit-fast-push:
+	${SFOLDER}/s.sh -r commit -a "-b ${MAIN_BRANCH} -f"
+	${SFOLDER}/s.sh -r push -a "-r ${GIT_URL} -f"
+
 # Undo previous commit (move HEAD pointer up for one record)
 undo-commit:
 	printf "$(YELLOW)Commit to undo: $(END)"
@@ -68,9 +77,7 @@ last-commit:
 reflog:
 	git reflog
 
-# Push all your comits to current branch
-push:
-	${SFOLDER}/s.sh -r push -a "-r ${GIT_URL}"
+
 
 
 # Get version from VERSION file

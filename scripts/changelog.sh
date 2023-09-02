@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
 
 nano CHANGELOG.md
 git add CHANGELOG.md

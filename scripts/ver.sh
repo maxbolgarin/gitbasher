@@ -18,6 +18,7 @@ EDIT_HINT="""\n
 ### For more information: https://semver.org/
 """
 
+
 function edit_version {
     printf "${EDIT_HINT}" >> $1
     nano $1

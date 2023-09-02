@@ -30,7 +30,7 @@ pull-tags:
 ver:
 	${SFOLDER}/s.sh -r ver -a "-b ${MAIN_BRANCH} -f ${VERSION_FILE}"
 
-# Get version from VERSION file and add last commit hash if branch is not main
+# Get versions from VERSION file and add last commit hash if branch is not main
 ver-dev:
 	${SFOLDER}/s.sh -r ver -a "-b ${MAIN_BRANCH} -f ${VERSION_FILE} -d"
 

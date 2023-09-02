@@ -20,9 +20,9 @@ END := $(shell tput sgr0)
 ### Git things
 # Pull current brancha
 pull:
-	git pull origin $(shell git branch --show-current)
+	git pull origin $(shell git branch --show-current) --no-rebase
 
-# Pull tags
+# Pull taags
 pull-tags:
 	git pull --tags origin $(shell git branch --show-current)
 

@@ -18,13 +18,13 @@ YELLOW := $(shell tput setaf 184)
 END := $(shell tput sgr0)
 
 ### Git things
-# Pull current branch
+# Pull current brancha
 pull:
-	git pull origin $(shell git branch --show-current)
+	git pull origin $(shell git branch --show-current) --no-rebase
 
-# Pull tags
+# Pull tagsa
 pull-tags:
-	git pull --tags origin $(shell git branch --show-current)
+	git pull --tags origin $(shell git branch --show-current) --no-rebase
 
 # Run Commit Manager to build conventional commit message
 commit:

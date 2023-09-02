@@ -22,7 +22,7 @@ END := $(shell tput sgr0)
 pull:
 	git pull origin $(shell git branch --show-current)
 
-# Pull taaaaags
+# Pull tags
 pull-tags:
 	git pull --tags origin $(shell git branch --show-current)
 
@@ -77,7 +77,7 @@ push:
 ver:
 	${SFOLDER}/s.sh -r ver -a "-b ${MAIN_BRANCH} -f ${VERSION_FILE}"
 
-# Get version from VERSION file and add last commit hash if branch is not main
+# Get versions from VERSION file and add last commit hash if branch is not main
 ver-dev:
 	${SFOLDER}/s.sh -r ver -a "-b ${MAIN_BRANCH} -f ${VERSION_FILE} -d"
 

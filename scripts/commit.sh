@@ -5,10 +5,16 @@
 
 ### Options
 # f: fast commit (not force!)
+# t: add ticket info to the end of message header
+# a: amend without edit (add to last commit)
 
-while getopts fb:u: flag; do
+VERSION="v1.0"
+
+while getopts ftab:u: flag; do
     case "${flag}" in
         f) fast="true";;
+        t) ticket="true";;
+        a) amend="true";;
 
         b) main_branch=${OPTARG};;
         u) utils=${OPTARG};;
@@ -23,11 +29,12 @@ source $utils
 
 
 ### Script logic below
-
-if [ -n "${fast}" ]; then
-    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} FAST MODE v1.0"
+if [ -n "${amend}" ]; then
+    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} AMEND MODE ${VERSION}"
+elif [ -n "${fast}" ]; then
+    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} FAST MODE ${VERSION}"
 else
-    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} v1.0"
+    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} ${VERSION}"
 fi
 
 echo
@@ -48,7 +55,7 @@ if [ -n "${fast}" ]; then
 else
     echo
     echo -e "${YELLOW}Step 1.${ENDCOLOR} List the files that need to be commited"
-    echo "You can specify entire folders or use a '.' if you want to add everything, Tab also works"
+    echo "You can specify entire folders or use a '.' if you want to add everything, tab also works here"
     echo "Leave it blank if you want to exit"
 
     while [ true ]; do
@@ -65,6 +72,18 @@ else
         fi
     done
     echo
+fi
+
+if [ -n "${amend}" ]; then
+    amend_result=$(git commit --amend --no-edit)
+    amend_header=$(echo "$amend_result" | head -n 1)
+    amend_bottom=$(echo "$amend_result" | tail -n 2)
+
+    echo -e "${GREEN}Successful commit amend${ENDCOLOR}"
+    echo
+    echo -e "${YELLOW}${amend_header}${ENDCOLOR}"
+    echo -e "${amend_bottom}"
+    exit
 fi
 
 echo -e "${YELLOW}Staged files:${ENDCOLOR}"
@@ -199,7 +218,7 @@ done
 rm commitmsg
 
 # Step 5: enter tracker ticket
-if [ -z "${fast}" ]; then
+if [ -n "${ticket}" ]; then
     echo
     echo -e "${YELLOW}Step 5.${ENDCOLOR} Enter the number of issue in your tracking system (e.g. JIRA or Youtrack)"
     echo -e "It will be added to the end of summary"
@@ -237,12 +256,12 @@ echo
 
 current_branch=$(git branch --show-current)
 commit_hash=$(git rev-parse HEAD)
-echo -e "${YELLOW}[$current_branch $commit_hash]${ENDCOLOR}"
+echo -e "${BLUE}[$current_branch $commit_hash]${ENDCOLOR}"
 printf "$commit\n"
 
 if [ -z "${fast}" ]; then
     echo
     echo -e "Push your changes: ${YELLOW}make push${ENDCOLOR}"
     echo -e "Undo commit: ${YELLOW}make undo-commit${ENDCOLOR}"
-    echo -e "Add all staged files to prev commit (ONLY LOCAL): ${YELLOW}make last-commit${ENDCOLOR}"
+    echo -e "Update this commit: ${YELLOW}make commit-amend${ENDCOLOR}"
 fi

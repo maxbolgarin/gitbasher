@@ -2,8 +2,6 @@
 
 ##### HERE ARE FIELDS TO CHANGE #####
 
-# Name of the application
-APP_NAME ?= gitbasher
 # URL of git repository
 GIT_URL ?= https://github.com/maxbolgarin/gitbasher
 # Name of main branch (usually `main` or `master`)
@@ -16,6 +14,8 @@ VERSION_FILE ?= scripts/VERSION
 ##### END OF FIELDS TO CHANGE #####
 
 MAKEFLAGS += --silent
+YELLOW := $(shell tput setaf 184)
+END := $(shell tput sgr0)
 
 ### Git things
 # Pull current branch
@@ -25,6 +25,53 @@ pull:
 # Pull taaaaags
 pull-tags:
 	git pull --tags origin $(shell git branch --show-current)
+
+# Run Commit Manager to build conventional commit message
+commit:
+	${SFOLDER}/s.sh -r commit -a "-b ${MAIN_BRANCH}"
+
+# Run Commit Manager to build conventional commit message with tracker's ticket info
+commit-ticket:
+	${SFOLDER}/s.sh -r commit -a "-b ${MAIN_BRANCH} -t"
+
+# Run Commit Manager to build conventional commit message in fast mode (git add .)
+commit-fast:
+	${SFOLDER}/s.sh -r commit -a "-b ${MAIN_BRANCH} -f"
+
+# Run Commit Manager to add files to the last commit (git commit --amend --no-edit)
+commit-amend:
+	${SFOLDER}/s.sh -r commit -a "-b ${MAIN_BRANCH} -a"
+
+# Undo previous commit (move HEAD pointer up for one record)
+undo-commit:
+	printf "$(YELLOW)Commit to undo: $(END)"
+	$(MAKE) last-commit
+	git reset HEAD^ > /dev/null
+	printf "$(YELLOW)New last commit: $(END)"
+	$(MAKE) last-commit
+
+# Undo previous action (move HEAD pointer to @{1})
+undo-action:
+	printf "$(YELLOW)Current last commit: $(END)"
+	$(MAKE) last-commit
+	printf "$(YELLOW)Action to undo: $(END)"
+	git reflog --pretty='%gs' -1 | cat
+	git reset HEAD@{1} > /dev/null
+	printf "$(YELLOW)New last commit: $(END)"
+	$(MAKE) last-commit
+
+# Print last commit
+last-commit:
+	git log --pretty="%s | %h | %cd" -1 | cat
+
+# Just print git reflog
+reflog:
+	git reflog
+
+# Push all your comits to current branch
+push:
+	${SFOLDER}/s.sh -r push -a "-r ${GIT_URL}"
+
 
 # Get version from VERSION file
 ver:
@@ -41,27 +88,6 @@ ver-full:
 # Edit VERSION file and return version in development mode
 ver-edit:
 	${SFOLDER}/s.sh -r ver -a "-b ${MAIN_BRANCH} -f ${VERSION_FILE} -d -e"
-
-# Run Commit Manager to build conventional commit message
-commit:
-	${SFOLDER}/s.sh -r commit -a "-b ${MAIN_BRANCH}"
-
-# Run Commit Manager to build conventional commit message in fast mode (git add .)
-fast-commit:
-	${SFOLDER}/s.sh -r commit -a "-b ${MAIN_BRANCH} -f"
-
-# Undo previous commit (move HEAD pointer up for one record)
-undo-commit:
-	git reset HEAD^
-
-# Add all staged files to the last commit
-last-commit:
-	git add . 
-	git commit --amend --no-edit
-
-# Push all your comits to current branch
-push:
-	${SFOLDER}/s.sh -r push -a "-r ${GIT_URL}"
 
 fast-commit-push: fast-commit
 	${SFOLDER}/s.sh -r push -a '-f'
@@ -85,61 +111,3 @@ release: t pull-tags
 fix-release: t pull-tags
 	${SFOLDER}/s.sh -r release -a "-a ${FULL_NAME} -f"
 	echo "${REPO_URL}" > /dev/null
-
-
-### Golang running
-LDFLAGS += -X 'main.Version=\"${VERSION}\"'
-LDFLAGS += -X 'main.Time=\"$(shell LANG=en_us_88591; date)\"'
-
-all: 
-	go run -ldflags="-X 'main.Version=$(shell $(shell $(MAKE) ver-dev))' -X 'main.Time=$(shell LANG=en_us_88591; date)'" cmd/main/main.go
-
-
-### Golang testing
-t:
-	go clean -testcache
-	go test -race -cover ./...
-	if [ $$? -eq 0 ] ; then echo "TESTS IS DONE" ; fi
-
-tv:
-	go clean -testcache
-	go test -race -cover -v ./...
-	if [ $$? -eq 0 ] ; then echo "TESTS IS DONE" ; fi
-
-integration:
-	go clean -testcache
-	go test --tags=integration -cover ./...
-	if [ $$? -eq 0 ] ; then echo "TESTS IS DONE" ; fi
-
-
-### Golang building
-build: ver
-	go build \
-		-ldflags="-X 'main.Version=$(shell $(shell $(MAKE) ver-dev))' -X 'main.Time=$(shell LANG=en_us_88591; date)'" \
-		-o dist/${FULL_NAME} cmd/main/main.go 
-
-build-linux: ver
-	env GOOS=linux GOARCH=amd64 go build \
-		-ldflags="-X 'main.Version=$(shell $(shell $(MAKE) ver-dev))' -X 'main.Time=$(shell LANG=en_us_88591; date)'" \
-		-o dist/${FULL_NAME} cmd/main/main.go 
-
-build-windows: ver
-	env GOOS=windows GOARCH=amd64 go build \
-		-ldflags="-X 'main.Version=$(shell $(shell $(MAKE) ver-dev))' -X 'main.Time=$(shell LANG=en_us_88591; date)'" \
-		-o dist/${FULL_NAME} cmd/main/main.go
-
-build-mac: ver
-	env GOOS=darwin GOARCH=amd64 go build \
-		-ldflags="-X 'main.Version=$(shell $(shell $(MAKE) ver-dev))' -X 'main.Time=$(shell LANG=en_us_88591; date)'" \
-		-o dist/${FULL_NAME} cmd/main/main.go
-
-build-arm-mac: ver
-	env GOOS=darwin GOARCH=arm64 go build \
-		-ldflags="-X 'main.Version=$(shell $(shell $(MAKE) ver-dev))' -X 'main.Time=$(shell LANG=en_us_88591; date)'" \
-		-o dist/${FULL_NAME} cmd/main/main.go 
-
-protoc:
-	protoc --go_out=. --go-grpc_out=. pb/${APP_NAME}v1.proto
-
-
-### Add something project specific

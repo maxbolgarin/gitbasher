@@ -6,7 +6,7 @@ GIT_URL ?= https://github.com/maxbolgarin/gitbasher  # URL of git repository
 MAIN_BRANCH ?= main  # Name of main branch (usually `main` or `master`)
 S ?= ./s.sh  # Relative path to s.sh script
 
-######################################################
+################################################
 
 .PHONY: default
 default: help

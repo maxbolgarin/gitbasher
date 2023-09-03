@@ -53,6 +53,10 @@ push-list: ##@Origin Print a list of unpushed commits
 
 ################################################
 
+.PHONY: main
+main: ##@BranchManager Checkout to main branch
+	git checkout ${MAIN_BRANCH} 
+
 .PHONY: branch
 branch: ##@BranchManager Checkout to an available local branch
 
@@ -77,11 +81,14 @@ branch-prune: ##@BranchManager Remove all local branches that don't track in ori
 ################################################
 
 .PHONY: merge-main
-merge-main: ##@Origin Merge main branch to current branch
+merge-main: ##@Merge Merge main branch to current branch
 	git pull origin ${MAIN_BRANCH} --no-rebase
 
 .PHONY: merge-to-main
 merge-to-main: ##@Merge Merge current branch to main
+	branch=$(shell git branch --show-current)
+	git checkout ${MAIN_BRANCH}
+	git merge ${branch}
 
 .PHONY: merge-request
 merge-request: ##@Merge Create merge request (pull request)

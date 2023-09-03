@@ -26,6 +26,7 @@ fi
 source $utils
 
 branch=$(git branch --show-current)
+# TODO: fix local branches
 push_log=$(git --no-pager log --pretty=format:"\t%h - %an, %ar:\t%s\n" origin/${branch}..HEAD)
 
 if [ -z "$list" ]; then

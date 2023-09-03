@@ -3,10 +3,14 @@
 ### Script for creating branches for developing
 
 ### Options
+# n: create a new branch
+# c: create a new branch from a current one instead of the main branch
 # s: separator between type and name (default '/')
 
-while getopts s:b:u: flag; do
+while getopts ncs:b:u: flag; do
     case "${flag}" in
+        n) new="true";;
+        c) current="true";;
         s) sep=${OPTARG};;
 
         b) main_branch=${OPTARG};;
@@ -27,6 +31,7 @@ fi
 ### Script logic below
 
 echo -e "${YELLOW}BRANCH MANAGER${ENDCOLOR} v1.0"
+echo
 
 echo -e "${YELLOW}Step 1.${ENDCOLOR} What type of branch do you want to create?"
 echo "1. feat:      new feature or logic changes, 'feat' and 'perf' commits"
@@ -46,12 +51,94 @@ while [ true ]; do
     read -n 1 -s choice
 
     if [ "$choice" == "0" ]; then
-        git restore --staged $git_add
         exit
     fi
 
-    commit_type="${types[$choice]}"
-    if [ -n "$commit_type" ]; then
+    branch_type="${types[$choice]}"
+    if [ -n "$branch_type" ]; then
         break
     fi
 done
+
+echo
+echo -e "${YELLOW}Step 2.${ENDCOLOR} Enter the name of the branch, using '-' as a separator between words"
+echo "Leave it blank if you want to exit"
+
+read -p "Branch: ${branch_type}${sep}" -e branch_name
+
+if [ -z $branch_name ]; then
+    exit
+fi
+
+branch_name="${branch_type}${sep}${branch_name##*( )}"
+
+if [ -z "${current}" ]; then
+    checkout_output=$(git checkout $main_branch 2>&1)
+    checkout_code=$?
+
+    if [ $checkout_code -ne 0 ]; then
+        echo -e "${RED}Cannot checkout to '$main_branch': $checkout_output${ENDCOLOR}"
+        exit $checkout_code
+    fi
+
+    echo
+    echo -e "${GREEN}Switched to '$main_branch'${ENDCOLOR}"
+    echo -e "${YELLOW}Pulling...${ENDCOLOR}"
+    
+    pull_output=$(git pull origin ${main_branch} --no-rebase 2>&1)
+    pull_code=$?
+
+    echo
+    if [ $pull_code -ne 0 ] ; then
+        if [[ $pull_output == *"Please commit your changes or stash them before you merge"* ]]; then
+            echo -e "${RED}Cannot pull! There is uncommited changes, that will be overwritten by merge${ENDCOLOR}"
+            files_to_commit=$(echo "$pull_output" | tail -n +4 | head -n +1)
+            echo -e "${YELLOW}Files:${ENDCOLOR}"
+            echo "$files_to_commit"
+            echo
+            echo -e "Commit checnges and then use ${YELLOW}make branch-new${ENDCOLOR} again"
+            exit $pull_code
+        fi
+
+        if [[ $pull_output == *"fix conflicts and then commit the result"* ]]; then
+            echo -e "${RED}Cannot pull! You should fix conflicts${ENDCOLOR}"
+            files_with_conflicts=$(git diff --name-only --diff-filter=U --relative | cat)
+            echo -e "${YELLOW}Files:${ENDCOLOR}"
+            echo "$files_with_conflicts"
+            echo
+            echo -e "Fix conflicts and commit result, then use ${YELLOW}make branch-new${ENDCOLOR} again"
+            echo
+            echo -e "Press ${YELLOW}n${ENDCOLOR} if you want to abort merge or any key to exit"
+            read -n 1 -s choice
+            if [ "$choice" == "n" ]; then
+                echo -e "${YELLOW}Aborting merge...${ENDCOLOR}"
+                git merge --abort
+            fi
+            exit $pull_code
+        fi
+
+        echo -e "${RED}Cannot pull '$main_branch', here is the error${ENDCOLOR}\n$pull_output"
+        echo
+        echo -e "Pull ${YELLOW}$main_branch${ENDCOLOR} firstly and then use ${YELLOW}make branch-new${ENDCOLOR} again"
+        exit $pull_code
+    fi
+    echo -e "${GREEN}Successful pull!${ENDCOLOR}"
+fi
+
+checkout_output=$(git checkout -b $branch_name 2>&1)
+checkout_code=$?
+
+echo
+
+if [ $checkout_code -eq 0 ]; then
+    echo -e "${GREEN}${checkout_output}${ENDCOLOR}"
+    exit
+fi
+
+if [[ $checkout_output == *"already exists"* ]]; then
+    echo -e "${RED}Branch with name '${branch_name}' already exists${ENDCOLOR}"
+    exit $checkout_code
+fi
+
+echo -e "${RED}Checkout error: ${checkout_output}${ENDCOLOR}"
+exit $checkout_code

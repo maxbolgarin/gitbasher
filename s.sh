@@ -1,5 +1,22 @@
 #!/usr/bin/env bash
 
+### Main script for running Gitbasher other scripts
+# In file $SETTINGS_FILE is stored a path to a directory with gitbasher repo
+# Using: s.sh -r <script_name> -a "<script_args>"
+# Example: s.sh -r commit -a "-f -b main"
+# Supported scripts:
+# - branch
+# - commit
+# - push
+# - ver
+
+### Options
+# i: init application
+# f: force init
+# s: silent init
+# r: script name to run
+# a: args to script
+
 SETTINGS_FILE=~/.gitbasher
 
 RED="\e[31m"
@@ -16,15 +33,12 @@ If your OS is mac, use:
     exit 1; 
 fi
 
-### Get options
-# i: init application
-# f: force init
-# r: script name to run
-# a: args to script
-while getopts 'ifr:a:' flag; do
+
+while getopts 'ifsr:a:' flag; do
     case "${flag}" in
         i) to_init="true";;
         f) force="true";;
+        s) silent="true";;
         r) to_run="$OPTARG";;
         a) args="$OPTARG";;
     esac
@@ -32,11 +46,10 @@ done
 
 SCRIPTS_DIR="scripts"
 declare -A scripts=(
-    ["ver"]="${SCRIPTS_DIR}/ver.sh"
-    ["changelog"]="${SCRIPTS_DIR}/changelog.sh"
+    ["branch"]="${SCRIPTS_DIR}/branch.sh"
     ["commit"]="${SCRIPTS_DIR}/commit.sh"
     ["push"]="${SCRIPTS_DIR}/push.sh"
-    ["release"]="${SCRIPTS_DIR}/release.sh"
+    ["ver"]="${SCRIPTS_DIR}/ver.sh"
 )
 
 GITBASHER_DIR=$( cat ${SETTINGS_FILE} 2>/dev/null )
@@ -46,10 +59,14 @@ function prepare_path {
 }
 
 function init {
-    printf "\nWelcome to ${YELLOW}gitbasher${ENDCOLOR} init application!\n"
+    if [[ -z "${silent}" ]]; then
+        printf "Welcome to ${YELLOW}gitbasher${ENDCOLOR} init application!\n"
+    fi
     if [[ -n "${GITBASHER_DIR}" ]] & [[ -z "$1"  ]]; then
-        echo -e "Scripts are already inited to folder: ${YELLOW}${GITBASHER_DIR}${ENDCOLOR}"
-        echo "If you want to change it, use '-f' flag."
+        if [[ -z "${silent}" ]]; then
+            echo -e "Scripts are already inited to folder: ${YELLOW}${GITBASHER_DIR}${ENDCOLOR}"
+            echo "If you want to change it, use '-f' flag."
+        fi
         return
     fi
     touch ${SETTINGS_FILE}

@@ -72,6 +72,7 @@ branch-rm: ##@BranchManager Choose a branch to remove
 
 .PHONY: branch-prune
 branch-prune: ##@BranchManager Remove all local branches that don't track in origin
+	git prune remote origin
 
 ################################################
 

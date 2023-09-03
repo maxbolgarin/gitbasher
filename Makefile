@@ -47,6 +47,10 @@ pull-tags: ##@Origin Pull current branch and tags
 push: ##@Origin Run Push Manager to push changes and pull origin if there are unpulled changes
 	${S} -r push -a "-r ${GIT_URL}"
 
+.PHONY: push
+push-list: ##@Origin Print list of unpushed commits
+	${S} -r push -a "-r ${GIT_URL} -l"
+
 ################################################
 
 .PHONY: branch

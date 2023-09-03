@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 
 ### Script for pushing commits in git repository
+# It will pull current branch if there are unpulled changes
 
 ### Options
 # y: fast push (answer 'yes')
+# l: list of commits to push
 # r: repo url to print after push
 
-while getopts yr:b:u: flag; do
+while getopts ylr:b:u: flag; do
     case "${flag}" in
         y) fast="true";;
+        l) list="true";;
         r) repo=${OPTARG};;
 
         b) main_branch=${OPTARG};;
@@ -22,13 +25,14 @@ fi
 
 source $utils
 
-### TODO: pull and merge
-
-echo -e "${YELLOW}PUSH MANAGER${ENDCOLOR} v1.0"
-echo
-
 branch=$(git branch --show-current)
 push_log=$(git --no-pager log --pretty=format:"\t%h - %an, %ar:\t%s\n" origin/${branch}..HEAD)
+
+if [ -z "$list" ]; then
+    echo -e "${YELLOW}PUSH MANAGER${ENDCOLOR} v1.0"
+fi
+
+echo
 
 if [ -z "$push_log" ]; then
     echo -e "${GREEN}Nothing to push${ENDCOLOR}"
@@ -37,6 +41,10 @@ fi
 
 echo -e "${YELLOW}Commit history:${ENDCOLOR}"
 echo -e $push_log
+
+if [ -n "$list" ]; then
+    exit
+fi
 
 if [ -n "${fast}" ]; then
     git push origin ${branch}

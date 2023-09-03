@@ -1,105 +1,140 @@
-##### GITBASHER MAKEFILE v1.0 ######
+##### GITBASHER MAKEFILE ######
 
-##### HERE ARE FIELDS TO CHANGE #####
+##### TODO: FIELDS TO CHANGE #####
 
-# URL of git repository
-GIT_URL ?= https://github.com/maxbolgarin/gitbasher
-# Name of main branch (usually `main` or `master`)
-MAIN_BRANCH ?= main
-# Relative path to folder with s.sh script
-SFOLDER ?= .
-# Relative path to file with version
-VERSION_FILE ?= scripts/VERSION
+GIT_URL ?= https://github.com/maxbolgarin/gitbasher  # URL of git repository
+MAIN_BRANCH ?= main  # Name of main branch (usually `main` or `master`)
+S ?= ./s.sh  # Relative path to s.sh script
 
-##### END OF FIELDS TO CHANGE #####
+################################################
+
+.PHONY: default
+default: help
+
+.PHONY: commit
+commit: ##@CommitManager Build conventional commit message in format 'type(scope): message'
+	${S} -r commit -a "-b ${MAIN_BRANCH}"
+
+.PHONY: commit-ticket
+commit-ticket: ##@CommitManager Build conventional commit message with tracker's ticket info (e.g. JIRA)
+	${S} -r commit -a "-b ${MAIN_BRANCH} -t"
+
+.PHONY: commit-fast
+commit-fast: ##@CommitManager Build conventional commit message in fast mode (git add .)
+	${S} -r commit -a "-b ${MAIN_BRANCH} -f"
+
+.PHONY: commit-fast-push
+commit-fast-push: ##@CommitManager Build conventional commit message in fast mode (git add .) and then push changes
+	${S} -r commit -a "-b ${MAIN_BRANCH} -f"
+	echo
+	${S} -r push -a "-r ${GIT_URL} -y"
+
+.PHONY: commit-amend
+commit-amend: ##@CommitManager Add files to the last commit (git commit --amend --no-edit)
+	${S} -r commit -a "-b ${MAIN_BRANCH} -a"
+
+################################################
+
+.PHONY: pull
+pull: ##@Origin Pull current branch
+	git pull origin $(shell git branch --show-current) --no-rebase
+
+.PHONY: pull-tags
+pull-tags: ##@Origin Pull current branch and tags
+	git pull --tags origin $(shell git branch --show-current) --no-rebase
+
+.PHONY: push
+push: ##@Origin Run Push Manager to push changes and pull origin if there are unpulled changes
+	${S} -r push -a "-r ${GIT_URL}"
+
+################################################
+
+.PHONY: branch
+branch: ##@BranchManager Checkout to an available local branch
+
+.PHONY: branch-origin
+branch-origin: ##@BranchManager Checkout to an available origin branch and fetch it
+
+.PHONY: branch-new
+branch-new: ##@BranchManager Create a new branch from 'main' according to conventional naming
+
+.PHONY: branch-new-current
+branch-new-current: ##@BranchManager Create a new branch from current state according to conventional naming
+
+.PHONY: branch-rm
+branch-rm: ##@BranchManager Choose a branch to remove
+
+.PHONY: branch-prune
+branch-prune: ##@BranchManager Remove all local branches that don't track in origin
+
+################################################
+
+.PHONY: merge-main
+merge-main: ##@Origin Merge main branch to current branch
+	git pull origin ${MAIN_BRANCH} --no-rebase
+
+.PHONY: merge-to-main
+merge-to-main: ##@Merge Merge current branch to main
+
+.PHONY: merge-request
+merge-request: ##@Merge Create merge request (pull request)
+
+################################################
+
+.PHONY: log
+log: ##@GitLog Open git log in pretty format
+	git log --pretty="%C(Yellow)%h  %C(reset)%ad (%C(Green)%cr%C(reset))%x09 %C(Cyan)%an: %C(reset)%s"
+
+.PHONY: reflog
+reflog: ##@GitLog Open git reflog in pretty format
+	git reflog --pretty="%C(Yellow)%h  %C(reset)%ad (%C(Green)%cr%C(reset))%x09 %gd %gs"
+
+.PHONY: last-commit
+last-commit: ##@GitLog Print last commit message
+	git log --pretty="%s | %h | %cd" -1 | cat
+
+.PHONY: undo-commit
+undo-commit: ##@GitLog Undo previous commit (move HEAD pointer up for one record, HEAD^)
+	printf "$(YELLOW)Commit to undo: $(ENDCOLOR)"
+	$(MAKE) last-commit
+	git reset HEAD^ > /dev/null
+	printf "$(YELLOW)New last commit: $(ENDCOLOR)"
+	$(MAKE) last-commit
+
+.PHONY: undo-action
+undo-action: ##@GitLog Undo previous action (move HEAD pointer to @{1})
+	printf "$(YELLOW)Current last commit: $(ENDCOLOR)"
+	$(MAKE) last-commit
+	printf "$(YELLOW)Action to undo: $(ENDCOLOR)"
+	git reflog --pretty='%gs' -1 | cat
+	git reset HEAD@{1} > /dev/null
+	printf "$(YELLOW)New last commit: $(ENDCOLOR)"
+	$(MAKE) last-commit
+
+################################################
+
+HELP_FUN = \
+	%help; while(<>){push@{$$help{$$2//'options'}},[$$1,$$3] \
+	if/^([\w-_]+)\s*:.*\#\#(?:@(\w+))?\s(.*)$$/}; \
+	print"$$_:\n", map"  $$_->[0]".(" "x(20-length($$_->[0])))."$$_->[1]\n",\
+	@{$$help{$$_}},"\n" for keys %help; \
+
+help: ##@Miscellaneous Show this help
+	${S} -i -s
+	@printf "Usage: $(YELLOW)make [target]$(ENDCOLOR)\n\n"
+	@perl -e '$(HELP_FUN)' $(MAKEFILE_LIST)
+	@printf "Written by $(SCRIPT_AUTHOR), version $(SCRIPT_VERSION)\n"
+	@printf "Please report any bug or error to the author\n" 
+
 
 MAKEFLAGS += --silent
 YELLOW := $(shell tput setaf 184)
-END := $(shell tput sgr0)
+ENDCOLOR := $(shell tput sgr0)
 
-### Git things
-# Pull current branch
-pull:
-	git pull origin $(shell git branch --show-current) --no-rebase
+SCRIPT_AUTHOR:=maxbolgarin
+SCRIPT_VERSION:=1.0.0
 
-# Pull tags
-pull-tags:
-	git pull --tags origin $(shell git branch --show-current) --no-rebase
-
-# Run Commit Manager to build conventional commit message
-commit:
-	${SFOLDER}/s.sh -r commit -a "-b ${MAIN_BRANCH}"
-
-# Run Commit Manager to build conventional commit message with tracker's ticket info
-commit-ticket:
-	${SFOLDER}/s.sh -r commit -a "-b ${MAIN_BRANCH} -t"
-
-# Run Commit Manager to build conventional commit message in fast mode (git add .)
-commit-fast:
-	${SFOLDER}/s.sh -r commit -a "-b ${MAIN_BRANCH} -f"
-
-# Run Commit Manager to add files to the last commit (git commit --amend --no-edit)
-commit-amend:
-	${SFOLDER}/s.sh -r commit -a "-b ${MAIN_BRANCH} -a"
-
-# Push all your comits to current branch
-push:
-	${SFOLDER}/s.sh -r push -a "-r ${GIT_URL}"
-
-# Run Commit Manager to build conventional commit message in fast mode (git add .)
-commit-fast-push:
-	${SFOLDER}/s.sh -r commit -a "-b ${MAIN_BRANCH} -f"
-	echo
-	${SFOLDER}/s.sh -r push -a "-r ${GIT_URL} -y"
-
-# Undo previous commit (move HEAD pointer up for one record)
-undo-commit:
-	printf "$(YELLOW)Commit to undo: $(END)"
-	$(MAKE) last-commit
-	git reset HEAD^ > /dev/null
-	printf "$(YELLOW)New last commit: $(END)"
-	$(MAKE) last-commit
-
-# Undo previous action (move HEAD pointer to @{1})
-undo-action:
-	printf "$(YELLOW)Current last commit: $(END)"
-	$(MAKE) last-commit
-	printf "$(YELLOW)Action to undo: $(END)"
-	git reflog --pretty='%gs' -1 | cat
-	git reset HEAD@{1} > /dev/null
-	printf "$(YELLOW)New last commit: $(END)"
-	$(MAKE) last-commit
-
-# Print last commit
-last-commit:
-	git log --pretty="%s | %h | %cd" -1 | cat
-
-# Just print git reflog
-reflog:
-	git reflog
-
-
-
-
-# Get version from VERSION file
-ver:
-	${SFOLDER}/s.sh -r ver -a "-b ${MAIN_BRANCH} -f ${VERSION_FILE}"
-
-# Get versions from VERSION file and add last commit hash if branch is not main
-ver-dev:
-	${SFOLDER}/s.sh -r ver -a "-b ${MAIN_BRANCH} -f ${VERSION_FILE} -d"
-
-# Get version from VERSION file and add last commit hash
-ver-full:
-	${SFOLDER}/s.sh -r ver -a "-b ${MAIN_BRANCH} -f ${VERSION_FILE} -v"
-
-# Edit VERSION file and return version in development mode
-ver-edit:
-	${SFOLDER}/s.sh -r ver -a "-b ${MAIN_BRANCH} -f ${VERSION_FILE} -d -e"
-
-fast-commit-push: fast-commit
-	${SFOLDER}/s.sh -r push -a '-f'
-	echo "${REPO_URL}" > /dev/null
+################################################
 
 merge: t pull-tags ver
 	printf " " >> CHANGELOG.md
@@ -113,9 +148,9 @@ after-merge:
 	$(MAKE) release
 
 release: t pull-tags
-	${SFOLDER}/s.sh -r release -a "-a ${FULL_NAME}"
+	${S} -r release -a "-a ${FULL_NAME}"
 	echo "${REPO_URL}" > /dev/null
 
 fix-release: t pull-tags
-	${SFOLDER}/s.sh -r release -a "-a ${FULL_NAME} -f"
+	${S} -r release -a "-a ${FULL_NAME} -f"
 	echo "${REPO_URL}" > /dev/null

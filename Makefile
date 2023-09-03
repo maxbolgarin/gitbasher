@@ -6,7 +6,7 @@ GIT_URL ?= https://github.com/maxbolgarin/gitbasher  # URL of git repository
 MAIN_BRANCH ?= main  # Name of main branch (usually `main` or `master`)
 S ?= ./s.sh  # Relative path to s.sh script
 
-################################################
+######################################################
 
 .PHONY: default
 default: help
@@ -48,7 +48,7 @@ push: ##@Origin Run Push Manager to push changes and pull origin if there are un
 	${S} -r push -a "-r ${GIT_URL}"
 
 .PHONY: push
-push-list: ##@Origin Print list of unpushed commits
+push-list: ##@Origin Print a list of unpushed commits
 	${S} -r push -a "-r ${GIT_URL} -l"
 
 ################################################
@@ -61,9 +61,11 @@ branch-origin: ##@BranchManager Checkout to an available origin branch and fetch
 
 .PHONY: branch-new
 branch-new: ##@BranchManager Create a new branch from 'main' according to conventional naming
+	${S} -r branch -a "-b ${MAIN_BRANCH} -n"
 
 .PHONY: branch-new-current
 branch-new-current: ##@BranchManager Create a new branch from current state according to conventional naming
+	${S} -r branch -a "-b ${MAIN_BRANCH} -n -c"
 
 .PHONY: branch-rm
 branch-rm: ##@BranchManager Choose a branch to remove

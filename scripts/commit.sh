@@ -8,6 +8,8 @@
 # f: fast commit (not force!)
 # t: add ticket info to the end of message header
 # a: amend without edit (add to last commit)
+# x: fixup commit
+# s: squash fixup commits
 
 while getopts ftab:u: flag; do
     case "${flag}" in
@@ -64,7 +66,8 @@ else
             exit
         fi
 
-        git_add=$(trim_spaces $git_add)
+        # trim spaces
+        git_add=$(echo "$git_add" | xargs)
         git add $git_add
         if [ $? -eq 0 ]; then
             break
@@ -155,7 +158,7 @@ if [ "$commit_scope" == "0" ]; then
     exit
 fi
 
-commit_scope=$(trim_spaces $commit_scope)
+commit_scope=$(echo "$commit_scope" | xargs)
 if [ "$commit_scope" != "" ]; then
     commit="$commit($commit_scope):"
 else
@@ -207,7 +210,7 @@ while [ true ]; do
     echo
     echo -e "${YELLOW}Commit message cannot be empty!${ENDCOLOR}"
     echo
-    read -n 1 -p "Try for one more time? ('y' or any to exit) " -e choice
+    read -n 1 -p "Try for one more time? (y/n) " -s -e choice
     if [ "$choice" != "y" ]; then
         git restore --staged $git_add
         exit
@@ -231,7 +234,7 @@ if [ -n "${ticket}" ]; then
     fi
 
     if [ "$commit_ticket" != "" ]; then
-        commit_ticket=$(trim_spaces $commit_ticket)
+        commit_ticket=$(echo "$commit_ticket" | xargs)
 
         summary=$(echo "$commit_message" | head -n 1)
         remaining_message=""

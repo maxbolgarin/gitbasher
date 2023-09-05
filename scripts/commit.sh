@@ -64,7 +64,8 @@ else
             exit
         fi
 
-        git_add=$(trim_spaces $git_add)
+        # trim spaces
+        git_add=$(echo "$git_add" | xargs)
         git add $git_add
         if [ $? -eq 0 ]; then
             break
@@ -155,7 +156,7 @@ if [ "$commit_scope" == "0" ]; then
     exit
 fi
 
-commit_scope=$(trim_spaces $commit_scope)
+commit_scope=$(echo "$commit_scope" | xargs)
 if [ "$commit_scope" != "" ]; then
     commit="$commit($commit_scope):"
 else
@@ -231,7 +232,7 @@ if [ -n "${ticket}" ]; then
     fi
 
     if [ "$commit_ticket" != "" ]; then
-        commit_ticket=$(trim_spaces $commit_ticket)
+        commit_ticket=$(echo "$commit_ticket" | xargs)
 
         summary=$(echo "$commit_message" | head -n 1)
         remaining_message=""

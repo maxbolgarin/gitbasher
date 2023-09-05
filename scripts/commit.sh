@@ -8,12 +8,15 @@
 # f: fast commit (not force!)
 # t: add ticket info to the end of message header
 # a: amend without edit (add to last commit)
+# x: fixup commit
+# s: squash fixup commits
 
 while getopts ftab:u: flag; do
     case "${flag}" in
         f) fast="true";;
         t) ticket="true";;
         a) amend="true";;
+        
 
         b) main_branch=${OPTARG};;
         u) utils=${OPTARG};;
@@ -208,7 +211,7 @@ while [ true ]; do
     echo
     echo -e "${YELLOW}Commit message cannot be empty!${ENDCOLOR}"
     echo
-    read -n 1 -p "Try for one more time? ('y' or any to exit) " -e choice
+    read -n 1 -p "Try for one more time? (y/n) " -s -e choice
     if [ "$choice" != "y" ]; then
         git restore --staged $git_add
         exit

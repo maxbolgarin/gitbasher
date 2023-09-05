@@ -2,13 +2,12 @@
 
 ### Script for creating commits in angular style (conventional commits)
 # Reference: https://github.com/angular/angular/blob/22b96b9/CONTRIBUTING.md#-commit-message-guidelines
+# Use this script only with gitbasher.sh
 
 ### Options
 # f: fast commit (not force!)
 # t: add ticket info to the end of message header
 # a: amend without edit (add to last commit)
-
-VERSION="v1.0"
 
 while getopts ftab:u: flag; do
     case "${flag}" in
@@ -27,18 +26,18 @@ fi
 
 source $utils
 
-
-### Script logic below
+### Script logic here
 if [ -n "${amend}" ]; then
-    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} AMEND MODE ${VERSION}"
+    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} AMEND MODE"
 elif [ -n "${fast}" ]; then
-    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} FAST MODE ${VERSION}"
+    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} FAST MODE"
 else
-    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} ${VERSION}"
+    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR}"
 fi
 
 echo
 
+# Don't need to print status in fast mode because we add everything
 if [ -z "${fast}" ]; then
    git status
 fi
@@ -48,7 +47,7 @@ if [ "$is_clean" = "nothing to commit, working tree clean" ]; then
     return
 fi
 
-# Step 1: add fiels to commit
+# Step 1: add files to commit
 if [ -n "${fast}" ]; then
     git add .
     git_add="."
@@ -65,7 +64,7 @@ else
             exit
         fi
 
-        git_add=${git_add##*( )}
+        git_add=$(trim_spaces $git_add)
         git add $git_add
         if [ $? -eq 0 ]; then
             break
@@ -156,8 +155,8 @@ if [ "$commit_scope" == "0" ]; then
     exit
 fi
 
+commit_scope=$(trim_spaces $commit_scope)
 if [ "$commit_scope" != "" ]; then
-    commit_scope=${commit_scope##*( )}
     commit="$commit($commit_scope):"
 else
     commit="$commit:"
@@ -232,7 +231,7 @@ if [ -n "${ticket}" ]; then
     fi
 
     if [ "$commit_ticket" != "" ]; then
-        commit_ticket=${commit_ticket##*( )}
+        commit_ticket=$(trim_spaces $commit_ticket)
 
         summary=$(echo "$commit_message" | head -n 1)
         remaining_message=""

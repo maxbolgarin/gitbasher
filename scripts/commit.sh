@@ -11,11 +11,14 @@
 # x: fixup commit
 # s: squash fixup commits
 
+
 while getopts ftab:u: flag; do
     case "${flag}" in
         f) fast="true";;
         t) ticket="true";;
         a) amend="true";;
+        x) fixup="true";;
+        s) squash="true";;
 
         b) main_branch=${OPTARG};;
         u) utils=${OPTARG};;

@@ -33,6 +33,14 @@ commit-fast-push: ##@CommitManager Build conventional commit message in fast mod
 commit-amend: ##@CommitManager Add files to the last commit (git commit --amend --no-edit)
 	@${GITBASHER_S} -r commit -a "-b ${GITBASHER_MAIN_BRANCH} -a"
 
+.PHONY: commit-fixup
+commit-fixup: ##@CommitManager Make fixup commit (git commit --fixup <commit>)
+# TODO: fixup commit from list (last 9 commits)
+
+.PHONY: commit-autosquash
+commit-autosquash: ##@CommitManager Make autosquash of fixup commits (git rebase --autosquash <commit>)
+# TODO: <after-this-commit> from list (last 9 commits)
+
 ################################################
 
 .PHONY: pull
@@ -99,11 +107,11 @@ merge-finish: ##@Merge Create merge commit and finish merge
 
 .PHONY: log
 gitlog: ##@GitLog Open git log in pretty format
-	@git log --pretty="%C(GITBASHER_YELLOW)%h  %C(reset)%ad (%C(Green)%cr%C(reset))%x09 %C(Cyan)%an: %C(reset)%s"
+	@git log --pretty="%C(Yellow)%h  %C(reset)%ad (%C(Green)%cr%C(reset))%x09 %C(Cyan)%an: %C(reset)%s"
 
 .PHONY: reflog
 reflog: ##@GitLog Open git reflog in pretty format
-	@git reflog --pretty="%C(GITBASHER_YELLOW)%h  %C(reset)%ad (%C(Green)%cr%C(reset))%x09 %gd %gs"
+	@git reflog --pretty="%C(Yellow)%h  %C(reset)%ad (%C(Green)%cr%C(reset))%x09 %gd %gs"
 
 .PHONY: last-commit
 last-commit: ##@GitLog Print last commit message

@@ -2,6 +2,7 @@
 
 ### Script for versioning of your application
 # In VERSION file store only actual semver version
+# Use this script only with gitbasher.sh
 
 ### Options
 # f: path to VERSION file (default "scripts/VERSION")

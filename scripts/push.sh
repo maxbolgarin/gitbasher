@@ -2,6 +2,7 @@
 
 ### Script for pushing commits in git repository
 # It will pull current branch if there are unpulled changes
+# Use this script only with gitbasher.sh
 
 ### Options
 # y: fast push (answer 'yes')
@@ -12,7 +13,6 @@ while getopts ylr:b:u: flag; do
     case "${flag}" in
         y) fast="true";;
         l) list="true";;
-        r) repo=${OPTARG};;
 
         b) main_branch=${OPTARG};;
         u) utils=${OPTARG};;
@@ -71,6 +71,10 @@ function push {
 
     if [ $push_code -eq 0 ] ; then 
         echo -e "${GREEN}Successful push!${ENDCOLOR}"
+        repo=$(git config --get remote.origin.url)
+        repo="${repo/":"/"/"}" 
+        repo="${repo/"git@"/"https://"}"
+        repo="${repo/".git"/""}" 
         echo -e "${YELLOW}Repo: ${ENDCOLOR}${repo}"
         exit
     fi

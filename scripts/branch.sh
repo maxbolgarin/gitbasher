@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 ### Script for creating branches for developing
+# Use this script only with gitbasher.sh
 
 ### Options
 # n: create a new branch
@@ -32,6 +33,56 @@ fi
 
 echo -e "${YELLOW}BRANCH MANAGER${ENDCOLOR} v1.0"
 echo
+
+if [ -z "$new" ]; then
+    all_branches=$(git branch --list | cat 2>&1)
+    all_branches="${all_branches//\*}"
+    all_branches=${all_branches//[[:blank:]]/}
+
+    IFS=$'\n' read -rd '' -a branches_temp <<<"$all_branches"
+    reverse branches_temp branches
+
+    echo -e "${YELLOW}Checkout to local branch${ENDCOLOR}"
+    for index in "${!branches[@]}"
+    do
+        echo "$(($index+1)). ${branches[index]}"
+    done
+    echo "0. Exit..."
+
+    number_of_branches=${#branches[@]}
+
+    echo
+    printf "Enter branch number: "
+
+    while [ true ]; do
+        if [ $number_of_branches -gt 9 ]; then
+            read -n 2 choice
+        else
+            read -n 1 -s choice
+        fi
+
+        if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
+            exit
+        fi
+
+        re='^[0-9]+$'
+        if ! [[ $choice =~ $re ]]; then
+           continue
+        fi
+
+        index=$(($choice-1))
+        branch_name="${branches[index]}"
+        if [ -n "$branch_name" ]; then
+            break
+        fi
+    done
+    echo
+
+    ## TODO: handle errors
+    git checkout $branch_name
+    exit $?
+fi
+
 
 echo -e "${YELLOW}Step 1.${ENDCOLOR} What type of branch do you want to create?"
 echo "1. feat:      new feature or logic changes, 'feat' and 'perf' commits"

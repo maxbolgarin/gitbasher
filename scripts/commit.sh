@@ -16,7 +16,6 @@ while getopts ftab:u: flag; do
         f) fast="true";;
         t) ticket="true";;
         a) amend="true";;
-        
 
         b) main_branch=${OPTARG};;
         u) utils=${OPTARG};;

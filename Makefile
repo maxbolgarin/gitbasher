@@ -103,7 +103,7 @@ merge-request: ##@Merge Create merge request (pull request)
 .PHONY: merge-finish
 merge-finish: ##@Merge Create merge commit and finish merge
 
-################################################
+#321###############################################
 
 .PHONY: log
 gitlog: ##@GitLog Open git log in pretty format

@@ -301,13 +301,14 @@ echo
 echo -e "${GREEN}Successful commit!${ENDCOLOR}"
 echo
 
-echo $(echo -e $commit_output | tail -n +2)
-echo
-
 current_branch=$(git branch --show-current)
 commit_hash=$(git rev-parse HEAD)
 echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR}"
 printf "$commit\n"
+
+echo
+stat=$(git show --stat)
+echo $(${stat} | tail -n 1)
 
 if [ -z "${fast}" ]; then
     echo

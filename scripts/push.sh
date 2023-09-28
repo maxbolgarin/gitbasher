@@ -47,24 +47,6 @@ if [ -n "$list" ]; then
     exit
 fi
 
-if [ -n "${fast}" ]; then
-    git push origin ${branch}
-    exit
-fi
-
-echo -e "Do you want to push it to ${YELLOW}origin/${branch}${ENDCOLOR} (y/n)?"
-while [ true ]; do
-    read -n 1 -s choice
-    if [ "$choice" == "y" ]; then
-        echo -e "${YELLOW}Pushing...${ENDCOLOR}"
-        echo
-        break
-    fi
-    if [ "$choice" == "n" ]; then
-        exit
-    fi
-done
-
 function push {
     push_output=$(git push origin ${branch} 2>&1)
     push_code=$?
@@ -86,7 +68,26 @@ function push {
     fi
 }
 
-# will exit if everythinh is ok
+if [ -n "${fast}" ]; then
+    push
+    exit
+fi
+
+echo -e "Do you want to push it to ${YELLOW}origin/${branch}${ENDCOLOR} (y/n)?"
+while [ true ]; do
+    read -n 1 -s choice
+    if [ "$choice" == "y" ]; then
+        echo -e "${YELLOW}Pushing...${ENDCOLOR}"
+        echo
+        break
+    fi
+    if [ "$choice" == "n" ]; then
+        exit
+    fi
+done
+
+
+# will exit if everything is ok
 push
 
 echo -e "${RED}Cannot push! There is unpulled changes in origin/${branch}${ENDCOLOR}"

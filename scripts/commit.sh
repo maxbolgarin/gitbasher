@@ -307,8 +307,8 @@ echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR}"
 printf "$commit\n"
 
 echo
-stat=$(git show --stat)
-echo $(${stat} | tail -n 1)
+stat=$(git show $commit_hash --stat --format="" | cat)
+echo $stat
 
 if [ -z "${fast}" ]; then
     echo

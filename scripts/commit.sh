@@ -102,6 +102,35 @@ echo -e "${YELLOW}Staged files:${ENDCOLOR}"
 staged=$(git diff --name-only --cached)
 echo -e "${GREEN}${staged}${ENDCOLOR}"
 
+
+function after_commit {
+    echo
+    echo -e "${GREEN}Successful commit!${ENDCOLOR}"
+    echo
+
+    commit_hash=$(git rev-parse HEAD)
+    echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR}"
+    printf "$commit\n"
+
+    echo
+
+    stat=$(git show $commit_hash --stat --format="" | cat)
+    IFS=$'\n' read -rd '' -a stats <<<"$stat"
+    for index in "${!stats[@]}"
+    do
+        s=$(echo ${stats[index]} | xargs)
+        s=$(sed 's/+/\\e[32m+\\e[0m/g' <<< ${s})
+        s=$(sed 's/-/\\e[31m-\\e[0m/g' <<< ${s})
+        echo -e "${s}"
+    done
+
+    if [ -z "${fast}" ]; then
+        echo
+        echo -e "Push your changes: ${YELLOW}make push${ENDCOLOR}"
+        echo -e "Undo commit: ${YELLOW}make undo-commit${ENDCOLOR}"
+        echo -e "Update this commit: ${YELLOW}make commit-amend${ENDCOLOR}"
+    fi
+}
 # Step 2 if fixup: choose commit to fixup
 
 if [ -n "${fixup}" ]; then
@@ -138,8 +167,15 @@ if [ -n "${fixup}" ]; then
     done
     echo
     
-    git commit --fixup $commit_hash
-    exit $?
+    commit_output=$(git commit --fixup $commit_hash)
+    if [ $? != 0 ]; then
+        echo -e "${RED}Error during commit${ENDCOLOR}"
+        echo -e "$commit_output"
+        exit $?
+    fi
+
+    after_commit
+    exit
 fi
 
 # Step 2: choose commit type
@@ -306,30 +342,10 @@ commit="$commit $commit_message"
 
 # Finally
 commit_output=$(git commit -m """$commit""")
-
-echo
-echo -e "${GREEN}Successful commit!${ENDCOLOR}"
-echo
-
-commit_hash=$(git rev-parse HEAD)
-echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR}"
-printf "$commit\n"
-
-echo
-
-stat=$(git show $commit_hash --stat --format="" | cat)
-IFS=$'\n' read -rd '' -a stats <<<"$stat"
-for index in "${!stats[@]}"
-do
-    s=$(echo ${stats[index]} | xargs)
-    s=$(sed 's/+/\\e[32m+\\e[0m/g' <<< ${s})
-    s=$(sed 's/-/\\e[31m-\\e[0m/g' <<< ${s})
-    echo -e "${s}"
-done
-
-if [ -z "${fast}" ]; then
-    echo
-    echo -e "Push your changes: ${YELLOW}make push${ENDCOLOR}"
-    echo -e "Undo commit: ${YELLOW}make undo-commit${ENDCOLOR}"
-    echo -e "Update this commit: ${YELLOW}make commit-amend${ENDCOLOR}"
+if [ $? != 0 ]; then
+    echo -e "${RED}Error during commit${ENDCOLOR}"
+    echo -e "$commit_output"
+    exit $?
 fi
+
+after_commit

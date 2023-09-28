@@ -5,14 +5,18 @@ Bash scripts to help with development
 
 ## How to use
 
-1. Copy `s.sh` script to your project inside `scripts` folder (or inside folder from `SFOLDER` variable);
-2. Copy `Makefile` to your project and:
-    * Set your app name to `APP_NAME` variable (it also should match the name of git repo);
-    * If you want to use prefix name (e.g. project name), set `NS_NAME` variable, name will be `${NS_NAME}${APP_NAME}`;
-    * Set to `GIT_URL_PREFIX` url to your git profile, repo will be located at `${GIT_URL_PREFIX}/${APP_NAME}`;
-    * Set main protected branch to your `MAIN_BRANCH` (e.g. `main` or `master`);
-3. Use make.
-
+1. Clone gitbasher to your local environment: `git clone https://github.com/maxbolgarin/gitbasher.git && cd gitbasher`
+2. Run `make` to start gitbasher init process
+3. Enter `pwd` to use current directory as gitbasher's base, it will create a file `~/.gitbasher` with path to gitbasher repo
+4. Copy `gitbasher.sh` to your project
+5. Copy `Makefile` to your project (or copy it's code to the end of your `Makefile`) and make some configurations:
+    * Remove `default: gitbasher` if you have another default make target
+    * Set to `GITBASHER_S` path to `gitbasher.sh` script (inside your project)
+    * Set to `GITBASHER_MAIN_BRANCH` name of your main development branch (e.g. `main`, `master` or `develop`)
+    * Set to `GITBASHER_BRANCH_SEPARATOR` separator which is using for creating branch names (e.g. `/` or `_`)
+    * Rename gitbasher's targets if you have conflicts with your existing targets (if you have copied `Makefile` to yours)
+6. Run `make gitbasher` to ensure that everything is working
+7. Use `make *command*` to work with git
 
 ## Makefile commands
 

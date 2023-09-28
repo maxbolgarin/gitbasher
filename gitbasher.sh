@@ -62,7 +62,7 @@ function init {
     if [[ -z "${silent}" ]]; then
         printf "Welcome to ${YELLOW}gitbasher${ENDCOLOR} init application!\n"
     fi
-    if [[ -n "${gitbasher_directory}" ]] & [[ -z "$1"  ]]; then
+    if [[ -n "${gitbasher_directory}" ]] && [[ -z "$1"  ]]; then
         if [[ -z "${silent}" ]]; then
             echo -e "Scripts are already inited to folder: ${YELLOW}${gitbasher_directory}${ENDCOLOR}"
             echo "If you want to change it, use '-f' flag."
@@ -70,9 +70,20 @@ function init {
         return
     fi
     touch ${SETTINGS_FILE}
-      
+    
+    echo -e "To init gitbasher you should provide a path to gitbasher repo (it will be saved to ~/.gitbasher, default ${YELLOW}../gitbasher${ENDCOLOR})"
+    echo -e "Enter ${YELLOW}pwd${ENDCOLOR} to use current directory (if you inside gitbasher repo now)"
+    echo -e "Enter ${YELLOW}0${ENDCOLOR} to exit"
     while [ true ]; do
-        read -p "Enter path to gitbasher repo (apply to all projects, default ../gitbasher): " -e gitbasher_directory
+        read -p "Path: " -e gitbasher_directory
+
+        if [ "${gitbasher_directory}" == "0" ]; then
+            exit 1
+        fi
+
+        if [ "${gitbasher_directory}" == "pwd" ]; then
+            gitbasher_directory=$(pwd)
+        fi
 
         if [ -z "${gitbasher_directory}" ]; then
             gitbasher_directory="../gitbasher"
@@ -82,6 +93,7 @@ function init {
         if [ -d $( prepare_path $gitbasher_directory ) ]; then
             echo ${gitbasher_directory} > $( prepare_path $SETTINGS_FILE )
             echo -e "Set path to ${YELLOW}${gitbasher_directory}${ENDCOLOR}"
+            echo
             return
         else
             echo -e "${RED}Directory ${YELLOW}${gitbasher_directory} ${RED}doesn't exist!${ENDCOLOR}"

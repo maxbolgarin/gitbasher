@@ -301,7 +301,7 @@ done
 commit="$commit_type"
 
 
-# Commit Step 3: enter commit scope
+### Commit Step 3: enter commit scope
 echo
 step="3"
 if [ -n "${fast}" ]; then
@@ -326,7 +326,7 @@ else
 fi
 
 
-# Commit Step 4: enter commit message
+### Commit Step 4: enter commit message
 touch commitmsg
 step="4"
 if [ -n "${fast}" ]; then
@@ -380,7 +380,7 @@ done
 rm commitmsg
 
 
-# Commit Step 5: enter tracker ticket
+### Commit Step 5: enter tracker ticket
 if [ -n "${ticket}" ]; then
     echo
     echo -e "${YELLOW}Step 5.${ENDCOLOR} Enter the number of issue in your tracking system (e.g. JIRA or Youtrack)"

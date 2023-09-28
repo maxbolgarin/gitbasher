@@ -44,14 +44,19 @@ fi
 
 echo
 
+current_branch=$(git branch --show-current)
+
 # Don't need to print status in fast mode because we add everything
 if [ -z "${fast}" ]; then
-   git status
+    echo -e "On branch ${YELLOW}${current_branch}${ENDCOLOR}"
+    echo
+    echo -e "${BLUE}Changed fiels${ENDCOLOR}"
+    git status -s
 fi
 
 is_clean=$(git status | tail -n 1)
 if [ "$is_clean" = "nothing to commit, working tree clean" ]; then
-    return
+    exit
 fi
 
 # Step 1: add files to commit
@@ -306,7 +311,6 @@ echo
 echo -e "${GREEN}Successful commit!${ENDCOLOR}"
 echo
 
-current_branch=$(git branch --show-current)
 commit_hash=$(git rev-parse HEAD)
 echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR}"
 printf "$commit\n"
@@ -319,7 +323,7 @@ for index in "${!stats[@]}"
 do
     s=$(echo ${stats[index]} | xargs)
     s=$(sed 's/+/\\e[32m+\\e[0m/g' <<< ${s})
-    s=$(sed 's/+/\\e[31m-\\e[0m/g' <<< ${s})
+    s=$(sed 's/-/\\e[31m-\\e[0m/g' <<< ${s})
     echo -e "${s}"
 done
 

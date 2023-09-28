@@ -31,6 +31,38 @@ fi
 
 source $utils
 
+
+function after_commit {
+    echo -e "${GREEN}Successful commit $1${ENDCOLOR}"
+    echo
+
+    commit_hash=$(git rev-parse HEAD)
+    echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR}"
+    if [ -z "${commit}" ]; then
+        echo $(git log -1 --pretty=%B | cat)
+    else
+        printf "$commit\n"
+    fi
+
+    echo
+
+    stat=$(git show $commit_hash --stat --format="" | cat)
+    IFS=$'\n' read -rd '' -a stats <<<"$stat"
+    for index in "${!stats[@]}"
+    do
+        s=$(echo ${stats[index]} | xargs)
+        s=$(sed 's/+/\\e[32m+\\e[0m/g' <<< ${s})
+        s=$(sed 's/-/\\e[31m-\\e[0m/g' <<< ${s})
+        echo -e "${s}"
+    done
+
+    if [ -z "${fast}" ]; then
+        echo
+        echo -e "Push your changes: ${YELLOW}make push${ENDCOLOR}"
+        echo -e "Undo commit: ${YELLOW}make undo-commit${ENDCOLOR}"
+    fi
+}
+
 ### Script logic here
 if [ -n "${amend}" ]; then
     echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} AMEND MODE"
@@ -162,36 +194,6 @@ if [ -z "${fast}" ]; then
     git status -s
 fi
 
-function after_commit {
-    echo -e "${GREEN}Successful commit $1${ENDCOLOR}"
-    echo
-
-    commit_hash=$(git rev-parse HEAD)
-    echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR}"
-    if [ -z "${commit}" ]; then
-        echo $(git log -1 --pretty=%B | cat)
-    else
-        printf "$commit\n"
-    fi
-
-    echo
-
-    stat=$(git show $commit_hash --stat --format="" | cat)
-    IFS=$'\n' read -rd '' -a stats <<<"$stat"
-    for index in "${!stats[@]}"
-    do
-        s=$(echo ${stats[index]} | xargs)
-        s=$(sed 's/+/\\e[32m+\\e[0m/g' <<< ${s})
-        s=$(sed 's/-/\\e[31m-\\e[0m/g' <<< ${s})
-        echo -e "${s}"
-    done
-
-    if [ -z "${fast}" ]; then
-        echo
-        echo -e "Push your changes: ${YELLOW}make push${ENDCOLOR}"
-        echo -e "Undo commit: ${YELLOW}make undo-commit${ENDCOLOR}"
-    fi
-}
 
 # Step 1: add files to commit
 if [ -n "${fast}" ]; then

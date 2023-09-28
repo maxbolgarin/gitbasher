@@ -41,4 +41,3 @@ Usage `make *command*`
 | **commit-fixup**      | Choose files to commit and select commit to --fixup (`git commit --fixup <commit>`)             |
 | **commit-autosquash** | Choose commit from which to squash fixup commits and run `git rebase -i --autosquash <commit>`  |
 | **commit-revert**     | Choose commit to revert (`git revert -no-edit <commit>`)                                        |
-

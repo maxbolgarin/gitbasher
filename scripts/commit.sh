@@ -58,11 +58,14 @@ elif [ -n "${autosquash}" ]; then
 fi
 
 if [ -n "${autosquash}" ]; then
-    commit_list=$(git log --pretty="%h %s" | cat 2>&1)
+    commit_list=$(git log --pretty="%h %s" -n 20 | cat 2>&1)
+
     IFS=$'\n' read -rd '' -a commits <<<"$commit_list"
 
+    number_of_commits=${#commits[@]}
+
     echo
-    echo -e "${YELLOW}Step 2.${ENDCOLOR} Choose commit to fixup:"
+    echo -e "${YELLOW}Step q.${ENDCOLOR} Choose commit from which to sqash fixup commits:"
     for index in "${!commits[@]}"
     do
         echo -e "$(($index+1)). ${YELLOW}$(echo ${commits[index]} | awk '{print $1}')${ENDCOLOR}  $(echo ${commits[index]#* })" 
@@ -70,9 +73,13 @@ if [ -n "${autosquash}" ]; then
     echo "0. Exit..."
 
     while [ true ]; do
-        read -n 1 -s choice
+         if [ $number_of_commits -gt 9 ]; then
+            read -n 2 choice
+        else
+            read -n 1 -s choice
+        fi
 
-        if [ "$choice" == "0" ]; then
+        if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
             git restore --staged $git_add
             exit
         fi
@@ -88,15 +95,8 @@ if [ -n "${autosquash}" ]; then
             break
         fi
     done
-    
-    commit_output=$(git commit --fixup $commit_hash)
-    if [ $? != 0 ]; then
-        echo -e "${RED}Error during commit${ENDCOLOR}"
-        echo -e "$commit_output"
-        exit $?
-    fi
-    echo
-    after_commit "fixup"
+
+    git rebase -i --autosquash ${commit_hash}
     exit
 
 fi

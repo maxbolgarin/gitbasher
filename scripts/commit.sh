@@ -313,7 +313,11 @@ printf "$commit\n"
 
 echo
 stat=$(git show $commit_hash --stat --format="" | cat)
-echo "$stat"
+IFS=$'\n' read -rd '' -a stats <<<"$stat"
+for index in "${!stats[@]}"
+do
+    echo -e "${stats[index]}" 
+done
 
 if [ -z "${fast}" ]; then
     echo

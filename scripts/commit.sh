@@ -11,7 +11,6 @@
 # x: fixup commit
 # s: squash fixup commits
 
-
 while getopts ftaxsb:u: flag; do
     case "${flag}" in
         f) fast="true";;
@@ -96,7 +95,6 @@ if [ -n "${autosquash}" ]; then
 
     git rebase -i --autosquash ${commit_hash}
     exit
-
 fi
 
 current_branch=$(git branch --show-current)

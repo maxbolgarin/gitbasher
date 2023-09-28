@@ -23,9 +23,13 @@ Usage `make *command*`
 | **gitbasher**       | Print information about all commands in console                                                 |
 
 
-| Commands for commit | Description                                                                                  |
-|---------------------|----------------------------------------------------------------------------------------------|
-| **commit**          | Add files to commit and create conventional commit message in format: 'type(scope): message' |
-| **commit-ticket**   | Same as previous, but add tracker's ticket info to the end of commit header                  |
-| **commit-fast**     | Add all files (git add .) and create commit message as in **commit**                         |
+| Commands for commit   | Description                                                                                     |
+|-----------------------|-------------------------------------------------------------------------------------------------|
+| **commit**            | Choose files to commit and create conventional commit message in format: 'type(scope): message' |
+| **commit-ticket**     | Same as previous, but add tracker's ticket info to the end of commit header                     |
+| **commit-fast**       | Add all files (`git add .`) and create commit message as in **commit**                          |
+| **commit-fast-push**  | Add all files (`git add .`), create commit message and immediately push changes to origin       |
+| **commit-amend**      | Choose files to commit and make --amend commit to the last one (`git commit --amend --no-edit`) |
+| **commit-fixup**      | Choose files to commit and select commit to --fixup (`git commit --fixup *hash*`)               |
+| **commit-autosquash** | Choose commit from which to squash fixup commits and run `git rebase -i --autosquash *hash*`    |
 

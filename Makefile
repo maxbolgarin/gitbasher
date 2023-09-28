@@ -40,7 +40,6 @@ commit-fixup: ##@CommitManager Make fixup commit (git commit --fixup <commit>)
 .PHONY: commit-autosquash
 commit-autosquash: ##@CommitManager Make autosquash of fixup commits (git rebase --autosquash <commit>)
 	@${GITBASHER_S} -r commit -a "-b ${GITBASHER_MAIN_BRANCH} -s"
-# TODO: <after-this-commit> from list (last 9 commits)
 
 ################################################
 

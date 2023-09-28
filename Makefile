@@ -33,6 +33,9 @@ commit-fast-push: ##@CommitManager Build conventional commit message in fast mod
 commit-amend: ##@CommitManager Add files to the last commit (git commit --amend --no-edit)
 	@${GITBASHER_S} -r commit -a "-b ${GITBASHER_MAIN_BRANCH} -a"
 
+.PHONY: commit-squash
+commit-squash: ##@CommitManager Make squash of commits
+
 .PHONY: commit-fixup
 commit-fixup: ##@CommitManager Make fixup commit (git commit --fixup <commit>)
 # TODO: fixup commit from list (last 9 commits)

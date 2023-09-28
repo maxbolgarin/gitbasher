@@ -38,6 +38,8 @@ elif [ -n "${fast}" ]; then
     echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} FAST MODE"
 elif [ -n "${fixup}" ]; then
     echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} FIXUP MODE"
+elif [ -n "${squash}" ]; then
+    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} SQUASH MODE"
 else
     echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR}"
 fi
@@ -47,8 +49,14 @@ echo
 is_clean=$(git status | tail -n 1)
 if [ "$is_clean" = "nothing to commit, working tree clean" ]; then
     echo -e "${GREEN}Nothing to commit, working tree clean${ENDCOLOR}"
+    if [ -z "${squash}" ]; then
+        exit
+    fi
+elif [ -n "${squash}" ]; then
+    echo -e "${RED}Cannot squash: there is uncommited changes${ENDCOLOR}"
     exit
 fi
+
 
 current_branch=$(git branch --show-current)
 

@@ -316,7 +316,8 @@ stat=$(git show $commit_hash --stat --format="" | cat)
 IFS=$'\n' read -rd '' -a stats <<<"$stat"
 for index in "${!stats[@]}"
 do
-    s=$(echo ${stats[index]} | xargs | sed -i '' 's/+/${GREEN}+${ENDCOLOR}/g')
+    s=$(echo ${stats[index]} | xargs)
+    s=$(sed 's/+/${GREEN}+${ENDCOLOR}/g' <<< ${s})
     echo -e "${s}"
 done
 

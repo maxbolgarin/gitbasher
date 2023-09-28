@@ -318,6 +318,7 @@ for index in "${!stats[@]}"
 do
     s=$(echo ${stats[index]} | xargs)
     s=$(sed 's/+/\\e[32m+\\e[0m/g' <<< ${s})
+    s=$(sed 's/+/\\e[31m-\\e[0m/g' <<< ${s})
     echo -e "${s}"
 done
 

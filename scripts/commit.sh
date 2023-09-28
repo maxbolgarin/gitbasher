@@ -61,7 +61,6 @@ if [ -z "${fast}" ]; then
 fi
 
 function after_commit {
-    echo
     echo -e "${GREEN}Successful commit $1${ENDCOLOR}"
     echo
 
@@ -176,7 +175,7 @@ if [ -n "${fixup}" ]; then
         echo -e "$commit_output"
         exit $?
     fi
-
+    echo
     after_commit "fixup"
     exit
 fi
@@ -351,4 +350,5 @@ if [ $? != 0 ]; then
     exit $?
 fi
 
+echo
 after_commit

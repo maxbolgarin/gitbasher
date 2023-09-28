@@ -12,7 +12,7 @@
 # s: squash fixup commits
 
 
-while getopts ftab:u: flag; do
+while getopts ftaxsb:u: flag; do
     case "${flag}" in
         f) fast="true";;
         t) ticket="true";;
@@ -36,6 +36,8 @@ if [ -n "${amend}" ]; then
     echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} AMEND MODE"
 elif [ -n "${fast}" ]; then
     echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} FAST MODE"
+elif [ -n "${fixup}" ]; then
+    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} FIXUP MODE"
 else
     echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR}"
 fi
@@ -94,6 +96,45 @@ fi
 echo -e "${YELLOW}Staged files:${ENDCOLOR}"
 staged=$(git diff --name-only --cached)
 echo -e "${GREEN}${staged}${ENDCOLOR}"
+
+# Step 2 if fixup: choose commit to fixup
+
+if [ -n "${fixup}" ]; then
+    commit_list=$(git log --pretty="%h %s" -n 9 | cat 2>&1)
+
+    IFS=$'\n' read -rd '' -a commits <<<"$commit_list"
+
+    echo
+    echo -e "${YELLOW}Step 2.${ENDCOLOR} Choose commit to fixup:"
+    for index in "${!commits[@]}"
+    do
+        echo -e "$(($index+1)). ${YELLOW}$(echo ${commits[index]} | awk '{print $1}')${ENDCOLOR}  $(echo ${commits[index]#* })" 
+    done
+    echo "0. Exit..."
+
+    while [ true ]; do
+        read -n 1 -s choice
+
+        if [ "$choice" == "0" ]; then
+            exit
+        fi
+
+        re='^[0-9]+$'
+        if ! [[ $choice =~ $re ]]; then
+           continue
+        fi
+
+        index=$(($choice-1))
+        commit_hash="$(echo ${commits[index]} | awk '{print $1}')"
+        if [ -n "$commit_hash" ]; then
+            break
+        fi
+    done
+    echo
+
+    git commit --fixup $commit_hash
+    exit $?
+fi
 
 # Step 2: choose commit type
 

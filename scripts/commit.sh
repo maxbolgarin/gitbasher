@@ -88,7 +88,6 @@ function after_commit {
         echo
         echo -e "Push your changes: ${YELLOW}make push${ENDCOLOR}"
         echo -e "Undo commit: ${YELLOW}make undo-commit${ENDCOLOR}"
-        echo -e "Update this commit: ${YELLOW}make commit-amend${ENDCOLOR}"
     fi
 }
 

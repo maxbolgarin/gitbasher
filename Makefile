@@ -41,6 +41,10 @@ commit-fixup: ##@CommitManager Make fixup commit (git commit --fixup <commit>)
 commit-autosquash: ##@CommitManager Make autosquash of fixup commits (git rebase --autosquash <commit>)
 	@${GITBASHER_S} -r commit -a "-b ${GITBASHER_MAIN_BRANCH} -s"
 
+.PHONY: commit-revert
+commit-revert: ##@CommitManager Revert selected commit (git revert --no-edit <commit>)
+	@${GITBASHER_S} -r commit -a "-b ${GITBASHER_MAIN_BRANCH} -r"
+
 ################################################
 
 .PHONY: pull

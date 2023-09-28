@@ -11,13 +11,14 @@
 # x: fixup commit
 # s: squash fixup commits
 
-while getopts ftaxsb:u: flag; do
+while getopts ftaxsrb:u: flag; do
     case "${flag}" in
         f) fast="true";;
         t) ticket="true";;
         a) amend="true";;
         x) fixup="true";;
         s) autosquash="true";;
+        r) revert="true";;
 
         b) main_branch=${OPTARG};;
         u) utils=${OPTARG};;
@@ -39,6 +40,8 @@ elif [ -n "${fixup}" ]; then
     echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} FIXUP MODE"
 elif [ -n "${squash}" ]; then
     echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} AUTOSQUASH MODE"
+elif [ -n "${revert}" ]; then
+    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} REVERT MODE"
 else
     echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR}"
 fi
@@ -47,12 +50,15 @@ echo
 
 is_clean=$(git status | tail -n 1)
 if [ "$is_clean" = "nothing to commit, working tree clean" ]; then
-    if [ -z "${autosquash}" ]; then
+    if [ -z "${autosquash}" ] && [ -z "${revert}" ]; then
         echo -e "${GREEN}Nothing to commit, working tree clean${ENDCOLOR}"
         exit
     fi
 elif [ -n "${autosquash}" ]; then
     echo -e "${RED}Cannot autosquash: there is uncommited changes${ENDCOLOR}"
+    exit
+elif [ -n "${revert}" ]; then
+    echo -e "${RED}Cannot revert: there is uncommited changes${ENDCOLOR}"
     exit
 fi
 
@@ -94,6 +100,47 @@ if [ -n "${autosquash}" ]; then
     done
 
     git rebase -i --autosquash ${commit_hash}
+    exit
+fi
+
+if [ -n "${revert}" ]; then
+    commit_list=$(git log --pretty="%h %s" -n 9 | cat 2>&1)
+
+    IFS=$'\n' read -rd '' -a commits <<<"$commit_list"
+
+    number_of_commits=${#commits[@]}
+
+    echo -e "${YELLOW}Step 1.${ENDCOLOR} Choose commit to revert:"
+    for index in "${!commits[@]}"
+    do
+        echo -e "$(($index+1)). ${YELLOW}$(echo ${commits[index]} | awk '{print $1}')${ENDCOLOR}  $(echo ${commits[index]#* })" 
+    done
+    echo "0. Exit..."
+
+    while [ true ]; do
+         if [ $number_of_commits -gt 9 ]; then
+            read -n 2 choice
+        else
+            read -n 1 -s choice
+        fi
+
+        if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
+            exit
+        fi
+
+        re='^[0-9]+$'
+        if ! [[ $choice =~ $re ]]; then
+           continue
+        fi
+
+        index=$(($choice-1))
+        commit_hash="$(echo ${commits[index]} | awk '{print $1}')"
+        if [ -n "$commit_hash" ]; then
+            break
+        fi
+    done
+
+    git revert --no-edit ${commit_hash}
     exit
 fi
 

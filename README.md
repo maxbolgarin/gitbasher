@@ -2,6 +2,9 @@
 
 Bash scripts to help with development
 
+* Conventional style of commits: [read](https://www.conventionalcommits.org/en) and [project_example](https://gist.github.com/brianclements/841ea7bffdb01346392c)
+* GitHub flow to manage development of your projects: [read](https://gitversion.net/docs/learn/branching-strategies/githubflow/)
+
 
 ## How to use
 

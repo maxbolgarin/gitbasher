@@ -184,6 +184,7 @@ if [ -n "${revert}" ]; then
     exit
 fi
 
+
 current_branch=$(git branch --show-current)
 
 # Don't need to print status in fast mode because we add everything

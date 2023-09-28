@@ -64,8 +64,7 @@ if [ -n "${autosquash}" ]; then
 
     number_of_commits=${#commits[@]}
 
-    echo
-    echo -e "${YELLOW}Step q.${ENDCOLOR} Choose commit from which to sqash fixup commits:"
+    echo -e "${YELLOW}Step 1.${ENDCOLOR} Choose commit from which to sqash fixup commits:"
     for index in "${!commits[@]}"
     do
         echo -e "$(($index+1)). ${YELLOW}$(echo ${commits[index]} | awk '{print $1}')${ENDCOLOR}  $(echo ${commits[index]#* })" 
@@ -80,7 +79,6 @@ if [ -n "${autosquash}" ]; then
         fi
 
         if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
-            git restore --staged $git_add
             exit
         fi
 

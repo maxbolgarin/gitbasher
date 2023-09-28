@@ -2,6 +2,7 @@
 
 ### Script for creating commits in angular style (conventional commits)
 # Reference: https://github.com/angular/angular/blob/22b96b9/CONTRIBUTING.md#-commit-message-guidelines
+# Read README.md to get more information how to use it
 # Use this script only with gitbasher.sh
 
 ### Options
@@ -9,7 +10,10 @@
 # t: add ticket info to the end of message header
 # a: amend without edit (add to last commit)
 # x: fixup commit
-# s: squash fixup commits
+# s: autosquash fixup commits
+# r: revert commit
+# u: path to utils.sh (mandatory)
+
 
 while getopts ftaxsrb:u: flag; do
     case "${flag}" in
@@ -20,23 +24,21 @@ while getopts ftaxsrb:u: flag; do
         s) autosquash="true";;
         r) revert="true";;
 
-        b) main_branch=${OPTARG};;
         u) utils=${OPTARG};;
     esac
 done
-
-if [ -z "$main_branch" ]; then
-    main_branch="main"
-fi
 
 source $utils
 
 current_branch=$(git branch --show-current)
 
+### This function prints information about last commit, use it after `git commit`
+# $1: name of operation, e.g. `amend`
 function after_commit {
     echo -e "${GREEN}Successful commit $1${ENDCOLOR}"
     echo
 
+    # Print commit hash and message
     commit_hash=$(git rev-parse HEAD)
     echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR}"
     if [ -z "${commit}" ]; then
@@ -47,6 +49,7 @@ function after_commit {
 
     echo
 
+    # Print stat of last commit - updated files and lines
     stat=$(git show $commit_hash --stat --format="" | cat)
     IFS=$'\n' read -rd '' -a stats <<<"$stat"
     for index in "${!stats[@]}"
@@ -57,6 +60,7 @@ function after_commit {
         echo -e "${s}"
     done
 
+    # Some info to help users
     if [ -z "${fast}" ]; then
         echo
         echo -e "Push your changes: ${YELLOW}make push${ENDCOLOR}"
@@ -64,45 +68,14 @@ function after_commit {
     fi
 }
 
-### Script logic here
-if [ -n "${amend}" ]; then
-    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} AMEND MODE"
-elif [ -n "${fast}" ]; then
-    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} FAST MODE"
-elif [ -n "${fixup}" ]; then
-    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} FIXUP MODE"
-elif [ -n "${squash}" ]; then
-    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} AUTOSQUASH MODE"
-elif [ -n "${revert}" ]; then
-    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} REVERT MODE"
-else
-    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR}"
-fi
-
-echo
-
-is_clean=$(git status | tail -n 1)
-if [ "$is_clean" = "nothing to commit, working tree clean" ]; then
-    if [ -z "${autosquash}" ] && [ -z "${revert}" ]; then
-        echo -e "${GREEN}Nothing to commit, working tree clean${ENDCOLOR}"
-        exit
-    fi
-elif [ -n "${autosquash}" ]; then
-    echo -e "${RED}Cannot autosquash: there is uncommited changes${ENDCOLOR}"
-    exit
-elif [ -n "${revert}" ]; then
-    echo -e "${RED}Cannot revert: there is uncommited changes${ENDCOLOR}"
-    exit
-fi
-
-if [ -n "${autosquash}" ]; then
-    commit_list=$(git log --pretty="%h %s" -n 20 | cat 2>&1)
-
+### This function print the list of commits and user should choose one
+# $1: number of last commits to show
+function choose_commit {
+    commit_list=$(git log --pretty="%h %s" -n $1 | cat 2>&1)
     IFS=$'\n' read -rd '' -a commits <<<"$commit_list"
 
     number_of_commits=${#commits[@]}
 
-    echo -e "${YELLOW}Step 1.${ENDCOLOR} Choose commit from which to sqash fixup commits:"
     for index in "${!commits[@]}"
     do
         echo -e "$(($index+1)). ${YELLOW}$(echo ${commits[index]} | awk '{print $1}')${ENDCOLOR}  $(echo ${commits[index]#* })" 
@@ -132,9 +105,58 @@ if [ -n "${autosquash}" ]; then
         fi
     done
 
+    return $commit_hash
+}
+
+
+###
+### Script logic here
+###
+
+### Print header
+if [ -n "${amend}" ]; then
+    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} AMEND MODE"
+elif [ -n "${fast}" ]; then
+    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} FAST MODE"
+elif [ -n "${fixup}" ]; then
+    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} FIXUP MODE"
+elif [ -n "${squash}" ]; then
+    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} AUTOSQUASH MODE"
+elif [ -n "${revert}" ]; then
+    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} REVERT MODE"
+else
+    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR}"
+fi
+
+echo
+
+
+### Check if there are unstaged files
+is_clean=$(git status | tail -n 1)
+if [ "$is_clean" = "nothing to commit, working tree clean" ]; then
+    if [ -z "${autosquash}" ] && [ -z "${revert}" ]; then
+        echo -e "${GREEN}Nothing to commit, working tree clean${ENDCOLOR}"
+        exit
+    fi
+elif [ -n "${autosquash}" ]; then
+    echo -e "${RED}Cannot autosquash: there is uncommited changes${ENDCOLOR}"
+    exit
+elif [ -n "${revert}" ]; then
+    echo -e "${RED}Cannot revert: there is uncommited changes${ENDCOLOR}"
+    exit
+fi
+
+
+### Run autosquash logic
+if [ -n "${autosquash}" ]; then
+    echo -e "${YELLOW}Step 1.${ENDCOLOR} Choose commit from which to sqash fixup commits:"
+
+    commit_hash=$(choose_commit 20)
+
     git rebase -i --autosquash ${commit_hash}
     exit
 fi
+
 
 if [ -n "${revert}" ]; then
     commit_list=$(git log --pretty="%h %s" -n 9 | cat 2>&1)

@@ -13,37 +13,37 @@ GITBASHER_BRANCH_SEPARATOR ?= /  # Separator in branch naming (e.g. feat/name)
 
 .PHONY: commit
 commit: ##@CommitManager Build conventional commit message in format 'type(scope): message'
-	@${GITBASHER_S} -r commit -a "-b ${GITBASHER_MAIN_BRANCH}"
+	@${GITBASHER_S} -r commit
 
 .PHONY: commit-ticket
 commit-ticket: ##@CommitManager Build conventional commit message with tracker's ticket info (e.g. JIRA)
-	@${GITBASHER_S} -r commit -a "-b ${GITBASHER_MAIN_BRANCH} -t"
+	@${GITBASHER_S} -r commit -a "-t"
 
 .PHONY: commit-fast
 commit-fast: ##@CommitManager Build conventional commit message in fast mode (git add .)
-	@${GITBASHER_S} -r commit -a "-b ${GITBASHER_MAIN_BRANCH} -f"
+	@${GITBASHER_S} -r commit -a "-f"
 
 .PHONY: commit-fast-push
 commit-fast-push: ##@CommitManager Build conventional commit message in fast mode (git add .) and then push changes
-	@${GITBASHER_S} -r commit -a "-b ${GITBASHER_MAIN_BRANCH} -f"
+	@${GITBASHER_S} -r commit -a "-f"
 	@echo
 	@${GITBASHER_S} -r push -a "-y"
 
 .PHONY: commit-amend
 commit-amend: ##@CommitManager Add files to the last commit (git commit --amend --no-edit)
-	@${GITBASHER_S} -r commit -a "-b ${GITBASHER_MAIN_BRANCH} -a"
+	@${GITBASHER_S} -r commit -a "-a"
 
 .PHONY: commit-fixup
 commit-fixup: ##@CommitManager Make fixup commit (git commit --fixup <commit>)
-	@${GITBASHER_S} -r commit -a "-b ${GITBASHER_MAIN_BRANCH} -x"
+	@${GITBASHER_S} -r commit -a "-x"
 
 .PHONY: commit-autosquash
 commit-autosquash: ##@CommitManager Make autosquash of fixup commits (git rebase --autosquash <commit>)
-	@${GITBASHER_S} -r commit -a "-b ${GITBASHER_MAIN_BRANCH} -s"
+	@${GITBASHER_S} -r commit -a "-s"
 
 .PHONY: commit-revert
 commit-revert: ##@CommitManager Revert selected commit (git revert --no-edit <commit>)
-	@${GITBASHER_S} -r commit -a "-b ${GITBASHER_MAIN_BRANCH} -r"
+	@${GITBASHER_S} -r commit -a "-r"
 
 ################################################
 

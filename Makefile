@@ -38,7 +38,7 @@ commit-squash: ##@CommitManager Make squash of commits
 
 .PHONY: commit-fixup
 commit-fixup: ##@CommitManager Make fixup commit (git commit --fixup <commit>)
-# TODO: fixup commit from list (last 9 commits)
+	@${GITBASHER_S} -r commit -a "-b ${GITBASHER_MAIN_BRANCH} -x"
 
 .PHONY: commit-autosquash
 commit-autosquash: ##@CommitManager Make autosquash of fixup commits (git rebase --autosquash <commit>)

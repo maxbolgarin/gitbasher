@@ -187,7 +187,7 @@ echo -e "${GREEN}${staged}${ENDCOLOR}"
 # Step 2 if fixup: choose commit to fixup
 
 if [ -n "${fixup}" ]; then
-    commit_list=$(git log --pretty="%h %s" -n 20 | cat 2>&1)
+    commit_list=$(git log --pretty="%h %s" -n 9 | cat 2>&1)
 
     IFS=$'\n' read -rd '' -a commits <<<"$commit_list"
 

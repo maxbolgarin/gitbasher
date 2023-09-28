@@ -316,8 +316,7 @@ stat=$(git show $commit_hash --stat --format="" | cat)
 IFS=$'\n' read -rd '' -a stats <<<"$stat"
 for index in "${!stats[@]}"
 do
-    s=${stats[index]}
-    s=${s//[[:blank:]]/}
+    s=$(xargs ${stats[index]})
     echo -e "${s}" 
 
 done

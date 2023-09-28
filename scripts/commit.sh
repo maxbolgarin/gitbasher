@@ -316,7 +316,10 @@ stat=$(git show $commit_hash --stat --format="" | cat)
 IFS=$'\n' read -rd '' -a stats <<<"$stat"
 for index in "${!stats[@]}"
 do
-    echo -e "${stats[index]}" 
+    s=${stats[index]}
+    s=${s//[[:blank:]]/}
+    echo -e "${s}" 
+
 done
 
 if [ -z "${fast}" ]; then

@@ -310,7 +310,7 @@ printf "$commit\n"
 
 echo
 stat=$(git show $commit_hash --stat --format="" | cat)
-echo -e $stat
+echo -e "$stat"
 
 if [ -z "${fast}" ]; then
     echo

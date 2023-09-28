@@ -21,3 +21,11 @@ function reverse() {
         rev=("$i" "${rev[@]}")
     done
 }
+
+function check_code {
+    if [ $1 != 0 ]; then
+        echo -e "${RED}Error during $3${ENDCOLOR}"
+        echo -e "$2"
+        exit $1
+    fi
+}

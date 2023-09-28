@@ -131,7 +131,7 @@ $script
 script_code=$?
 
 if [ -f commitmsg ]; then 
-    rm commitmsg
+    rm commitmsg*
 fi
 
 exit $script_code

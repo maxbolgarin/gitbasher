@@ -30,6 +30,7 @@ done
 
 source $utils
 
+
 current_branch=$(git branch --show-current)
 
 ### This function prints information about last commit, use it after `git commit`
@@ -68,6 +69,9 @@ function after_commit {
     fi
 }
 
+commit_hash=""
+git_add=""
+
 ### This function print the list of commits and user should choose one
 # $1: number of last commits to show
 function choose_commit {
@@ -90,6 +94,9 @@ function choose_commit {
         fi
 
         if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
+            if [ -n "$git_add" ]; then
+                git restore --staged $git_add
+            fi
             exit
         fi
 
@@ -104,10 +111,8 @@ function choose_commit {
             break
         fi
     done
-
-    return $commit_hash
+    return
 }
-
 
 ###
 ### Script logic here
@@ -149,65 +154,32 @@ fi
 
 ### Run autosquash logic
 if [ -n "${autosquash}" ]; then
-    echo -e "${YELLOW}Step 1.${ENDCOLOR} Choose commit from which to sqash fixup commits:"
+    echo -e "${YELLOW}Step 1.${ENDCOLOR} Choose commit from which to squash fixup commits (third one or older):"
 
-    commit_hash=$(choose_commit 20)
+    choose_commit 20
 
     git rebase -i --autosquash ${commit_hash}
+    check_code $? "" "autosquash"
     exit
 fi
 
 
+### Run revert logic
 if [ -n "${revert}" ]; then
-    commit_list=$(git log --pretty="%h %s" -n 9 | cat 2>&1)
-
-    IFS=$'\n' read -rd '' -a commits <<<"$commit_list"
-
-    number_of_commits=${#commits[@]}
-
     echo -e "${YELLOW}Step 1.${ENDCOLOR} Choose commit to revert:"
-    for index in "${!commits[@]}"
-    do
-        echo -e "$(($index+1)). ${YELLOW}$(echo ${commits[index]} | awk '{print $1}')${ENDCOLOR}  $(echo ${commits[index]#* })" 
-    done
-    echo "0. Exit..."
+    
+    choose_commit 20
 
-    while [ true ]; do
-         if [ $number_of_commits -gt 9 ]; then
-            read -n 2 choice
-        else
-            read -n 1 -s choice
-        fi
-
-        if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
-            exit
-        fi
-
-        re='^[0-9]+$'
-        if ! [[ $choice =~ $re ]]; then
-           continue
-        fi
-
-        index=$(($choice-1))
-        commit_hash="$(echo ${commits[index]} | awk '{print $1}')"
-        if [ -n "$commit_hash" ]; then
-            break
-        fi
-    done
-
-    revert_result=$(git revert --no-edit ${commit_hash})
-    if [ $? != 0 ]; then
-        echo -e "${RED}Error during commit${ENDCOLOR}"
-        echo -e "$revert_result"
-        exit $?
-    fi
+    result=$(git revert --no-edit ${commit_hash})
+    check_code $? "$result" "revert"
 
     echo
     after_commit "revert"
     exit
 fi
 
-# Don't need to print status in fast mode because we add everything
+
+### Print status (don't need to print in fast mode because we add everything)
 if [ -z "${fast}" ]; then
     echo -e "On branch ${YELLOW}${current_branch}${ENDCOLOR}"
     echo
@@ -216,7 +188,7 @@ if [ -z "${fast}" ]; then
 fi
 
 
-# Step 1: add files to commit
+### Commit Step 1: add files to commit
 if [ -n "${fast}" ]; then
     git add .
     git_add="."
@@ -233,7 +205,7 @@ else
             exit
         fi
 
-        # trim spaces
+        # Trim spaces
         git_add=$(echo "$git_add" | xargs)
         git add $git_add
         if [ $? -eq 0 ]; then
@@ -243,75 +215,40 @@ else
     echo
 fi
 
+
+### Run amend logic - add staged files to last commit
 if [ -n "${amend}" ]; then
-    amend_result=$(git commit --amend --no-edit)
-    if [ $? != 0 ]; then
-        echo -e "${RED}Error during commit${ENDCOLOR}"
-        echo -e "$amend_result"
-        exit $?
-    fi
+    result=$(git commit --amend --no-edit)
+    check_code $? "$result" "amend"
+
     after_commit "amend"
     exit
 fi
 
+
+### Print staged files that we add at step 1
 echo -e "${YELLOW}Staged files:${ENDCOLOR}"
 staged=$(git diff --name-only --cached)
 echo -e "${GREEN}${staged}${ENDCOLOR}"
 
-# Step 2 if fixup: choose commit to fixup
 
+### Run fixup logic
 if [ -n "${fixup}" ]; then
-    commit_list=$(git log --pretty="%h %s" -n 9 | cat 2>&1)
-
-    IFS=$'\n' read -rd '' -a commits <<<"$commit_list"
-
-    number_of_commits=${#commits[@]}
-
     echo
     echo -e "${YELLOW}Step 2.${ENDCOLOR} Choose commit to fixup:"
-    for index in "${!commits[@]}"
-    do
-        echo -e "$(($index+1)). ${YELLOW}$(echo ${commits[index]} | awk '{print $1}')${ENDCOLOR}  $(echo ${commits[index]#* })" 
-    done
-    echo "0. Exit..."
 
-    while [ true ]; do
-         if [ $number_of_commits -gt 9 ]; then
-            read -n 2 choice
-        else
-            read -n 1 -s choice
-        fi
-
-        if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
-            git restore --staged $git_add
-            exit
-        fi
-
-        re='^[0-9]+$'
-        if ! [[ $choice =~ $re ]]; then
-           continue
-        fi
-
-        index=$(($choice-1))
-        commit_hash="$(echo ${commits[index]} | awk '{print $1}')"
-        if [ -n "$commit_hash" ]; then
-            break
-        fi
-    done
+    choose_commit 9
     
-    commit_output=$(git commit --fixup $commit_hash)
-    if [ $? != 0 ]; then
-        echo -e "${RED}Error during commit${ENDCOLOR}"
-        echo -e "$commit_output"
-        exit $?
-    fi
+    result=$(git commit --fixup $commit_hash)
+    check_code $? "$result" "fixup"
+
     echo
     after_commit "fixup"
     exit
 fi
 
-# Step 2: choose commit type
 
+### Commit Step 2: choose commit type
 echo
 step="2"
 if [ -n "${fast}" ]; then
@@ -363,8 +300,8 @@ done
 
 commit="$commit_type"
 
-# Step 3: enter commit scope
 
+# Commit Step 3: enter commit scope
 echo
 step="3"
 if [ -n "${fast}" ]; then
@@ -388,8 +325,8 @@ else
     commit="$commit:"
 fi
 
-# Step 4: enter commit message
 
+# Commit Step 4: enter commit message
 touch commitmsg
 step="4"
 if [ -n "${fast}" ]; then
@@ -442,7 +379,8 @@ done
 
 rm commitmsg
 
-# Step 5: enter tracker ticket
+
+# Commit Step 5: enter tracker ticket
 if [ -n "${ticket}" ]; then
     echo
     echo -e "${YELLOW}Step 5.${ENDCOLOR} Enter the number of issue in your tracking system (e.g. JIRA or Youtrack)"
@@ -472,13 +410,10 @@ fi
 
 commit="$commit $commit_message"
 
-# Finally
-commit_output=$(git commit -m """$commit""")
-if [ $? != 0 ]; then
-    echo -e "${RED}Error during commit${ENDCOLOR}"
-    echo -e "$commit_output"
-    exit $?
-fi
+
+### Finally
+result=$(git commit -m """$commit""")
+check_code $? "$result" "commit"
 
 echo
 after_commit

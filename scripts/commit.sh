@@ -48,8 +48,8 @@ echo
 
 is_clean=$(git status | tail -n 1)
 if [ "$is_clean" = "nothing to commit, working tree clean" ]; then
-    echo -e "${GREEN}Nothing to commit, working tree clean${ENDCOLOR}"
-    if [ -z "${squash}" ]; then
+    if [ -z "${autosquash}" ]; then
+        echo -e "${GREEN}Nothing to commit, working tree clean${ENDCOLOR}"
         exit
     fi
 elif [ -n "${autosquash}" ]; then

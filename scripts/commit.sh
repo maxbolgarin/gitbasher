@@ -31,6 +31,7 @@ fi
 
 source $utils
 
+current_branch=$(git branch --show-current)
 
 function after_commit {
     echo -e "${GREEN}Successful commit $1${ENDCOLOR}"
@@ -183,8 +184,6 @@ if [ -n "${revert}" ]; then
     after_commit "revert"
     exit
 fi
-
-current_branch=$(git branch --show-current)
 
 # Don't need to print status in fast mode because we add everything
 if [ -z "${fast}" ]; then

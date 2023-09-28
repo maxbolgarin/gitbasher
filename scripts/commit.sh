@@ -317,7 +317,7 @@ IFS=$'\n' read -rd '' -a stats <<<"$stat"
 for index in "${!stats[@]}"
 do
     s=$(echo ${stats[index]} | xargs)
-    s=$(sed 's/+/${GREEN}+${ENDCOLOR}/g' <<< ${s})
+    s=$(sed 's/+/\e[32m+\e[0m/g' <<< ${s})
     echo -e "${s}"
 done
 

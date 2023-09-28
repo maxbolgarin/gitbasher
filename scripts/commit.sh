@@ -116,6 +116,7 @@ if [ -n "${fixup}" ]; then
         read -n 1 -s choice
 
         if [ "$choice" == "0" ]; then
+            git restore --staged $git_add
             exit
         fi
 
@@ -131,7 +132,7 @@ if [ -n "${fixup}" ]; then
         fi
     done
     echo
-
+    
     git commit --fixup $commit_hash
     exit $?
 fi

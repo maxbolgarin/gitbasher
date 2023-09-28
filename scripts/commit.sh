@@ -44,6 +44,12 @@ fi
 
 echo
 
+is_clean=$(git status | tail -n 1)
+if [ "$is_clean" = "nothing to commit, working tree clean" ]; then
+    echo -e "${GREEN}Nothing to commit, working tree clean${ENDCOLOR}"
+    exit
+fi
+
 current_branch=$(git branch --show-current)
 
 # Don't need to print status in fast mode because we add everything
@@ -54,10 +60,38 @@ if [ -z "${fast}" ]; then
     git status -s
 fi
 
-is_clean=$(git status | tail -n 1)
-if [ "$is_clean" = "nothing to commit, working tree clean" ]; then
-    exit
-fi
+function after_commit {
+    echo
+    echo -e "${GREEN}Successful commit $1${ENDCOLOR}"
+    echo
+
+    commit_hash=$(git rev-parse HEAD)
+    echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR}"
+    if [ -z "${commit}" ]; then
+        echo $(git log -1 --pretty=%B | cat)
+    else
+        printf "$commit\n"
+    fi
+
+    echo
+
+    stat=$(git show $commit_hash --stat --format="" | cat)
+    IFS=$'\n' read -rd '' -a stats <<<"$stat"
+    for index in "${!stats[@]}"
+    do
+        s=$(echo ${stats[index]} | xargs)
+        s=$(sed 's/+/\\e[32m+\\e[0m/g' <<< ${s})
+        s=$(sed 's/-/\\e[31m-\\e[0m/g' <<< ${s})
+        echo -e "${s}"
+    done
+
+    if [ -z "${fast}" ]; then
+        echo
+        echo -e "Push your changes: ${YELLOW}make push${ENDCOLOR}"
+        echo -e "Undo commit: ${YELLOW}make undo-commit${ENDCOLOR}"
+        echo -e "Update this commit: ${YELLOW}make commit-amend${ENDCOLOR}"
+    fi
+}
 
 # Step 1: add files to commit
 if [ -n "${fast}" ]; then
@@ -88,13 +122,12 @@ fi
 
 if [ -n "${amend}" ]; then
     amend_result=$(git commit --amend --no-edit)
-    amend_header=$(echo "$amend_result" | head -n 1)
-    amend_bottom=$(echo "$amend_result" | tail -n 2)
-
-    echo -e "${GREEN}Successful commit amend${ENDCOLOR}"
-    echo
-    echo -e "${YELLOW}${amend_header}${ENDCOLOR}"
-    echo -e "${amend_bottom}"
+    if [ $? != 0 ]; then
+        echo -e "${RED}Error during commit${ENDCOLOR}"
+        echo -e "$amend_result"
+        exit $?
+    fi
+    after_commit "amend"
     exit
 fi
 
@@ -102,39 +135,6 @@ echo -e "${YELLOW}Staged files:${ENDCOLOR}"
 staged=$(git diff --name-only --cached)
 echo -e "${GREEN}${staged}${ENDCOLOR}"
 
-
-function after_commit {
-    echo
-    echo -e "${GREEN}Successful commit!${ENDCOLOR}"
-    echo
-
-    commit_hash=$(git rev-parse HEAD)
-    echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR}"
-    if [ -z "${commit}" ]; then
-        echo $(git log -1 --pretty=%B | cat)
-    else
-        printf "$commit\n"
-    fi
-
-    echo
-
-    stat=$(git show $commit_hash --stat --format="" | cat)
-    IFS=$'\n' read -rd '' -a stats <<<"$stat"
-    for index in "${!stats[@]}"
-    do
-        s=$(echo ${stats[index]} | xargs)
-        s=$(sed 's/+/\\e[32m+\\e[0m/g' <<< ${s})
-        s=$(sed 's/-/\\e[31m-\\e[0m/g' <<< ${s})
-        echo -e "${s}"
-    done
-
-    if [ -z "${fast}" ]; then
-        echo
-        echo -e "Push your changes: ${YELLOW}make push${ENDCOLOR}"
-        echo -e "Undo commit: ${YELLOW}make undo-commit${ENDCOLOR}"
-        echo -e "Update this commit: ${YELLOW}make commit-amend${ENDCOLOR}"
-    fi
-}
 # Step 2 if fixup: choose commit to fixup
 
 if [ -n "${fixup}" ]; then
@@ -177,7 +177,7 @@ if [ -n "${fixup}" ]; then
         exit $?
     fi
 
-    after_commit
+    after_commit "fixup"
     exit
 fi
 

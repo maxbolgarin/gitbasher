@@ -21,6 +21,7 @@ Bash scripts to help with development
 6. Run `make gitbasher` to ensure that everything is working
 7. Use `make *command*` to work with git
 
+
 ## Makefile commands
 
 Usage `make *command*`

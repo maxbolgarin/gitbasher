@@ -306,11 +306,11 @@ commit_hash=$(git rev-parse HEAD)
 echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR}"
 printf "$commit\n"
 
-git show $commit_hash --stat --format=""
+#git show $commit_hash --stat --format=""
 
-# echo
-# stat=$(git show $commit_hash --stat --format="" | cat)
-# echo -e $stat
+echo
+stat=$(git show $commit_hash --stat --format="" | cat)
+echo -e $stat
 
 if [ -z "${fast}" ]; then
     echo

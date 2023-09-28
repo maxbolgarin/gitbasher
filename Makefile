@@ -37,11 +37,7 @@ commit-amend: ##@CommitManager Add files to the last commit (git commit --amend 
 commit-fixup: ##@CommitManager Make fixup commit (git commit --fixup <commit>)
 	@${GITBASHER_S} -r commit -a "-b ${GITBASHER_MAIN_BRANCH} -x"
 
-.PHONY: commit-squash
-commit-squash: ##@CommitManager Make squash of commits
-	@${GITBASHER_S} -r commit -a "-b ${GITBASHER_MAIN_BRANCH} -s"
-
-.PHONY: commit-squash-auto
+.PHONY: commit-autosquash
 commit-squash-auto: ##@CommitManager Make autosquash of fixup commits (git rebase --autosquash <commit>)
 	@${GITBASHER_S} -r commit -a "-b ${GITBASHER_MAIN_BRANCH} -s"
 # TODO: <after-this-commit> from list (last 9 commits)

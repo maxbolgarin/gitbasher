@@ -18,7 +18,7 @@ while getopts ftaxsb:u: flag; do
         t) ticket="true";;
         a) amend="true";;
         x) fixup="true";;
-        s) squash="true";;
+        s) autosquash="true";;
 
         b) main_branch=${OPTARG};;
         u) utils=${OPTARG};;
@@ -39,7 +39,7 @@ elif [ -n "${fast}" ]; then
 elif [ -n "${fixup}" ]; then
     echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} FIXUP MODE"
 elif [ -n "${squash}" ]; then
-    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} SQUASH MODE"
+    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} AUTOSQUASH MODE"
 else
     echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR}"
 fi
@@ -52,11 +52,54 @@ if [ "$is_clean" = "nothing to commit, working tree clean" ]; then
     if [ -z "${squash}" ]; then
         exit
     fi
-elif [ -n "${squash}" ]; then
-    echo -e "${RED}Cannot squash: there is uncommited changes${ENDCOLOR}"
+elif [ -n "${autosquash}" ]; then
+    echo -e "${RED}Cannot autosquash: there is uncommited changes${ENDCOLOR}"
     exit
 fi
 
+if [ -n "${autosquash}" ]; then
+    commit_list=$(git log --pretty="%h %s" | cat 2>&1)
+    IFS=$'\n' read -rd '' -a commits <<<"$commit_list"
+
+    echo
+    echo -e "${YELLOW}Step 2.${ENDCOLOR} Choose commit to fixup:"
+    for index in "${!commits[@]}"
+    do
+        echo -e "$(($index+1)). ${YELLOW}$(echo ${commits[index]} | awk '{print $1}')${ENDCOLOR}  $(echo ${commits[index]#* })" 
+    done
+    echo "0. Exit..."
+
+    while [ true ]; do
+        read -n 1 -s choice
+
+        if [ "$choice" == "0" ]; then
+            git restore --staged $git_add
+            exit
+        fi
+
+        re='^[0-9]+$'
+        if ! [[ $choice =~ $re ]]; then
+           continue
+        fi
+
+        index=$(($choice-1))
+        commit_hash="$(echo ${commits[index]} | awk '{print $1}')"
+        if [ -n "$commit_hash" ]; then
+            break
+        fi
+    done
+    
+    commit_output=$(git commit --fixup $commit_hash)
+    if [ $? != 0 ]; then
+        echo -e "${RED}Error during commit${ENDCOLOR}"
+        echo -e "$commit_output"
+        exit $?
+    fi
+    echo
+    after_commit "fixup"
+    exit
+
+fi
 
 current_branch=$(git branch --show-current)
 
@@ -144,9 +187,11 @@ echo -e "${GREEN}${staged}${ENDCOLOR}"
 # Step 2 if fixup: choose commit to fixup
 
 if [ -n "${fixup}" ]; then
-    commit_list=$(git log --pretty="%h %s" -n 9 | cat 2>&1)
+    commit_list=$(git log --pretty="%h %s" -n 99 | cat 2>&1)
 
     IFS=$'\n' read -rd '' -a commits <<<"$commit_list"
+
+    number_of_commits=${#commits[@]}
 
     echo
     echo -e "${YELLOW}Step 2.${ENDCOLOR} Choose commit to fixup:"
@@ -157,9 +202,13 @@ if [ -n "${fixup}" ]; then
     echo "0. Exit..."
 
     while [ true ]; do
-        read -n 1 -s choice
+         if [ $number_of_commits -gt 9 ]; then
+            read -n 2 choice
+        else
+            read -n 1 -s choice
+        fi
 
-        if [ "$choice" == "0" ]; then
+        if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
             git restore --staged $git_add
             exit
         fi

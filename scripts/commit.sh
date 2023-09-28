@@ -295,10 +295,13 @@ fi
 commit="$commit $commit_message"
 
 # Finally
-git commit -m """$commit""" > /dev/null
+commit_output=$(git commit -m """$commit""")
 
 echo
 echo -e "${GREEN}Successful commit!${ENDCOLOR}"
+echo
+
+echo $commit_output
 echo
 
 current_branch=$(git branch --show-current)

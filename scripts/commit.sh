@@ -177,6 +177,11 @@ while [ true ]; do
         exit
     fi
 
+    re='^[0-9]+$'
+    if ! [[ $choice =~ $re ]]; then
+        continue
+    fi
+
     commit_type="${types[$choice]}"
     if [ -n "$commit_type" ]; then
         break
@@ -305,8 +310,6 @@ current_branch=$(git branch --show-current)
 commit_hash=$(git rev-parse HEAD)
 echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR}"
 printf "$commit\n"
-
-#git show $commit_hash --stat --format=""
 
 echo
 stat=$(git show $commit_hash --stat --format="" | cat)

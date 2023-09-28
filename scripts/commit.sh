@@ -110,7 +110,11 @@ function after_commit {
 
     commit_hash=$(git rev-parse HEAD)
     echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR}"
-    printf "$commit\n"
+    if [ -z "${commit}" ]; then
+        echo $(git log -1 --pretty=%B | cat)
+    else
+        printf "$commit\n"
+    fi
 
     echo
 
@@ -165,7 +169,6 @@ if [ -n "${fixup}" ]; then
             break
         fi
     done
-    echo
     
     commit_output=$(git commit --fixup $commit_hash)
     if [ $? != 0 ]; then

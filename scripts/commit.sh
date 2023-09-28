@@ -140,7 +140,15 @@ if [ -n "${revert}" ]; then
         fi
     done
 
-    git revert --no-edit ${commit_hash}
+    revert_result=$(git revert --no-edit ${commit_hash})
+    if [ $? != 0 ]; then
+        echo -e "${RED}Error during commit${ENDCOLOR}"
+        echo -e "$revert_result"
+        exit $?
+    fi
+
+    echo
+    after_commit "revert"
     exit
 fi
 

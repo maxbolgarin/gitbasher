@@ -49,3 +49,18 @@ Usage `make *command*`
 | **pull-tags**     | Pull current branch with tags (run `git pull --tags origin <branch> --no-rebase`)  |
 | **push**          | Push commits to current branch and pull changes if there are conflicts with origin |
 | **push-list**     | Show list of commits to push without actual pushing it                             |
+
+
+## For developers of gitbasher
+
+Here are the possible values for `scope` in commit messages headers. Use only this values when making commits. You can also use this as example for your project - it can help you understand what scope is.
+
+| **Scope**    | **Description**                                                                 |
+|--------------|---------------------------------------------------------------------------------|
+| **branch**   | Changes mainly in `branch.sh` script, related to branching features and fixes   |
+| **commit**   | Changes mainly in `commit.sh` script, related to commit features and fixes      |
+| **push**     | Changes mainly in `push.sh` script, related to push features and fixes          |
+| **main**     | Changes mainly in `gitbasher.sh` script, related to some general behavior       |
+| **make**     | Fixes and new features in `Makefile`                                            |
+| **readme**   | Changes in `README` and other informational files                               |
+| **global**   | Some common or non-important changes such as auto refactoring (don't abuse it)  |

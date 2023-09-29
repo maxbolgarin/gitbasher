@@ -59,8 +59,8 @@ pull-tags: ##@Origin Pull current branch and tags
 push: ##@Origin Run Push Manager to push changes and pull origin if there are unpulled changes
 	@${GITBASHER_S} -r push
 
-.PHONY: push-list
-push-list: ##@Origin Print a list of unpushed commits
+.PHONY: push-log
+push-log: ##@Origin Print a list of unpushed commits
 	@${GITBASHER_S} -r push -a "-l"
 
 ################################################

@@ -110,6 +110,9 @@ if [ -z "$new" ]; then
     checkout_output=$(git checkout $branch_name 2>&1)
     checkout_code=$?
 
+    echo $checkout_output
+    echo $checkout_code
+
     ## Checkout is OK
     if [ "$checkout_code" == 0 ]; then
         if [ "$current_branch" == "${branch_name}" ]; then
@@ -128,7 +131,7 @@ if [ -z "$new" ]; then
         if [ -n "$push_log" ]; then
             echo
             echo -e "Your branch ${YELLOW}${branch_name}${ENDCOLOR} is ahead of ${YELLOW}${history_from}${ENDCOLOR} by this commits:"
-            echo -e "$push_log"
+            echo -e $push_log
         fi
         exit
     fi

@@ -82,10 +82,19 @@ if [ -z "$list" ]; then
 fi
 echo
 
-# TODO: fix local branches
+# TODO: fix local branches HERERERER
 
 ### Check if there is commits to push
-push_log=$(git --no-pager log --pretty=format:"\t%h - %an, %ar:\t%s\n" ${branch}..HEAD)
+push_log=$(git --no-pager log --pretty=format:"\t%h - %an, %ar:\t%s\n" origin/${branch}..HEAD 2>&1)
+if [[ $push_log == *"unknown revision or path not in the working tree"* ]]; then 
+    echo "${YELLOW}Branch ${branch} doesn't exist in origin, so get ${ENDCOLOR}"
+fi
+
+echo $push_log
+exit
+
+#push_log=$(git --no-pager log --pretty=format:"\t%h - %an, %ar:\t%s\n" @{push})
+#push_log=$(git --no-pager log --pretty=format:"\t%h - %an, %ar:\t%s\n" main..HEAD)
 
 if [ -z "$push_log" ]; then
     echo -e "${GREEN}Nothing to push${ENDCOLOR}"

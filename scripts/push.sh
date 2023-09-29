@@ -46,6 +46,7 @@ function push {
         echo -e "${YELLOW}Repo: ${ENDCOLOR}${repo}"
         exit
     fi
+    # https://github.com/maxbolgarin/gitbasher/pull/new/feat/new-test-new
 
     if [[ $push_output != *"[rejected]"* ]]; then
         echo -e "${RED}Cannot push! Here is the error${ENDCOLOR}"
@@ -55,6 +56,7 @@ function push {
 }
 
 ### This function asks user to enter yes or no, it will exit at no answer
+# $1: What to write to console on success
 function yes_no_choice {
     while [ true ]; do
         read -n 1 -s choice
@@ -71,6 +73,12 @@ function yes_no_choice {
     done
 }
 
+### Function returns git log diff between provided argument and HEAD
+# $1: branch or commit from which to calc diff
+function gitlog_diff {
+    git --no-pager log --pretty=format:"\t%h - %an, %ar:\t%s\n" $1..HEAD 2>&1
+}
+
 ###
 ### Script logic here
 ###
@@ -85,18 +93,17 @@ echo
 # TODO: fix local branches HERERERER
 
 ### Check if there is commits to push
-push_log=$(git --no-pager log --pretty=format:"\t%h - %an, %ar:\t%s\n" origin/${branch}..HEAD 2>&1)
+push_log=$(gitlog_diff origin/${branch})
 if [[ $push_log == *"unknown revision or path not in the working tree"* ]]; then
-    # base_commit=$(diff -u <(git rev-list --first-parent ${branch}) <(git rev-list --first-parent ${main_branch}) | sed -ne 's/^ //p' | head -1)
-    push_log=$(git --no-pager log --pretty=format:"\t%h - %an, %ar:\t%s\n" origin/${branch}..HEAD 2>&1)
-    echo "${YELLOW}Branch ${branch} doesn't exist in origin, so get ${ENDCOLOR}"
+    echo "${YELLOW}Branch ${branch} doesn't exist in origin, so get commit diff from base commit${ENDCOLOR}"
+    
+    base_commit=$(diff -u <(git rev-list --first-parent ${branch}) <(git rev-list --first-parent ${main_branch}) | sed -ne 's/^ //p' | head -1)
+    if [ -n "$base_commit" ]; then
+        push_log=$(gitlog_diff ${base_commit})
+    else
+        push_log=$(gitlog_diff "origin/HEAD")
+    fi
 fi
-
-echo $push_log
-exit
-
-#push_log=$(git --no-pager log --pretty=format:"\t%h - %an, %ar:\t%s\n" @{push})
-#push_log=$(git --no-pager log --pretty=format:"\t%h - %an, %ar:\t%s\n" main..HEAD)
 
 if [ -z "$push_log" ]; then
     echo -e "${GREEN}Nothing to push${ENDCOLOR}"
@@ -179,3 +186,4 @@ if [ "$choice" == "n" ]; then
     echo -e "${YELLOW}Aborting merge...${ENDCOLOR}"
     git merge --abort
 fi
+

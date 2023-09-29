@@ -101,7 +101,7 @@ echo
 
 ### Run checkout logic
 if [ -z "$new" ]; then
-    echo -e "${YELLOW}Checkout to local branch${ENDCOLOR}"
+    echo -e "${YELLOW}Checkout from '${current_branch}' to local branch${ENDCOLOR}"
 
     choose_branch
 
@@ -125,23 +125,23 @@ if [ -z "$new" ]; then
         fi
 
         get_push_log ${branch_name} ${main_branch}
-        echo
-        echo -e "Your branch ${YELLOW}${branch_name}${ENDCOLOR} is ahead of ${YELLOW}${history_from}${ENDCOLOR} by this commits:"
-        echo -e "$push_log"
+        if [ -n "$push_log" ]; then
+            echo
+            echo -e "Your branch ${YELLOW}${branch_name}${ENDCOLOR} is ahead of ${YELLOW}${history_from}${ENDCOLOR} by this commits:"
+            echo -e "$push_log"
+        fi
         exit
     fi
 
     ## There are uncommited files with conflicts
     if [[ $checkout_output == *"Your local changes to the following files would be overwritten by checkout"* ]]; then
-        conflicts="$(echo "$checkout_output" | tail -n +2 | head -n +2)"
+        conflicts="$(echo "$checkout_output" | tail -r | tail -n +3 | tail -r | tail -n +2)"
         echo -e "${RED}Changes would be overwritten by checkout to '${branch_name}':${ENDCOLOR}"       
         echo -e "${conflicts//[[:blank:]]/}"
         echo
         echo -e "${YELLOW}Commit these files and try to checkout for one more time${ENDCOLOR}"
         exit
     fi
-
-
 
     exit
 fi

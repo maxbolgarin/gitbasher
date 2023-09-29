@@ -8,7 +8,7 @@
 ### Options
 # y: fast push (answer 'yes')
 # l: list of commits to push
-# b: name of main branch
+# b: name of main branch (default 'main')
 # u: path to utils.sh (mandatory)
 
 

@@ -72,7 +72,7 @@ function after_commit {
 commit_hash=""
 git_add=""
 
-### This function print the list of commits and user should choose one
+### This function prints the list of commits and user should choose one
 # $1: number of last commits to show
 function choose_commit {
     commit_list=$(git log --pretty="%h %s" -n $1 | cat 2>&1)
@@ -86,11 +86,14 @@ function choose_commit {
     done
     echo "0. Exit..."
 
+    echo
+    printf "Enter commit number: "
+
     while [ true ]; do
          if [ $number_of_commits -gt 9 ]; then
             read -n 2 choice
         else
-            read -n 1 -s choice
+            read -n 1 choice
         fi
 
         if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
@@ -183,7 +186,7 @@ fi
 if [ -z "${fast}" ]; then
     echo -e "On branch ${YELLOW}${current_branch}${ENDCOLOR}"
     echo
-    echo -e "${BLUE}Changed fiels${ENDCOLOR}"
+    echo -e "${YELLOW}Changed fiels${ENDCOLOR}"
     git status -s
 fi
 

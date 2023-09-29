@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
 
-### Script for creating branches for developing
+### Script for working with branches: create, checkout, remove
+# Use a separate branch for writing new code, then merge it to main
+# Read README.md to get more information how to use it
 # Use this script only with gitbasher.sh
 
 ### Options
 # n: create a new branch
 # c: create a new branch from a current one instead of the main branch
 # s: separator between type and name (default '/')
+# b: name of main branch (default 'main')
+# u: path to utils.sh (mandatory)
+
 
 while getopts ncs:b:u: flag; do
     case "${flag}" in
@@ -23,18 +28,18 @@ if [ -z "$main_branch" ]; then
     main_branch="main"
 fi
 
-source $utils
-
 if [ -z "$sep" ]; then
     sep="/"
 fi
 
-### Script logic below
+source $utils
 
-echo -e "${YELLOW}BRANCH MANAGER${ENDCOLOR} v1.0"
-echo
 
-if [ -z "$new" ]; then
+branch_name=""
+current_branch=$(git branch --show-current)
+
+### This function prints the list of branches and user should choose one
+function choose_branch {
     all_branches=$(git branch --list | cat 2>&1)
     all_branches="${all_branches//\*}"
     all_branches=${all_branches//[[:blank:]]/}
@@ -42,14 +47,19 @@ if [ -z "$new" ]; then
     IFS=$'\n' read -rd '' -a branches_temp <<<"$all_branches"
     reverse branches_temp branches
 
-    echo -e "${YELLOW}Checkout to local branch${ENDCOLOR}"
+    number_of_branches=${#branches[@]}
+
+    if [[ "$number_of_branches" == 1 ]] && [[ "${branches[0]}" == "${current_branch}" ]]; then
+        echo
+        echo -e "You have only a single branch: ${YELLOW}${current_branch}${ENDCOLOR}"
+        exit
+    fi
+
     for index in "${!branches[@]}"
     do
         echo "$(($index+1)). ${branches[index]}"
     done
     echo "0. Exit..."
-
-    number_of_branches=${#branches[@]}
 
     echo
     printf "Enter branch number: "
@@ -77,13 +87,53 @@ if [ -z "$new" ]; then
         fi
     done
     echo
+}
 
-    ## TODO: handle errors
-    git checkout $branch_name
-    exit $?
+
+###
+### Script logic below
+###
+
+### Print header
+echo -e "${YELLOW}BRANCH MANAGER${ENDCOLOR}"
+echo
+
+
+### Run checkout logic
+if [ -z "$new" ]; then
+    echo -e "${YELLOW}Checkout to local branch${ENDCOLOR}"
+
+    choose_branch
+
+    echo
+
+    result=$(git checkout $branch_name 2>&1)
+    checkout_code=$?
+
+    #echo $result
+
+    if [ "$checkout_code" == 0 ]; then
+        if [ "$current_branch" == "${branch_name}" ]; then
+            echo -e "${GREEN}Already on '${branch_name}'${ENDCOLOR}"
+        else
+            echo -e "${GREEN}Switched to branch '${branch_name}'${ENDCOLOR}"
+            changes=$(git status -s)
+            if [ -n "$changes" ]; then
+                echo
+                echo -e "${YELLOW}Moved changes:${ENDCOLOR}"
+                git status -s
+            fi
+        fi
+        exit
+    fi
+
+
+
+    exit
 fi
 
 
+### Run create new branch logic
 echo -e "${YELLOW}Step 1.${ENDCOLOR} What type of branch do you want to create?"
 echo "1. feat:      new feature or logic changes, 'feat' and 'perf' commits"
 echo "2. fix:       small changes, eg. bug fix, including hotfixes"
@@ -97,6 +147,7 @@ declare -A types=(
     [3]="other"
     [4]="misc"
 )
+
 branch_type=""
 while [ true ]; do
     read -n 1 -s choice

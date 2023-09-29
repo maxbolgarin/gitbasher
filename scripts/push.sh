@@ -194,4 +194,3 @@ if [ "$choice" == "n" ]; then
     echo -e "${YELLOW}Aborting merge...${ENDCOLOR}"
     git merge --abort
 fi
-

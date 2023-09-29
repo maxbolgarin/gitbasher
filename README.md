@@ -26,12 +26,12 @@ Bash scripts to help with development
 
 Usage `make *command*`
 
-| Commands general    | Description                                                                                     |
+| **Misc**            | **Description**                                                                                 |
 | ------------------- | ------------------------------------------------------------------------------------------------|
-| **gitbasher**       | Print information about all commands in console                                                 |
+| **gitbasher**       | Print information about all commands                                                            |
 
 
-| Commands for commit   | Description                                                                                     |
+| **Commit**            | **Description**                                                                                 |
 |-----------------------|-------------------------------------------------------------------------------------------------|
 | **commit**            | Choose files to commit and create conventional commit message in format: 'type(scope): message' |
 | **commit-ticket**     | Same as previous, but add tracker's ticket info to the end of commit header                     |
@@ -41,3 +41,11 @@ Usage `make *command*`
 | **commit-fixup**      | Choose files to commit and select commit to --fixup (`git commit --fixup <commit>`)             |
 | **commit-autosquash** | Choose commit from which to squash fixup commits and run `git rebase -i --autosquash <commit>`  |
 | **commit-revert**     | Choose commit to revert (`git revert -no-edit <commit>`)                                        |
+
+
+| **Pull and Push** | **Description**                                                                    |
+|-------------------|------------------------------------------------------------------------------------|
+| **pull**          | Pull current branch in no-rebase mode (run `git pull origin <branch> --no-rebase`) |
+| **pull-tags**     | Pull current branch with tags (run `git pull --tags origin <branch> --no-rebase`)  |
+| **push**          | Push commits to current branch and pull changes if there are conflicts with origin |
+| **push-list**     | Show list of commits to push without actual pushing it                             |

@@ -55,9 +55,18 @@ function choose_branch {
         exit
     fi
 
+    branches_first_main=()
+    branches_first_main+=(${main_branch})
     for index in "${!branches[@]}"
     do
-        echo "$(($index+1)). ${branches[index]}"
+        if [[ "${branches[index]}" != "${main_branch}" ]]; then 
+            branches_first_main+=(${branches[index]})
+        fi
+    done
+
+    for index in "${!branches_first_main[@]}"
+    do
+        echo "$(($index+1)). ${branches_first_main[index]}"
     done
     echo "0. Exit..."
 
@@ -81,7 +90,7 @@ function choose_branch {
         fi
 
         index=$(($choice-1))
-        branch_name="${branches[index]}"
+        branch_name="${branches_first_main[index]}"
         if [ -n "$branch_name" ]; then
             break
         fi
@@ -109,9 +118,6 @@ if [ -z "$new" ]; then
 
     checkout_output=$(git checkout $branch_name 2>&1)
     checkout_code=$?
-
-    echo $checkout_output
-    echo $checkout_code
 
     ## Checkout is OK
     if [ "$checkout_code" == 0 ]; then

@@ -107,11 +107,10 @@ if [ -z "$new" ]; then
 
     echo
 
-    result=$(git checkout $branch_name 2>&1)
+    checkout_output=$(git checkout $branch_name 2>&1)
     checkout_code=$?
 
-    #echo $result
-
+    ## Checkout is OK
     if [ "$checkout_code" == 0 ]; then
         if [ "$current_branch" == "${branch_name}" ]; then
             echo -e "${GREEN}Already on '${branch_name}'${ENDCOLOR}"
@@ -124,6 +123,21 @@ if [ -z "$new" ]; then
                 git status -s
             fi
         fi
+
+        get_push_log ${branch_name} ${main_branch}
+        echo
+        echo -e "Your branch ${YELLOW}${branch_name}${ENDCOLOR} is ahead of ${YELLOW}${history_from}${ENDCOLOR} by this commits:"
+        echo -e "$push_log"
+        exit
+    fi
+
+    ## There are uncommited files with conflicts
+    if [[ $checkout_output == *"Your local changes to the following files would be overwritten by checkout"* ]]; then
+        conflicts="$(echo "$checkout_output" | tail -n +2 | head -n +2)"
+        echo -e "${RED}Changes would be overwritten by checkout to '${branch_name}':${ENDCOLOR}"       
+        echo -e "${conflicts//[[:blank:]]/}"
+        echo
+        echo -e "${YELLOW}Commit these files and try to checkout for one more time${ENDCOLOR}"
         exit
     fi
 

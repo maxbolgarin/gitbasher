@@ -79,12 +79,6 @@ function yes_no_choice {
     done
 }
 
-### Function returns git log diff between provided argument and HEAD
-# $1: branch or commit from which to calc diff
-function gitlog_diff {
-    git --no-pager log --pretty=format:"\t%h - %an, %ar:\t%s\n" $1..HEAD 2>&1
-}
-
 ###
 ### Script logic here
 ###
@@ -97,19 +91,10 @@ echo
 
 
 ### Check if there is commits to push
-push_log=$(gitlog_diff origin/${branch})
-history_from="origin/${branch}"
-if [[ $push_log == *"unknown revision or path not in the working tree"* ]]; then
+get_push_log ${branch} ${main_branch}
+
+if [ "${history_from}" != "origin/${branch}" ]; then
     echo -e "Branch ${YELLOW}${branch}${ENDCOLOR} doesn't exist in origin, so get commit diff from base commit"
-    
-    base_commit=$(diff -u <(git rev-list --first-parent ${branch}) <(git rev-list --first-parent ${main_branch}) | sed -ne 's/^ //p' | head -1)
-    if [ -n "$base_commit" ]; then
-        push_log=$(gitlog_diff ${base_commit})
-        history_from="${base_commit::7}"
-    else
-        push_log=$(gitlog_diff "origin/${main_branch}")
-        history_from="origin/${main_branch}"
-    fi
 fi
 
 if [ -z "$push_log" ]; then

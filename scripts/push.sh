@@ -44,12 +44,15 @@ function push {
         repo="${repo/"git@"/"https://"}"
         repo="${repo/".git"/""}" 
         echo -e "${YELLOW}Repo:${ENDCOLOR}\t${repo}"
-        if [[ $repo == *"github"* ]] && [[ ${branch} != ${main_branch} ]]; then
-            echo -e "${YELLOW}PR:${ENDCOLOR}\t${repo}/pull/new/${branch}"
+        if [[ ${branch} != ${main_branch} ]]; then
+            if [[ $repo == *"github"* ]]; then
+                echo -e "${YELLOW}PR:${ENDCOLOR}\t${repo}/pull/new/${branch}"
+            elif [[ $repo == *"gitlab"* ]]; then
+                echo -e "${YELLOW}MR:${ENDCOLOR}\t${repo}/-/merge_requests/new?merge_request%5Bsource_branch%5D=${branch}"
+            fi
         fi
         exit
     fi
-    # https://github.com/maxbolgarin/gitbasher/pull/new/feat/new-test-new
 
     if [[ $push_output != *"[rejected]"* ]]; then
         echo -e "${RED}Cannot push! Here is the error${ENDCOLOR}"
@@ -93,7 +96,6 @@ if [ -z "$list" ]; then
 fi
 echo
 
-# TODO: fix local branches HERERERER
 
 ### Check if there is commits to push
 push_log=$(gitlog_diff origin/${branch})

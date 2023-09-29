@@ -94,14 +94,17 @@ echo
 
 ### Check if there is commits to push
 push_log=$(gitlog_diff origin/${branch})
+history_from="origin/${branch}"
 if [[ $push_log == *"unknown revision or path not in the working tree"* ]]; then
     echo "${YELLOW}Branch ${branch} doesn't exist in origin, so get commit diff from base commit${ENDCOLOR}"
     
     base_commit=$(diff -u <(git rev-list --first-parent ${branch}) <(git rev-list --first-parent ${main_branch}) | sed -ne 's/^ //p' | head -1)
     if [ -n "$base_commit" ]; then
         push_log=$(gitlog_diff ${base_commit})
+        history_from="${base_commit} (base ${branch} commit)"
     else
-        push_log=$(gitlog_diff "origin/HEAD")
+        push_log=$(gitlog_diff "origin/${main_branch}")
+        history_from="origin/${main_branch}"
     fi
 fi
 
@@ -110,7 +113,7 @@ if [ -z "$push_log" ]; then
     exit
 fi
 
-echo -e "${YELLOW}Commit history:${ENDCOLOR}"
+echo -e "${YELLOW}Commit history from ${history_from}:${ENDCOLOR}"
 echo -e $push_log
 
 

@@ -86,7 +86,9 @@ echo
 
 ### Check if there is commits to push
 push_log=$(git --no-pager log --pretty=format:"\t%h - %an, %ar:\t%s\n" origin/${branch}..HEAD 2>&1)
-if [[ $push_log == *"unknown revision or path not in the working tree"* ]]; then 
+if [[ $push_log == *"unknown revision or path not in the working tree"* ]]; then
+    # base_commit=$(diff -u <(git rev-list --first-parent ${branch}) <(git rev-list --first-parent ${main_branch}) | sed -ne 's/^ //p' | head -1)
+    push_log=$(git --no-pager log --pretty=format:"\t%h - %an, %ar:\t%s\n" origin/${branch}..HEAD 2>&1)
     echo "${YELLOW}Branch ${branch} doesn't exist in origin, so get ${ENDCOLOR}"
 fi
 

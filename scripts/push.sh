@@ -44,7 +44,7 @@ function push {
         repo="${repo/"git@"/"https://"}"
         repo="${repo/".git"/""}" 
         echo -e "${YELLOW}Repo:${ENDCOLOR}\t${repo}"
-        if [[ $repo == *"github"* ]]; then
+        if [[ $repo == *"github"* ]] && [[ ${branch} != ${main_branch} ]]; then
             echo -e "${YELLOW}PR:${ENDCOLOR}\t${repo}/pull/new/${branch}"
         fi
         exit

@@ -43,7 +43,10 @@ function push {
         repo="${repo/":"/"/"}" 
         repo="${repo/"git@"/"https://"}"
         repo="${repo/".git"/""}" 
-        echo -e "${YELLOW}Repo: ${ENDCOLOR}${repo}"
+        echo -e "${YELLOW}Repo:${ENDCOLOR}\t${repo}"
+        if [[ $repo == *"github"* ]]; then
+            echo -e "${YELLOW}PR:${ENDCOLOR}\t${repo}/pull/new/${branch}"
+        fi
         exit
     fi
     # https://github.com/maxbolgarin/gitbasher/pull/new/feat/new-test-new

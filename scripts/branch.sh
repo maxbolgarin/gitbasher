@@ -58,7 +58,7 @@ if [ -z "$new" ]; then
         if [ $number_of_branches -gt 9 ]; then
             read -n 2 choice
         else
-            read -n 1 -s choice
+            read -n 1 choice
         fi
 
         if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then

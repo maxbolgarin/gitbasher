@@ -84,7 +84,7 @@ branch-new-current: ##@BranchManager Create a new branch from current state acco
 branch-rm: ##@BranchManager Choose a branch to remove
 
 .PHONY: branch-prune
-branch-prune-stuck: ##@BranchManager Remove all not merged branches and run 'git remote prune origin'
+branch-prune: ##@BranchManager Remove all not merged branches and run 'git remote prune origin'
 	@git branch --merged | egrep -v "(^\*|master|main|${GITBASHER_MAIN_BRANCH})" | xargs git branch -d
 	@git remote prune origin
 

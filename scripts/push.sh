@@ -89,7 +89,6 @@ function gitlog_diff {
 ### Script logic here
 ###
 
-
 ### Print header
 if [ -z "$list" ]; then
     echo -e "${YELLOW}PUSH MANAGER${ENDCOLOR}"

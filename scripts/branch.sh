@@ -157,6 +157,7 @@ fi
 
 
 ### Run create new branch logic
+### Step 1. Choose branch type
 echo -e "${YELLOW}Step 1.${ENDCOLOR} What type of branch do you want to create?"
 echo "1. feat:      new feature or logic changes, 'feat' and 'perf' commits"
 echo "2. fix:       small changes, eg. bug fix, including hotfixes"
@@ -186,6 +187,9 @@ while [ true ]; do
 done
 
 echo
+
+
+### Step 2. Enter branch name
 echo -e "${YELLOW}Step 2.${ENDCOLOR} Enter the name of the branch, using '-' as a separator between words"
 echo "Leave it blank if you want to exit"
 
@@ -197,6 +201,8 @@ fi
 
 branch_name="${branch_type}${sep}${branch_name##*( )}"
 
+
+### Step 3. Checkout to main, pull it and then create a new branch from main
 if [ -z "${current}" ]; then
     checkout_output=$(git checkout $main_branch 2>&1)
     checkout_code=$?
@@ -221,7 +227,7 @@ if [ -z "${current}" ]; then
             echo -e "${YELLOW}Files:${ENDCOLOR}"
             echo "$files_to_commit"
             echo
-            echo -e "Commit checnges and then use ${YELLOW}make branch-new${ENDCOLOR} again"
+            echo -e "Commit changes and then use ${YELLOW}make branch-new${ENDCOLOR} again"
             exit $pull_code
         fi
 
@@ -250,6 +256,8 @@ if [ -z "${current}" ]; then
     echo -e "${GREEN}Successful pull!${ENDCOLOR}"
 fi
 
+
+### Step 4. Create a new branch and checkout to it
 checkout_output=$(git checkout -b $branch_name 2>&1)
 checkout_code=$?
 
@@ -257,6 +265,12 @@ echo
 
 if [ $checkout_code -eq 0 ]; then
     echo -e "${GREEN}${checkout_output}${ENDCOLOR}"
+    changes=$(git status -s)
+    if [ -n "$changes" ]; then
+        echo
+        echo -e "${YELLOW}Moved changes:${ENDCOLOR}"
+        git status -s
+    fi
     exit
 fi
 
@@ -267,3 +281,4 @@ fi
 
 echo -e "${RED}Checkout error: ${checkout_output}${ENDCOLOR}"
 exit $checkout_code
+ma

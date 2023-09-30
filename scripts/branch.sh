@@ -13,10 +13,11 @@
 # u: path to utils.sh (mandatory)
 
 
-while getopts ncs:b:u: flag; do
+while getopts ncrs:b:u: flag; do
     case "${flag}" in
         n) new="true";;
         c) current="true";;
+        r) remote="true";;
         s) sep=${OPTARG};;
 
         b) main_branch=${OPTARG};;
@@ -55,20 +56,26 @@ function choose_branch {
         exit
     fi
 
-    branches_first_main=()
-    branches_first_main+=(${main_branch})
+    IFS=$'\n' read -rd '' -a branches_with_commits_temp <<<"$(git branch --list -v | cat 2>&1)"
+    reverse branches_with_commits_temp branches_with_commits
+
+    branches_first_main=(${main_branch})
+    branches_with_commits_first_main=("dummy")
     for index in "${!branches[@]}"
     do
         if [[ "${branches[index]}" != "${main_branch}" ]]; then 
             branches_first_main+=(${branches[index]})
+            branches_with_commits_first_main+=("${branches_with_commits[index]}")
+        else
+            branches_with_commits_first_main[0]="${branches_with_commits[index]}"
         fi
     done
 
-    for index in "${!branches_first_main[@]}"
+    for index in "${!branches_with_commits_first_main[@]}"
     do
-        echo "$(($index+1)). ${branches_first_main[index]}"
+        echo "$(($index+1)). ${branches_with_commits_first_main[index]}"
     done
-    echo "0. Exit..."
+    printf "0. Exit...\n"
 
     echo
     printf "Enter branch number: "

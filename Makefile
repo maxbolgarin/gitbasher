@@ -69,8 +69,8 @@ push-log: ##@Origin Print a list of unpushed commits
 branch: ##@BranchManager Checkout to an available local branch
 	@${GITBASHER_S} -r branch -a "-b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR}"
 
-.PHONY: branch-origin
-branch-origin: ##@BranchManager Checkout to an available origin branch and fetch it
+.PHONY: branch-remote
+branch-remote: ##@BranchManager Checkout to an available remote branch
 
 .PHONY: branch-new
 branch-new: ##@BranchManager Create a new branch from 'main' according to conventional naming

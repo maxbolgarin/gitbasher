@@ -6,6 +6,13 @@ Bash scripts to help with development
 * GitHub flow to manage development of your projects: [read](https://gitversion.net/docs/learn/branching-strategies/githubflow/)
 
 
+## Requirements
+
+* `bash` version from 4.0
+* `make` version from 3.81
+* `git`  version from 2.23
+
+
 ## How to use
 
 1. Clone gitbasher to your local environment: `git clone https://github.com/maxbolgarin/gitbasher.git && cd gitbasher`

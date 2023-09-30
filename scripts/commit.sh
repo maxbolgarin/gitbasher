@@ -93,7 +93,7 @@ function choose_commit {
          if [ $number_of_commits -gt 9 ]; then
             read -n 2 choice
         else
-            read -n 1 choice
+            read -n 1 -s choice
         fi
 
         if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
@@ -111,6 +111,7 @@ function choose_commit {
         index=$(($choice-1))
         commit_hash="$(echo ${commits[index]} | awk '{print $1}')"
         if [ -n "$commit_hash" ]; then
+            printf $choice
             break
         fi
     done

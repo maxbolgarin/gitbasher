@@ -71,6 +71,7 @@ branch: ##@BranchManager Checkout to an available local branch
 
 .PHONY: branch-remote
 branch-remote: ##@BranchManager Checkout to an available remote branch
+	@${GITBASHER_S} -r branch -a "-b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR} -r"
 
 .PHONY: branch-new
 branch-new: ##@BranchManager Create a new branch from 'main' according to conventional naming

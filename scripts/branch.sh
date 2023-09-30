@@ -6,18 +6,22 @@
 # Use this script only with gitbasher.sh
 
 ### Options
+# no options: switch to local branch
+# r: switch to remote branch
 # n: create a new branch
 # c: create a new branch from a current one instead of the main branch
+# d: delete a local branch
 # s: separator between type and name (default '/')
 # b: name of main branch (default 'main')
 # u: path to utils.sh (mandatory)
 
 
-while getopts ncrs:b:u: flag; do
+while getopts ncrds:b:u: flag; do
     case "${flag}" in
         n) new="true";;
         c) current="true";;
         r) remote="true";;
+        d) delete="true";;
         s) sep=${OPTARG};;
 
         b) main_branch=${OPTARG};;
@@ -41,7 +45,13 @@ current_branch=$(git branch --show-current)
 
 ### This function prints the list of branches and user should choose one
 function choose_branch {
-    all_branches=$(git branch --list --sort=-committerdate | cat 2>&1)
+    args="--list --sort=-committerdate"
+    if [[ "$1" == "remote" ]]; then
+        args="--list --sort=-committerdate -r"
+    fi
+    all_branches=$(git branch $args | cat 2>&1)
+    all_branches_wih_commits=$(git branch $args -v | cat 2>&1)
+
     all_branches="${all_branches//\*}"
     all_branches=${all_branches//[[:blank:]]/}
 
@@ -56,17 +66,17 @@ function choose_branch {
         exit
     fi
 
-    IFS=$'\n' read -rd '' -a branches_with_commits_temp <<<"$(git branch --list -v | cat 2>&1)"
+    IFS=$'\n' read -rd '' -a branches_with_commits_temp <<<"$all_branches_wih_commits"
     reverse branches_with_commits_temp branches_with_commits
 
     branches_first_main=(${main_branch})
     branches_with_commits_first_main=("dummy")
     for index in "${!branches[@]}"
     do
-        if [[ "${branches[index]}" != "${main_branch}" ]]; then 
+        if [[ "${branches[index]}" != *"${main_branch}"* ]]; then 
             branches_first_main+=(${branches[index]})
             branches_with_commits_first_main+=("${branches_with_commits[index]}")
-        else
+        elif [[ "${branches[index]}" != *"HEAD->"* ]]; then 
             branches_with_commits_first_main[0]="${branches_with_commits[index]}"
         fi
     done
@@ -84,7 +94,7 @@ function choose_branch {
         if [ $number_of_branches -gt 9 ]; then
             read -n 2 choice
         else
-            read -n 1 choice
+            read -n 1 -s choice
         fi
 
         if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
@@ -99,6 +109,7 @@ function choose_branch {
         index=$(($choice-1))
         branch_name="${branches_first_main[index]}"
         if [ -n "$branch_name" ]; then
+            printf $choice
             break
         fi
     done
@@ -111,13 +122,21 @@ function choose_branch {
 ###
 
 ### Print header
-echo -e "${YELLOW}BRANCH MANAGER${ENDCOLOR}"
+if [ -n "${new}" ]; then
+    echo -e "${YELLOW}BRANCH MANAGER${ENDCOLOR} NEW"
+elif [ -n "${remote}" ]; then
+    echo -e "${YELLOW}BRANCH MANAGER${ENDCOLOR} REMOTE"
+elif [ -n "${delete}" ]; then
+    echo -e "${YELLOW}BRANCH MANAGER${ENDCOLOR} DELETE"
+else
+    echo -e "${YELLOW}BRANCH MANAGER${ENDCOLOR}"
+fi
 echo
 
 
-### Run checkout logic
-if [ -z "$new" ]; then
-    echo -e "${YELLOW}Checkout from '${current_branch}' to local branch${ENDCOLOR}"
+### Run switch to local logic
+if [ -z "$new" ] && [ -z "$remote" ]; then
+    echo -e "${YELLOW}Switch from '${current_branch}' to local branch${ENDCOLOR}"
 
     choose_branch
 
@@ -152,12 +171,35 @@ if [ -z "$new" ]; then
     ## There are uncommited files with conflicts
     if [[ $checkout_output == *"Your local changes to the following files would be overwritten by checkout"* ]]; then
         conflicts="$(echo "$checkout_output" | tail -r | tail -n +3 | tail -r | tail -n +2)"
-        echo -e "${RED}Changes would be overwritten by checkout to '${branch_name}':${ENDCOLOR}"       
+        echo -e "${RED}Changes would be overwritten by switch to '${branch_name}':${ENDCOLOR}"       
         echo -e "${conflicts//[[:blank:]]/}"
         echo
-        echo -e "${YELLOW}Commit these files and try to checkout for one more time${ENDCOLOR}"
+        echo -e "${YELLOW}Commit these files and try to switch for one more time${ENDCOLOR}"
         exit
     fi
+
+    exit
+
+
+### Run switch to remote logic
+elif [[ -z "$new" ]] && [[ -n "$remote" ]]; then
+    echo -e "${YELLOW}Fetching remote...${ENDCOLOR}"
+    echo
+
+    fetch_output=$(git fetch 2>&1)
+    fetch_code=$?
+    if [ $fetch_code -ne 0 ] ; then
+        echo -e "${RED}Cannot fetch remote!${ENDCOLOR}"
+        echo -e "${fetch_output}"
+        exit $fetch_code
+    fi
+
+    echo -e "${YELLOW}Switch from '${current_branch}' to remote branch${ENDCOLOR}"
+    choose_branch "remote"
+
+    echo
+
+    echo $branch_name
 
     exit
 fi
@@ -209,13 +251,13 @@ fi
 branch_name="${branch_type}${sep}${branch_name##*( )}"
 
 
-### Step 3. Checkout to main, pull it and then create a new branch from main
+### Step 3. Switch to main, pull it and then create a new branch from main
 if [ -z "${current}" ]; then
     checkout_output=$(git checkout $main_branch 2>&1)
     checkout_code=$?
 
     if [ $checkout_code -ne 0 ]; then
-        echo -e "${RED}Cannot checkout to '$main_branch': $checkout_output${ENDCOLOR}"
+        echo -e "${RED}Cannot switch to '$main_branch': $checkout_output${ENDCOLOR}"
         exit $checkout_code
     fi
 
@@ -286,6 +328,6 @@ if [[ $checkout_output == *"already exists"* ]]; then
     exit $checkout_code
 fi
 
-echo -e "${RED}Checkout error: ${checkout_output}${ENDCOLOR}"
+echo -e "${RED}Switch error: ${checkout_output}${ENDCOLOR}"
 exit $checkout_code
 ma

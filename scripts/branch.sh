@@ -41,7 +41,7 @@ current_branch=$(git branch --show-current)
 
 ### This function prints the list of branches and user should choose one
 function choose_branch {
-    all_branches=$(git branch --list | cat 2>&1)
+    all_branches=$(git branch --list --sort=-committerdate | cat 2>&1)
     all_branches="${all_branches//\*}"
     all_branches=${all_branches//[[:blank:]]/}
 

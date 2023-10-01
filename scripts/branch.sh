@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-### Script for working with branches: create, checkout, remove
+### Script for working with branches: create, switch, remove
 # Use a separate branch for writing new code, then merge it to main
 # Read README.md to get more information how to use it
 # Use this script only with gitbasher.sh
@@ -142,11 +142,13 @@ if [ -z "$new" ] && [ -z "$remote" ]; then
 
     echo
 
-    checkout_output=$(git checkout $branch_name 2>&1)
-    checkout_code=$?
+    switch_output=$(git switch $branch_name 2>&1)
+    switch_code=$?
 
-    ## Checkout is OK
-    if [ "$checkout_code" == 0 ]; then
+    echo -e "$switch_output"
+
+    ## Switch is OK
+    if [ "$switch_code" == 0 ]; then
         if [ "$current_branch" == "${branch_name}" ]; then
             echo -e "${GREEN}Already on '${branch_name}'${ENDCOLOR}"
         else
@@ -169,8 +171,8 @@ if [ -z "$new" ] && [ -z "$remote" ]; then
     fi
 
     ## There are uncommited files with conflicts
-    if [[ $checkout_output == *"Your local changes to the following files would be overwritten by checkout"* ]]; then
-        conflicts="$(echo "$checkout_output" | tail -r | tail -n +3 | tail -r | tail -n +2)"
+    if [[ $switch_output == *"Your local changes to the following files would be overwritten"* ]]; then
+        conflicts="$(echo "$switch_output" | tail -r | tail -n +3 | tail -r | tail -n +2)"
         echo -e "${RED}Changes would be overwritten by switch to '${branch_name}':${ENDCOLOR}"       
         echo -e "${conflicts//[[:blank:]]/}"
         echo
@@ -253,12 +255,12 @@ branch_name="${branch_type}${sep}${branch_name##*( )}"
 
 ### Step 3. Switch to main, pull it and then create a new branch from main
 if [ -z "${current}" ]; then
-    checkout_output=$(git checkout $main_branch 2>&1)
-    checkout_code=$?
+    switch_output=$(git switch $main_branch 2>&1)
+    switch_code=$?
 
-    if [ $checkout_code -ne 0 ]; then
-        echo -e "${RED}Cannot switch to '$main_branch': $checkout_output${ENDCOLOR}"
-        exit $checkout_code
+    if [ $switch_code -ne 0 ]; then
+        echo -e "${RED}Cannot switch to '$main_branch': $switch_output${ENDCOLOR}"
+        exit $switch_code
     fi
 
     echo
@@ -306,14 +308,15 @@ if [ -z "${current}" ]; then
 fi
 
 
-### Step 4. Create a new branch and checkout to it
-checkout_output=$(git checkout -b $branch_name 2>&1)
-checkout_code=$?
+### Step 4. Create a new branch and switch to it
+switch_output=$(git switch -c $branch_name 2>&1)
+switch_code=$?
 
+echo -e "${switch_output}"
 echo
 
-if [ $checkout_code -eq 0 ]; then
-    echo -e "${GREEN}${checkout_output}${ENDCOLOR}"
+if [ $switch_code -eq 0 ]; then
+    echo -e "${GREEN}${switch_output}${ENDCOLOR}"
     changes=$(git status -s)
     if [ -n "$changes" ]; then
         echo
@@ -323,11 +326,10 @@ if [ $checkout_code -eq 0 ]; then
     exit
 fi
 
-if [[ $checkout_output == *"already exists"* ]]; then
+if [[ $switch_output == *"already exists"* ]]; then
     echo -e "${RED}Branch with name '${branch_name}' already exists${ENDCOLOR}"
-    exit $checkout_code
+    exit $switch_code
 fi
 
-echo -e "${RED}Switch error: ${checkout_output}${ENDCOLOR}"
-exit $checkout_code
-ma
+echo -e "${RED}Switch error: ${switch_output}${ENDCOLOR}"
+exit $switch_code

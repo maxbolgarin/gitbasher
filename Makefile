@@ -81,12 +81,13 @@ branch-new: ##@BranchManager Create a new branch from 'main' according to conven
 branch-new-current: ##@BranchManager Create a new branch from current state according to conventional naming
 	@${GITBASHER_S} -r branch -a "-b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR} -n -c"
 
-.PHONY: branch-rm
-branch-rm: ##@BranchManager Choose a branch to remove
+.PHONY: branch-delete
+branch-delete: ##@BranchManager Choose a branch to delete
+	@${GITBASHER_S} -r branch -a "-b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR} -d"
 
 .PHONY: branch-prune
 branch-prune: ##@BranchManager Remove all not merged branches and run 'git remote prune origin'
-	@git branch --merged | egrep -v "(^\*|master|main|${GITBASHER_MAIN_BRANCH})" | xargs git branch -d
+	@git branch --merged | egrep -v "(^\*|master|main|develop|${GITBASHER_MAIN_BRANCH})" | xargs git branch -d
 	@git remote prune origin
 
 ################################################

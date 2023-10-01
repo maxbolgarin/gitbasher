@@ -46,18 +46,21 @@ fi
 source $utils
 
 
-branch_name=""
 current_branch=$(git branch --show-current)
 
-### This function prints the list of branches and user should choose one
-# $1: pass 'remote' if you want to select from remote branches
-function choose_branch {
+### Function prints list of branches
+# $1: possible values:
+#     * no value prints all local branches
+#     * 'remote' - all remote
+#     * 'no-main' - all local without main
+#     * 'no-merged' - not merged local
+function list_branches {
     args="--list --sort=-committerdate"
     if [[ "$1" == "remote" ]]; then
         args="--list --sort=-committerdate -r"
     fi
     all_branches=$(git branch $args | cat 2>&1)
-    all_branches_wih_commits=$(git branch $args -v | cat 2>&1)
+    all_branches_wih_commits=$(git branch -v $args  | cat 2>&1)
 
     all_branches="${all_branches//\*}"
     all_branches=${all_branches//[[:blank:]]/}
@@ -66,10 +69,25 @@ function choose_branch {
     reverse branches_temp branches
 
     number_of_branches=${#branches[@]}
+    if [[ "$1" == "remote" ]]; then
+        # There is origin/HEAD
+        ((number_of_branches=number_of_branches-1))
+    fi
 
-    if [[ "$number_of_branches" == 1 ]] && [[ "${branches[0]}" == "${current_branch}" ]]; then
+    if [[ "$number_of_branches" == 0 ]]; then
         echo
-        echo -e "You have only a single branch: ${YELLOW}${current_branch}${ENDCOLOR}"
+        echo -e "${YELLOW}There is no branches${ENDCOLOR}"
+        exit
+    fi
+
+    branch_to_check="${branches[0]}"
+    if [[ "$1" == "remote" ]]; then
+        branch_to_check="$(sed "s/${origin_name}\///g" <<< ${branch_to_check})"
+    fi
+
+    if [[ "$number_of_branches" == 1 ]] && [[ "${branch_to_check}" == "${current_branch}" ]]; then
+        echo
+        echo -e "You have only one branch: ${YELLOW}${current_branch}${ENDCOLOR}"
         exit
     fi
 
@@ -80,10 +98,11 @@ function choose_branch {
     branches_with_commits_first_main=("dummy")
     for index in "${!branches[@]}"
     do
-        if [[ "${branches[index]}" != *"${main_branch}"* ]]; then 
+        branch_to_check="$(echo "${branches[index]//\*}" | xargs)"
+        if [[ "$branch_to_check" != "${main_branch}"* ]]; then 
             branches_first_main+=(${branches[index]})
             branches_with_commits_first_main+=("${branches_with_commits[index]}")
-        elif [[ "${branches[index]}" != *"HEAD->"* ]]; then 
+        elif [[ "$branch_to_check" != "HEAD->"* ]]; then 
             branches_with_commits_first_main[0]="${branches_with_commits[index]}"
         fi
     done
@@ -92,6 +111,14 @@ function choose_branch {
     do
         echo "$(($index+1)). ${branches_with_commits_first_main[index]}"
     done
+}
+
+branch_name=""
+
+### This function prints the list of branches and user should choose one
+# $1: pass 'remote' if you want to select from remote branches, 'delete' if you want to select for delete
+function choose_branch {
+    list_branches $1
     printf "0. Exit...\n"
 
     echo
@@ -193,7 +220,7 @@ echo
 
 
 ### Run switch to local logic
-if [ -z "$new" ] && [ -z "$remote" ]; then
+if [[ -z "$new" ]] && [[ -z "$remote" ]] && [[ -z "$delete" ]]; then
     echo -e "${YELLOW}Switch from '${current_branch}' to local branch${ENDCOLOR}"
 
     choose_branch
@@ -201,7 +228,7 @@ if [ -z "$new" ] && [ -z "$remote" ]; then
     switch ${branch_name}
 
 ### Run switch to remote logic
-elif [[ -z "$new" ]] && [[ -n "$remote" ]]; then
+elif [[ -z "$new" ]] && [[ -n "$remote" ]] && [[ -z "$delete" ]]; then
     echo -e "${YELLOW}Fetching remote...${ENDCOLOR}"
     echo
 
@@ -218,6 +245,55 @@ elif [[ -z "$new" ]] && [[ -n "$remote" ]]; then
     choose_branch "remote"
 
     switch ${branch_name}
+
+elif [[ -z "$new" ]] && [[ -n "$delete" ]]; then
+    merged_branches_str=$(git branch -v --sort=-committerdate --merged | cat 2>&1)
+    #merged_branches_str="${merged_branches_str//\*}"
+
+    IFS=$'\n' read -rd '' -a merged_branches <<<"$merged_branches_str"
+
+    merged_branches_without_main=()
+    for index in "${!merged_branches[@]}"
+    do
+        branch_with_info="$(echo "${merged_branches[index]}" | xargs)"
+        if [[ ${branch_with_info} != "${main_branch}"* ]] && [[ ${branch_with_info} != "*"* ]] ; then
+            merged_branches_without_main+=("$branch_with_info")
+        fi
+    done
+    number_of_branches=${#merged_branches_without_main[@]}
+
+    if [ $number_of_branches != 0 ]; then
+        echo -e "${YELLOW}Do you want to delete merged local branches?${ENDCOLOR}"
+        echo -e "These are branches without new changes regarding ${main_branch}"
+        for index in "${!merged_branches_without_main[@]}"
+        do
+            printf "\t${merged_branches_without_main[index]}\n"
+        done
+
+        printf "\nAnswer (y/n): "
+        
+        while [ true ]; do
+            read -n 1 -s choice
+            if [ "$choice" == "y" ]; then
+                printf "y\n\n"
+                git branch --merged | egrep -v "(^\*|master|main|develop|${main_branch})" | xargs git branch -d
+                break
+
+            elif [ "$choice" == "n" ]; then
+                printf "n\n\n"
+                break
+            fi
+        done
+    fi
+
+    #choose_branch "delete"
+
+    echo -e "${branch_name}"
+
+    #switch ${branch_name}
+
+   
+    exit
 fi
 
 

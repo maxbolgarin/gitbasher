@@ -43,9 +43,14 @@ history_from=""
 ### Function sets to variables push_log and history_from actual push log information
 # $1: current branch
 # $2: main branch
+# $3: origin name
 function get_push_log {
-    push_log=$(gitlog_diff origin/$1)
-    history_from="origin/$1"
+    origin_name="origin"
+    if [ -n "$3" ]; then
+        origin_name="$3"
+    fi 
+    push_log=$(gitlog_diff ${origin_name}/$1)
+    history_from="${origin_name}/$1"
 
     if [[ $push_log == *"unknown revision or path not in the working tree"* ]]; then
         base_commit=$(diff -u <(git rev-list --first-parent $1) <(git rev-list --first-parent $2) | sed -ne 's/^ //p' | head -1)
@@ -53,8 +58,8 @@ function get_push_log {
             push_log=$(gitlog_diff ${base_commit})
             history_from="${base_commit::7}"
         else
-            push_log=$(gitlog_diff "origin/$2")
-            history_from="origin/$2"
+            push_log=$(gitlog_diff "${origin_name}/$2")
+            history_from="${origin_name}/$2"
         fi
     fi
 }

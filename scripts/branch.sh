@@ -13,10 +13,11 @@
 # d: delete a local branch
 # s: separator between type and name (default '/')
 # b: name of main branch (default 'main')
+# o: name of remote (default 'origin')
 # u: path to utils.sh (mandatory)
 
 
-while getopts ncrds:b:u: flag; do
+while getopts ncrds:b:o:u: flag; do
     case "${flag}" in
         n) new="true";;
         c) current="true";;
@@ -25,12 +26,17 @@ while getopts ncrds:b:u: flag; do
         s) sep=${OPTARG};;
 
         b) main_branch=${OPTARG};;
+        o) origin_name=${OPTARG};;
         u) utils=${OPTARG};;
     esac
 done
 
 if [ -z "$main_branch" ]; then
     main_branch="main"
+fi
+
+if [ -z "$origin_name" ]; then
+    origin_name="origin"
 fi
 
 if [ -z "$sep" ]; then
@@ -114,6 +120,11 @@ function choose_branch {
             break
         fi
     done
+
+    # if [[ "$1" == "remote" ]]; then
+
+    # fi
+
     echo
 }
 
@@ -160,7 +171,7 @@ if [ -z "$new" ] && [ -z "$remote" ]; then
             fi
         fi
 
-        get_push_log ${branch_name} ${main_branch}
+        get_push_log ${branch_name} ${main_branch} ${origin_name}
         if [ -n "$push_log" ]; then
             echo
             echo -e "Your branch ${YELLOW}${branch_name}${ENDCOLOR} is ahead of ${YELLOW}${history_from}${ENDCOLOR} by this commits:"
@@ -221,7 +232,7 @@ elif [[ -z "$new" ]] && [[ -n "$remote" ]]; then
             fi
         fi
 
-        get_push_log ${branch_name} ${main_branch}
+        get_push_log ${branch_name} ${main_branch} ${origin_name}
         if [ -n "$push_log" ]; then
             echo
             echo -e "Your branch ${YELLOW}${branch_name}${ENDCOLOR} is ahead of ${YELLOW}${history_from}${ENDCOLOR} by this commits:"
@@ -293,7 +304,7 @@ if [ -z "${current}" ]; then
     echo -e "${GREEN}Switched to '$main_branch'${ENDCOLOR}"
     echo -e "${YELLOW}Pulling...${ENDCOLOR}"
     
-    pull_output=$(git pull origin ${main_branch} --no-rebase 2>&1)
+    pull_output=$(git pull ${origin_name} ${main_branch} --no-rebase 2>&1)
     pull_code=$?
 
     echo

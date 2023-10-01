@@ -9,21 +9,27 @@
 # y: fast push (answer 'yes')
 # l: list of commits to push
 # b: name of main branch (default 'main')
+# o: name of remote (default 'origin')
 # u: path to utils.sh (mandatory)
 
 
-while getopts ylb:u: flag; do
+while getopts ylb:o:u: flag; do
     case "${flag}" in
         y) fast="true";;
         l) log="true";;
 
         b) main_branch=${OPTARG};;
+        o) origin_name=${OPTARG};;
         u) utils=${OPTARG};;
     esac
 done
 
 if [ -z "$main_branch" ]; then
     main_branch="main"
+fi
+
+if [ -z "$origin_name" ]; then
+    origin_name="origin"
 fi
 
 source $utils
@@ -34,12 +40,12 @@ branch=$(git branch --show-current)
 ### Use this function to push changes to origin
 ### It will exit if everyrhing is ok or there is a critical error
 function push {
-    push_output=$(git push origin ${branch} 2>&1)
+    push_output=$(git push ${origin_name} ${branch} 2>&1)
     push_code=$?
 
     if [ $push_code -eq 0 ] ; then 
         echo -e "${GREEN}Successful push!${ENDCOLOR}"
-        repo=$(git config --get remote.origin.url)
+        repo=$(git config --get remote.${origin_name}.url)
         repo="${repo/":"/"/"}" 
         repo="${repo/"git@"/"https://"}"
         repo="${repo/".git"/""}" 
@@ -91,10 +97,10 @@ echo
 
 
 ### Check if there is commits to push
-get_push_log ${branch} ${main_branch}
+get_push_log ${branch} ${main_branch} ${origin_name}
 
-if [ "${history_from}" != "origin/${branch}" ]; then
-    echo -e "Branch ${YELLOW}${branch}${ENDCOLOR} doesn't exist in origin, so get commit diff from base commit"
+if [ "${history_from}" != "${origin_name}/${branch}" ]; then
+    echo -e "Branch ${YELLOW}${branch}${ENDCOLOR} doesn't exist in ${origin_name}, so get commit diff from base commit"
 fi
 
 if [ -z "$push_log" ]; then
@@ -119,19 +125,19 @@ if [ -n "${fast}" ]; then
 fi
 
 ### Push
-echo -e "Do you want to push it to ${YELLOW}origin/${branch}${ENDCOLOR} (y/n)?"
+echo -e "Do you want to push it to ${YELLOW}${origin_name}/${branch}${ENDCOLOR} (y/n)?"
 yes_no_choice "Pushing..."
 push
 
 
 ### Gut push error - there is unpulled changes
-echo -e "${RED}Cannot push! There is unpulled changes in origin/${branch}${ENDCOLOR}"
+echo -e "${RED}Cannot push! There is unpulled changes in ${origin_name}/${branch}${ENDCOLOR}"
 echo
 
-echo -e "Do you want to pull ${YELLOW}origin/${branch}${ENDCOLOR} with --no-rebase (y/n)?"
+echo -e "Do you want to pull ${YELLOW}${origin_name}/${branch}${ENDCOLOR} with --no-rebase (y/n)?"
 yes_no_choice "Pulling..."
 
-pull_output=$(git pull origin ${branch} --no-rebase 2>&1)
+pull_output=$(git pull ${origin_name} ${branch} --no-rebase 2>&1)
 pull_code=$?
 
 

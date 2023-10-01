@@ -50,6 +50,7 @@ branch_name=""
 current_branch=$(git branch --show-current)
 
 ### This function prints the list of branches and user should choose one
+# $1: pass 'remote' if you want to select from remote branches
 function choose_branch {
     args="--list --sort=-committerdate"
     if [[ "$1" == "remote" ]]; then
@@ -121,40 +122,20 @@ function choose_branch {
         fi
     done
 
-    # if [[ "$1" == "remote" ]]; then
-
-    # fi
+    if [[ "$1" == "remote" ]]; then
+        branch_name=$(sed "s/${origin_name}\///g" <<< ${branch_name})
+    fi
 
     echo
 }
 
 
-###
-### Script logic below
-###
-
-### Print header
-if [ -n "${new}" ]; then
-    echo -e "${YELLOW}BRANCH MANAGER${ENDCOLOR} NEW"
-elif [ -n "${remote}" ]; then
-    echo -e "${YELLOW}BRANCH MANAGER${ENDCOLOR} REMOTE"
-elif [ -n "${delete}" ]; then
-    echo -e "${YELLOW}BRANCH MANAGER${ENDCOLOR} DELETE"
-else
-    echo -e "${YELLOW}BRANCH MANAGER${ENDCOLOR}"
-fi
-echo
-
-
-### Run switch to local logic
-if [ -z "$new" ] && [ -z "$remote" ]; then
-    echo -e "${YELLOW}Switch from '${current_branch}' to local branch${ENDCOLOR}"
-
-    choose_branch
-
+### Function handles switch result
+# $1: name of the branch to switch
+function switch {
     echo
 
-    switch_output=$(git switch $branch_name 2>&1)
+    switch_output=$(git switch $1 2>&1)
     switch_code=$?
 
     ## Switch is OK
@@ -187,11 +168,37 @@ if [ -z "$new" ] && [ -z "$remote" ]; then
         echo -e "${conflicts//[[:blank:]]/}"
         echo
         echo -e "${YELLOW}Commit these files and try to switch for one more time${ENDCOLOR}"
-        exit
+        exit $switch_code
     fi
 
     exit
+}
 
+
+###
+### Script logic below
+###
+
+### Print header
+if [ -n "${new}" ]; then
+    echo -e "${YELLOW}BRANCH MANAGER${ENDCOLOR} NEW"
+elif [ -n "${remote}" ]; then
+    echo -e "${YELLOW}BRANCH MANAGER${ENDCOLOR} REMOTE"
+elif [ -n "${delete}" ]; then
+    echo -e "${YELLOW}BRANCH MANAGER${ENDCOLOR} DELETE"
+else
+    echo -e "${YELLOW}BRANCH MANAGER${ENDCOLOR}"
+fi
+echo
+
+
+### Run switch to local logic
+if [ -z "$new" ] && [ -z "$remote" ]; then
+    echo -e "${YELLOW}Switch from '${current_branch}' to local branch${ENDCOLOR}"
+
+    choose_branch
+
+    switch ${branch_name}
 
 ### Run switch to remote logic
 elif [[ -z "$new" ]] && [[ -n "$remote" ]]; then
@@ -207,41 +214,10 @@ elif [[ -z "$new" ]] && [[ -n "$remote" ]]; then
     fi
 
     echo -e "${YELLOW}Switch from '${current_branch}' to remote branch${ENDCOLOR}"
+    
     choose_branch "remote"
 
-    echo
-
-    echo $branch_name
-
-    switch_output=$(git switch $branch_name 2>&1)
-    switch_code=$?
-
-    echo -e "$switch_output"
-    echo $switch_code
-
-    if [ "$switch_code" == 0 ]; then
-        if [ "$current_branch" == "${branch_name}" ]; then
-            echo -e "${GREEN}Already on '${branch_name}'${ENDCOLOR}"
-        else
-            echo -e "${GREEN}Switched to branch '${branch_name}'${ENDCOLOR}"
-            changes=$(git status -s)
-            if [ -n "$changes" ]; then
-                echo
-                echo -e "${YELLOW}Moved changes:${ENDCOLOR}"
-                git status -s
-            fi
-        fi
-
-        get_push_log ${branch_name} ${main_branch} ${origin_name}
-        if [ -n "$push_log" ]; then
-            echo
-            echo -e "Your branch ${YELLOW}${branch_name}${ENDCOLOR} is ahead of ${YELLOW}${history_from}${ENDCOLOR} by this commits:"
-            echo -e $push_log
-        fi
-        exit
-    fi
-
-    exit
+    switch ${branch_name}
 fi
 
 

@@ -98,6 +98,7 @@ function choose_branch {
         fi
 
         if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
+            printf $choice
             exit
         fi
 
@@ -144,8 +145,6 @@ if [ -z "$new" ] && [ -z "$remote" ]; then
 
     switch_output=$(git switch $branch_name 2>&1)
     switch_code=$?
-
-    echo -e "$switch_output"
 
     ## Switch is OK
     if [ "$switch_code" == 0 ]; then
@@ -203,6 +202,34 @@ elif [[ -z "$new" ]] && [[ -n "$remote" ]]; then
 
     echo $branch_name
 
+    switch_output=$(git switch $branch_name 2>&1)
+    switch_code=$?
+
+    echo -e "$switch_output"
+    echo $switch_code
+
+    if [ "$switch_code" == 0 ]; then
+        if [ "$current_branch" == "${branch_name}" ]; then
+            echo -e "${GREEN}Already on '${branch_name}'${ENDCOLOR}"
+        else
+            echo -e "${GREEN}Switched to branch '${branch_name}'${ENDCOLOR}"
+            changes=$(git status -s)
+            if [ -n "$changes" ]; then
+                echo
+                echo -e "${YELLOW}Moved changes:${ENDCOLOR}"
+                git status -s
+            fi
+        fi
+
+        get_push_log ${branch_name} ${main_branch}
+        if [ -n "$push_log" ]; then
+            echo
+            echo -e "Your branch ${YELLOW}${branch_name}${ENDCOLOR} is ahead of ${YELLOW}${history_from}${ENDCOLOR} by this commits:"
+            echo -e $push_log
+        fi
+        exit
+    fi
+
     exit
 fi
 
@@ -237,10 +264,9 @@ while [ true ]; do
     fi
 done
 
-echo
-
 
 ### Step 2. Enter branch name
+echo
 echo -e "${YELLOW}Step 2.${ENDCOLOR} Enter the name of the branch, using '-' as a separator between words"
 echo "Leave it blank if you want to exit"
 
@@ -271,6 +297,8 @@ if [ -z "${current}" ]; then
     pull_code=$?
 
     echo
+
+    # Handle pull errors, don't use single function with push beacause there is different output
     if [ $pull_code -ne 0 ] ; then
         if [[ $pull_output == *"Please commit your changes or stash them before you merge"* ]]; then
             echo -e "${RED}Cannot pull! There is uncommited changes, that will be overwritten by merge${ENDCOLOR}"
@@ -304,6 +332,7 @@ if [ -z "${current}" ]; then
         echo -e "Pull ${YELLOW}$main_branch${ENDCOLOR} firstly and then use ${YELLOW}make branch-new${ENDCOLOR} again"
         exit $pull_code
     fi
+
     echo -e "${GREEN}Successful pull!${ENDCOLOR}"
 fi
 
@@ -312,7 +341,6 @@ fi
 switch_output=$(git switch -c $branch_name 2>&1)
 switch_code=$?
 
-echo -e "${switch_output}"
 echo
 
 if [ $switch_code -eq 0 ]; then

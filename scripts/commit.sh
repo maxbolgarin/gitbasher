@@ -100,6 +100,7 @@ function choose_commit {
             if [ -n "$git_add" ]; then
                 git restore --staged $git_add
             fi
+            printf $choice
             exit
         fi
 

@@ -59,7 +59,7 @@ pull-tags: ##@Remote Pull current branch and tags from remote
 
 .PHONY: push
 push: ##@Remote Run Push Manager to push changes and pull origin if there are unpulled changes
-	@${GITBASHER_S} -r push -a "-l -o ${GITBASHER_ORIGIN_NAME}"
+	@${GITBASHER_S} -r push -a "-o ${GITBASHER_ORIGIN_NAME}"
 
 .PHONY: push-log
 push-log: ##@Remote Print a list of unpushed commits

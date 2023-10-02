@@ -227,6 +227,7 @@ if [[ -z "$new" ]] && [[ -z "$remote" ]] && [[ -z "$delete" ]]; then
 
     switch ${branch_name}
 
+
 ### Run switch to remote logic
 elif [[ -z "$new" ]] && [[ -n "$remote" ]] && [[ -z "$delete" ]]; then
     echo -e "${YELLOW}Fetching remote...${ENDCOLOR}"
@@ -246,11 +247,11 @@ elif [[ -z "$new" ]] && [[ -n "$remote" ]] && [[ -z "$delete" ]]; then
 
     switch ${branch_name}
 
-elif [[ -z "$new" ]] && [[ -n "$delete" ]]; then
-    merged_branches_str=$(git branch -v --sort=-committerdate --merged | cat 2>&1)
-    #merged_branches_str="${merged_branches_str//\*}"
 
-    IFS=$'\n' read -rd '' -a merged_branches <<<"$merged_branches_str"
+### Run delete local logic
+elif [[ -z "$new" ]] && [[ -n "$delete" ]]; then
+
+    IFS=$'\n' read -rd '' -a merged_branches <<<"$(git branch -v --sort=-committerdate --merged | cat 2>&1)"
 
     merged_branches_without_main=()
     for index in "${!merged_branches[@]}"

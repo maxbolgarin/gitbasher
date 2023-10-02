@@ -130,8 +130,6 @@ script=$( prepare_path "${gitbasher_directory}/${script_name} ${args} -u ${utils
 $script
 script_code=$?
 
-if [ -f commitmsg ]; then 
-    rm commitmsg*
-fi
+rm_out=$(rm commitmsg* 2>&1)
 
 exit $script_code

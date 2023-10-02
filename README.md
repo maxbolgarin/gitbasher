@@ -24,6 +24,7 @@ Bash scripts to help with development
     * Set to `GITBASHER_S` path to `gitbasher.sh` script (inside your project)
     * Set to `GITBASHER_MAIN_BRANCH` name of your main development branch (e.g. `main`, `master` or `develop`)
     * Set to `GITBASHER_BRANCH_SEPARATOR` separator which is using for creating branch names (e.g. `/` or `_`)
+    * Set to `GITBASHER_TEXTEDITOR` bin name of text editor you want to use in commit messages writing (e.g. `nano` or `vi`)
     * Rename gitbasher's targets if you have conflicts with your existing targets (if you have copied `Makefile` to yours)
 6. Run `make gitbasher` to ensure that everything is working
 7. Use `make *command*` to work with git

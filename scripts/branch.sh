@@ -263,6 +263,7 @@ elif [[ -z "$new" ]] && [[ -n "$remote" ]] && [[ -z "$delete" ]]; then
 ### Run delete local logic
 elif [[ -z "$new" ]] && [[ -n "$delete" ]]; then
 
+    # Try to delete all merged branches
     IFS=$'\n' read -rd '' -a merged_branches <<<"$(git branch -v --sort=-committerdate --merged | cat 2>&1)"
 
     merged_branches_without_main=()
@@ -314,6 +315,7 @@ elif [[ -z "$new" ]] && [[ -n "$delete" ]]; then
         done
     fi
 
+    # Delete in normal way
     echo -e "${YELLOW}Delete local branch${ENDCOLOR}"
 
     choose_branch "delete"

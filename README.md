@@ -69,6 +69,13 @@ Usage `make *command*`
 | **branch-prune**       | Delete all merged branches except `master`, `main` and `develop` and prune remote branches     |
 
 
+| **Git log**     | **Description**                                                              |
+|-----------------|------------------------------------------------------------------------------|
+| **gitlog**      | Run `git log` with nice oneline formatting                                   |
+| **reflog**      | Run `git reflog` with nice oneline formatting                                |
+| **last-commit** | Show info about last commit                                                  |
+| **undo-commit** | Run `git reset HEAD^` to move pointer up for one record and undo last commit |
+| **undo-action** | Run `git reset HEAD@{1}` to reset last record in reflog                      |
 
 
 ## For developers of gitbasher

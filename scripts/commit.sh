@@ -12,10 +12,11 @@
 # x: fixup commit
 # s: autosquash fixup commits
 # r: revert commit
+# e: text editor to write commit message (default 'nano')
 # u: path to utils.sh (mandatory)
 
 
-while getopts ftaxsrb:u: flag; do
+while getopts ftaxsre:u: flag; do
     case "${flag}" in
         f) fast="true";;
         t) ticket="true";;
@@ -24,9 +25,14 @@ while getopts ftaxsrb:u: flag; do
         s) autosquash="true";;
         r) revert="true";;
 
+        e) editor=${OPTARG};;
         u) utils=${OPTARG};;
     esac
 done
+
+if [ -z "$editor" ]; then
+    editor="nano"
+fi
 
 source $utils
 
@@ -366,7 +372,7 @@ echo """
 """ >> commitmsg
 
 while [ true ]; do
-    nano commitmsg
+    $editor commitmsg
     commit_message=$(cat commitmsg | sed '/^#/d')
 
     if [ -n "$commit_message" ]; then

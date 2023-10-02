@@ -8,42 +8,43 @@ GITBASHER_S ?= ./gitbasher.sh  # Relative path to gitbasher.sh script
 
 GITBASHER_MAIN_BRANCH ?= main  # Name of main branch (usually `main` or `master`)
 GITBASHER_BRANCH_SEPARATOR ?= /  # Separator in branch naming (e.g. feat/name)
+GITBASHER_TEXTEDITOR ?= vi # Texteditor for commit messages (e.g. nano or vi)
 
 ################################################
 
 .PHONY: commit
 commit: ##@CommitManager Build conventional commit message in format 'type(scope): message'
-	@${GITBASHER_S} -r commit
+	@${GITBASHER_S} -r commit -a "-e ${GITBASHER_TEXTEDITOR}"
 
 .PHONY: commit-ticket
 commit-ticket: ##@CommitManager Build conventional commit message with tracker's ticket info (e.g. JIRA)
-	@${GITBASHER_S} -r commit -a "-t"
+	@${GITBASHER_S} -r commit -a "-t -e ${GITBASHER_TEXTEDITOR}"
 
 .PHONY: commit-fast
 commit-fast: ##@CommitManager Build conventional commit message in fast mode (git add .)
-	@${GITBASHER_S} -r commit -a "-f"
+	@${GITBASHER_S} -r commit -a "-f -e ${GITBASHER_TEXTEDITOR}"
 
 .PHONY: commit-fast-push
 commit-fast-push: ##@CommitManager Build conventional commit message in fast mode (git add .) and then push changes
-	@${GITBASHER_S} -r commit -a "-f"
+	@${GITBASHER_S} -r commit -a "-f -e ${GITBASHER_TEXTEDITOR}"
 	@echo
 	@${GITBASHER_S} -r push -a "-y"
 
 .PHONY: commit-amend
 commit-amend: ##@CommitManager Add files to the last commit (git commit --amend --no-edit)
-	@${GITBASHER_S} -r commit -a "-a"
+	@${GITBASHER_S} -r commit -a "-a -e ${GITBASHER_TEXTEDITOR}"
 
 .PHONY: commit-fixup
 commit-fixup: ##@CommitManager Make fixup commit (git commit --fixup <commit>)
-	@${GITBASHER_S} -r commit -a "-x"
+	@${GITBASHER_S} -r commit -a "-x -e ${GITBASHER_TEXTEDITOR}"
 
 .PHONY: commit-autosquash
 commit-autosquash: ##@CommitManager Make autosquash of fixup commits (git rebase --autosquash <commit>)
-	@${GITBASHER_S} -r commit -a "-s"
+	@${GITBASHER_S} -r commit -a "-s -e ${GITBASHER_TEXTEDITOR}"
 
 .PHONY: commit-revert
 commit-revert: ##@CommitManager Revert selected commit (git revert --no-edit <commit>)
-	@${GITBASHER_S} -r commit -a "-r"
+	@${GITBASHER_S} -r commit -a "-r -e ${GITBASHER_TEXTEDITOR}"
 
 ################################################
 

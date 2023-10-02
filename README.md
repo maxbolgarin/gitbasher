@@ -23,6 +23,7 @@ Bash scripts to help with development
     * Remove `default: gitbasher` if you have another default make target
     * Set to `GITBASHER_S` path to `gitbasher.sh` script (inside your project)
     * Set to `GITBASHER_MAIN_BRANCH` name of your main development branch (e.g. `main`, `master` or `develop`)
+    * Set to `GITBASHER_ORIGIN_NAME` name of your remote (in 99% cases it is `origin`)
     * Set to `GITBASHER_BRANCH_SEPARATOR` separator which is using for creating branch names (e.g. `/` or `_`)
     * Set to `GITBASHER_TEXTEDITOR` bin name of text editor you want to use in commit messages writing (e.g. `nano` or `vi`)
     * Rename gitbasher's targets if you have conflicts with your existing targets (if you have copied `Makefile` to yours)
@@ -78,6 +79,13 @@ Usage `make *command*`
 | **undo-action** | Run `git reset HEAD@{1}` to reset last record in reflog                      |
 
 
+| **Merge**         | **Description**                                                     |
+|-------------------|---------------------------------------------------------------------|
+| **merge-main**    | Fetch main and run `git merge main` to merge it into current branch |
+| **merge-to-main** | Switch to main and merge current branch to it                       |
+
+
+
 ## For developers of gitbasher
 
 Here are the possible values for `scope` in commit messages headers. Use only this values when making commits. You can also use this as example for your project - it can help you understand what scope is.
@@ -92,3 +100,4 @@ Here are the possible values for `scope` in commit messages headers. Use only th
 | **readme**   | Changes in `README` and other informational files                               |
 | **global**   | Some common or non-important changes such as auto refactoring (don't abuse it)  |
 | **lang**     | Changes in `lang` directory                                                     |
+

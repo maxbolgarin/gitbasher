@@ -7,6 +7,7 @@ default: gitbasher
 GITBASHER_S ?= ./gitbasher.sh  # Relative path to gitbasher.sh script
 
 GITBASHER_MAIN_BRANCH ?= main  # Name of main branch (usually `main` or `master`)
+GITBASHER_ORIGIN_NAME ?= origin  # Name of remote (in 99% cases it is `origin`)
 GITBASHER_BRANCH_SEPARATOR ?= /  # Separator in branch naming (e.g. feat/name)
 GITBASHER_TEXTEDITOR ?= vi  # Texteditor for writing commit messages (e.g. nano or vi)
 
@@ -49,66 +50,60 @@ commit-revert: ##@Commit Revert selected commit (git revert --no-edit <commit>)
 ################################################
 
 .PHONY: pull
-pull: ##@Origin Pull current branch
-	@git pull origin $(shell git branch --show-current) --no-rebase
+pull: ##@Remote Pull current branch from remote
+	@git pull ${GITBASHER_ORIGIN_NAME} $(shell git branch --show-current) --no-rebase
 
 .PHONY: pull-tags
-pull-tags: ##@Origin Pull current branch and tags
-	@git pull --tags origin $(shell git branch --show-current) --no-rebase
+pull-tags: ##@Remote Pull current branch and tags from remote
+	@git pull --tags ${GITBASHER_ORIGIN_NAME} $(shell git branch --show-current) --no-rebase
 
 .PHONY: push
-push: ##@Origin Run Push Manager to push changes and pull origin if there are unpulled changes
-	@${GITBASHER_S} -r push
+push: ##@Remote Run Push Manager to push changes and pull origin if there are unpulled changes
+	@${GITBASHER_S} -r push -a "-l -o ${GITBASHER_ORIGIN_NAME}"
 
 .PHONY: push-log
-push-log: ##@Origin Print a list of unpushed commits
-	@${GITBASHER_S} -r push -a "-l"
+push-log: ##@Remote Print a list of unpushed commits
+	@${GITBASHER_S} -r push -a "-l -o ${GITBASHER_ORIGIN_NAME}"
 
 ################################################
 
 .PHONY: branch
 branch: ##@Branch Checkout to an available local branch
-	@${GITBASHER_S} -r branch -a "-b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR}"
+	@${GITBASHER_S} -r branch -a "-b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR} -o ${GITBASHER_ORIGIN_NAME}"
 
 .PHONY: branch-remote
 branch-remote: ##@Branch Checkout to an available remote branch
-	@${GITBASHER_S} -r branch -a "-b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR} -r"
+	@${GITBASHER_S} -r branch -a "-r -b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR} -o ${GITBASHER_ORIGIN_NAME}"
 
 .PHONY: branch-new
 branch-new: ##@Branch Create a new branch from 'main' according to conventional naming
-	@${GITBASHER_S} -r branch -a "-b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR} -n"
+	@${GITBASHER_S} -r branch -a "-n -b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR} -o ${GITBASHER_ORIGIN_NAME}"
 
 .PHONY: branch-new-current
 branch-new-current: ##@Branch Create a new branch from current state according to conventional naming
-	@${GITBASHER_S} -r branch -a "-b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR} -n -c"
+	@${GITBASHER_S} -r branch -a "-n -c -b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR} -o ${GITBASHER_ORIGIN_NAME}"
 
 .PHONY: branch-delete
 branch-delete: ##@Branch Choose a branch to delete
-	@${GITBASHER_S} -r branch -a "-b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR} -d"
+	@${GITBASHER_S} -r branch -a "-d -b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR} -o ${GITBASHER_ORIGIN_NAME}"
 
 .PHONY: branch-prune
 branch-prune: ##@Branch Remove all not merged branches and run 'git remote prune origin'
 	@git branch --merged | egrep -v "(^\*|master|main|develop|${GITBASHER_MAIN_BRANCH})" | xargs git branch -d
-	@git remote prune origin
+	@git remote prune ${GITBASHER_ORIGIN_NAME}
 
 ################################################
 
 .PHONY: merge-main
 merge-main: ##@Merge Merge main branch to current branch
-	@git fetch origin ${GITBASHER_MAIN_BRANCH}
+	@git fetch ${GITBASHER_ORIGIN_NAME} ${GITBASHER_MAIN_BRANCH}
 	@git merge ${GITBASHER_MAIN_BRANCH}
 
 .PHONY: merge-to-main
 merge-to-main: ##@Merge Merge current branch to main
 	@$(eval branch:=$(shell git branch --show-current))
-	@git checkout ${GITBASHER_MAIN_BRANCH}
+	@git switch ${GITBASHER_MAIN_BRANCH}
 	@git merge ${branch}
-
-.PHONY: merge-request
-merge-request: ##@Merge Create merge request (pull request)
-
-.PHONY: merge-finish
-merge-finish: ##@Merge Create merge commit and finish merge
 
 ################################################
 
@@ -164,24 +159,3 @@ GITBASHER_ENDCOLOR := $(shell tput sgr0)
 
 GITBASHER_AUTHOR := https://t.me/maxbolgarin
 GITBASHER_VERSION := 1.0.0
-
-################################################
-
-merge: t pull-tags ver
-	printf " " >> CHANGELOG.md
-	git add .
-	git commit -m "Ready to merge"
-	git push -o merge_request.create -o merge_request.title="Release $(shell $(shell $(MAKE) ver-print-main))" origin $(shell git branch --show-current)
-
-after-merge:
-	git checkout ${GITBASHER_MAIN_BRANCH}
-	git pull origin ${GITBASHER_MAIN_BRANCH}
-	$(MAKE) release
-
-release: t pull-tags
-	${GITBASHER_S} -r release -a "-a ${FULL_NAME}"
-	echo "${REPO_URL}" > /dev/null
-
-fix-release: t pull-tags
-	${GITBASHER_S} -r release -a "-a ${FULL_NAME} -f"
-	echo "${REPO_URL}" > /dev/null

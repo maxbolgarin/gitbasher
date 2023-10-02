@@ -52,8 +52,7 @@ current_branch=$(git branch --show-current)
 # $1: possible values:
 #     * no value prints all local branches
 #     * 'remote' - all remote
-#     * 'no-main' - all local without main
-#     * 'no-merged' - not merged local
+#     * 'delete' - all local without main and current
 function list_branches {
     args="--list --sort=-committerdate"
     if [[ "$1" == "remote" ]]; then
@@ -65,8 +64,7 @@ function list_branches {
     all_branches="${all_branches//\*}"
     all_branches=${all_branches//[[:blank:]]/}
 
-    IFS=$'\n' read -rd '' -a branches_temp <<<"$all_branches"
-    reverse branches_temp branches
+    IFS=$'\n' read -rd '' -a branches <<<"$all_branches"
 
     number_of_branches=${#branches[@]}
     if [[ "$1" == "remote" ]]; then
@@ -91,15 +89,29 @@ function list_branches {
         exit
     fi
 
-    IFS=$'\n' read -rd '' -a branches_with_commits_temp <<<"$all_branches_wih_commits"
-    reverse branches_with_commits_temp branches_with_commits
+    if [[ "$1" == "delete" ]] && [[ "$number_of_branches" == 2 ]] && [[ "${current_branch}" != "${main_branch}" ]]; then
+        echo
+        echo -e "${YELLOW}There is no branches to delete${ENDCOLOR}"
+        exit
+    fi
+
+    IFS=$'\n' read -rd '' -a branches_with_commits <<<"$all_branches_wih_commits"
 
     branches_first_main=(${main_branch})
     branches_with_commits_first_main=("dummy")
+    if [[ "$1" == "delete" ]]; then
+        branches_first_main=()
+        branches_with_commits_first_main=()
+    fi
     for index in "${!branches[@]}"
     do
-        branch_to_check="$(echo "${branches[index]//\*}" | xargs)"
-        if [[ "$branch_to_check" != "${main_branch}"* ]]; then 
+        branch_to_check="${branches[index]}"
+        if [[ "$1" == "delete" ]]; then
+            if [[ "$branch_to_check" == "${current_branch}"* ]] || [[ "$branch_to_check" == "${main_branch}"* ]]; then
+                continue    
+            fi
+        fi
+        if [[ "$branch_to_check" != "${main_branch}"* ]]; then
             branches_first_main+=(${branches[index]})
             branches_with_commits_first_main+=("${branches_with_commits[index]}")
         elif [[ "$branch_to_check" != "HEAD->"* ]]; then 
@@ -195,7 +207,7 @@ function switch {
         echo -e "${conflicts//[[:blank:]]/}"
         echo
         echo -e "${YELLOW}Commit these files and try to switch for one more time${ENDCOLOR}"
-        exit $switch_code
+        exit
     fi
 
     exit
@@ -277,7 +289,22 @@ elif [[ -z "$new" ]] && [[ -n "$delete" ]]; then
             read -n 1 -s choice
             if [ "$choice" == "y" ]; then
                 printf "y\n\n"
-                git branch --merged | egrep -v "(^\*|master|main|develop|${main_branch})" | xargs git branch -d
+                branches_to_delete="$(git branch --merged | egrep -v "(^\*|master|main|develop|${main_branch})" | xargs)"
+                IFS=$' ' read -rd '' -a branches <<<"$branches_to_delete"
+                for index in "${!branches[@]}"
+                do
+                    branch_to_delete="$(echo "${branches[index]}" | xargs)"
+                    delete_output=$(git branch -d $branch_to_delete 2>&1)
+                    delete_code=$?
+                    if [ $delete_code == 0 ]; then
+                        echo -e "${GREEN}Deleted branch '$branch_to_delete'${ENDCOLOR}"
+                    else
+                        echo -e "${RED}Cannot delete branch '$branch_to_delete'${ENDCOLOR}"
+                        echo -e "${delete_output}"
+                        break
+                    fi
+                done
+                echo
                 break
 
             elif [ "$choice" == "n" ]; then
@@ -287,12 +314,51 @@ elif [[ -z "$new" ]] && [[ -n "$delete" ]]; then
         done
     fi
 
-    #choose_branch "delete"
+    echo -e "${YELLOW}Delete local branch${ENDCOLOR}"
 
-    echo -e "${branch_name}"
+    choose_branch "delete"
 
-    #switch ${branch_name}
+    echo
 
+    delete_output=$(git branch -d $branch_name 2>&1)
+    delete_code=$?
+
+    if [ "$delete_code" == 0 ]; then
+        echo -e "${GREEN}Deleted branch '$branch_name'${ENDCOLOR}"
+        exit
+    fi
+
+    if [[ ${delete_output} == *"is not fully merged"* ]]; then
+        echo -e "${RED}The branch '$branch_name' is not fully merged!${ENDCOLOR}"
+        echo "Do you want to force delete (-D flag) this branch?"
+
+        printf "\nAnswer (y/n): "
+        
+        while [ true ]; do
+            read -n 1 -s choice
+            if [ "$choice" == "y" ]; then
+                printf "y\n\n"
+                delete_output=$(git branch -D $branch_name 2>&1)
+                delete_code=$?
+                if [ "$delete_code" == 0 ]; then
+                    echo -e "${GREEN}Deleted branch '$branch_name'${ENDCOLOR}"
+                    exit
+                fi
+                echo -e "${RED}Cannot delete branch '$branch_to_delete'${ENDCOLOR}"
+                echo -e "${delete_output}"
+                exit
+
+            elif [ "$choice" == "n" ]; then
+                printf "n\n"
+                exit
+            fi
+        done
+
+        exit
+    fi
+
+    echo -e "${RED}Cannot delete branch '$branch_to_delete'${ENDCOLOR}"
+    echo -e "${delete_output}"
    
     exit
 fi
@@ -305,7 +371,7 @@ echo "1. feat:      new feature or logic changes, 'feat' and 'perf' commits"
 echo "2. fix:       small changes, eg. bug fix, including hotfixes"
 echo "3. other:     non important changes in code, e.g. 'refactor', 'test'"
 echo "4. misc:      non-code changes, e.g. 'ci', 'docs', 'build'"
-echo "0. EXIT without changes"
+echo "0. Exit without changes"
 
 declare -A types=(
     [1]="feat"

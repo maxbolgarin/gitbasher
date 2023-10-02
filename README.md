@@ -59,6 +59,18 @@ Usage `make *command*`
 | **push-log**      | Show list of commits to push without actual pushing it                             |
 
 
+| **Branch**             | **Description**                                                                                |
+|------------------------|------------------------------------------------------------------------------------------------|
+| **branch**             | Select a local branch to switch                                                                |
+| **branch-remote**      | Fetch origin and select a remote branch to switch                                              |
+| **branch-new**         | Build conventional name for a new branch, switch to main, pull it and switch to the new branch |
+| **branch-new-current** | Build conventional name for a new branch and switch to in from current branch                  |
+| **branch-delete**      | Select branch to delete                                                                        |
+| **branch-prune**       | Delete all merged branches except `master`, `main` and `develop` and prune remote branches     |
+
+
+
+
 ## For developers of gitbasher
 
 Here are the possible values for `scope` in commit messages headers. Use only this values when making commits. You can also use this as example for your project - it can help you understand what scope is.

@@ -13,37 +13,37 @@ GITBASHER_TEXTEDITOR ?= vi  # Texteditor for writing commit messages (e.g. nano 
 ################################################
 
 .PHONY: commit
-commit: ##@CommitManager Build conventional commit message in format 'type(scope): message'
+commit: ##@Commit Build conventional commit message in format 'type(scope): message'
 	@${GITBASHER_S} -r commit -a "-e ${GITBASHER_TEXTEDITOR}"
 
 .PHONY: commit-ticket
-commit-ticket: ##@CommitManager Build conventional commit message with tracker's ticket info (e.g. JIRA)
+commit-ticket: ##@Commit Build conventional commit message with tracker's ticket info (e.g. JIRA)
 	@${GITBASHER_S} -r commit -a "-t -e ${GITBASHER_TEXTEDITOR}"
 
 .PHONY: commit-fast
-commit-fast: ##@CommitManager Build conventional commit message in fast mode (git add .)
+commit-fast: ##@Commit Build conventional commit message in fast mode (git add .)
 	@${GITBASHER_S} -r commit -a "-f -e ${GITBASHER_TEXTEDITOR}"
 
 .PHONY: commit-fast-push
-commit-fast-push: ##@CommitManager Build conventional commit message in fast mode (git add .) and then push changes
+commit-fast-push: ##@Commit Build conventional commit message in fast mode (git add .) and then push changes
 	@${GITBASHER_S} -r commit -a "-f -e ${GITBASHER_TEXTEDITOR}"
 	@echo
 	@${GITBASHER_S} -r push -a "-y"
 
 .PHONY: commit-amend
-commit-amend: ##@CommitManager Add files to the last commit (git commit --amend --no-edit)
+commit-amend: ##@Commit Add files to the last commit (git commit --amend --no-edit)
 	@${GITBASHER_S} -r commit -a "-a -e ${GITBASHER_TEXTEDITOR}"
 
 .PHONY: commit-fixup
-commit-fixup: ##@CommitManager Make fixup commit (git commit --fixup <commit>)
+commit-fixup: ##@Commit Make fixup commit (git commit --fixup <commit>)
 	@${GITBASHER_S} -r commit -a "-x -e ${GITBASHER_TEXTEDITOR}"
 
 .PHONY: commit-autosquash
-commit-autosquash: ##@CommitManager Make autosquash of fixup commits (git rebase --autosquash <commit>)
+commit-autosquash: ##@Commit Make autosquash of fixup commits (git rebase --autosquash <commit>)
 	@${GITBASHER_S} -r commit -a "-s -e ${GITBASHER_TEXTEDITOR}"
 
 .PHONY: commit-revert
-commit-revert: ##@CommitManager Revert selected commit (git revert --no-edit <commit>)
+commit-revert: ##@Commit Revert selected commit (git revert --no-edit <commit>)
 	@${GITBASHER_S} -r commit -a "-r -e ${GITBASHER_TEXTEDITOR}"
 
 ################################################
@@ -67,27 +67,27 @@ push-log: ##@Origin Print a list of unpushed commits
 ################################################
 
 .PHONY: branch
-branch: ##@BranchManager Checkout to an available local branch
+branch: ##@Branch Checkout to an available local branch
 	@${GITBASHER_S} -r branch -a "-b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR}"
 
 .PHONY: branch-remote
-branch-remote: ##@BranchManager Checkout to an available remote branch
+branch-remote: ##@Branch Checkout to an available remote branch
 	@${GITBASHER_S} -r branch -a "-b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR} -r"
 
 .PHONY: branch-new
-branch-new: ##@BranchManager Create a new branch from 'main' according to conventional naming
+branch-new: ##@Branch Create a new branch from 'main' according to conventional naming
 	@${GITBASHER_S} -r branch -a "-b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR} -n"
 
 .PHONY: branch-new-current
-branch-new-current: ##@BranchManager Create a new branch from current state according to conventional naming
+branch-new-current: ##@Branch Create a new branch from current state according to conventional naming
 	@${GITBASHER_S} -r branch -a "-b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR} -n -c"
 
 .PHONY: branch-delete
-branch-delete: ##@BranchManager Choose a branch to delete
+branch-delete: ##@Branch Choose a branch to delete
 	@${GITBASHER_S} -r branch -a "-b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR} -d"
 
 .PHONY: branch-prune
-branch-prune: ##@BranchManager Remove all not merged branches and run 'git remote prune origin'
+branch-prune: ##@Branch Remove all not merged branches and run 'git remote prune origin'
 	@git branch --merged | egrep -v "(^\*|master|main|develop|${GITBASHER_MAIN_BRANCH})" | xargs git branch -d
 	@git remote prune origin
 

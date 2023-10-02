@@ -370,16 +370,21 @@ fi
 ### Step 1. Choose branch type
 echo -e "${YELLOW}Step 1.${ENDCOLOR} What type of branch do you want to create?"
 echo "1. feat:      new feature or logic changes, 'feat' and 'perf' commits"
-echo "2. fix:       small changes, eg. bug fix, including hotfixes"
-echo "3. other:     non important changes in code, e.g. 'refactor', 'test'"
-echo "4. misc:      non-code changes, e.g. 'ci', 'docs', 'build'"
+echo "2. fix:       small changes, eg. not critical bug fix"
+echo "3. hotfix:    fix, that should be mreged as fast as possible"
+echo "4. refactor:  non important and/or style changes in code"
+echo "5. misc:      non-code changes, e.g. 'ci', 'docs', 'build'"
+echo "6. wip:       'work in progress', for changes not ready for merging in the near future"
+echo "7.            don't use prefix for branch"
 echo "0. Exit without changes"
 
 declare -A types=(
     [1]="feat"
     [2]="fix"
-    [3]="other"
-    [4]="misc"
+    [3]="hotfix"
+    [4]="refactor"
+    [5]="misc"
+    [6]="wip"
 )
 
 branch_type=""
@@ -389,9 +394,19 @@ while [ true ]; do
     if [ "$choice" == "0" ]; then
         exit
     fi
+    
+    if [ "$choice" == "7" ]; then
+        break
+    fi
+
+    re='^[0-9]+$'
+    if ! [[ $choice =~ $re ]]; then
+        continue
+    fi
 
     branch_type="${types[$choice]}"
     if [ -n "$branch_type" ]; then
+        branch_type_and_sep="${branch_type}${sep}"
         break
     fi
 done
@@ -402,13 +417,13 @@ echo
 echo -e "${YELLOW}Step 2.${ENDCOLOR} Enter the name of the branch, using '-' as a separator between words"
 echo "Leave it blank if you want to exit"
 
-read -p "Branch: ${branch_type}${sep}" -e branch_name
+read -p "Branch: ${branch_type_and_sep}" -e branch_name
 
 if [ -z $branch_name ]; then
     exit
 fi
 
-branch_name="${branch_type}${sep}${branch_name##*( )}"
+branch_name="${branch_type_and_sep}${branch_name##*( )}"
 
 
 ### Step 3. Switch to main, pull it and then create a new branch from main

@@ -8,6 +8,7 @@
 ### Options
 # no options: switch to local branch
 # r: switch to remote branch
+# m: switch to main branch
 # n: create a new branch
 # c: create a new branch from a current one instead of the main branch
 # d: delete a local branch
@@ -17,11 +18,12 @@
 # u: path to utils.sh (mandatory)
 
 
-while getopts ncrds:b:o:u: flag; do
+while getopts rmncds:b:o:u: flag; do
     case "${flag}" in
+        r) remote="true";;
+        m) main="true";;
         n) new="true";;
         c) current="true";;
-        r) remote="true";;
         d) delete="true";;
         s) sep=${OPTARG};;
 
@@ -172,17 +174,15 @@ function choose_branch {
 ### Function handles switch result
 # $1: name of the branch to switch
 function switch {
-    echo
-
     switch_output=$(git switch $1 2>&1)
     switch_code=$?
 
     ## Switch is OK
     if [ "$switch_code" == 0 ]; then
-        if [ "$current_branch" == "${branch_name}" ]; then
-            echo -e "${GREEN}Already on '${branch_name}'${ENDCOLOR}"
+        if [ "$current_branch" == "$1" ]; then
+            echo -e "${GREEN}Already on '$1'${ENDCOLOR}"
         else
-            echo -e "${GREEN}Switched to branch '${branch_name}'${ENDCOLOR}"
+            echo -e "${GREEN}Switched to branch '$1'${ENDCOLOR}"
             changes=$(git status -s)
             if [ -n "$changes" ]; then
                 echo
@@ -191,10 +191,10 @@ function switch {
             fi
         fi
 
-        get_push_log ${branch_name} ${main_branch} ${origin_name}
+        get_push_log $1 ${main_branch} ${origin_name}
         if [ -n "$push_log" ]; then
             echo
-            echo -e "Your branch ${YELLOW}${branch_name}${ENDCOLOR} is ahead of ${YELLOW}${history_from}${ENDCOLOR} by this commits:"
+            echo -e "Your branch ${YELLOW}$1${ENDCOLOR} is ahead of ${YELLOW}${history_from}${ENDCOLOR} by this commits:"
             echo -e $push_log
         fi
         exit
@@ -203,7 +203,7 @@ function switch {
     ## There are uncommited files with conflicts
     if [[ $switch_output == *"Your local changes to the following files would be overwritten"* ]]; then
         conflicts="$(echo "$switch_output" | tail -r | tail -n +3 | tail -r | tail -n +2)"
-        echo -e "${RED}Changes would be overwritten by switch to '${branch_name}':${ENDCOLOR}"       
+        echo -e "${RED}Changes would be overwritten by switch to '$1':${ENDCOLOR}"       
         echo -e "${conflicts//[[:blank:]]/}"
         echo
         echo -e "${YELLOW}Commit these files and try to switch for one more time${ENDCOLOR}"
@@ -225,17 +225,24 @@ elif [ -n "${remote}" ]; then
     echo -e "${YELLOW}BRANCH MANAGER${ENDCOLOR} REMOTE"
 elif [ -n "${delete}" ]; then
     echo -e "${YELLOW}BRANCH MANAGER${ENDCOLOR} DELETE"
-else
+elif [ -z "${main}" ]; then
     echo -e "${YELLOW}BRANCH MANAGER${ENDCOLOR}"
 fi
 echo
 
+
+### Run switch to main logic
+if [[ -n "${main}" ]]; then
+    switch ${main_branch}
+fi
 
 ### Run switch to local logic
 if [[ -z "$new" ]] && [[ -z "$remote" ]] && [[ -z "$delete" ]]; then
     echo -e "${YELLOW}Switch from '${current_branch}' to local branch${ENDCOLOR}"
 
     choose_branch
+
+    echo
 
     switch ${branch_name}
 
@@ -256,6 +263,8 @@ elif [[ -z "$new" ]] && [[ -n "$remote" ]] && [[ -z "$delete" ]]; then
     echo -e "${YELLOW}Switch from '${current_branch}' to remote branch${ENDCOLOR}"
     
     choose_branch "remote"
+
+    echo
 
     switch ${branch_name}
 

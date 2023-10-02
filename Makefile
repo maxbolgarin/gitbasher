@@ -19,7 +19,7 @@ commit: ##@Commit Build conventional commit message in format 'type(scope): mess
 
 .PHONY: commit-ticket
 commit-ticket: ##@Commit Build conventional commit message with tracker's ticket info (e.g. JIRA)
-	@${GITBASHER_S} -r commit -a "-t -e ${GITBASHER_TEXTEDITOR}"
+	@${GITBASHER_S} -r commit -a "-j -e ${GITBASHER_TEXTEDITOR}"
 
 .PHONY: commit-fast
 commit-fast: ##@Commit Build conventional commit message in fast mode (git add .)
@@ -47,6 +47,10 @@ commit-autosquash: ##@Commit Make autosquash of fixup commits (git rebase --auto
 commit-revert: ##@Commit Revert selected commit (git revert --no-edit <commit>)
 	@${GITBASHER_S} -r commit -a "-r -e ${GITBASHER_TEXTEDITOR}"
 
+.PHONY: commit-tag
+commit-tag: ##@Commit Create a new tag and push it to remote
+	@${GITBASHER_S} -r commit -a "-t -e ${GITBASHER_TEXTEDITOR}"
+
 ################################################
 
 .PHONY: pull
@@ -68,12 +72,16 @@ push-log: ##@Remote Print a list of unpushed commits
 ################################################
 
 .PHONY: branch
-branch: ##@Branch Checkout to an available local branch
+branch: ##@Branch Switch to an available local branch
 	@${GITBASHER_S} -r branch -a "-b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR} -o ${GITBASHER_ORIGIN_NAME}"
 
 .PHONY: branch-remote
-branch-remote: ##@Branch Checkout to an available remote branch
+branch-remote: ##@Branch Switch to an available remote branch
 	@${GITBASHER_S} -r branch -a "-r -b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR} -o ${GITBASHER_ORIGIN_NAME}"
+
+.PHONY: branch-main
+branch-main: ##@Branch Switch to main branch
+	@${GITBASHER_S} -r branch -a "-m -b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR} -o ${GITBASHER_ORIGIN_NAME}"
 
 .PHONY: branch-new
 branch-new: ##@Branch Create a new branch from 'main' according to conventional naming

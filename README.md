@@ -64,6 +64,7 @@ Usage `make *command*`
 |------------------------|------------------------------------------------------------------------------------------------|
 | **branch**             | Select a local branch to switch                                                                |
 | **branch-remote**      | Fetch origin and select a remote branch to switch                                              |
+| **branch-main**        | Switch to main branch without additional confirmations                                         |
 | **branch-new**         | Build conventional name for a new branch, switch to main, pull it and switch to the new branch |
 | **branch-new-current** | Build conventional name for a new branch and switch to in from current branch                  |
 | **branch-delete**      | Select branch to delete                                                                        |

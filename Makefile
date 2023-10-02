@@ -8,7 +8,7 @@ GITBASHER_S ?= ./gitbasher.sh  # Relative path to gitbasher.sh script
 
 GITBASHER_MAIN_BRANCH ?= main  # Name of main branch (usually `main` or `master`)
 GITBASHER_BRANCH_SEPARATOR ?= /  # Separator in branch naming (e.g. feat/name)
-GITBASHER_TEXTEDITOR ?= vi # Texteditor for commit messages (e.g. nano or vi)
+GITBASHER_TEXTEDITOR ?= code # Texteditor for commit messages (e.g. nano or vi)
 
 ################################################
 

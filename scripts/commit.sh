@@ -81,16 +81,20 @@ git_add=""
 ### This function prints the list of commits and user should choose one
 # $1: number of last commits to show
 function choose_commit {
-    commit_list=$(git log --pretty="%h %s" -n $1 | cat 2>&1)
-    IFS=$'\n' read -rd '' -a commits <<<"$commit_list"
+    commits_info_str=$(git log --pretty="%h | %s | %an | %cr" -n $1 | column -ts'|')
+    commits_hash_str=$(git log --pretty="%h" -n $1)
+    IFS=$'\n' read -rd '' -a commits_info <<<"$commits_info_str"
+    IFS=$'\n' read -rd '' -a commits_hash <<<"$commits_hash_str"
 
-    number_of_commits=${#commits[@]}
+    number_of_commits=${#commits_info[@]}
 
-    for index in "${!commits[@]}"
+    for index in "${!commits_info[@]}"
     do
-        echo -e "$(($index+1)). ${YELLOW}$(echo ${commits[index]} | awk '{print $1}')${ENDCOLOR}  $(echo ${commits[index]#* })" 
+        commit_line=$(sed "s/${commits_hash[index]}/${YELLOW_ES}${commits_hash[index]}${ENDCOLOR_ES}/g" <<< ${commits_info[index]})
+        echo -e "$(($index+1)). ${commit_line}"
     done
     echo "0. Exit..."
+    # TODO: add navigation
 
     echo
     printf "Enter commit number: "
@@ -116,7 +120,7 @@ function choose_commit {
         fi
 
         index=$(($choice-1))
-        commit_hash="$(echo ${commits[index]} | awk '{print $1}')"
+        commit_hash=${commits_hash[index]}
         if [ -n "$commit_hash" ]; then
             printf $choice
             break
@@ -131,15 +135,15 @@ function choose_commit {
 
 ### Print header
 if [ -n "${amend}" ]; then
-    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} AMEND MODE"
+    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} AMEND"
 elif [ -n "${fast}" ]; then
-    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} FAST MODE"
+    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} FAST"
 elif [ -n "${fixup}" ]; then
-    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} FIXUP MODE"
+    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} FIXUP"
 elif [ -n "${squash}" ]; then
-    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} AUTOSQUASH MODE"
+    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} AUTOSQUASH"
 elif [ -n "${revert}" ]; then
-    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} REVERT MODE"
+    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} REVERT"
 else
     echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR}"
 fi
@@ -181,7 +185,7 @@ if [ -n "${revert}" ]; then
     
     choose_commit 20
 
-    result=$(git revert --no-edit ${commit_hash})
+    result=$(git revert --no-edit ${commit_hash} 2>&1)
     check_code $? "$result" "revert"
 
     echo
@@ -229,7 +233,7 @@ fi
 
 ### Run amend logic - add staged files to last commit
 if [ -n "${amend}" ]; then
-    result=$(git commit --amend --no-edit)
+    result=$(git commit --amend --no-edit 2>&1)
     check_code $? "$result" "amend"
 
     after_commit "amend"
@@ -250,7 +254,7 @@ if [ -n "${fixup}" ]; then
 
     choose_commit 9
     
-    result=$(git commit --fixup $commit_hash)
+    result=$(git commit --fixup $commit_hash 2>&1)
     check_code $? "$result" "fixup"
 
     echo
@@ -423,7 +427,7 @@ commit="$commit $commit_message"
 
 
 ### Finally
-result=$(git commit -m """$commit""")
+result=$(git commit -m """$commit""" 2>&1)
 check_code $? "$result" "commit"
 
 echo

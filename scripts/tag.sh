@@ -89,12 +89,63 @@ if [ -n "$list" ]; then
 fi
 
 echo
-echo -e "${YELLOW}Current commit${ENDCOLOR}"
 
-current_branch=$(git branch --show-current)
-commit_hash=$(git rev-parse HEAD)
-commit_message=$(git log -1 --pretty=%B | cat)
-echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR} ${commit_message}"
+if [ -n "$select" ]; then
+    echo -e "${YELLOW}Select commits 1-9${ENDCOLOR}"
+    commits_info_str=$(git log --pretty="%h | %s | %an | %cr" -n 9 | column -ts'|')
+    commits_hash_str=$(git log --pretty="%h" -n 10)
+    IFS=$'\n' read -rd '' -a commits_info <<<"$commits_info_str"
+    IFS=$'\n' read -rd '' -a commits_hash <<<"$commits_hash_str"
+
+    number_of_commits=${#commits[@]}
+
+    for index in "${!commits_info[@]}"
+    do
+        commit_line=$(sed "s/${commits_hash[index]}/${YELLOW_ES}${commits_hash[index]}${ENDCOLOR_ES}/g" <<< ${commits_info[index]})
+        echo -e "$(($index+1)). ${commit_line}"
+    done
+    echo "0. Exit..."
+
+    echo
+    printf "Enter commit number: "
+
+    while [ true ]; do
+         if [ $number_of_commits -gt 9 ]; then
+            read -n 2 choice
+        else
+            read -n 1 -s choice
+        fi
+
+        if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
+            if [ -n "$git_add" ]; then
+                git restore --staged $git_add
+            fi
+            printf $choice
+            exit
+        fi
+
+        re='^[0-9]+$'
+        if ! [[ $choice =~ $re ]]; then
+           continue
+        fi
+
+        index=$(($choice-1))
+        commit_hash=${commits_hash[index]}
+        if [ -n "$commit_hash" ]; then
+            printf $choice
+            break
+        fi
+    done
+
+    exit
+else
+    echo -e "${YELLOW}Current commit${ENDCOLOR}"
+
+    current_branch=$(git branch --show-current)
+    commit_hash=$(git rev-parse HEAD)
+    commit_message=$(git log -1 --pretty=%B | cat)
+    echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR} ${commit_message}"
+fi
 
 echo
 

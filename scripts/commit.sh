@@ -42,6 +42,7 @@ current_branch=$(git branch --show-current)
 ### This function prints information about last commit, use it after `git commit`
 # $1: name of operation, e.g. `amend`
 function after_commit {
+    echo
     echo -e "${GREEN}Successful commit $1${ENDCOLOR}"
     echo
 
@@ -73,60 +74,6 @@ function after_commit {
         echo -e "Push your changes: ${YELLOW}make push${ENDCOLOR}"
         echo -e "Undo commit: ${YELLOW}make undo-commit${ENDCOLOR}"
     fi
-}
-
-commit_hash=""
-git_add=""
-
-### This function prints the list of commits and user should choose one
-# $1: number of last commits to show
-function choose_commit {
-    commits_info_str=$(git log --pretty="%h | %s | %an | %cr" -n $1 | column -ts'|')
-    commits_hash_str=$(git log --pretty="%h" -n $1)
-    IFS=$'\n' read -rd '' -a commits_info <<<"$commits_info_str"
-    IFS=$'\n' read -rd '' -a commits_hash <<<"$commits_hash_str"
-
-    number_of_commits=${#commits_info[@]}
-
-    for index in "${!commits_info[@]}"
-    do
-        commit_line=$(sed "s/${commits_hash[index]}/${YELLOW_ES}${commits_hash[index]}${ENDCOLOR_ES}/g" <<< ${commits_info[index]})
-        echo -e "$(($index+1)). ${commit_line}"
-    done
-    echo "0. Exit..."
-    # TODO: add navigation
-
-    echo
-    printf "Enter commit number: "
-
-    while [ true ]; do
-         if [ $number_of_commits -gt 9 ]; then
-            read -n 2 choice
-        else
-            read -n 1 -s choice
-        fi
-
-        if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
-            if [ -n "$git_add" ]; then
-                git restore --staged $git_add
-            fi
-            printf $choice
-            exit
-        fi
-
-        re='^[0-9]+$'
-        if ! [[ $choice =~ $re ]]; then
-           continue
-        fi
-
-        index=$(($choice-1))
-        commit_hash=${commits_hash[index]}
-        if [ -n "$commit_hash" ]; then
-            printf $choice
-            break
-        fi
-    done
-    return
 }
 
 ###
@@ -227,7 +174,6 @@ else
             break
         fi
     done
-    echo
 fi
 
 
@@ -240,6 +186,7 @@ if [ -n "${amend}" ]; then
     exit
 fi
 
+echo
 
 ### Print staged files that we add at step 1
 echo -e "${YELLOW}Staged files:${ENDCOLOR}"

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+### Consts for colors
 RED="\e[31m"
 GREEN="\e[32m"
 YELLOW="\e[33m"
@@ -8,6 +9,8 @@ PURPLE="\e[35m"
 CYAN="\e[36m"
 ENDCOLOR="\e[0m"
 
+
+### Consts for colors to use inside 'sed'
 RED_ES="\x1b[31m"
 GREEN_ES="\x1b[32m"
 YELLOW_ES="\x1b[33m"
@@ -16,13 +19,18 @@ PURPLE_ES="\x1b[35m"
 CYAN_ES="\x1b[36m"
 ENDCOLOR_ES="\x1b[0m"
 
+
+### Function for evaluating path with '~' symbol
+# $1: path
 function prepare_path {
     eval echo "$1"
 }
 
+
+### Function reverts array
+# $1: array to reverse
+# $2: output array
 function reverse() {
-    # first argument is the array to reverse
-    # second is the output array
     declare -n arr="$1" rev="$2"
     for i in "${arr[@]}"
     do
@@ -30,15 +38,79 @@ function reverse() {
     done
 }
 
+
+commit_hash=""
+git_add=""
+
+### Function prints the list of commits and user should choose one
+# $1: number of last commits to show
+function choose_commit {
+    commits_info_str=$(git log --pretty="%h | %s | %an | %cr" -n $1 | column -ts'|')
+    commits_hash_str=$(git log --pretty="%h" -n $1)
+    IFS=$'\n' read -rd '' -a commits_info <<<"$commits_info_str"
+    IFS=$'\n' read -rd '' -a commits_hash <<<"$commits_hash_str"
+
+    number_of_commits=${#commits_info[@]}
+
+    for index in "${!commits_info[@]}"
+    do
+        commit_line=$(sed "s/${commits_hash[index]}/${YELLOW_ES}${commits_hash[index]}${ENDCOLOR_ES}/g" <<< ${commits_info[index]})
+        echo -e "$(($index+1)). ${commit_line}"
+    done
+    echo "0. Exit..."
+    # TODO: add navigation
+
+    echo
+    printf "Enter commit number: "
+
+    while [ true ]; do
+         if [ $number_of_commits -gt 9 ]; then
+            read -n 2 choice
+        else
+            read -n 1 -s choice
+        fi
+
+        if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
+            if [ -n "$git_add" ]; then
+                git restore --staged $git_add
+            fi
+            printf $choice
+            exit
+        fi
+
+        re='^[0-9]+$'
+        if ! [[ $choice =~ $re ]]; then
+           continue
+        fi
+
+        index=$(($choice-1))
+        commit_hash=${commits_hash[index]}
+        if [ -n "$commit_hash" ]; then
+            printf $choice
+            break
+        fi
+    done
+    return
+}
+
+
+### Function checks code against 0 and show error
+# $1: return code
+# $2: command output (error message)
+# $3: comand name
 function check_code {
     if [ $1 != 0 ]; then
         echo
         echo
         echo -e "${RED}Error during $3${ENDCOLOR}"
         echo -e "$2"
+        if [ -n "$git_add" ]; then
+            git restore --staged $git_add
+        fi
         exit $1
     fi
 }
+
 
 ### Function returns git log diff between provided argument and HEAD
 # $1: branch or commit from which to calc diff

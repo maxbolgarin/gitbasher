@@ -79,7 +79,7 @@ echo -e "${YELLOW}Last local tags${ENDCOLOR}"
 
 for index in "${!tags[@]}"
 do
-    tag_line=$(sed "s/${tags[index]}/${GREEN_ES}${tags[index]}${ENDCOLOR_ES}/g" <<< ${tags_info[index]})
+    tag_line=$(sed "1,/${tags[index]}/ s/${tags[index]}/${GREEN_ES}${tags[index]}${ENDCOLOR_ES}/" <<< ${tags_info[index]})
     echo -e "${tag_line}"
     #echo -e "$(($index+1)). ${tag_line}"
 done
@@ -91,53 +91,9 @@ fi
 echo
 
 if [ -n "$select" ]; then
-    echo -e "${YELLOW}Select commits 1-9${ENDCOLOR}"
-    commits_info_str=$(git log --pretty="%h | %s | %an | %cr" -n 9 | column -ts'|')
-    commits_hash_str=$(git log --pretty="%h" -n 10)
-    IFS=$'\n' read -rd '' -a commits_info <<<"$commits_info_str"
-    IFS=$'\n' read -rd '' -a commits_hash <<<"$commits_hash_str"
+    echo -e "${YELLOW}Select commit for a new tag${ENDCOLOR}"
+    choose_commit 9
 
-    number_of_commits=${#commits[@]}
-
-    for index in "${!commits_info[@]}"
-    do
-        commit_line=$(sed "s/${commits_hash[index]}/${YELLOW_ES}${commits_hash[index]}${ENDCOLOR_ES}/g" <<< ${commits_info[index]})
-        echo -e "$(($index+1)). ${commit_line}"
-    done
-    echo "0. Exit..."
-
-    echo
-    printf "Enter commit number: "
-
-    while [ true ]; do
-         if [ $number_of_commits -gt 9 ]; then
-            read -n 2 choice
-        else
-            read -n 1 -s choice
-        fi
-
-        if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
-            if [ -n "$git_add" ]; then
-                git restore --staged $git_add
-            fi
-            printf $choice
-            exit
-        fi
-
-        re='^[0-9]+$'
-        if ! [[ $choice =~ $re ]]; then
-           continue
-        fi
-
-        index=$(($choice-1))
-        commit_hash=${commits_hash[index]}
-        if [ -n "$commit_hash" ]; then
-            printf $choice
-            break
-        fi
-    done
-
-    exit
 else
     echo -e "${YELLOW}Current commit${ENDCOLOR}"
 
@@ -145,10 +101,10 @@ else
     commit_hash=$(git rev-parse HEAD)
     commit_message=$(git log -1 --pretty=%B | cat)
     echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR} ${commit_message}"
+
 fi
 
 echo
-
 echo -e "${YELLOW}Enter the name of a new tag${ENDCOLOR}"
 echo -e "If this tag will be using for release, use version number in semver format, like '1.0.0-alpha'"
 echo -e "Leave it blank to exit"
@@ -161,7 +117,12 @@ fi
 
 echo
 
-tag_output=$(git tag $tag_name 2>&1)
+tag_output=""
+if [ -n "$commit_hash" ]; then
+    tag_output=$(git tag $tag_name $commit_hash 2>&1)
+else
+    tag_output=$(git tag $tag_name 2>&1)
+fi
 tag_code=$?
 
 if [ $tag_code != 0 ]; then
@@ -174,4 +135,9 @@ if [ $tag_code != 0 ]; then
     exit
 fi
 
-echo -e "${GREEN}Successfully created tag '${tag_name}'${ENDCOLOR}"
+if [ -n "$commit_hash" ]; then
+    echo -e "${GREEN}Successfully created tag '${tag_name}' from commit '${commit_hash}'${ENDCOLOR}"
+else
+    echo -e "${GREEN}Successfully created tag '${tag_name}'${ENDCOLOR}"
+fi
+

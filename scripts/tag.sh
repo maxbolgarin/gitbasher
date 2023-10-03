@@ -2,6 +2,7 @@
 
 ### Script for managing git tags
 # Read README.md to get more information how to use it
+# Semver reference: https://semver.org/
 # Use this script only with gitbasher.sh
 
 ### Options
@@ -74,8 +75,48 @@ tags_only=$(git for-each-ref --count=$count --format="%(refname:short)" --sort=-
 IFS=$'\n' read -rd '' -a tags_info <<<"$tags_list"
 IFS=$'\n' read -rd '' -a tags <<<"$tags_only"
 
+echo -e "${YELLOW}Last local tags${ENDCOLOR}"
+
 for index in "${!tags[@]}"
 do
     tag_line=$(sed "s/${tags[index]}/${GREEN_ES}${tags[index]}${ENDCOLOR_ES}/g" <<< ${tags_info[index]})
     echo -e "${tag_line}"
+    #echo -e "$(($index+1)). ${tag_line}"
 done
+
+echo
+echo -e "${YELLOW}Current commit${ENDCOLOR}"
+
+current_branch=$(git branch --show-current)
+commit_hash=$(git rev-parse HEAD)
+commit_message=$(git log -1 --pretty=%B | cat)
+echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR} ${commit_message}"
+
+echo
+
+echo -e "${YELLOW}Enter the name of a new tag${ENDCOLOR}"
+echo -e "If this tag will be using for release, use version number in semver format, like '1.0.0-alpha'"
+echo -e "Leave it blank to exit"
+
+read -p "git tag " -e tag_name
+
+if [ -z $tag_name ]; then
+    exit
+fi
+
+echo
+
+tag_output=$(git tag $tag_name 2>&1)
+tag_code=$?
+
+if [ $tag_code != 0 ]; then
+    if [[ $tag_output == *"already exists" ]]; then
+        echo -e "${RED}Tag '${tag_name}' already exists${ENDCOLOR}"
+    else
+        echo -e "${RED}Cannot create tag '${tag_name}'${ENDCOLOR}"
+        echo -e "$tag_output"
+    fi
+    exit
+fi
+
+echo -e "${GREEN}Successfully created tag '${tag_name}'${ENDCOLOR}"

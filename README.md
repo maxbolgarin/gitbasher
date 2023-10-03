@@ -11,6 +11,7 @@ Bash scripts to help with development
 * `bash` version from 4.0
 * `make` version from 3.81
 * `git`  version from 2.23
+* Tested on `MacOS 13.5.1`, on other systems may be problems with utilities like `sed` because of different implementations / versions
 
 
 ## How to use

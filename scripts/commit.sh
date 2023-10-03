@@ -13,7 +13,7 @@
 # s: autosquash fixup commits
 # r: revert commit
 # e: text editor to write commit message (default 'nano')
-# u: path to utils.sh (mandatory)
+# u: path to utils.sh (mandatory, auto pass by gitbasher.sh)
 
 
 while getopts ftaxsre:u: flag; do

@@ -10,7 +10,7 @@
 # l: list of commits to push
 # b: name of main branch (default 'main')
 # o: name of remote (default 'origin')
-# u: path to utils.sh (mandatory)
+# u: path to utils.sh (mandator, auto pass by gitbasher.sh)
 
 
 while getopts ylb:o:u: flag; do

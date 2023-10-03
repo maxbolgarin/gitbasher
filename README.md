@@ -86,7 +86,6 @@ Usage `make *command*`
 | **merge-to-main** | Switch to main and merge current branch to it                       |
 
 
-
 ## For developers of gitbasher
 
 Here are the possible values for `scope` in commit messages headers. Use only this values when making commits. You can also use this as example for your project - it can help you understand what scope is.
@@ -101,4 +100,3 @@ Here are the possible values for `scope` in commit messages headers. Use only th
 | **readme**   | Changes in `README` and other informational files                               |
 | **global**   | Some common or non-important changes such as auto refactoring (don't abuse it)  |
 | **lang**     | Changes in `lang` directory                                                     |
-

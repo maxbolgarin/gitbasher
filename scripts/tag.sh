@@ -90,14 +90,16 @@ fi
 
 echo
 
+current_branch=$(git branch --show-current)
+
 if [ -n "$select" ]; then
     echo -e "${YELLOW}Select commit for a new tag${ENDCOLOR}"
     choose_commit 9
+    commit_message=$(git log -1 --pretty=%B $commit_hash | cat)
 
 else
     echo -e "${YELLOW}Current commit${ENDCOLOR}"
 
-    current_branch=$(git branch --show-current)
     commit_hash=$(git rev-parse HEAD)
     commit_message=$(git log -1 --pretty=%B | cat)
     echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR} ${commit_message}"
@@ -109,7 +111,11 @@ echo -e "${YELLOW}Enter the name of a new tag${ENDCOLOR}"
 echo -e "If this tag will be using for release, use version number in semver format, like '1.0.0-alpha'"
 echo -e "Leave it blank to exit"
 
-read -p "git tag " -e tag_name
+if [ -n "${annotated}" ]; then
+    read -p "git tag -a " -e tag_name
+else
+    read -p "git tag " -e tag_name
+fi
 
 if [ -z $tag_name ]; then
     exit
@@ -117,11 +123,52 @@ fi
 
 echo
 
+if [ -n "$annotated" ]; then
+    tag_file=".tagmsg__"
+    touch $tag_file
+
+    echo """
+###
+### Write some words about a new tag '${tag_name}'
+### [$current_branch ${commit_hash::7}] ${commit_message}
+### 
+### You can place changelog here, if this tag means a new release
+""" >> $tag_file
+
+    while [ true ]; do
+        $editor $tag_file
+        tag_message=$(cat $tag_file | sed '/^#/d')
+
+        if [ -n "$tag_message" ]; then
+            break
+        fi
+        echo
+        echo -e "${YELLOW}Tag message cannot be empty${ENDCOLOR}"
+        echo
+        read -n 1 -p "Try for one more time? (y/n) " -s -e choice
+        if [ "$choice" != "y" ]; then
+            find . -name "$tag_file*" -delete
+            exit
+        fi    
+    done
+
+    find . -name "$tag_file*" -delete
+fi
+
+
 tag_output=""
-if [ -n "$commit_hash" ]; then
-    tag_output=$(git tag $tag_name $commit_hash 2>&1)
+if [ -n "$select" ]; then
+    if [ -n "$annotated" ]; then
+        tag_output=$(git tag -a -m """$tag_message""" $tag_name $commit_hash 2>&1)
+    else
+        tag_output=$(git tag $tag_name $commit_hash 2>&1)
+    fi
 else
-    tag_output=$(git tag $tag_name 2>&1)
+    if [ -n "$annotated" ]; then
+        tag_output=$(git tag -a -m """$tag_message""" $tag_name 2>&1)
+    else
+        tag_output=$(git tag $tag_name 2>&1)
+    fi
 fi
 tag_code=$?
 
@@ -135,9 +182,16 @@ if [ $tag_code != 0 ]; then
     exit
 fi
 
-if [ -n "$commit_hash" ]; then
-    echo -e "${GREEN}Successfully created tag '${tag_name}' from commit '${commit_hash}'${ENDCOLOR}"
-else
-    echo -e "${GREEN}Successfully created tag '${tag_name}'${ENDCOLOR}"
+if [ -n "$annotated" ]; then
+    is_annotated=" annotated"
 fi
 
+if [ -n "$select" ]; then
+    is_commit_hash=" from commit '${commit_hash}'"
+fi
+
+echo -e "${GREEN}Successfully created${is_annotated} tag '${tag_name}'${is_commit_hash}${ENDCOLOR}"
+
+if [ -n "$tag_message" ]; then
+    echo -e "$tag_message"
+fi

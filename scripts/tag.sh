@@ -84,6 +84,10 @@ do
     #echo -e "$(($index+1)). ${tag_line}"
 done
 
+if [ -n "$list" ]; then
+    exit
+fi
+
 echo
 echo -e "${YELLOW}Current commit${ENDCOLOR}"
 

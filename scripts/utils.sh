@@ -8,6 +8,14 @@ PURPLE="\e[35m"
 CYAN="\e[36m"
 ENDCOLOR="\e[0m"
 
+RED_ES="\x1b[31m"
+GREEN_ES="\x1b[32m"
+YELLOW_ES="\x1b[33m"
+BLUE_ES="\x1b[34m"
+PURPLE_ES="\x1b[35m"
+CYAN_ES="\x1b[36m"
+ENDCOLOR_ES="\x1b[0m"
+
 function prepare_path {
     eval echo "$1"
 }

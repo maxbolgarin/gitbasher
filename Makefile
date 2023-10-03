@@ -19,7 +19,7 @@ commit: ##@Commit Build conventional commit message in format 'type(scope): mess
 
 .PHONY: commit-ticket
 commit-ticket: ##@Commit Build conventional commit message with tracker's ticket info (e.g. JIRA)
-	@${GITBASHER_S} -r commit -a "-j -e ${GITBASHER_TEXTEDITOR}"
+	@${GITBASHER_S} -r commit -a "-t -e ${GITBASHER_TEXTEDITOR}"
 
 .PHONY: commit-fast
 commit-fast: ##@Commit Build conventional commit message in fast mode (git add .)
@@ -47,9 +47,39 @@ commit-autosquash: ##@Commit Make autosquash of fixup commits (git rebase --auto
 commit-revert: ##@Commit Revert selected commit (git revert --no-edit <commit>)
 	@${GITBASHER_S} -r commit -a "-r -e ${GITBASHER_TEXTEDITOR}"
 
-.PHONY: commit-tag
-commit-tag: ##@Commit Create a new tag and push it to remote
-	@${GITBASHER_S} -r commit -a "-t -e ${GITBASHER_TEXTEDITOR}"
+################################################
+
+.PHONY: tag
+tag: ##@Tag Create a new tag from a current commit and push it to a remote
+	@${GITBASHER_S} -r tag -a "-e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
+
+.PHONY: tag-commit
+tag-commit: ##@Tag Create a new tag from a selected commit and push it to a remote
+	@${GITBASHER_S} -r tag -a "-s -e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
+
+.PHONY: tag-full
+tag-full: ##@Tag Create a new annotated tag from a selected commit and push it to a remote
+	@${GITBASHER_S} -r tag -a "-s -a -e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
+
+.PHONY: tag-list
+tag-list: ##@Tag Print a list of local tags
+	@${GITBASHER_S} -r tag -a "-l -e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
+
+.PHONY: tag-delete
+tag-delete: ##@Commit Select a tag to delete
+	@${GITBASHER_S} -r tag -a "-d -e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
+
+.PHONY: tag-remote
+tag-pull: ##@Commit Pull tags from a remote and print it
+	@${GITBASHER_S} -r tag -a "-r -l -e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
+
+.PHONY: tag-push
+tag-push: ##@Commit Select a tag to push to a remote
+	@${GITBASHER_S} -r tag -a "-p -s -e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
+
+.PHONY: tag-push-all
+tag-push-all: ##@Commit Push all local tags to a remote
+	@${GITBASHER_S} -r tag -a "-p -e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
 
 ################################################
 
@@ -63,11 +93,15 @@ pull-tags: ##@Remote Pull current branch and tags from remote
 
 .PHONY: push
 push: ##@Remote Run Push Manager to push changes and pull origin if there are unpulled changes
-	@${GITBASHER_S} -r push -a "-o ${GITBASHER_ORIGIN_NAME}"
+	@${GITBASHER_S} -r push -a "-b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
 
 .PHONY: push-log
 push-log: ##@Remote Print a list of unpushed commits
-	@${GITBASHER_S} -r push -a "-l -o ${GITBASHER_ORIGIN_NAME}"
+	@${GITBASHER_S} -r push -a "-l -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
+
+.PHONY: push-tag
+push-tag: ##@Remote Select a tag to push
+	@${GITBASHER_S} -r push -a "-t -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
 
 ################################################
 

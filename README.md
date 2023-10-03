@@ -95,6 +95,7 @@ Here are the possible values for `scope` in commit messages headers. Use only th
 | **branch**   | Changes mainly in `branch.sh` script, related to branching features and fixes   |
 | **commit**   | Changes mainly in `commit.sh` script, related to commit features and fixes      |
 | **push**     | Changes mainly in `push.sh` script, related to push features and fixes          |
+| **tag**      | Changes mainly in `tag.sh` script, related to tag features and fixes            |  
 | **main**     | Changes mainly in `gitbasher.sh` script, related to some general behavior       |
 | **make**     | Fixes and new features in `Makefile`                                            |
 | **readme**   | Changes in `README` and other informational files                               |

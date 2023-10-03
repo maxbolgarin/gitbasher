@@ -16,7 +16,7 @@
 while getopts ylb:o:u: flag; do
     case "${flag}" in
         y) fast="true";;
-        l) log="true";;
+        l) list="true";;
 
         b) main_branch=${OPTARG};;
         o) origin_name=${OPTARG};;
@@ -90,7 +90,7 @@ function yes_no_choice {
 ###
 
 ### Print header
-if [ -z "$log" ]; then
+if [ -z "$list" ]; then
     echo -e "${YELLOW}PUSH MANAGER${ENDCOLOR}"
 fi
 echo
@@ -113,7 +113,7 @@ echo -e $push_log
 
 
 ### List mode - print only unpushed commits
-if [ -n "$log" ]; then
+if [ -n "$list" ]; then
     exit
 fi
 

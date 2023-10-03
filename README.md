@@ -57,7 +57,7 @@ Usage `make *command*`
 | **pull**          | Pull current branch in no-rebase mode (run `git pull origin <branch> --no-rebase`) |
 | **pull-tags**     | Pull current branch with tags (run `git pull --tags origin <branch> --no-rebase`)  |
 | **push**          | Push commits to current branch and pull changes if there are conflicts with origin |
-| **push-log**      | Show list of commits to push without actual pushing it                             |
+| **push-list**     | Show list of commits to push without actual pushing it                             |
 
 
 | **Branch**             | **Description**                                                                                |

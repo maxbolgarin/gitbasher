@@ -9,7 +9,10 @@
 # - branch
 # - commit
 # - push
+# - tag
 # - ver
+
+SETTINGS_FILE=~/.gitbasher
 
 ### Options
 # i: init application
@@ -17,22 +20,6 @@
 # s: silent init
 # r: script name to run
 # a: args to script
-
-SETTINGS_FILE=~/.gitbasher
-
-RED="\e[31m"
-GREEN="\e[32m"
-YELLOW="\e[33m"
-ENDCOLOR="\e[0m"
-
-if ((BASH_VERSINFO[0] < 4)); then 
-    printf "Sorry, you need at least ${YELLOW}bash-4.0${ENDCOLOR} to run this script.\n
-If your OS is debian-based, use:
-    ${GREEN}apt-get install --only-upgrade bash${ENDCOLOR}\n
-If your OS is mac, use:
-    ${GREEN}brew install bash${ENDCOLOR}\n\n" 
-    exit 1; 
-fi
 
 while getopts 'ifsr:a:' flag; do
     case "${flag}" in
@@ -44,20 +31,44 @@ while getopts 'ifsr:a:' flag; do
     esac
 done
 
-SCRIPTS_DIR="scripts"
-declare -A scripts=(
-    ["branch"]="${SCRIPTS_DIR}/branch.sh"
-    ["commit"]="${SCRIPTS_DIR}/commit.sh"
-    ["push"]="${SCRIPTS_DIR}/push.sh"
-    ["ver"]="${SCRIPTS_DIR}/ver.sh"
-)
-
+RED="\e[31m"
+GREEN="\e[32m"
+YELLOW="\e[33m"
+ENDCOLOR="\e[0m"
 gitbasher_directory=$( cat ${SETTINGS_FILE} 2> /dev/null )
 
+
+### Cannot use bash version less than 4 because of many features that was added to language in that version
+if ((BASH_VERSINFO[0] < 4)); then 
+    printf "Sorry, you need at least ${YELLOW}bash-4.0${ENDCOLOR} to run this script.\n
+If your OS is debian-based, use:
+    ${GREEN}apt-get install --only-upgrade bash${ENDCOLOR}\n
+If your OS is mac, use:
+    ${GREEN}brew install bash${ENDCOLOR}\n\n" 
+    exit 1; 
+fi
+
+
+### Supported scripts
+scripts_dir="scripts"
+declare -A scripts=(
+    ["branch"]="${scripts_dir}/branch.sh"
+    ["commit"]="${scripts_dir}/commit.sh"
+    ["push"]="${scripts_dir}/push.sh"
+    ["tag"]="${scripts_dir}/tag.sh"
+    ["ver"]="${scripts_dir}/ver.sh"
+)
+
+
+### Function for evaluating path with '~' symbol
+# $1: path
 function prepare_path {
     eval echo "$1"
 }
 
+
+### Function for creating .gitbasher file with path to gitbasher repo
+# $1: flag for force init
 function init {
     if [[ -z "${silent}" ]]; then
         printf "Welcome to ${YELLOW}gitbasher${ENDCOLOR} init application!\n"
@@ -101,19 +112,24 @@ function init {
     done
 }
 
+###
 ### Script logic here
+###
 
-# Run init if we want to init, provide -f if you want to force init
+### Run init if we want to init, provide -f if you want to force init
 if [ -n "${to_init}" ]; then
     init $force
     exit
 fi
 
-# Run init if we haven't been inited
+
+#### Run init if we haven't been inited
 if [ -z "${gitbasher_directory}" ]; then
     init 'true'
 fi
 
+
+### Run script
 if [ -z "${to_run}" ]; then
     echo "You should provide script to run, use '-r' flag."
     exit
@@ -125,11 +141,12 @@ if [ -z "$script_name" ]; then
     exit
 fi
 
-utils=$( prepare_path "${gitbasher_directory}/${SCRIPTS_DIR}/utils.sh" )
+utils=$( prepare_path "${gitbasher_directory}/${scripts_dir}/utils.sh" )
 script=$( prepare_path "${gitbasher_directory}/${script_name} ${args} -u ${utils}" )
 $script
 script_code=$?
 
+# Clear temporary files from commit.sh (you can accidentally create file like 'commitmsg\', which wouldn't be deleted)
 rm_out=$(rm commitmsg* 2>&1)
 
 exit $script_code

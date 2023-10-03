@@ -135,7 +135,6 @@ if [ -n "${revert}" ]; then
     result=$(git revert --no-edit ${commit_hash} 2>&1)
     check_code $? "$result" "revert"
 
-    echo
     after_commit "revert"
     exit
 fi
@@ -204,7 +203,6 @@ if [ -n "${fixup}" ]; then
     result=$(git commit --fixup $commit_hash 2>&1)
     check_code $? "$result" "fixup"
 
-    echo
     after_commit "fixup"
     exit
 fi
@@ -377,5 +375,4 @@ commit="$commit $commit_message"
 result=$(git commit -m """$commit""" 2>&1)
 check_code $? "$result" "commit"
 
-echo
 after_commit

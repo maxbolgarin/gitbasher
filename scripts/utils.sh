@@ -54,7 +54,7 @@ function choose_commit {
 
     for index in "${!commits_info[@]}"
     do
-        commit_line=$(sed "s/${commits_hash[index]}/${YELLOW_ES}${commits_hash[index]}${ENDCOLOR_ES}/g" <<< ${commits_info[index]})
+        commit_line=$(sed "1,/${commits_hash[index]}/ s/${commits_hash[index]}/${YELLOW_ES}${commits_hash[index]}${ENDCOLOR_ES}/" <<< ${commits_info[index]})
         echo -e "$(($index+1)). ${commit_line}"
     done
     echo "0. Exit..."
@@ -64,7 +64,7 @@ function choose_commit {
     printf "Enter commit number: "
 
     while [ true ]; do
-         if [ $number_of_commits -gt 9 ]; then
+        if [ $number_of_commits -gt 9 ]; then
             read -n 2 choice
         else
             read -n 1 -s choice
@@ -74,22 +74,35 @@ function choose_commit {
             if [ -n "$git_add" ]; then
                 git restore --staged $git_add
             fi
-            printf $choice
+            if [ $number_of_commits -le 9 ]; then
+                printf $choice
+            fi
             exit
         fi
 
         re='^[0-9]+$'
         if ! [[ $choice =~ $re ]]; then
-           continue
+            if [ $number_of_commits -gt 9 ]; then
+                exit
+            fi
+            continue
         fi
 
         index=$(($choice-1))
         commit_hash=${commits_hash[index]}
         if [ -n "$commit_hash" ]; then
-            printf $choice
+            if [ $number_of_commits -le 9 ]; then
+                printf $choice
+            fi
             break
+        else
+            if [ $number_of_commits -gt 9 ]; then
+                exit
+            fi
         fi
     done
+
+    echo
     return
 }
 

@@ -145,8 +145,4 @@ utils=$( prepare_path "${gitbasher_directory}/${scripts_dir}/utils.sh" )
 script=$( prepare_path "${gitbasher_directory}/${script_name} ${args} -u ${utils}" )
 $script
 script_code=$?
-
-# Clear temporary files from commit.sh (you can accidentally create file like 'commitmsg\', which wouldn't be deleted)
-rm_out=$(rm commitmsg* 2>&1)
-
 exit $script_code

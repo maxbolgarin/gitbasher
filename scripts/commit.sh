@@ -287,7 +287,8 @@ fi
 
 
 ### Commit Step 4: enter commit message
-touch commitmsg
+commitmsg_file=".commitmsg__"
+touch $commitmsg_file
 step="4"
 if [ -n "${fast}" ]; then
     step="3"
@@ -318,26 +319,27 @@ echo """
 ###
 ### Similarly, a Deprecation section should start with 'DEPRECATED: ' followed by a short description of what is deprecated,
 ### a blank line, and a detailed description of the deprecation that also mentions the recommended update path.
-""" >> commitmsg
+""" >> $commitmsg_file
 
 while [ true ]; do
-    $editor commitmsg
-    commit_message=$(cat commitmsg | sed '/^#/d')
+    $editor $commitmsg_file
+    commit_message=$(cat $commitmsg_file | sed '/^#/d')
 
     if [ -n "$commit_message" ]; then
         break
     fi
     echo
-    echo -e "${YELLOW}Commit message cannot be empty!${ENDCOLOR}"
+    echo -e "${YELLOW}Commit message cannot be empty${ENDCOLOR}"
     echo
     read -n 1 -p "Try for one more time? (y/n) " -s -e choice
     if [ "$choice" != "y" ]; then
         git restore --staged $git_add
+        find . -name "$commitmsg_file*" -delete
         exit
     fi    
 done
 
-rm commitmsg
+find . -name "$commitmsg_file*" -delete
 
 
 ### Commit Step 5: enter tracker ticket

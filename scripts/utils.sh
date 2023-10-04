@@ -47,7 +47,7 @@ function check_code {
     if [ $1 != 0 ]; then
         echo
         echo
-        echo -e "${RED}Error during $3${ENDCOLOR}"
+        echo -e "${RED}Error during $3!${ENDCOLOR}"
         echo -e "$2"
         if [ -n "$git_add" ]; then
             git restore --staged $git_add

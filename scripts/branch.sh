@@ -309,7 +309,7 @@ elif [[ -z "$new" ]] && [[ -n "$delete" ]]; then
                     if [ $delete_code == 0 ]; then
                         echo -e "${GREEN}Deleted branch '$branch_to_delete'${ENDCOLOR}"
                     else
-                        echo -e "${RED}Cannot delete branch '$branch_to_delete'${ENDCOLOR}"
+                        echo -e "${RED}Cannot delete branch '$branch_to_delete'!${ENDCOLOR}"
                         echo -e "${delete_output}"
                         break
                     fi
@@ -340,7 +340,7 @@ elif [[ -z "$new" ]] && [[ -n "$delete" ]]; then
     fi
 
     if [[ ${delete_output} == *"is not fully merged"* ]]; then
-        echo -e "${RED}The branch '$branch_name' is not fully merged!${ENDCOLOR}"
+        echo -e "${RED}The branch '$branch_name' is not fully merged${ENDCOLOR}"
         echo "Do you want to force delete (-D flag) this branch?"
 
         printf "\nAnswer (y/n): "
@@ -355,7 +355,7 @@ elif [[ -z "$new" ]] && [[ -n "$delete" ]]; then
                     echo -e "${GREEN}Deleted branch '$branch_name'${ENDCOLOR}"
                     exit
                 fi
-                echo -e "${RED}Cannot delete branch '$branch_to_delete'${ENDCOLOR}"
+                echo -e "${RED}Cannot delete branch '$branch_to_delete'!${ENDCOLOR}"
                 echo -e "${delete_output}"
                 exit
 
@@ -368,7 +368,7 @@ elif [[ -z "$new" ]] && [[ -n "$delete" ]]; then
         exit
     fi
 
-    echo -e "${RED}Cannot delete branch '$branch_to_delete'${ENDCOLOR}"
+    echo -e "${RED}Cannot delete branch '$branch_to_delete'!${ENDCOLOR}"
     echo -e "${delete_output}"
    
     exit
@@ -449,7 +449,7 @@ if [ -z "${current}" ]; then
     echo -e "${GREEN}Switched to '$main_branch'${ENDCOLOR}"
     echo -e "${YELLOW}Pulling...${ENDCOLOR}"
     
-    pull_output=$(git pull ${origin_name} ${main_branch} --no-rebase 2>&1)
+    pull_output=$(git pull $origin_name $main_branch --no-rebase 2>&1)
     pull_code=$?
 
     echo
@@ -483,7 +483,7 @@ if [ -z "${current}" ]; then
             exit $pull_code
         fi
 
-        echo -e "${RED}Cannot pull '$main_branch', here is the error${ENDCOLOR}\n$pull_output"
+        echo -e "${RED}Cannot pull '$main_branch'! Here is an error${ENDCOLOR}\n$pull_output"
         echo
         echo -e "Pull ${YELLOW}$main_branch${ENDCOLOR} firstly and then use ${YELLOW}make branch-new${ENDCOLOR} again"
         exit $pull_code
@@ -511,7 +511,7 @@ if [ $switch_code -eq 0 ]; then
 fi
 
 if [[ $switch_output == *"already exists"* ]]; then
-    echo -e "${RED}Branch with name '${branch_name}' already exists${ENDCOLOR}"
+    echo -e "${RED}Branch with name '${branch_name}' already exists!${ENDCOLOR}"
     exit $switch_code
 fi
 

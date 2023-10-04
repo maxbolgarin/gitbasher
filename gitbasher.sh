@@ -107,7 +107,7 @@ function init {
             echo
             return
         else
-            echo -e "${RED}Directory ${YELLOW}${gitbasher_directory} ${RED}doesn't exist!${ENDCOLOR}"
+            echo -e "${RED}Directory ${YELLOW}${gitbasher_directory} ${RED}doesn't exist${ENDCOLOR}"
         fi
     done
 }

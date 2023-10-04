@@ -20,6 +20,10 @@ CYAN_ES="\x1b[36m"
 ENDCOLOR_ES="\x1b[0m"
 
 
+### Useful consts
+current_branch=$(git branch --show-current)
+
+
 ### Function for evaluating path with '~' symbol
 # $1: path
 function prepare_path {
@@ -178,6 +182,139 @@ function get_push_log {
 }
 
 
+### Function prints list of branches
+# $1: possible values:
+#     * no value prints all local branches
+#     * 'remote' - all remote
+#     * 'delete' - all local without main and current
+# Using of global:
+#     * current_branch
+#     * main_branch
+# Returns:
+#     * number_of_branches
+#     * branches_first_main
+function list_branches {
+    args="--list --sort=-committerdate"
+    if [[ "$1" == "remote" ]]; then
+        args="--list --sort=-committerdate -r"
+    fi
+    all_branches=$(git branch $args | cat 2>&1)
+    all_branches_wih_commits=$(git branch -v $args  | cat 2>&1)
+
+    all_branches="${all_branches//\*}"
+    all_branches=${all_branches//[[:blank:]]/}
+
+    IFS=$'\n' read -rd '' -a branches <<<"$all_branches"
+
+    number_of_branches=${#branches[@]}
+    if [[ "$1" == "remote" ]]; then
+        # There is origin/HEAD
+        ((number_of_branches=number_of_branches-1))
+    fi
+
+    if [[ "$number_of_branches" == 0 ]]; then
+        echo
+        echo -e "${YELLOW}There is no branches${ENDCOLOR}"
+        exit
+    fi
+
+    branch_to_check="${branches[0]}"
+    if [[ "$1" == "remote" ]]; then
+        branch_to_check="$(sed "s/${origin_name}\///g" <<< ${branch_to_check})"
+    fi
+
+    if [[ "$number_of_branches" == 1 ]] && [[ "${branch_to_check}" == "${current_branch}" ]]; then
+        echo
+        echo -e "You have only one branch: ${YELLOW}${current_branch}${ENDCOLOR}"
+        exit
+    fi
+
+    if [[ "$1" == "delete" ]] && [[ "$number_of_branches" == 2 ]] && [[ "${current_branch}" != "${main_branch}" ]]; then
+        echo
+        echo -e "${YELLOW}There is no branches to delete${ENDCOLOR}"
+        exit
+    fi
+
+    IFS=$'\n' read -rd '' -a branches_with_commits <<<"$all_branches_wih_commits"
+
+    branches_first_main=(${main_branch})
+    branches_with_commits_first_main=("dummy")
+    if [[ "$1" == "delete" ]]; then
+        branches_first_main=()
+        branches_with_commits_first_main=()
+    fi
+    for index in "${!branches[@]}"
+    do
+        branch_to_check="${branches[index]}"
+        if [[ "$1" == "delete" ]]; then
+            if [[ "$branch_to_check" == "${current_branch}"* ]] || [[ "$branch_to_check" == "${main_branch}"* ]]; then
+                continue    
+            fi
+        fi
+        if [[ "$branch_to_check" != "${main_branch}"* ]]; then
+            branches_first_main+=(${branches[index]})
+            branches_with_commits_first_main+=("${branches_with_commits[index]}")
+        elif [[ "$branch_to_check" != "HEAD->"* ]]; then 
+            branches_with_commits_first_main[0]="${branches_with_commits[index]}"
+        fi
+    done
+
+    for index in "${!branches_with_commits_first_main[@]}"
+    do
+        echo "$(($index+1)). ${branches_with_commits_first_main[index]}"
+    done
+}
+
+
+### This function prints the list of branches and user should choose one
+# $1: possible values:
+#     * no value prints all local branches
+#     * 'remote' - choose from all remote
+#     * 'delete' - choose from all local without main and current
+# Using of global:
+#     * origin_name
+# Returns:
+#     * branch_name
+function choose_branch {
+    list_branches $1
+    printf "0. Exit...\n"
+
+    echo
+    printf "Enter branch number: "
+
+    while [ true ]; do
+        if [ $number_of_branches -gt 9 ]; then
+            read -n 2 choice
+        else
+            read -n 1 -s choice
+        fi
+
+        if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
+            printf $choice
+            exit
+        fi
+
+        re='^[0-9]+$'
+        if ! [[ $choice =~ $re ]]; then
+           continue
+        fi
+
+        index=$(($choice-1))
+        branch_name="${branches_first_main[index]}"
+        if [ -n "$branch_name" ]; then
+            printf $choice
+            break
+        fi
+    done
+
+    if [[ "$1" == "remote" ]]; then
+        branch_name=$(sed "s/${origin_name}\///g" <<< ${branch_name})
+    fi
+
+    echo
+}
+
+
 ### Function pulls provided branch, handles errors and makes a merge
 # $1: branch name
 # $2: origin name
@@ -210,7 +347,7 @@ function pull {
 
     ### Cannot pull because there is conflict in committed and pulled files, user should merge changes
     echo -e "${RED}Cannot pull! There are conflicts in staged files${ENDCOLOR}"
-    merge $1 $2 $3
+    resolve_conflicts $1 $2 $3
 
     echo -e "${GREEN}Successful pull!${ENDCOLOR}"
 }
@@ -220,7 +357,7 @@ function pull {
 # $1: branch name
 # $2: origin name
 # $3: editor
-function merge {
+function resolve_conflicts {
 
     ### Print files with conflicts
     echo -e "${YELLOW}Files with conflicts${ENDCOLOR}"

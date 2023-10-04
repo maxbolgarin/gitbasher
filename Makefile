@@ -128,16 +128,17 @@ branch-prune: ##@Branch Remove all not merged branches and run 'git remote prune
 
 ################################################
 
+.PHONY: merge
+merge: ##@Merge Select branch to merge into current
+	@${GITBASHER_S} -r pull -a "-m -e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
+
 .PHONY: merge-main
-merge-main: ##@Merge Merge main branch to current branch
-	@git fetch ${GITBASHER_ORIGIN_NAME} ${GITBASHER_MAIN_BRANCH}
-	@git merge ${GITBASHER_MAIN_BRANCH}
+merge-main: ##@Merge Merge main branch into current
+	@${GITBASHER_S} -r pull -a "-m -a -e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
 
 .PHONY: merge-to-main
-merge-to-main: ##@Merge Merge current branch to main
-	@$(eval branch:=$(shell git branch --show-current))
-	@git switch ${GITBASHER_MAIN_BRANCH}
-	@git merge ${branch}
+merge-to-main: ##@Merge Merge current branch into main
+	@${GITBASHER_S} -r pull -a "-m -t -e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
 
 ################################################
 

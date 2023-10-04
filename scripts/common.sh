@@ -211,6 +211,8 @@ function pull {
     ### Cannot pull because there is conflict in committed and pulled files, user should merge changes
     echo -e "${RED}Cannot pull! There are conflicts in staged files${ENDCOLOR}"
     merge $1 $2 $3
+
+    echo -e "${GREEN}Successful pull!${ENDCOLOR}"
 }
 
 
@@ -230,9 +232,9 @@ function merge {
     ### Ask user what he wants to do
     default_message="Merge branch '$2/$1' into '$1'"
     echo -e "${YELLOW}You should fix conflicts manually.${ENDCOLOR} There are some options:"
-    echo -e "1. Create merge commit with generated message and continue push"
+    echo -e "1. Create merge commit with generated message"
     printf "\tMessage: ${BLUE}${default_message}${ENDCOLOR}\n"
-    echo -e "2. Create merge commit with entered message and continue push"
+    echo -e "2. Create merge commit with entered message"
     echo -e "3. Abort merge (undo pulling)"
     echo -e "Press any another key to exit from this script without merge abort"
 
@@ -247,8 +249,11 @@ function merge {
         fi
 
         if [ "$choice" == "1" ] || [ "$choice" == "2" ]; then
-              echo
-              merge_commit $choice $files_with_conflicts $default_message $1 $2 $3
+            echo
+            merge_commit $choice $files_with_conflicts "${default_message}" $1 $2 $3
+            if [ -z "$merge_commit_code" ] || [ $merge_commit_code == 0 ]; then
+                return
+            fi
         fi
 
         if [ "$choice" == "3" ]; then
@@ -272,6 +277,8 @@ function merge {
 # $4: branch name
 # $5: origin name
 # $6: editor
+# Returns: 
+#     merge_commit_code - 0 if everything is ok
 function merge_commit {
 
     ### Check if there are files with conflicts
@@ -286,6 +293,7 @@ function merge_commit {
 
         echo
         echo -e "Fix conflicts and press ${YELLOW}$1${ENDCOLOR} for one more time"
+        merge_commit_code=1
         return
     fi
 
@@ -298,6 +306,7 @@ function merge_commit {
     if [ "$1" == "1" ]; then
         result=$(git commit -m "$3" 2>&1)
         check_code $? "$result" "merge commit"
+        commit_message="$3"
 
     ### 2. Commit with entered message
     else
@@ -319,13 +328,13 @@ ${staged_with_tab}
             if [ -n "$commit_message" ]; then
                 break
             fi
-            echo
             echo -e "${YELLOW}Merge commit message cannot be empty${ENDCOLOR}"
             echo
             read -n 1 -p "Try for one more time? (y/n) " -s -e choice
             if [ "$choice" != "y" ]; then
                 git restore --staged $files_with_conflicts_one_line
                 find . -name "$commitmsg_file*" -delete
+                merge_commit_code=2
                 exit
             fi    
         done
@@ -336,6 +345,8 @@ ${staged_with_tab}
         check_code $? "$result" "merge commit"
     fi
 
-    echo -e "${GREEN}Successful merge!${ENDCOLOR}"
+    echo -e "${GREEN}Successful merge${ENDCOLOR}"
+    echo -e "$commit_message"
     echo
+    merge_commit_code=0
 }

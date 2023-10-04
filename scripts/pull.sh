@@ -38,6 +38,6 @@ source $utils
 branch=$(git branch --show-current)
 
 echo
-echo -e "${YELLOW}Pulling $origin_name/$branch...${ENDCOLOR}"
+echo -e "${YELLOW}Pulling '$origin_name/$branch'...${ENDCOLOR}"
 echo
 pull $branch $origin_name $editor

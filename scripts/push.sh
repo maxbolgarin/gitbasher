@@ -111,18 +111,17 @@ if [ -n "$list" ]; then
 fi
 
 
-### Run fast mode - push without asking and fixing errors
-if [ -n "${fast}" ]; then
-    push
-    exit
+### If not in fast mode - ask if user wants to push
+if [ -z "${fast}" ]; then
+    echo -e "Do you want to push it to ${YELLOW}${origin_name}/${branch}${ENDCOLOR} (y/n)?"
+    yes_no_choice "Pushing..."
+else
+    echo -e "${YELLOW}Pushing...${ENDCOLOR}"
+    echo
 fi
 
-
-### Push
-echo -e "Do you want to push it to ${YELLOW}${origin_name}/${branch}${ENDCOLOR} (y/n)?"
-yes_no_choice "Pushing..."
+### Pushing
 push
-
 
 ### Get push error - there is unpulled changes
 echo -e "${RED}Cannot push! There is unpulled changes in '${origin_name}/${branch}'${ENDCOLOR}"

@@ -43,7 +43,12 @@ current_branch=$(git branch --show-current)
 # $1: name of operation, e.g. `amend`
 function after_commit {
     echo
-    echo -e "${GREEN}Successful commit $1${ENDCOLOR}"
+    if [ -n "$1" ]; then
+        echo -e "${GREEN}Successful commit $1!${ENDCOLOR}"
+    else
+        echo -e "${GREEN}Successful commit!${ENDCOLOR}"
+    fi
+    
     echo
 
     # Print commit hash and message
@@ -106,10 +111,10 @@ if [ "$is_clean" = "nothing to commit, working tree clean" ]; then
         exit
     fi
 elif [ -n "${autosquash}" ]; then
-    echo -e "${RED}Cannot autosquash: there is uncommited changes${ENDCOLOR}"
+    echo -e "${RED}Cannot autosquash: there is uncommited changes!${ENDCOLOR}"
     exit
 elif [ -n "${revert}" ]; then
-    echo -e "${RED}Cannot revert: there is uncommited changes${ENDCOLOR}"
+    echo -e "${RED}Cannot revert: there is uncommited changes!${ENDCOLOR}"
     exit
 fi
 
@@ -293,12 +298,18 @@ step="4"
 if [ -n "${fast}" ]; then
     step="3"
 fi
+staged_with_tab="$(sed 's/^/###\t/' <<< "${staged}")"
 echo
 echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Write a <summary> about your changes"
 echo """
 ###
-### Step ${step}. Write a <summary> about your changes and press ^X, Y and Enter. Here is expected format:
+### Step ${step}. Write a <summary> about your changes. Lines starting with '#' will be ignored. 
+### 
+### On branch ${current_branch}
+### Changes to be commited:
+${staged_with_tab}
 ###
+### Here is expected format:
 ### ${commit} <summary>
 ### <BLANK LINE>
 ### <optional body>

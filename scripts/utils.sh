@@ -39,11 +39,47 @@ function reverse() {
 }
 
 
-commit_hash=""
-git_add=""
+### Function checks code against 0 and show error
+# $1: return code
+# $2: command output (error message)
+# $3: command name
+function check_code {
+    if [ $1 != 0 ]; then
+        echo
+        echo
+        echo -e "${RED}Error during $3${ENDCOLOR}"
+        echo -e "$2"
+        if [ -n "$git_add" ]; then
+            git restore --staged $git_add
+        fi
+        exit $1
+    fi
+}
+
+
+### This function asks user to enter yes or no, it will exit at no answer
+# $1: What to write to console on success
+function yes_no_choice {
+    while [ true ]; do
+        read -n 1 -s choice
+        if [ "$choice" == "y" ]; then
+            if [ -n "$1" ]; then
+                echo -e "${YELLOW}$1${ENDCOLOR}"
+                echo
+            fi
+            return
+        fi
+        if [ "$choice" == "n" ]; then
+            exit
+        fi
+    done
+}
+
 
 ### Function prints the list of commits and user should choose one
 # $1: number of last commits to show
+# Returns: 
+#     commit_hash - hash of selected commit
 function choose_commit {
     commits_info_str=$(git log --pretty="%h | %s | %an | %cr" -n $1 | column -ts'|')
     commits_hash_str=$(git log --pretty="%h" -n $1)
@@ -107,24 +143,6 @@ function choose_commit {
 }
 
 
-### Function checks code against 0 and show error
-# $1: return code
-# $2: command output (error message)
-# $3: comand name
-function check_code {
-    if [ $1 != 0 ]; then
-        echo
-        echo
-        echo -e "${RED}Error during $3${ENDCOLOR}"
-        echo -e "$2"
-        if [ -n "$git_add" ]; then
-            git restore --staged $git_add
-        fi
-        exit $1
-    fi
-}
-
-
 ### Function returns git log diff between provided argument and HEAD
 # $1: branch or commit from which to calc diff
 function gitlog_diff {
@@ -132,13 +150,13 @@ function gitlog_diff {
 }
 
 
-push_log=""
-history_from=""
-
 ### Function sets to variables push_log and history_from actual push log information
 # $1: current branch
 # $2: main branch
 # $3: origin name
+# Returns: 
+#     push_log - unpushed commits
+#     history_from - branch or commit from which history was calculated
 function get_push_log {
     origin_name="origin"
     if [ -n "$3" ]; then

@@ -67,24 +67,6 @@ function push {
     fi
 }
 
-### This function asks user to enter yes or no, it will exit at no answer
-# $1: What to write to console on success
-function yes_no_choice {
-    while [ true ]; do
-        read -n 1 -s choice
-        if [ "$choice" == "y" ]; then
-            if [ -n "$1" ]; then 
-                echo -e "${YELLOW}$1${ENDCOLOR}"
-                echo
-            fi
-            return
-        fi
-        if [ "$choice" == "n" ]; then
-            exit
-        fi
-    done
-}
-
 ###
 ### Script logic here
 ###
@@ -123,6 +105,7 @@ if [ -n "${fast}" ]; then
     push
     exit
 fi
+
 
 ### Push
 echo -e "Do you want to push it to ${YELLOW}${origin_name}/${branch}${ENDCOLOR} (y/n)?"

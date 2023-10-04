@@ -43,7 +43,11 @@ commit-fixup: ##@Commit Make fixup commit (git commit --fixup <commit>)
 commit-autosquash: ##@Commit Make autosquash of fixup commits (git rebase --autosquash <commit>)
 	@${GITBASHER_S} -r commit -a "-s -e ${GITBASHER_TEXTEDITOR}"
 
+<<<<<<< HEAD
 .PHONY: commit-rever
+=======
+.PHONY: commit-revertaasd
+>>>>>>> 236064ac99d8b0d2bad574a52973f4f4542eff30
 commit-revert: ##@Commit Revert selected commit (git revert --no-edit <commit>)
 	@${GITBASHER_S} -r commit -a "-r -e ${GITBASHER_TEXTEDITOR}"
 

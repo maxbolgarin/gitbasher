@@ -78,7 +78,7 @@ function push {
 ###
 
 ### Print header
-if [ -z "$list" ]; then
+if [ -z "$list" ] && [ -z "$fast" ]; then
     echo -e "${YELLOW}PUSH MANAGER${ENDCOLOR}"
 fi
 echo

@@ -43,7 +43,7 @@ commit-fixup: ##@Commit Make fixup commit (git commit --fixup <commit>)
 commit-autosquash: ##@Commit Make autosquash of fixup commits (git rebase --autosquash <commit>)
 	@${GITBASHER_S} -r commit -a "-s -e ${GITBASHER_TEXTEDITOR}"
 
-.PHONY: commit-reverta
+.PHONY: commit-revert
 commit-revert: ##@Commit Revert selected commit (git revert --no-edit <commit>)
 	@${GITBASHER_S} -r commit -a "-r -e ${GITBASHER_TEXTEDITOR}"
 
@@ -93,15 +93,11 @@ pull-tags: ##@Remote Pull current branch and tags from remote
 
 .PHONY: push
 push: ##@Remote Run Push Manager to push changes and pull origin if there are unpulled changes
-	@${GITBASHER_S} -r push -a "-b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
+	@${GITBASHER_S} -r push -a "-e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
 
 .PHONY: push-list
 push-list: ##@Remote Print a list of unpushed commits
-	@${GITBASHER_S} -r push -a "-l -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
-
-.PHONY: push-tag
-push-tag: ##@Remote Select a tag to push
-	@${GITBASHER_S} -r push -a "-t -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
+	@${GITBASHER_S} -r push -a "-l -e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
 
 ################################################
 

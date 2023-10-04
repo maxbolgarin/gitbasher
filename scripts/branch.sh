@@ -278,7 +278,7 @@ elif [[ -z "$new" ]] && [[ -n "$delete" ]]; then
     merged_branches_without_main=()
     for index in "${!merged_branches[@]}"
     do
-        branch_with_info="$(echo "${merged_branches[index]}" | xargs)"
+        branch_with_info="$(echo "${merged_branches[index]}" | sed -e 's/^[[:space:]]*//')"
         if [[ ${branch_with_info} != "${main_branch}"* ]] && [[ ${branch_with_info} != "*"* ]] ; then
             merged_branches_without_main+=("$branch_with_info")
         fi

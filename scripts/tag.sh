@@ -67,7 +67,10 @@ fi
 
 echo
 
-count=10
+count=14
+if [ -n "${delete}" ]; then
+    count=9
+fi
 
 tags_list=$(git for-each-ref --count=$count --format="%(refname:short) | %(creatordate:relative) | %(objectname:short) - %(contents:subject)" --sort=-creatordate refs/tags | column -ts'|' )
 tags_only=$(git for-each-ref --count=$count --format="%(refname:short)" --sort=-creatordate refs/tags)
@@ -75,16 +78,63 @@ tags_only=$(git for-each-ref --count=$count --format="%(refname:short)" --sort=-
 IFS=$'\n' read -rd '' -a tags_info <<<"$tags_list"
 IFS=$'\n' read -rd '' -a tags <<<"$tags_only"
 
-echo -e "${YELLOW}Last local tags${ENDCOLOR}"
+number_of_tags=${#tags[@]}
+
+echo -e "${YELLOW}Last ${number_of_tags} local tags${ENDCOLOR}"
 
 for index in "${!tags[@]}"
 do
     tag_line=$(sed "1,/${tags[index]}/ s/${tags[index]}/${GREEN_ES}${tags[index]}${ENDCOLOR_ES}/" <<< ${tags_info[index]})
-    echo -e "${tag_line}"
-    #echo -e "$(($index+1)). ${tag_line}"
+    if [ -n "${delete}" ]; then
+        echo -e "$(($index+1)). ${tag_line}"
+    else
+        echo -e "${tag_line}"
+    fi
 done
 
 if [ -n "$list" ]; then
+    exit
+fi
+
+if [ -n "${delete}" ]; then
+    echo "0. Exit..."
+    echo
+    printf "Enter tag number to delete: "
+    while [ true ]; do
+        read -n 1 -s choice
+
+        if [ "$choice" == "0" ]; then
+            printf $choice
+            exit
+        fi
+
+        re='^[0-9]+$'
+        if ! [[ $choice =~ $re ]]; then
+            continue
+        fi
+
+        index=$(($choice-1))
+        tag_name=${tags[index]}
+        if [ -n "$tag_name" ]; then
+            printf $choice
+            break
+        fi
+    done
+
+    echo
+    echo
+
+    delete_result=$(git tag -d $tag_name 2>&1)
+    delete_code=$?
+
+    if [ $delete_code != 0 ]; then
+        echo -e "${RED}Cannot delete tag '${tag_name}'${ENDCOLOR}"
+        echo -e "$delete_result"
+        exit
+    fi
+
+    echo -e "${GREEN}Successfully deleted tag '${tag_name}'${ENDCOLOR}"
+
     exit
 fi
 
@@ -156,20 +206,16 @@ if [ -n "$annotated" ]; then
 fi
 
 
-tag_output=""
-if [ -n "$select" ]; then
-    if [ -n "$annotated" ]; then
-        tag_output=$(git tag -a -m """$tag_message""" $tag_name $commit_hash 2>&1)
-    else
-        tag_output=$(git tag $tag_name $commit_hash 2>&1)
-    fi
-else
-    if [ -n "$annotated" ]; then
-        tag_output=$(git tag -a -m """$tag_message""" $tag_name 2>&1)
-    else
-        tag_output=$(git tag $tag_name 2>&1)
-    fi
+if [ -z "$select" ]; then
+    commit_hash=""
 fi
+
+if [ -n "$annotated" ]; then
+    tag_output=$(git tag -a -m """$tag_message""" $tag_name $commit_hash 2>&1)
+else
+    tag_output=$(git tag $tag_name $commit_hash 2>&1)
+fi
+
 tag_code=$?
 
 if [ $tag_code != 0 ]; then

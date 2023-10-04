@@ -67,7 +67,7 @@ function after_commit {
     IFS=$'\n' read -rd '' -a stats <<<"$stat"
     for index in "${!stats[@]}"
     do
-        s=$(echo ${stats[index]} | xargs)
+        s=$(echo ${stats[index]} | sed -e 's/^[[:space:]]*//')
         s=$(sed 's/+/\\e[32m+\\e[0m/g' <<< ${s})
         s=$(sed 's/-/\\e[31m-\\e[0m/g' <<< ${s})
         echo -e "${s}"
@@ -172,7 +172,7 @@ else
         fi
 
         # Trim spaces
-        git_add=$(echo "$git_add" | xargs)
+        git_add=$(echo "$git_add" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
         git add $git_add
         if [ $? -eq 0 ]; then
             break
@@ -368,7 +368,7 @@ if [ -n "${ticket}" ]; then
     fi
 
     if [ "$commit_ticket" != "" ]; then
-        commit_ticket=$(echo "$commit_ticket" | xargs)
+        commit_ticket=$(echo "$commit_ticket" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
 
         summary=$(echo "$commit_message" | head -n 1)
         remaining_message=""

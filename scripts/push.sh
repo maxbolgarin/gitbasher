@@ -8,21 +8,27 @@
 ### Options
 # y: fast push (answer 'yes')
 # l: list of commits to push
+# e: text editor to write commit message (default 'nano')
 # b: name of main branch (default 'main')
 # o: name of remote (default 'origin')
 # u: path to utils.sh (mandator, auto pass by gitbasher.sh)
 
 
-while getopts ylb:o:u: flag; do
+while getopts yle:b:o:u: flag; do
     case "${flag}" in
         y) fast="true";;
         l) list="true";;
 
+        e) editor=${OPTARG};;
         b) main_branch=${OPTARG};;
         o) origin_name=${OPTARG};;
         u) utils=${OPTARG};;
     esac
 done
+
+if [ -z "$editor" ]; then
+    editor="nano"
+fi
 
 if [ -z "$main_branch" ]; then
     main_branch="main"
@@ -114,7 +120,7 @@ push
 
 
 ### Gut push error - there is unpulled changes
-echo -e "${RED}Cannot push! There is unpulled changes in ${origin_name}/${branch}${ENDCOLOR}"
+echo -e "${RED}Cannot push! There is unpulled changes in '${origin_name}/${branch}'${ENDCOLOR}"
 echo
 
 echo -e "Do you want to pull ${YELLOW}${origin_name}/${branch}${ENDCOLOR} with --no-rebase (y/n)?"
@@ -152,7 +158,7 @@ fi
 
 
 ### Cannot pull because there is conflict in committed and pulled files, user should merge changes
-echo -e "${RED}Cannot pull! You should fix conflicts${ENDCOLOR}"
+echo -e "${RED}Cannot pull! There are conflicts in staged files${ENDCOLOR}"
 echo -e "${YELLOW}Files with conflicts${ENDCOLOR}"
 
 IFS=$'\n' read -rd '' -a files_with_conflicts <<<"$(git --no-pager diff --name-only --diff-filter=U --relative)"
@@ -187,13 +193,13 @@ while [ true ]; do
     if [ "$choice" == "1" ] || [ "$choice" == "2" ]; then
         echo
 
-        IFS=$'\n' read -rd '' -a files_with_conflicts <<<"$(grep --files-with-matches -r -E "[<=>]{7} HEAD" .)"
-        number_of_conflicts=${#files_with_conflicts[@]}
+        IFS=$'\n' read -rd '' -a files_with_conflicts_new <<<"$(grep --files-with-matches -r -E "[<=>]{7} HEAD" .)"
+        number_of_conflicts=${#files_with_conflicts_new[@]}
         if [ $number_of_conflicts -gt 0 ]; then
             echo -e "${YELLOW}There are still some files with conflicts${ENDCOLOR}"
-            for index in "${!files_with_conflicts[@]}"
+            for index in "${!files_with_conflicts_new[@]}"
             do
-                echo -e $(sed '1 s/.\///' <<< "\t${files_with_conflicts[index]}")
+                echo -e $(sed '1 s/.\///' <<< "\t${files_with_conflicts_new[index]}")
             done
             echo
             echo -e "Fix conflicts and press ${YELLOW}${choice}${ENDCOLOR} for one more time"
@@ -206,10 +212,10 @@ while [ true ]; do
             result=$(git commit -m "$default_message" 2>&1)
             check_code $? "$result" "merge commit"
         else
-            staged_with_tab="$(sed 's/^/###\t/' <<< "$(git diff --name-only --cached)")"
+            staged_with_tab="$(sed 's/^/###\t/' <<< "${files_with_conflicts}")"
             commitmsg_file=".commitmsg__"
-touch $commitmsg_file
-echo """
+            touch $commitmsg_file
+            echo """
 ###
 ### Write a message about merge from '$origin_name/$branch' into '$branch'. Lines starting with '#' will be ignored. 
 ### 
@@ -249,7 +255,7 @@ ${staged_with_tab}
 
     if [ "$choice" == "3" ]; then
         echo
-        echo -e "${YELLOW}Aborting merge...${ENDCOLOR}"
+        echo -e "${YELLOW}Cancel merge and undo pull${ENDCOLOR}"
         git merge --abort
         exit $?
     fi

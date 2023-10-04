@@ -81,8 +81,10 @@ function push {
 if [ -z "$list" ] && [ -z "$fast" ]; then
     echo -e "${YELLOW}PUSH MANAGER${ENDCOLOR}"
 fi
-echo
 
+if [ -z "$fast" ]; then
+    echo
+fi
 
 ### Check if there is commits to push
 get_push_log ${branch} ${main_branch} ${origin_name}

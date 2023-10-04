@@ -80,17 +80,24 @@ IFS=$'\n' read -rd '' -a tags <<<"$tags_only"
 
 number_of_tags=${#tags[@]}
 
-echo -e "${YELLOW}Last ${number_of_tags} local tags${ENDCOLOR}"
-
-for index in "${!tags[@]}"
-do
-    tag_line=$(sed "1,/${tags[index]}/ s/${tags[index]}/${GREEN_ES}${tags[index]}${ENDCOLOR_ES}/" <<< ${tags_info[index]})
+if [ $number_of_tags == 0 ]; then
+    echo -e "${YELLOW}There is no local tags${ENDCOLOR}"
     if [ -n "${delete}" ]; then
-        echo -e "$(($index+1)). ${tag_line}"
-    else
-        echo -e "${tag_line}"
+        exit
     fi
-done
+else
+    echo -e "${YELLOW}Last ${number_of_tags} local tags${ENDCOLOR}"
+
+    for index in "${!tags[@]}"
+    do
+        tag_line=$(sed "1,/${tags[index]}/ s/${tags[index]}/${GREEN_ES}${tags[index]}${ENDCOLOR_ES}/" <<< ${tags_info[index]})
+        if [ -n "${delete}" ]; then
+            echo -e "$(($index+1)). ${tag_line}"
+        else
+            echo -e "${tag_line}"
+        fi
+    done
+fi
 
 if [ -n "$list" ]; then
     exit
@@ -128,7 +135,7 @@ if [ -n "${delete}" ]; then
     delete_code=$?
 
     if [ $delete_code != 0 ]; then
-        echo -e "${RED}Cannot delete tag '${tag_name}'${ENDCOLOR}"
+        echo -e "${RED}Cannot delete tag '${tag_name}'!${ENDCOLOR}"
         echo -e "$delete_result"
         exit
     fi
@@ -220,9 +227,9 @@ tag_code=$?
 
 if [ $tag_code != 0 ]; then
     if [[ $tag_output == *"already exists" ]]; then
-        echo -e "${RED}Tag '${tag_name}' already exists${ENDCOLOR}"
+        echo -e "${RED}Tag '${tag_name}' already exists!${ENDCOLOR}"
     else
-        echo -e "${RED}Cannot create tag '${tag_name}'${ENDCOLOR}"
+        echo -e "${RED}Cannot create tag '${tag_name}'!${ENDCOLOR}"
         echo -e "$tag_output"
     fi
     exit
@@ -236,8 +243,40 @@ if [ -n "$select" ]; then
     is_commit_hash=" from commit '${commit_hash}'"
 fi
 
-echo -e "${GREEN}Successfully created${is_annotated} tag '${tag_name}'${is_commit_hash}${ENDCOLOR}"
+echo -e "${GREEN}Successfully created${is_annotated} tag '${tag_name}'${is_commit_hash}!${ENDCOLOR}"
 
 if [ -n "$tag_message" ]; then
     echo -e "$tag_message"
+fi
+
+echo
+
+echo -e "Do you want to push this tag to ${origin} (y/n)?"
+yes_no_choice "Pushing..."
+
+#push_result=$(git tag -d $tag_name 2>&1)
+#push_code=$?
+
+if [ $push_code -eq 0 ] ; then 
+        echo -e "${GREEN}Successful push!${ENDCOLOR}"
+        repo=$(git config --get remote.${origin_name}.url)
+        repo="${repo/":"/"/"}" 
+        repo="${repo/"git@"/"https://"}"
+        repo="${repo/".git"/""}" 
+        echo -e "${YELLOW}Repo:${ENDCOLOR}\t${repo}"
+        if [[ ${branch} != ${main_branch} ]]; then
+            if [[ $repo == *"github"* ]]; then
+                echo -e "${YELLOW}PR:${ENDCOLOR}\t${repo}/pull/new/${branch}"
+            elif [[ $repo == *"gitlab"* ]]; then
+                echo -e "${YELLOW}MR:${ENDCOLOR}\t${repo}/-/merge_requests/new?merge_request%5Bsource_branch%5D=${branch}"
+            fi
+        fi
+        exit
+    fi
+
+    if [[ $push_output != *"[rejected]"* ]]; then
+        echo -e "${RED}Cannot push! Here is the error${ENDCOLOR}"
+        echo "$push_output"
+        exit $push_code
+    fi
 fi

@@ -38,7 +38,7 @@ source $utils
 branch=$(git branch --show-current)
 
 ### Use this function to push changes to origin
-### It will exit if everyrhing is ok or there is a critical error
+### It will exit if everyrhing is ok or there is a critical error, return if there is unpulled changes
 function push {
     push_output=$(git push ${origin_name} ${branch} 2>&1)
     push_code=$?
@@ -120,7 +120,7 @@ echo
 echo -e "Do you want to pull ${YELLOW}${origin_name}/${branch}${ENDCOLOR} with --no-rebase (y/n)?"
 yes_no_choice "Pulling..."
 
-pull_output=$(git pull ${origin_name} ${branch} --no-rebase 2>&1)
+pull_output=$(git pull $origin_name $branch --no-rebase 2>&1)
 pull_code=$?
 
 
@@ -153,17 +153,109 @@ fi
 
 ### Cannot pull because there is conflict in committed and pulled files, user should merge changes
 echo -e "${RED}Cannot pull! You should fix conflicts${ENDCOLOR}"
-files_with_conflicts=$(git diff --name-only --diff-filter=U --relative | cat)
-echo -e "${YELLOW}Files:${ENDCOLOR}"
-echo "$files_with_conflicts"
+echo -e "${YELLOW}Files with conflicts${ENDCOLOR}"
+
+IFS=$'\n' read -rd '' -a files_with_conflicts <<<"$(git --no-pager diff --name-only --diff-filter=U --relative)"
+files_with_conflicts_line=""
+for index in "${!files_with_conflicts[@]}"
+do
+    files_with_conflicts_line="${files_with_conflicts_line} ${files_with_conflicts[index]}"
+    echo -e "\t${files_with_conflicts[index]}"
+done
+
 echo
-echo -e "Fix conflicts and commit result, then use ${YELLOW}make push${ENDCOLOR} for one more time"
 
 
-### Abort merge
-echo -e "Press ${YELLOW}n${ENDCOLOR} if you want to abort merge or any key to exit"
-read -n 1 -s choice
-if [ "$choice" == "n" ]; then
-    echo -e "${YELLOW}Aborting merge...${ENDCOLOR}"
-    git merge --abort
-fi
+### Merge process
+default_message="Merge branch '$origin_name/$branch' into '$branch'"
+echo -e "${YELLOW}You should fix conflicts manually.${ENDCOLOR} There are some options:"
+echo -e "1. Create merge commit with generated message and continue push"
+printf "\tMessage: ${BLUE}${default_message}${ENDCOLOR}\n"
+echo -e "2. Create merge commit with entered message and continue push"
+echo -e "3. Abort merge (undo pulling)"
+echo -e "Press any another key to exit from this script without merge abort"
+
+
+while [ true ]; do
+    read -n 1 -s choice
+
+    re='^[0-9]+$'
+    if ! [[ $choice =~ $re ]]; then
+        exit
+    fi
+
+    if [ "$choice" == "1" ] || [ "$choice" == "2" ]; then
+        echo
+
+        IFS=$'\n' read -rd '' -a files_with_conflicts <<<"$(grep --files-with-matches -r -E "[<=>]{7} HEAD" .)"
+        number_of_conflicts=${#files_with_conflicts[@]}
+        if [ $number_of_conflicts -gt 0 ]; then
+            echo -e "${YELLOW}There are still some files with conflicts${ENDCOLOR}"
+            for index in "${!files_with_conflicts[@]}"
+            do
+                echo -e $(sed '1 s/.\///' <<< "\t${files_with_conflicts[index]}")
+            done
+            echo
+            echo -e "Fix conflicts and press ${YELLOW}${choice}${ENDCOLOR} for one more time"
+            continue
+        fi
+
+        git add $files_with_conflicts_line
+
+        if [ "$choice" == "1" ]; then
+            result=$(git commit -m "$default_message" 2>&1)
+            check_code $? "$result" "merge commit"
+        else
+            staged_with_tab="$(sed 's/^/###\t/' <<< "$(git diff --name-only --cached)")"
+            commitmsg_file=".commitmsg__"
+touch $commitmsg_file
+echo """
+###
+### Write a message about merge from '$origin_name/$branch' into '$branch'. Lines starting with '#' will be ignored. 
+### 
+### On branch ${branch}
+### Changes to be commited:
+${staged_with_tab}
+""" >> $commitmsg_file
+            while [ true ]; do
+                $editor $commitmsg_file
+                commit_message=$(cat $commitmsg_file | sed '/^#/d')
+
+                if [ -n "$commit_message" ]; then
+                    break
+                fi
+                echo
+                echo -e "${YELLOW}Merge commit message cannot be empty${ENDCOLOR}"
+                echo
+                read -n 1 -p "Try for one more time? (y/n) " -s -e choice
+                if [ "$choice" != "y" ]; then
+                    git restore --staged $files_with_conflicts_line
+                    find . -name "$commitmsg_file*" -delete
+                    exit
+                fi    
+            done
+
+            find . -name "$commitmsg_file*" -delete
+            
+            result=$(git commit -m """$commitmsg_file""" 2>&1)
+            check_code $? "$result" "merge commit"
+        fi
+
+        echo -e "${GREEN}Successful merge!${ENDCOLOR}"
+        echo -e "${YELLOW}Pushing...${ENDCOLOR}"
+        echo
+        push
+    fi
+
+    if [ "$choice" == "3" ]; then
+        echo
+        echo -e "${YELLOW}Aborting merge...${ENDCOLOR}"
+        git merge --abort
+        exit $?
+    fi
+
+    if [ "$choice" == "0" ]; then
+        exit
+    fi
+done
+

@@ -16,7 +16,7 @@
 # e: text editor to write commit message (default 'nano')
 # b: name of main branch (default 'main')
 # o: name of remote (default 'origin')
-# u: path to utils.sh (mandatory, auto pass by gitbasher.sh)
+# u: path to common.sh (mandatory, auto pass by gitbasher.sh)
 
 
 while getopts saldrpe:b:o:u: flag; do

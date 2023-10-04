@@ -8,6 +8,7 @@
 # Supported scripts:
 # - branch
 # - commit
+# - pull
 # - push
 # - tag
 # - ver
@@ -54,6 +55,7 @@ scripts_dir="scripts"
 declare -A scripts=(
     ["branch"]="${scripts_dir}/branch.sh"
     ["commit"]="${scripts_dir}/commit.sh"
+    ["pull"]="${scripts_dir}/pull.sh"
     ["push"]="${scripts_dir}/push.sh"
     ["tag"]="${scripts_dir}/tag.sh"
     ["ver"]="${scripts_dir}/ver.sh"
@@ -141,7 +143,7 @@ if [ -z "$script_name" ]; then
     exit
 fi
 
-utils=$( prepare_path "${gitbasher_directory}/${scripts_dir}/utils.sh" )
+utils=$( prepare_path "${gitbasher_directory}/${scripts_dir}/common.sh" )
 script=$( prepare_path "${gitbasher_directory}/${script_name} ${args} -u ${utils}" )
 $script
 script_code=$?

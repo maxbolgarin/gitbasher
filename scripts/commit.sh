@@ -13,7 +13,7 @@
 # s: autosquash fixup commits
 # r: revert commit
 # e: text editor to write commit message (default 'nano')
-# u: path to utils.sh (mandatory, auto pass by gitbasher.sh)
+# u: path to common.sh (mandatory, auto pass by gitbasher.sh)
 
 
 while getopts ftaxsre:u: flag; do
@@ -63,15 +63,25 @@ function after_commit {
     echo
 
     # Print stat of last commit - updated files and lines
-    stat=$(git show $commit_hash --stat --format="" | cat)
-    IFS=$'\n' read -rd '' -a stats <<<"$stat"
+    IFS=$'\n' read -rd '' -a stats <<< "$(git show $commit_hash --stat --format="" | cat)"
+    result_stat=""
+    bottom_line=""
+    number_of_stats=${#stats[@]}
     for index in "${!stats[@]}"
     do
         s=$(echo ${stats[index]} | sed -e 's/^[[:space:]]*//')
-        s=$(sed 's/+/\\e[32m+\\e[0m/g' <<< ${s})
-        s=$(sed 's/-/\\e[31m-\\e[0m/g' <<< ${s})
-        echo -e "${s}"
+        s=$(sed "s/+/${GREEN_ES}+${ENDCOLOR_ES}/g" <<< ${s})
+        s=$(sed "s/-/${RED_ES}-${ENDCOLOR_ES}/g" <<< ${s})
+        if [ $(($index+1)) == $number_of_stats ]; then
+            #s=$(sed '1 s/,/|/' <<< ${s})
+            bottom_line="${s}"
+            break
+        fi
+        result_stat="${result_stat}\n${s}"
     done
+    echo -e "$(echo -e "${result_stat}" | column -ts'|')"
+    echo -e "$bottom_line"
+
 
     # Some info to help users
     if [ -z "${fast}" ]; then

@@ -85,11 +85,7 @@ tag-push-all: ##@Commit Push all local tags to a remote
 
 .PHONY: pull
 pull: ##@Remote Pull current branch from remote
-	@git pull ${GITBASHER_ORIGIN_NAME} $(shell git branch --show-current) --no-rebase
-
-.PHONY: pull-tags
-pull-tags: ##@Remote Pull current branch and tags from remote
-	@git pull --tags ${GITBASHER_ORIGIN_NAME} $(shell git branch --show-current) --no-rebase
+	@${GITBASHER_S} -r pull -a "-e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
 
 .PHONY: push
 push: ##@Remote Run Push Manager to push changes and pull origin if there are unpulled changes

@@ -63,6 +63,10 @@ echo
 
 ### Select branch which will be merged to current branch
 if [ -n "$main" ]; then
+    if [ "$current_branch" == "${main_branch}" ]; then
+        echo -e "${YELLOW}Already on ${main_branch}${ENDCOLOR}"
+        exit
+    fi
     merge_branch=${main_branch}
 else
     echo -e "${YELLOW}Which branch merge into '${current_branch}'?${ENDCOLOR}"
@@ -76,16 +80,22 @@ echo
 echo -e "Do you want to fetch ${YELLOW}${merge_branch}${ENDCOLOR} before merge (y/n)?"
 read -n 1 -s choice
 if [ "$choice" == "y" ]; then
-    echo -e "${YELLOW}Fetching...${ENDCOLOR}"
     echo
+    echo -e "${YELLOW}Fetching...${ENDCOLOR}"
 
-    fetch_output=$(git fetch ${origin_name} ${merge_branch} 2>&1)
-    fetch_code=$?
-
-    if [ $fetch_code != 0 ] ; then
-        echo -e "${RED}Error during fetching ${merge_branch}!${ENDCOLOR}"
-        echo -e "${fetch_output}"
-        exit $fetch_code
-    fi
+    fetch $merge_branch $origin_name
 fi
 
+echo
+
+merge $merge_branch $origin_name $editor
+
+if [ $merge_code == 0 ] ; then
+    echo
+    # TODO: list of changed files
+    echo -e "${GREEN}Successful merge!${ENDCOLOR}"
+    echo -e "${BLUE}${merge_branch}${ENDCOLOR} -> ${BLUE}${current_branch}${ENDCOLOR}"
+fi
+
+echo -e "$merge_output"
+echo $merge_code

@@ -315,41 +315,61 @@ function choose_branch {
 }
 
 
-### Function pulls provided branch, handles errors and makes a merge
+### Function fetchs provided branch and handles errors
 # $1: branch name
 # $2: origin name
 # $3: editor
-function pull {
-    pull_output=$(git pull $2 $1 --no-rebase 2>&1)
-    pull_code=$?
+# Returns:
+#      * fetch_code - if it is not zero - there is no such branch in origin
+function fetch {
+    fetch_output=$(git fetch $2 $1 2>&1)
+    fetch_code=$?
 
-    ### Successful pull
-    if [ $pull_code -eq 0 ] ; then
-        echo -e "${GREEN}Successful pull!${ENDCOLOR}"
+    if [ $fetch_code == 0 ] ; then
         return
     fi
 
-    ### Cannot pull because there is uncommitted files that changed in origin
-    if [[ $pull_output == *"Please commit your changes or stash them before you merge"* ]]; then
-        echo -e "${RED}Cannot pull! There is uncommited changes, that will be overwritten by merge${ENDCOLOR}"
-        files_to_commit=$(echo "$pull_output" | tail -n +4 | head -n +1)
+    if [[ ${fetch_output} != *"couldn't find remote ref"* ]]; then
+        echo -e "${RED}Cannot fetch '$1'! Here is the error!${ENDCOLOR}"
+        echo -e "${fetch_output}"
+        exit $fetch_code
+    fi
+    echo -e "${YELLOW}There is no '$1' in $2${ENDCOLOR}"
+}
+
+
+### Function merges provided branch and handles errors
+# $1: branch name from
+# $2: origin name
+# $3: editor
+# Returns:
+#      * if function returns -> everything is OK
+function merge {
+    merge_output=$(git merge ${merge_branch} 2>&1)
+    merge_code=$?
+
+    if [ $merge_code == 0 ] ; then
+        return
+    fi
+
+    ### Cannot merge because there is uncommitted files that changed in origin
+    if [[ $merge_output == *"Please commit your changes or stash them before you merge"* ]]; then
+        echo -e "${RED}Cannot merge! There is uncommited changes, that will be overwritten by merge${ENDCOLOR}"
+        files_to_commit=$(echo "$merge_output" | tail -n +2 | tail -r | tail -n +4 | tail -r)
         echo -e "${YELLOW}Files with changes${ENDCOLOR}"
         echo "$files_to_commit"
-        exit $pull_code
+        exit $merge_code
     fi
 
-    ### Cannot pull because of some other error
-    if [[ $pull_output != *"fix conflicts and then commit the result"* ]]; then
-        echo -e "${RED}Cannot pull! Here is the error${ENDCOLOR}"
-        echo "$pull_output"
-        exit $pull_code
+    ### Cannot merge because of some other error
+    if [[ $merge_output != *"fix conflicts and then commit the result"* ]]; then
+        echo -e "${RED}Cannot merge! Here is the error${ENDCOLOR}"
+        echo "$merge_output"
+        exit $merge_code
     fi
 
-    ### Cannot pull because there is conflict in committed and pulled files, user should merge changes
-    echo -e "${RED}Cannot pull! There are conflicts in staged files${ENDCOLOR}"
+    echo -e "${RED}Cannot merge! There are conflicts in staged files${ENDCOLOR}"
     resolve_conflicts $1 $2 $3
-
-    echo -e "${GREEN}Successful pull!${ENDCOLOR}"
 }
 
 
@@ -395,7 +415,7 @@ function resolve_conflicts {
 
         if [ "$choice" == "3" ]; then
             echo
-            echo -e "${YELLOW}Cancel merge and undo pull${ENDCOLOR}"
+            echo -e "${YELLOW}Cancel merge${ENDCOLOR}"
             git merge --abort
             exit $?
         fi
@@ -486,4 +506,27 @@ ${staged_with_tab}
     echo -e "$commit_message"
     echo
     merge_commit_code=0
+}
+
+
+### Function pulls provided branch and handles errors
+# $1: branch name
+# $2: origin name
+# $3: editor
+function pull {
+
+    fetch $1 $2
+
+    if [ $fetch_code != 0 ] ; then
+        return
+    fi
+
+    merge $1 $2 $3
+
+    if [ $merge_code == 0 ] ; then
+        echo -e "${GREEN}Successful pull!${ENDCOLOR}"
+        return 
+    fi
+
+    # TODO: print pull/merge result - changed files
 }

@@ -243,7 +243,7 @@ ${staged_with_tab}
 
             find . -name "$commitmsg_file*" -delete
             
-            result=$(git commit -m """$commitmsg_file""" 2>&1)
+            result=$(git commit -m """$commit_message""" 2>&1)
             check_code $? "$result" "merge commit"
         fi
 

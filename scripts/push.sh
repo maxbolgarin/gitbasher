@@ -77,15 +77,9 @@ function push {
 ### Script logic here
 ###
 
-### Print header
-if [ -z "$list" ] && [ -z "$fast" ]; then
-    echo -e "${YELLOW}PUSH MANAGER${ENDCOLOR}"
-fi
-
 if [ -z "$fast" ]; then
     echo
 fi
-
 
 ### Check if there is commits to push
 get_push_log ${branch} ${main_branch} ${origin_name}
@@ -97,6 +91,12 @@ fi
 if [ -z "$push_log" ]; then
     echo -e "${GREEN}Nothing to push${ENDCOLOR}"
     exit
+fi
+
+
+### Print header and commit list
+if [ -z "$list" ] && [ -z "$fast" ]; then
+    echo -e "${YELLOW}PUSH MANAGER${ENDCOLOR}"
 fi
 
 echo -e "${YELLOW}Commit history from ${history_from}:${ENDCOLOR}"

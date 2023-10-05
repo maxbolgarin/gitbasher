@@ -146,9 +146,6 @@ merge-to-main: ##@Merge Merge current branch into main
 gitlog: ##@GitLog Open git log in pretty format
 	@git log --pretty="%C(Yellow)%h  %C(reset)%ad (%C(Green)%cr%C(reset))%x09 %C(Cyan)%an: %C(reset)%s"
 
-
-
-
 .PHONY: reflog
 reflog: ##@GitLog Open git reflog in pretty format
 	@git reflog --pretty="%C(Yellow)%h  %C(reset)%ad (%C(Green)%cr%C(reset))%x09 %gd %gs"

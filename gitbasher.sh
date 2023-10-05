@@ -143,9 +143,6 @@ if [ -z "$script_name" ]; then
     exit
 fi
 
-
-
-
 utils=$( prepare_path "${gitbasher_directory}/${scripts_dir}/common.sh" )
 script=$( prepare_path "${gitbasher_directory}/${script_name} ${args} -u ${utils}" )
 $script

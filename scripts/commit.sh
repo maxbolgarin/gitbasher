@@ -138,9 +138,9 @@ fi
 
 
 ### Print status (don't need to print in fast mode because we add everything)
-if [ -z "${fast}" ]; then
-    echo -e "On branch ${YELLOW}${current_branch}${ENDCOLOR}"
-    echo
+if [ -z "${fast}" ]; then 
+    #echo -e "On branch ${YELLOW}${current_branch}${ENDCOLOR}"
+    #echo
     echo -e "${YELLOW}Changed fiels${ENDCOLOR}"
     git status -s
 fi
@@ -152,12 +152,12 @@ if [ -n "${fast}" ]; then
     git_add="."
 else
     echo
-    echo -e "${YELLOW}Step 1.${ENDCOLOR} List the files that need to be commited"
+    echo -e "${YELLOW}Step 1.${ENDCOLOR} List the files that need to be commited on ${YELLOW}${current_branch}${ENDCOLOR}"
     echo "You can specify entire folders or use a '.' if you want to add everything, tab also works here"
     echo "Leave it blank if you want to exit"
 
     while [ true ]; do
-        read -p "$(echo -n -e "${YELLOW}git add${ENDCOLOR} ")" -e git_add
+        read -p "$(echo -n -e "${TODO}git add${ENDCOLOR} ")" -e git_add
 
         if [ -z $git_add ]; then
             exit
@@ -189,7 +189,7 @@ fi
 
 ### Print staged files that we add at step 1
 echo -e "${YELLOW}Staged files:${ENDCOLOR}"
-staged=$(git diff --name-only --cached)
+staged="$(sed 's/^/\t/' <<< "$(git diff --name-only --cached)")"
 echo -e "${GREEN}${staged}${ENDCOLOR}"
 
 
@@ -271,14 +271,14 @@ echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Enter a scope of your changes to prov
 echo -e "Final meesage will be ${YELLOW}${commit_type}(<scope>): <summary>${ENDCOLOR}"
 echo -e "Leave it blank if you don't want to enter a scope or 0 to exit"
 
-read -p "$(echo -n -e "${YELLOW}<scope>:${ENDCOLOR} ")" -e commit_scope
+read -p "$(echo -n -e "${TODO}<scope>:${ENDCOLOR} ")" -e commit_scope
 
 if [ "$commit_scope" == "0" ]; then
     git restore --staged $git_add
     exit
 fi
 
-commit_scope=$(echo "$commit_scope" | xargs)
+commit_scope=$(echo "$commit_scope" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
 if [ "$commit_scope" != "" ]; then
     commit="$commit($commit_scope):"
 else

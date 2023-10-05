@@ -17,9 +17,13 @@ GITBASHER_TEXTEDITOR ?= vi  # Texteditor for writing commit messages (e.g. nano 
 commit: ##@Commit Build conventional commit message in format 'type(scope): message'
 	@${GITBASHER_S} -r commit -a "-e ${GITBASHER_TEXTEDITOR}"
 
+.PHONY: commit-msg
+commit-msg: ##@Commit Build conventional commit message in format 'type(scope): message' using editor for multiline message
+	@${GITBASHER_S} -r commit -a "-m -e ${GITBASHER_TEXTEDITOR}"
+
 .PHONY: commit-ticket
 commit-ticket: ##@Commit Build conventional commit message with tracker's ticket info (e.g. JIRA)
-	@${GITBASHER_S} -r commit -a "-t -e ${GITBASHER_TEXTEDITOR}"
+	@${GITBASHER_S} -r commit -a "-m -t -e ${GITBASHER_TEXTEDITOR}"
 
 .PHONY: commit-fast
 commit-fast: ##@Commit Build conventional commit message in fast mode (git add .)
@@ -91,6 +95,10 @@ pull: ##@Remote Pull current branch from remote
 push: ##@Remote Run Push Manager to push changes and pull origin if there are unpulled changes
 	@${GITBASHER_S} -r push -a "-e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
 
+.PHONY: push-fast
+push-fast: ##@Remote Run Push Manager to push changes and pull origin if there are unpulled changes
+	@${GITBASHER_S} -r push -a "-y -e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
+
 .PHONY: push-list
 push-list: ##@Remote Print a list of unpushed commits
 	@${GITBASHER_S} -r push -a "-l -e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
@@ -158,13 +166,12 @@ last-commit: ##@GitLog Print last commit info (from git log)
 last-action: ##@GitLog Print last action info (from git reflog)
 	@git --no-pager reflog --pretty='$(GITBASHER_YELLOW)%gd$(GITBASHER_ENDCOLOR) | %gs | $(GITBASHER_BLUE)%an$(GITBASHER_ENDCOLOR) | %cd' -1 | column -ts'|'
 
-
 .PHONY: undo-commit
 undo-commit: ##@GitLog Undo previous commit (move HEAD pointer up for one record, HEAD^)
-	@printf "$(GITBASHER_YELLOW)Commit to undo:\t\t$(GITBASHER_ENDCOLOR)"
+	@printf "$(GITBASHER_YELLOW)Commit to undo:\t$(GITBASHER_ENDCOLOR)"
 	@$(MAKE) last-commit
 	@git reset HEAD^ > /dev/null
-	@printf "$(GITBASHER_YELLOW)New last commit:\t$(GITBASHER_ENDCOLOR)"
+	@printf "$(GITBASHER_YELLOW)Last commit:\t$(GITBASHER_ENDCOLOR)"
 	@$(MAKE) last-commit
 
 .PHONY: undo-action

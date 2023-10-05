@@ -7,6 +7,7 @@
 
 ### Options
 # f: fast commit (not force!)
+# m: use editor to write commit message
 # t: add ticket info to the end of message header
 # a: amend without edit (add to last commit)
 # x: fixup commit
@@ -19,6 +20,7 @@
 while getopts ftaxsre:u: flag; do
     case "${flag}" in
         f) fast="true";;
+        m) msg="true";;
         t) ticket="true";;
         a) amend="true";;
         x) fixup="true";;
@@ -78,20 +80,20 @@ function after_commit {
 ###
 
 ### Print header
+header_msg="COMMIT MANAGER"
 if [ -n "${amend}" ]; then
-    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} AMEND"
+    header_msg="$header_msg AMEND"
 elif [ -n "${fast}" ]; then
-    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} FAST"
+    header_msg="$header_msg FAST"
 elif [ -n "${fixup}" ]; then
-    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} FIXUP"
+    header_msg="$header_msg FIXUP"
 elif [ -n "${squash}" ]; then
-    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} AUTOSQUASH"
+    header_msg="$header_msg AUTOSQUASH"
 elif [ -n "${revert}" ]; then
-    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR} REVERT"
-else
-    echo -e "${YELLOW}COMMIT MANAGER${ENDCOLOR}"
+    header_msg="$header_msg REVERT"
 fi
 
+echo -e "${YELLOW}${header_msg}${ENDCOLOR}"
 echo
 
 
@@ -286,16 +288,17 @@ else
 fi
 
 
-### Commit Step 4: enter commit message, use editor in normal mode and plain console in fast
+### Commit Step 4: enter commit message, use editor in msg mode
 step="4"
 if [ -n "${fast}" ]; then
     step="3"
 fi
 echo
 echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Write a <summary> about your changes"
+echo -e "Final meesage will be ${YELLOW}${commit} <summary>${ENDCOLOR}"
 
 # Use editor and commitmsg file
-if [ -z "$fast" ]; then
+if [ -n "$msg" ]; then
     commitmsg_file=".commitmsg__"
     touch $commitmsg_file
 
@@ -354,9 +357,10 @@ ${staged_with_tab}
 
 # Use read from console
 else
-    echo -e "Leave it blank if you don't want to exit"
-    read -p "$(echo -n -e "${YELLOW}${commit}${ENDCOLOR} ")" -e commit_message
+    echo -e "Leave it blank if you want to exit"
+    read -p "$(echo -n -e "${TODO}${commit}${ENDCOLOR} ")" -e commit_message
     if [ -z "$commit_message" ]; then
+        git restore --staged $git_add
         exit
     fi
 fi

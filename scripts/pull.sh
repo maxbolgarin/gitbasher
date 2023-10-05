@@ -92,10 +92,12 @@ merge $merge_branch $origin_name $editor
 
 if [ $merge_code == 0 ] ; then
     echo
-    # TODO: list of changed files
     # TODO: merge current branch to main (pass with -m)
     echo -e "${GREEN}Successful merge!${ENDCOLOR}"
     echo -e "${BLUE}${merge_branch}${ENDCOLOR} -> ${BLUE}${current_branch}${ENDCOLOR}"
+    echo
+    commit_hash="$(git --no-pager log --pretty="%h" -1)"
+    print_changes_stat "$(git --no-pager show $commit_hash --stat --format="")" 
 fi
 
 echo -e "$merge_output"

@@ -55,9 +55,8 @@ Usage `make *command*`
 
 | **Pull and Push** | **Description**                                                                    |
 |-------------------|------------------------------------------------------------------------------------|
-| **pull**          | Pull current branch in no-rebase mode (run `git pull origin <branch> --no-rebase`) |
-| **pull-tags**     | Pull current branch with tags (run `git pull --tags origin <branch> --no-rebase`)  |
-| **push**          | Push commits to current branch and pull changes if there are conflicts with origin |
+| **pull**          | Fetch current branch and then merge changes with conflicts fixing                  |
+| **push**          | Push commits to current branch and pull changes if there are new changes in origin |
 | **push-list**     | Show list of commits to push without actual pushing it                             |
 
 
@@ -72,6 +71,13 @@ Usage `make *command*`
 | **branch-prune**       | Delete all merged branches except `master`, `main` and `develop` and prune remote branches     |
 
 
+| **Merge**         | **Description**                                                     |
+|-------------------|---------------------------------------------------------------------|
+| **merge**         | Select branch to merge info current one and fix conflicts           |
+| **merge-main**    | Merge `main` to current branch and fix conflicts                    |
+| **merge-to-main** | Switch to `main` and merge current branch into `main`               |
+
+
 | **Git log**     | **Description**                                                              |
 |-----------------|------------------------------------------------------------------------------|
 | **gitlog**      | Run `git log` with nice oneline formatting                                   |
@@ -79,12 +85,6 @@ Usage `make *command*`
 | **last-commit** | Show info about last commit                                                  |
 | **undo-commit** | Run `git reset HEAD^` to move pointer up for one record and undo last commit |
 | **undo-action** | Run `git reset HEAD@{1}` to reset last record in reflog                      |
-
-
-| **Merge**         | **Description**                                                     |
-|-------------------|---------------------------------------------------------------------|
-| **merge-main**    | Fetch main and run `git merge main` to merge it into current branch |
-| **merge-to-main** | Switch to main and merge current branch to it                       |
 
 
 ## For developers of gitbasher

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-### Script for pulling commits from remote git repository
+### Script for pulling commits from remote git repository and merging branches
 # Read README.md to get more information how to use it
 # Use this script only with gitbasher.sh
 
@@ -46,7 +46,7 @@ source $utils
 ### Script logic here
 ###
 
-### Pull current branch (empty flags mode)
+### Pull current branch and exit (empty flags mode)
 if [ -z "$merge" ]; then
     echo
     echo -e "${YELLOW}Pulling '$origin_name/$current_branch'...${ENDCOLOR}"
@@ -56,7 +56,7 @@ if [ -z "$merge" ]; then
 fi
 
 
-### Print header
+### Merge mode - print header
 if [ -n "${to_main}" ]; then
     echo -e "${YELLOW}MERGE MANAGER${ENDCOLOR} TO MAIN"
 else
@@ -65,8 +65,7 @@ fi
 echo
 
 
-
-### Select branch which will be merged to current branch
+### Select branch which will be merged
 if [ -n "$main" ]; then
     if [ "$current_branch" == "${main_branch}" ]; then
         echo -e "${YELLOW}Already on ${main_branch}${ENDCOLOR}"
@@ -98,14 +97,15 @@ if [ "$choice" == "y" ]; then
 
     fetch $merge_branch $origin_name
 fi
-
 echo
 
+
+### Run merge-to-main logic - switch to main and merge
 if [ -n "$to_main" ]; then
     switch_output=$(git switch $main_branch 2>&1)
     switch_code=$?
 
-    ## Switch is OK
+    ### Switch is OK
     if [ "$switch_code" == 0 ]; then
         echo -e "${GREEN}Switched to '$main_branch'${ENDCOLOR}"
         changes=$(git status -s)
@@ -117,7 +117,7 @@ if [ -n "$to_main" ]; then
         echo
     fi
 
-    ## There are uncommited files with conflicts
+    ### There are uncommited files with conflicts
     if [[ $switch_output == *"Your local changes to the following files would be overwritten"* ]]; then
         conflicts="$(echo "$switch_output" | tail -r | tail -n +3 | tail -r | tail -n +2)"
         echo -e "${RED}Changes would be overwritten by switch to '$main_branch':${ENDCOLOR}"       
@@ -128,7 +128,10 @@ if [ -n "$to_main" ]; then
     fi
 fi
 
+
+### Run merge and handle conflicts
 merge $merge_branch $origin_name $editor
+
 
 ### Nothing to merge
 if [[ $merge_output == *"Already up to date"* ]]; then
@@ -137,15 +140,17 @@ if [[ $merge_output == *"Already up to date"* ]]; then
 fi
 
 
+### If we get here - it is success
 echo -e "${GREEN}Successful merge!${ENDCOLOR}"
 echo -e "${BLUE}[${merge_branch}${ENDCOLOR} -> ${BLUE}${current_branch}]${ENDCOLOR}"
 echo
 
-### Merge without conflicts
+
+### Merged without conflicts
 if [ $merge_code == 0 ] ; then
     print_changes_stat "$(echo "$merge_output" | tail -n +3)" 
 
-### Merge with conflicts, but they were resolved
+### Merged with conflicts, but they were resolved
 else
     commit_hash="$(git --no-pager log --pretty="%h" -1)"
     print_changes_stat "$(git --no-pager show $commit_hash --stat --format="")" 

@@ -165,18 +165,24 @@ fi
 
 echo
 echo -e "${YELLOW}Enter the name of a new tag${ENDCOLOR}"
-echo -e "If this tag will be using for release, use version number in semver format, like '1.0.0-alpha'"
+echo -e "If this tag will be using for release, use version number in semver format like '1.0.0-alpha'"
 echo -e "Leave it blank to exit"
 
 if [ -n "${annotated}" ]; then
-    prompt="$(echo -n -e "${YELLOW}git tag -a${ENDCOLOR} ")"
+    prompt="$(echo -n -e "${TODO}git tag -a${ENDCOLOR} ")"
 else
-    prompt="$(echo -n -e "${YELLOW}git tag${ENDCOLOR} ")"
+    prompt="$(echo -n -e "${TODO}git tag${ENDCOLOR} ")"
 fi
 
 read -p "$prompt" -e tag_name
 
 if [ -z $tag_name ]; then
+    exit
+fi
+
+if [ "$tag_name" == "tag" ]; then
+    echo
+    echo -e "${RED}This name is forbidden!${ENDCOLOR}"
     exit
 fi
 
@@ -253,32 +259,30 @@ fi
 
 echo
 
-echo -e "Do you want to push this tag to ${origin} (y/n)?"
+echo -e "Do you want to push this tag to ${YELLOW}${origin_name}${ENDCOLOR} (y/n)?"
 yes_no_choice "Pushing..."
 
-#push_result=$(git tag -d $tag_name 2>&1)
-#push_code=$?
+push_output=$(git push ${origin_name} $tag_name 2>&1)
+push_code=$?
 
-if [ $push_code -eq 0 ] ; then 
-        echo -e "${GREEN}Successful push!${ENDCOLOR}"
-        repo=$(git config --get remote.${origin_name}.url)
-        repo="${repo/":"/"/"}" 
-        repo="${repo/"git@"/"https://"}"
-        repo="${repo/".git"/""}" 
-        echo -e "${YELLOW}Repo:${ENDCOLOR}\t${repo}"
-        if [[ ${branch} != ${main_branch} ]]; then
-            if [[ $repo == *"github"* ]]; then
-                echo -e "${YELLOW}PR:${ENDCOLOR}\t${repo}/pull/new/${branch}"
-            elif [[ $repo == *"gitlab"* ]]; then
-                echo -e "${YELLOW}MR:${ENDCOLOR}\t${repo}/-/merge_requests/new?merge_request%5Bsource_branch%5D=${branch}"
-            fi
-        fi
-        exit
-    fi
+if [ $push_code != 0 ] ; then
+    echo -e "${RED}Cannot push! Here is the error${ENDCOLOR}"
+    echo "$push_output"
+    exit $push_code
+fi
 
-    if [[ $push_output != *"[rejected]"* ]]; then
-        echo -e "${RED}Cannot push! Here is the error${ENDCOLOR}"
-        echo "$push_output"
-        exit $push_code
-    fi
+if [[ $push_output == *"Everything up-to-date"* ]]; then
+    echo -e "${GREEN}Everything up-to-date${ENDCOLOR}"
+else
+    echo -e "${GREEN}Successful push tag '$tag_name'!${ENDCOLOR}"
+fi
+repo=$(git config --get remote.${origin_name}.url)
+repo="${repo/":"/"/"}" 
+repo="${repo/"git@"/"https://"}"
+repo="${repo/".git"/""}" 
+echo -e "${YELLOW}Repo:${ENDCOLOR}\t${repo}"
+if [[ $repo == *"github"* ]]; then
+    echo -e "${YELLOW}Tag:${ENDCOLOR}\t${repo}/releases/tag/${tag_name}"
+elif [[ $repo == *"gitlab"* ]]; then
+    echo -e "${YELLOW}MR:${ENDCOLOR}\t${repo}/-/tags/${tag_name}"
 fi

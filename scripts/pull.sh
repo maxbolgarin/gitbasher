@@ -57,8 +57,13 @@ fi
 
 
 ### Print header
-echo -e "${YELLOW}MERGE MANAGER${ENDCOLOR}"
+if [ -n "${to_main}" ]; then
+    echo -e "${YELLOW}MERGE MANAGER${ENDCOLOR} TO MAIN"
+else
+    echo -e "${YELLOW}MERGE MANAGER${ENDCOLOR}"
+fi
 echo
+
 
 
 ### Select branch which will be merged to current branch
@@ -68,6 +73,14 @@ if [ -n "$main" ]; then
         exit
     fi
     merge_branch=${main_branch}
+
+elif [ -n "$to_main" ]; then
+    if [ "$current_branch" == "${main_branch}" ]; then
+        echo -e "${YELLOW}Already on ${main_branch}${ENDCOLOR}"
+        exit
+    fi
+    merge_branch=${current_branch}
+
 else
     echo -e "${YELLOW}Which branch merge into '${current_branch}'?${ENDCOLOR}"
     choose_branch "merge"
@@ -88,7 +101,41 @@ fi
 
 echo
 
+if [ -n "$to_main" ]; then
+    switch_output=$(git switch $main_branch 2>&1)
+    switch_code=$?
+
+    ## Switch is OK
+    if [ "$switch_code" == 0 ]; then
+        echo -e "${GREEN}Switched to '$main_branch'${ENDCOLOR}"
+        changes=$(git status -s)
+        if [ -n "$changes" ]; then
+            echo
+            echo -e "${YELLOW}Moved changes:${ENDCOLOR}"
+            git status -s
+        fi
+        echo
+    fi
+
+    ## There are uncommited files with conflicts
+    if [[ $switch_output == *"Your local changes to the following files would be overwritten"* ]]; then
+        conflicts="$(echo "$switch_output" | tail -r | tail -n +3 | tail -r | tail -n +2)"
+        echo -e "${RED}Changes would be overwritten by switch to '$main_branch':${ENDCOLOR}"       
+        echo -e "${conflicts//[[:blank:]]/}"
+        echo
+        echo -e "${YELLOW}Commit these files and try to merge for one more time${ENDCOLOR}"
+        exit
+    fi
+fi
+
 merge $merge_branch $origin_name $editor
+
+### Nothing to merge
+if [[ $merge_output == *"Already up to date"* ]]; then
+    echo -e "${GREEN}Nothing to merge - already up to date${ENDCOLOR}"
+    exit
+fi
+
 
 echo -e "${GREEN}Successful merge!${ENDCOLOR}"
 echo -e "${BLUE}[${merge_branch}${ENDCOLOR} -> ${BLUE}${current_branch}]${ENDCOLOR}"
@@ -103,11 +150,3 @@ else
     commit_hash="$(git --no-pager log --pretty="%h" -1)"
     print_changes_stat "$(git --no-pager show $commit_hash --stat --format="")" 
 fi
-
-#echo -e "$merge_output"
-#echo $merge_code
-
-
-# TODO: merge current branch to main (pass with -m)
-
-

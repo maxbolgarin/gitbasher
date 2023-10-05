@@ -151,25 +151,30 @@ reflog: ##@GitLog Open git reflog in pretty format
 	@git reflog --pretty="%C(Yellow)%h  %C(reset)%ad (%C(Green)%cr%C(reset))%x09 %C(Cyan)%gd%C(reset) %gs"
 
 .PHONY: last-commit
-last-commit: ##@GitLog Print last commit message
+last-commit: ##@GitLog Print last commit info (from git log)
 	@git --no-pager log --pretty="$(GITBASHER_YELLOW)%h$(GITBASHER_ENDCOLOR) | %s | $(GITBASHER_BLUE)%an$(GITBASHER_ENDCOLOR) | %cd" -1 | column -ts'|'
+
+.PHONY: last-action
+last-action: ##@GitLog Print last action info (from git reflog)
+	@git --no-pager reflog --pretty='$(GITBASHER_YELLOW)%gd$(GITBASHER_ENDCOLOR) | %gs | $(GITBASHER_BLUE)%an$(GITBASHER_ENDCOLOR) | %cd' -1 | column -ts'|'
+
 
 .PHONY: undo-commit
 undo-commit: ##@GitLog Undo previous commit (move HEAD pointer up for one record, HEAD^)
-	@printf "$(GITBASHER_YELLOW)Commit to undo: $(GITBASHER_ENDCOLOR)"
+	@printf "$(GITBASHER_YELLOW)Commit to undo:\t\t$(GITBASHER_ENDCOLOR)"
 	@$(MAKE) last-commit
 	@git reset HEAD^ > /dev/null
-	@printf "$(GITBASHER_YELLOW)New last commit: $(GITBASHER_ENDCOLOR)"
+	@printf "$(GITBASHER_YELLOW)New last commit:\t$(GITBASHER_ENDCOLOR)"
 	@$(MAKE) last-commit
 
 .PHONY: undo-action
 undo-action: ##@GitLog Undo previous action (move HEAD pointer to @{1})
-	@printf "$(GITBASHER_YELLOW)Current last commit: $(GITBASHER_ENDCOLOR)"
+	@printf "$(GITBASHER_YELLOW)Old last commit:\t$(GITBASHER_ENDCOLOR)"
 	@$(MAKE) last-commit
-	@printf "$(GITBASHER_YELLOW)Action to undo: $(GITBASHER_ENDCOLOR)"
-	@git reflog --pretty='%gs' -1 | cat
+	@printf "$(GITBASHER_YELLOW)Action to undo:\t\t$(GITBASHER_ENDCOLOR)"
+	@$(MAKE) last-action
 	@git reset HEAD@{1} > /dev/null
-	@printf "$(GITBASHER_YELLOW)New last commit: $(GITBASHER_ENDCOLOR)"
+	@printf "$(GITBASHER_YELLOW)New last commit:\t$(GITBASHER_ENDCOLOR)"
 	@$(MAKE) last-commit
 
 ################################################
@@ -190,8 +195,9 @@ gitbasher: ##@Miscellaneous Show this help
 	@printf "Please report any bug or error to the author\n" 
 
 # https://unix.stackexchange.com/questions/269077/tput-setaf-color-table-how-to-determine-color-codes
-GITBASHER_BLUE := $(shell tput setaf 033)
+GITBASHER_GREEN := $(shell tput setaf 70)
 GITBASHER_YELLOW := $(shell tput setaf 184)
+GITBASHER_BLUE := $(shell tput setaf 040)
 GITBASHER_ENDCOLOR := $(shell tput sgr0)
 
 GITBASHER_AUTHOR := https://t.me/maxbolgarin

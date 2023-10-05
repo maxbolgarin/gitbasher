@@ -70,13 +70,13 @@ if [ -n "$main" ]; then
     merge_branch=${main_branch}
 else
     echo -e "${YELLOW}Which branch merge into '${current_branch}'?${ENDCOLOR}"
-    choose_branch "delete"
+    choose_branch "merge"
     merge_branch=${branch_name}
+    echo
 fi
 
 
 ### Fetch before merge
-echo
 echo -e "Do you want to fetch ${YELLOW}${merge_branch}${ENDCOLOR} before merge (y/n)?"
 read -n 1 -s choice
 if [ "$choice" == "y" ]; then
@@ -90,15 +90,22 @@ echo
 
 merge $merge_branch $origin_name $editor
 
+echo -e "${GREEN}Successful merge!${ENDCOLOR}"
+echo -e "${BLUE}[${merge_branch}${ENDCOLOR} -> ${BLUE}${current_branch}]${ENDCOLOR}"
+echo
+
+### Merge without conflicts
 if [ $merge_code == 0 ] ; then
-    echo
-    # TODO: merge current branch to main (pass with -m)
-    echo -e "${GREEN}Successful merge!${ENDCOLOR}"
-    echo -e "${BLUE}${merge_branch}${ENDCOLOR} -> ${BLUE}${current_branch}${ENDCOLOR}"
-    echo
+    print_changes_stat "$(echo "$merge_output" | tail -n +3)" 
+
+### Merge with conflicts, but they were resolved
+else
     commit_hash="$(git --no-pager log --pretty="%h" -1)"
     print_changes_stat "$(git --no-pager show $commit_hash --stat --format="")" 
 fi
 
-echo -e "$merge_output"
-echo $merge_code
+#echo -e "$merge_output"
+#echo $merge_code
+
+
+# TODO: merge current branch to main (pass with -m)

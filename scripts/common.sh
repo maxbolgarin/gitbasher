@@ -211,6 +211,7 @@ function get_push_log {
 #     * no value prints all local branches
 #     * 'remote' - all remote
 #     * 'delete' - all local without main and current
+#     * 'merge' - all local without current
 # Using of global:
 #     * current_branch
 #     * main_branch
@@ -267,12 +268,21 @@ function list_branches {
         branches_first_main=()
         branches_with_commits_first_main=()
     fi
+    if [[ "$1" == "merge" ]] && [[ "$current_branch" == "$main_branch" ]]; then
+        branches_first_main=()
+        branches_with_commits_first_main=()
+    fi
     for index in "${!branches[@]}"
     do
         branch_to_check="${branches[index]}"
         if [[ "$1" == "delete" ]]; then
             if [[ "$branch_to_check" == "${current_branch}"* ]] || [[ "$branch_to_check" == "${main_branch}"* ]]; then
                 continue    
+            fi
+        fi
+        if [[ "$1" == "merge" ]]; then
+            if [[ "$branch_to_check" == "${current_branch}"* ]]; then
+                continue
             fi
         fi
         if [[ "$branch_to_check" != "${main_branch}"* ]]; then

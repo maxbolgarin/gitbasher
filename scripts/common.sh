@@ -87,14 +87,20 @@ function yes_no_choice {
 function choose_commit {
     commits_info_str=$(git log --pretty="%h | %s | %an | %cr" -n $1 | column -ts'|')
     commits_hash_str=$(git log --pretty="%h" -n $1)
+    commits_author_str=$(git log --pretty="%an" -n $1)
+    commits_date_str=$(git log --pretty="%cr" -n $1)
     IFS=$'\n' read -rd '' -a commits_info <<<"$commits_info_str"
     IFS=$'\n' read -rd '' -a commits_hash <<<"$commits_hash_str"
+    IFS=$'\n' read -rd '' -a commits_author <<<"$commits_author_str"
+    IFS=$'\n' read -rd '' -a commits_date <<<"$commits_date_str"
 
     number_of_commits=${#commits_info[@]}
 
     for index in "${!commits_info[@]}"
     do
         commit_line=$(sed "1,/${commits_hash[index]}/ s/${commits_hash[index]}/${YELLOW_ES}${commits_hash[index]}${ENDCOLOR_ES}/" <<< ${commits_info[index]})
+        commit_line=$(sed "s/\(.*\)${commits_author[index]}/\1${BLUE_ES}${commits_author[index]}${ENDCOLOR_ES}/" <<< "${commit_line}")
+        commit_line=$(sed "s/\(.*\)${commits_date[index]}/\1${GREEN_ES}${commits_date[index]}${ENDCOLOR_ES}/" <<< "${commit_line}")
         echo -e "$(($index+1)). ${commit_line}"
     done
     echo "0. Exit..."

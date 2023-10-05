@@ -148,11 +148,11 @@ gitlog: ##@GitLog Open git log in pretty format
 
 .PHONY: reflog
 reflog: ##@GitLog Open git reflog in pretty format
-	@git reflog --pretty="%C(Yellow)%h  %C(reset)%ad (%C(Green)%cr%C(reset))%x09 %gd %gs"
+	@git reflog --pretty="%C(Yellow)%h  %C(reset)%ad (%C(Green)%cr%C(reset))%x09 %C(Cyan)%gd%C(reset) %gs"
 
 .PHONY: last-commit
 last-commit: ##@GitLog Print last commit message
-	@git log --pretty="%s | %h | %cd" -1 | cat
+	@git --no-pager log --pretty="$(GITBASHER_YELLOW)%h$(GITBASHER_ENDCOLOR) | %s | $(GITBASHER_BLUE)%an$(GITBASHER_ENDCOLOR) | %cd" -1 | column -ts'|'
 
 .PHONY: undo-commit
 undo-commit: ##@GitLog Undo previous commit (move HEAD pointer up for one record, HEAD^)
@@ -189,6 +189,8 @@ gitbasher: ##@Miscellaneous Show this help
 	@printf "Written by $(GITBASHER_AUTHOR), version $(GITBASHER_VERSION)\n"
 	@printf "Please report any bug or error to the author\n" 
 
+# https://unix.stackexchange.com/questions/269077/tput-setaf-color-table-how-to-determine-color-codes
+GITBASHER_BLUE := $(shell tput setaf 033)
 GITBASHER_YELLOW := $(shell tput setaf 184)
 GITBASHER_ENDCOLOR := $(shell tput sgr0)
 

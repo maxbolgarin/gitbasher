@@ -150,7 +150,7 @@ echo
 current_branch=$(git branch --show-current)
 
 if [ -n "$select" ]; then
-    echo -e "${YELLOW}Select commit for a new tag${ENDCOLOR}"
+    echo -e "${YELLOW}Select commit for a new tag on branch '$current_branch'${ENDCOLOR}"
     choose_commit 9
     commit_message=$(git log -1 --pretty=%B $commit_hash | cat)
 

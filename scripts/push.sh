@@ -133,6 +133,7 @@ pull $branch $origin_name $editor
 
 
 ### Push after pull
+echo
 echo -e "${YELLOW}Pushing...${ENDCOLOR}"
 echo
 push

@@ -147,6 +147,30 @@ function choose_commit {
 }
 
 
+### Function prints provided stat in nice format with colors
+# $1: stats after pull or commit like 'README.md | 1 +\n1 file changed, 1 insertion(+)'
+function print_changes_stat {
+    IFS=$'\n' read -rd '' -a stats <<< "$1"
+    result_stat=""
+    bottom_line=""
+    number_of_stats=${#stats[@]}
+    for index in "${!stats[@]}"
+    do
+        s=$(echo ${stats[index]} | sed -e 's/^[[:space:]]*//')
+        s=$(sed "s/+/${GREEN_ES}+${ENDCOLOR_ES}/g" <<< ${s})
+        s=$(sed "s/-/${RED_ES}-${ENDCOLOR_ES}/g" <<< ${s})
+        if [ $(($index+1)) == $number_of_stats ]; then
+            #s=$(sed '1 s/,/|/' <<< ${s})
+            bottom_line="${s}"
+            break
+        fi
+        result_stat="${result_stat}\n${s}"
+    done
+    echo -e "$(echo -e "${result_stat}" | column -ts'|')"
+    echo -e "$bottom_line"
+}
+
+
 ### Function returns git log diff between provided argument and HEAD
 # $1: branch or commit from which to calc diff
 function gitlog_diff {
@@ -342,8 +366,10 @@ function fetch {
 # $1: branch name from
 # $2: origin name
 # $3: editor
+# $4: operation name (e.g. merge or pull)
 # Returns:
-#      * if function returns -> everything is OK
+#      * merge_output
+#      * merge_code - 0 if everything is ok, not zero if there are conflicts
 function merge {
     merge_output=$(git merge ${merge_branch} 2>&1)
     merge_code=$?
@@ -352,23 +378,29 @@ function merge {
         return
     fi
 
+    operation="$4"
+    if [ "$operation" == "" ]; then
+        operation="merge"
+    fi
+
     ### Cannot merge because there is uncommitted files that changed in origin
     if [[ $merge_output == *"Please commit your changes or stash them before you merge"* ]]; then
-        echo -e "${RED}Cannot merge! There is uncommited changes, that will be overwritten by merge${ENDCOLOR}"
+        echo -e "${RED}Cannot $operation! There is uncommited changes, that will be overwritten by $operation${ENDCOLOR}"
         files_to_commit=$(echo "$merge_output" | tail -n +2 | tail -r | tail -n +4 | tail -r)
         echo -e "${YELLOW}Files with changes${ENDCOLOR}"
         echo "$files_to_commit"
+        echo
         exit $merge_code
     fi
 
     ### Cannot merge because of some other error
     if [[ $merge_output != *"fix conflicts and then commit the result"* ]]; then
-        echo -e "${RED}Cannot merge! Here is the error${ENDCOLOR}"
+        echo -e "${RED}Cannot $operation! Here is the error${ENDCOLOR}"
         echo "$merge_output"
         exit $merge_code
     fi
 
-    echo -e "${RED}Cannot merge! There are conflicts in staged files${ENDCOLOR}"
+    echo -e "${RED}Cannot $operation! There are conflicts in staged files${ENDCOLOR}"
     resolve_conflicts $1 $2 $3
 }
 
@@ -474,7 +506,7 @@ function merge_commit {
 ###
 ### Write a message about merge from '$5/$4' into '$4'. Lines starting with '#' will be ignored. 
 ### 
-### On branch ${branch}
+### On branch $4
 ### Changes to be commited:
 ${staged_with_tab}
 """ >> $commitmsg_file
@@ -502,8 +534,9 @@ ${staged_with_tab}
         check_code $? "$result" "merge commit"
     fi
 
-    echo -e "${GREEN}Successful merge${ENDCOLOR}"
-    echo -e "$commit_message"
+    commit_hash="$(git --no-pager log --pretty="%h" -1)"
+    echo -e "${GREEN}Successful merge!${ENDCOLOR}"
+    echo -e "${BLUE}[$4 $commit_hash]${ENDCOLOR} $commit_message"
     echo
     merge_commit_code=0
 }
@@ -514,19 +547,33 @@ ${staged_with_tab}
 # $2: origin name
 # $3: editor
 function pull {
-
+    ### Fetch, it will exit if critical error and return if branch doesn't exists in origin
     fetch $1 $2
 
     if [ $fetch_code != 0 ] ; then
         return
     fi
 
-    merge $1 $2 $3
+    ### Merge and resulve conflicts
+    merge $1 $2 $3 "pull"
 
-    if [ $merge_code == 0 ] ; then
-        echo -e "${GREEN}Successful pull!${ENDCOLOR}"
-        return 
+    ### Nothing to pull
+    if [[ $merge_output == *"Already up to date"* ]]; then
+        echo -e "${GREEN}Already up to date${ENDCOLOR}"
+        return
     fi
 
-    # TODO: print pull/merge result - changed files
+    ### It will exit if critical error or resolve conflicts, so here we can get only in case of success
+    echo -e "${GREEN}Successful pull!${ENDCOLOR}"
+    echo
+
+    ### Merge without conflicts
+    if [ $merge_code == 0 ] ; then
+        print_changes_stat "$(echo "$merge_output" | tail -n +3)" 
+
+    ### Merge with conflicts, but they were resolved
+    else
+        commit_hash="$(git --no-pager log --pretty="%h" -1)"
+        print_changes_stat "$(git --no-pager show $commit_hash --stat --format="")" 
+    fi
 }

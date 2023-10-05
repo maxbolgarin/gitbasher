@@ -93,6 +93,7 @@ merge $merge_branch $origin_name $editor
 if [ $merge_code == 0 ] ; then
     echo
     # TODO: list of changed files
+    # TODO: merge current branch to main (pass with -m)
     echo -e "${GREEN}Successful merge!${ENDCOLOR}"
     echo -e "${BLUE}${merge_branch}${ENDCOLOR} -> ${BLUE}${current_branch}${ENDCOLOR}"
 fi

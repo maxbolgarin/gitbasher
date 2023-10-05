@@ -63,25 +63,7 @@ function after_commit {
     echo
 
     # Print stat of last commit - updated files and lines
-    IFS=$'\n' read -rd '' -a stats <<< "$(git show $commit_hash --stat --format="" | cat)"
-    result_stat=""
-    bottom_line=""
-    number_of_stats=${#stats[@]}
-    for index in "${!stats[@]}"
-    do
-        s=$(echo ${stats[index]} | sed -e 's/^[[:space:]]*//')
-        s=$(sed "s/+/${GREEN_ES}+${ENDCOLOR_ES}/g" <<< ${s})
-        s=$(sed "s/-/${RED_ES}-${ENDCOLOR_ES}/g" <<< ${s})
-        if [ $(($index+1)) == $number_of_stats ]; then
-            #s=$(sed '1 s/,/|/' <<< ${s})
-            bottom_line="${s}"
-            break
-        fi
-        result_stat="${result_stat}\n${s}"
-    done
-    echo -e "$(echo -e "${result_stat}" | column -ts'|')"
-    echo -e "$bottom_line"
-
+    print_changes_stat "$(git --no-pager show $commit_hash --stat --format="")"
 
     # Some info to help users
     if [ -z "${fast}" ]; then

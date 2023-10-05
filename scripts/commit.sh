@@ -157,7 +157,7 @@ else
     echo "Leave it blank if you want to exit"
 
     while [ true ]; do
-        read -p "git add " -e git_add
+        read -p "$(echo -n -e "${YELLOW}git add${ENDCOLOR} ")" -e git_add
 
         if [ -z $git_add ]; then
             exit
@@ -182,7 +182,10 @@ if [ -n "${amend}" ]; then
     exit
 fi
 
-echo
+if [ -z "${fast}" ]; then
+    echo
+fi
+
 
 ### Print staged files that we add at step 1
 echo -e "${YELLOW}Staged files:${ENDCOLOR}"
@@ -268,7 +271,7 @@ echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Enter a scope of your changes to prov
 echo -e "Final meesage will be ${YELLOW}${commit_type}(<scope>): <summary>${ENDCOLOR}"
 echo -e "Leave it blank if you don't want to enter a scope or 0 to exit"
 
-read -p "<scope>: " -e commit_scope
+read -p "$(echo -n -e "${YELLOW}<scope>:${ENDCOLOR} ")" -e commit_scope
 
 if [ "$commit_scope" == "0" ]; then
     git restore --staged $git_add
@@ -283,17 +286,22 @@ else
 fi
 
 
-### Commit Step 4: enter commit message
-commitmsg_file=".commitmsg__"
-touch $commitmsg_file
+### Commit Step 4: enter commit message, use editor in normal mode and plain console in fast
 step="4"
 if [ -n "${fast}" ]; then
     step="3"
 fi
-staged_with_tab="$(sed 's/^/###\t/' <<< "${staged}")"
 echo
 echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Write a <summary> about your changes"
-echo """
+
+# Use editor and commitmsg file
+if [ -z "$fast" ]; then
+    commitmsg_file=".commitmsg__"
+    touch $commitmsg_file
+
+    staged_with_tab="$(sed 's/^/###\t/' <<< "${staged}")"
+
+    echo """
 ###
 ### Step ${step}. Write a <summary> about your changes. Lines starting with '#' will be ignored. 
 ### 
@@ -324,25 +332,34 @@ ${staged_with_tab}
 ### a blank line, and a detailed description of the deprecation that also mentions the recommended update path.
 """ >> $commitmsg_file
 
-while [ true ]; do
-    $editor $commitmsg_file
-    commit_message=$(cat $commitmsg_file | sed '/^#/d')
+    while [ true ]; do
+        $editor $commitmsg_file
+        commit_message=$(cat $commitmsg_file | sed '/^#/d')
 
-    if [ -n "$commit_message" ]; then
-        break
-    fi
-    echo
-    echo -e "${YELLOW}Commit message cannot be empty${ENDCOLOR}"
-    echo
-    read -n 1 -p "Try for one more time? (y/n) " -s -e choice
-    if [ "$choice" != "y" ]; then
-        git restore --staged $git_add
-        find . -name "$commitmsg_file*" -delete
+        if [ -n "$commit_message" ]; then
+            break
+        fi
+        echo
+        echo -e "${YELLOW}Commit message cannot be empty${ENDCOLOR}"
+        echo
+        read -n 1 -p "Try for one more time? (y/n) " -s -e choice
+        if [ "$choice" != "y" ]; then
+            git restore --staged $git_add
+            find . -name "$commitmsg_file*" -delete
+            exit
+        fi    
+    done
+
+    find . -name "$commitmsg_file*" -delete
+
+# Use read from console
+else
+    echo -e "Leave it blank if you don't want to exit"
+    read -p "$(echo -n -e "${YELLOW}${commit}${ENDCOLOR} ")" -e commit_message
+    if [ -z "$commit_message" ]; then
         exit
-    fi    
-done
-
-find . -name "$commitmsg_file*" -delete
+    fi
+fi
 
 
 ### Commit Step 5: enter tracker ticket

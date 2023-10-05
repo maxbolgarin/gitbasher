@@ -169,10 +169,12 @@ echo -e "If this tag will be using for release, use version number in semver for
 echo -e "Leave it blank to exit"
 
 if [ -n "${annotated}" ]; then
-    read -p "git tag -a " -e tag_name
+    prompt="$(echo -n -e "${YELLOW}git tag -a${ENDCOLOR} ")"
 else
-    read -p "git tag " -e tag_name
+    prompt="$(echo -n -e "${YELLOW}git tag${ENDCOLOR} ")"
 fi
+
+read -p "$prompt" -e tag_name
 
 if [ -z $tag_name ]; then
     exit

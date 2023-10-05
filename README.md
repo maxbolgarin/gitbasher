@@ -57,6 +57,7 @@ Usage `make *command*`
 |-------------------|------------------------------------------------------------------------------------|
 | **pull**          | Fetch current branch and then merge changes with conflicts fixing                  |
 | **push**          | Push commits to current branch and pull changes if there are new changes in origin |
+| **push-fast**     | `make push` without pressing 'y'                                                   |
 | **push-list**     | Show list of commits to push without actual pushing it                             |
 
 
@@ -82,7 +83,8 @@ Usage `make *command*`
 |-----------------|------------------------------------------------------------------------------|
 | **gitlog**      | Run `git log` with nice oneline formatting                                   |
 | **reflog**      | Run `git reflog` with nice oneline formatting                                |
-| **last-commit** | Show info about last commit                                                  |
+| **last-commit** | Show info about last commit (last record from `git log`)                     |
+| **last-action** | Show info about last commit (last record from `git reflog`)                  |
 | **undo-commit** | Run `git reset HEAD^` to move pointer up for one record and undo last commit |
 | **undo-action** | Run `git reset HEAD@{1}` to reset last record in reflog                      |
 

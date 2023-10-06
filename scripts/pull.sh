@@ -103,30 +103,9 @@ echo
 
 ### Run merge-to-main logic - switch to main and merge
 if [ -n "$to_main" ]; then
-    switch_output=$(git switch $main_branch 2>&1)
-    switch_code=$?
-
-    ### Switch is OK
-    if [ "$switch_code" == 0 ]; then
-        echo -e "${GREEN}Switched to '$main_branch'${ENDCOLOR}"
-        changes=$(git status -s)
-        if [ -n "$changes" ]; then
-            echo
-            echo -e "${YELLOW}Moved changes:${ENDCOLOR}"
-            git status -s
-        fi
-        echo
-    fi
-
-    ### There are uncommited files with conflicts
-    if [[ $switch_output == *"Your local changes to the following files would be overwritten"* ]]; then
-        conflicts="$(echo "$switch_output" | tail -r | tail -n +3 | tail -r | tail -n +2)"
-        echo -e "${RED}Changes would be overwritten by switch to '$main_branch':${ENDCOLOR}"       
-        echo -e "${conflicts//[[:blank:]]/}"
-        echo
-        echo -e "${YELLOW}Commit these files and try to merge for one more time${ENDCOLOR}"
-        exit
-    fi
+    switch $main_branch "true"
+    echo
+    current_branch=$main_branch
 fi
 
 

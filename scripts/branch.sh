@@ -47,56 +47,6 @@ fi
 
 source $utils
 
-
-### Function handles switch result
-# $1: name of the branch to switch
-# $2: pass it if you want to disable push log and moved changes
-function switch {
-    switch_output=$(git switch $1 2>&1)
-    switch_code=$?
-
-    ## Switch is OK
-    if [ "$switch_code" == 0 ]; then
-        if [ "$current_branch" == "$1" ]; then
-            echo -e "${GREEN}Already on '$1'${ENDCOLOR}"
-        else
-            echo -e "${GREEN}Switched to branch '$1'${ENDCOLOR}"
-            changes=$(git status -s)
-            if [ -n "$changes" ] && [ -z $2 ]; then
-                echo
-                echo -e "${YELLOW}Moved changes:${ENDCOLOR}"
-                git status -s
-            fi
-        fi
-
-        if [ -z $2 ]; then
-            get_push_log $1 ${main_branch} ${origin_name}
-            if [ -n "$push_log" ]; then
-                echo
-                echo -e "Your branch ${YELLOW}$1${ENDCOLOR} is ahead of ${YELLOW}${history_from}${ENDCOLOR} by this commits:"
-                echo -e $push_log
-            fi
-        fi
-        return
-    fi
-
-    ## There are uncommited files with conflicts
-    if [[ $switch_output == *"Your local changes to the following files would be overwritten"* ]]; then
-        conflicts="$(echo "$switch_output" | tail -r | tail -n +3 | tail -r | tail -n +2)"
-        echo -e "${RED}Changes would be overwritten by switch to '$1':${ENDCOLOR}"       
-        echo -e "${conflicts//[[:blank:]]/}"
-        echo
-        echo -e "${YELLOW}Commit these files and try to switch for one more time${ENDCOLOR}"
-        exit
-    fi
-
-    if [ $switch_code -ne 0 ]; then
-        echo -e "${RED}Cannot switch to '$main_branch'! Here is the error${ENDCOLOR}"
-        echo -e "$switch_output"
-        exit $switch_code
-    fi
-}
-
 ###
 ### Script logic below
 ###

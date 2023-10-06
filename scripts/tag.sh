@@ -7,11 +7,11 @@
 
 ### Options
 # empty: create a new tag from a current branch and commit
-# s: select commit instead of using current one
+# s: select commit instead of using current one (or select tag when pushing or deleting)
 # a: create an annotated tag with message
 # l: print list of local tags and exit
-# d: select a tag to delete 
-# r: pull tags from remote
+# d: delete tag (pass -s to select tag, or it will delete everything)
+# r: fetch tags from the remote
 # p: push tags (pass -s to select what tag to push)
 # e: text editor to write commit message (default 'nano')
 # b: name of main branch (default 'main')
@@ -50,33 +50,149 @@ fi
 source $utils
 
 
+### Function pushes tag and prints url to repo or error
+# $1: tag to push, empty for pushing all tags
+# $2: delete flag, pass it if you want to delete provided tag
+# Using of global:
+#     * origin_name
+function push_tag {
+    if [ -z "$1" ] || [ "$1" == "" ]; then
+        all="true"
+        push_output=$(git push $origin_name --tags 2>&1)
+    elif [ -n "$2" ]; then
+        push_output=$(git push --delete $origin_name $1 2>&1)
+    else
+        push_output=$(git push $origin_name $1 2>&1)
+    fi
+    push_code=$?
+
+    # Handle delete case
+    if [ -n "$delete" ]; then
+        if [[ "$push_output" == *"remote ref does not exist"* ]]; then
+            echo -e "${RED}Tag '$1' doesn't exist in '${origin_name}'${ENDCOLOR}"
+            exit
+        fi
+        echo -e "${GREEN}Successful deleted tag '$1' in '${origin_name}'!${ENDCOLOR}"
+        exit
+    fi
+    
+    repo=$(get_repo $origin_name)
+
+    # Print `push-all` result
+    if [ -n "$all" ]; then
+        echo
+
+        IFS=$'\n' read -rd '' -a lines_with_success <<< "$(sed -n '/\[new tag\]/p' <<< "$push_output")"
+
+        number_of_tags=${#lines_with_success[@]}
+        if [ $number_of_tags != 0 ]; then
+            echo -e "${GREEN}Pushed successfully${ENDCOLOR}"
+            
+            for index in "${!lines_with_success[@]}"
+            do
+                echo -e "\t$(sed -e 's#.*\-> \(\)#\1#' <<< "${lines_with_success[index]}" )"
+            done
+            echo
+        fi
+    fi
+
+    # Handle errors
+    if [ $push_code != 0 ] ; then
+        if [[ "$push_output" == *"Updates were rejected because the tag already exists in the remote"* ]]; then
+            echo -e "${RED}Some tags were rejected${ENDCOLOR}"
+
+            IFS=$'\n' read -rd '' -a lines_with_rejected <<< "$(sed -n '/\[rejected\]/p' <<< "$push_output")"
+            for index in "${!lines_with_rejected[@]}"
+            do
+                echo -e "\t$(sed -e 's#.*\-> \(\)#\1#' <<< "${lines_with_rejected[index]}" )"
+            done
+
+            echo
+            echo -e "${YELLOW}Repo:${ENDCOLOR} ${repo}"
+            exit
+        fi
+        
+        echo -e "${RED}Cannot push! Here is the error${ENDCOLOR}"
+        echo "$push_output"
+        exit $push_code
+    fi
+
+    # Print result
+    if [[ $push_output == *"Everything up-to-date"* ]]; then
+        echo -e "${GREEN}Everything up-to-date${ENDCOLOR}"
+    elif [ -z "$all" ]; then
+        echo -e "${GREEN}Successful push tag '$1'!${ENDCOLOR}"
+    else
+        echo -e "${GREEN}Successful push all local tags!${ENDCOLOR}"
+    fi
+
+    echo -e "${YELLOW}Repo:${ENDCOLOR}\t${repo}"
+
+    if [ -z "$all" ]; then
+        if [[ $repo == *"github"* ]]; then
+            echo -e "${YELLOW}Tag:${ENDCOLOR}\t${repo}/releases/tag/$1"
+        elif [[ $repo == *"gitlab"* ]]; then
+            echo -e "${YELLOW}Tag:${ENDCOLOR}\t${repo}/-/tags/$1"
+        fi
+    fi
+}
+
 ###
 ### Script logic here
 ###
 
 ### Print header
+header="TAG MANAGER"
 if [ -n "${annotated}" ]; then
-    echo -e "${YELLOW}TAG MANAGER${ENDCOLOR} ANNOTATED"
+    header="$header ANNOTATED"
 elif [ -n "${delete}" ]; then
-    echo -e "${YELLOW}TAG MANAGER${ENDCOLOR} DELETE"
+    header="$header DELETE"
 elif [ -n "${push}" ]; then
-    echo -e "${YELLOW}TAG MANAGER${ENDCOLOR} PUSH"
-else
-    echo -e "${YELLOW}TAG MANAGER${ENDCOLOR}"
+    header="$header PUSH"    
 fi
-
+echo -e "${YELLOW}${header}${ENDCOLOR}"
 echo
 
-count=14
-if [ -n "${delete}" ]; then
-    count=9
+
+### Fetch tags from the remote
+if [ -n "${remote}" ]; then
+    echo -e "${YELLOW}Fetching all tags from remote...${ENDCOLOR}"
+    fetch_output=$(git fetch $origin_name --tags 2>&1)
+    fetch_code=$?
+
+    echo
+    
+    if [ $fetch_code != 0 ]; then
+        echo -e "${RED}Cannot fetch tags! Here is the error${ENDCOLOR}"
+        echo -e "${fetch_output}"
+        exit $fetch_code
+    fi
+
+    if [ "$fetch_output" != "" ]; then
+        echo -e "${YELLOW}New tags${ENDCOLOR}"
+        IFS=$'\n' read -rd '' -a lines_with_tags <<< "$(sed -n '/\[new tag\]/p' <<< "$fetch_output")"
+        for index in "${!lines_with_tags[@]}"
+        do
+            echo -e "\t$(sed -e 's#.*\-> \(\)#\1#' <<< "${lines_with_tags[index]}" )"
+        done
+        echo
+    fi
 fi
 
-tags_list=$(git for-each-ref --count=$count --format="%(refname:short) | %(creatordate:relative) | %(objectname:short) - %(contents:subject)" --sort=-creatordate refs/tags | column -ts'|' )
-tags_only=$(git for-each-ref --count=$count --format="%(refname:short)" --sort=-creatordate refs/tags)
 
-IFS=$'\n' read -rd '' -a tags_info <<<"$tags_list"
-IFS=$'\n' read -rd '' -a tags <<<"$tags_only"
+### Print tag list
+count=14
+if [ -n "${delete}" ] || [ -n "${list}" ]; then
+    count=999  # Show all tags
+fi
+
+tags_info_str=$(git for-each-ref --count=$count --format="%(refname:short) | %(creatordate:relative) | %(objectname:short) - %(contents:subject)" --sort=-creatordate refs/tags | column -ts'|' )
+tags_str=$(git for-each-ref --count=$count --format="%(refname:short)" --sort=-creatordate refs/tags)
+commit_hashes_str=$(git for-each-ref --count=$count --format="%(objectname:short)" --sort=-creatordate refs/tags)
+
+IFS=$'\n' read -rd '' -a tags_info <<<"$tags_info_str"
+IFS=$'\n' read -rd '' -a tags <<<"$tags_str"
+IFS=$'\n' read -rd '' -a commit_hashes <<<"$commit_hashes_str"
 
 number_of_tags=${#tags[@]}
 
@@ -86,12 +202,17 @@ if [ $number_of_tags == 0 ]; then
         exit
     fi
 else
-    echo -e "${YELLOW}Last ${number_of_tags} local tags${ENDCOLOR}"
+    tags_header="Last ${number_of_tags} local tags"
+    if [ -n "${delete}" ] || [ -n "${list}" ]; then
+        tags_header="All ${number_of_tags} local tags"
+    fi
+    echo -e "${YELLOW}${tags_header}${ENDCOLOR}"
 
     for index in "${!tags[@]}"
     do
         tag_line=$(sed "1,/${tags[index]}/ s/${tags[index]}/${GREEN_ES}${tags[index]}${ENDCOLOR_ES}/" <<< ${tags_info[index]})
-        if [ -n "${delete}" ]; then
+        tag_line=$(sed "1,/${commit_hashes[index]}/ s/${commit_hashes[index]}/${YELLOW_ES}${commit_hashes[index]}${ENDCOLOR_ES}/" <<< "$tag_line")
+        if [ -n "${delete}" ] || [ -n "${push}" ]; then
             echo -e "$(($index+1)). ${tag_line}"
         else
             echo -e "${tag_line}"
@@ -103,33 +224,85 @@ if [ -n "$list" ]; then
     exit
 fi
 
-if [ -n "${delete}" ]; then
+
+### Push all case
+if [ -n "$push" ] && [ -z "$select" ]; then
+    echo
+    echo -e "${YELLOW}Pushing all tags..."${ENDCOLOR}
+
+    push_tag
+    exit
+fi
+
+
+### Delete all case
+if [ -n "${delete}" ] && [ -z "$select" ]; then
+    echo
+    echo -e "${YELLOW}Do you really want to delete all local tags (y/n)?${ENDCOLOR}"
+    yes_no_choice "Deleting..."
+    git tag | xargs git tag -d 
+    exit
+fi
+
+
+### Select tag for delete / push
+if [ -n "${delete}" ] || [ -n "$push" ]; then
     echo "0. Exit..."
     echo
-    printf "Enter tag number to delete: "
-    while [ true ]; do
-        read -n 1 -s choice
+    if [ -n "${delete}" ]; then
+        printf "Enter tag number to delete: "
+    else
+        printf "Enter tag number to push: "
+    fi
 
-        if [ "$choice" == "0" ]; then
-            printf $choice
+    while [ true ]; do
+        if [ $number_of_tags -gt 9 ]; then
+            read -n 2 choice
+        else
+            read -n 1 -s choice
+        fi
+
+        if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
+            if [ $number_of_tags -le 9 ]; then
+                printf $choice
+            fi
             exit
         fi
 
         re='^[0-9]+$'
         if ! [[ $choice =~ $re ]]; then
+            if [ $number_of_tags -gt 9 ]; then
+                exit
+            fi
             continue
         fi
 
         index=$(($choice-1))
         tag_name=${tags[index]}
         if [ -n "$tag_name" ]; then
-            printf $choice
+            if [ $number_of_tags -le 9 ]; then
+                printf $choice
+            fi
             break
+        else
+            if [ $number_of_tags -gt 9 ]; then
+                exit
+            fi
         fi
     done
 
+    if [ $number_of_tags -gt 9 ] && [ $choice -gt 9 ]; then
+        echo  # User press enter if choice < 10
+    fi
     echo
-    echo
+
+    # Push case
+    if [ -n "${push}" ]; then
+        echo -e "${YELLOW}Pushing..."${ENDCOLOR}
+        echo
+        push_tag $tag_name
+        exit
+    fi
 
     delete_result=$(git tag -d $tag_name 2>&1)
     delete_code=$?
@@ -141,28 +314,33 @@ if [ -n "${delete}" ]; then
     fi
 
     echo -e "${GREEN}Successfully deleted tag '${tag_name}'${ENDCOLOR}"
+    echo
+    echo -e "Do you want to delete this tag in ${YELLOW}${origin_name}${ENDCOLOR} (y/n)?"
+    yes_no_choice "Deleting..."
+    push_tag $tag_name "true"
 
     exit
 fi
-
 echo
 
-current_branch=$(git branch --show-current)
 
+### Select commit for new tag
 if [ -n "$select" ]; then
     echo -e "${YELLOW}Select commit for a new tag on branch '$current_branch'${ENDCOLOR}"
     choose_commit 9
     commit_message=$(git log -1 --pretty=%B $commit_hash | cat)
 
+### Use current commit for new tag
 else
     echo -e "${YELLOW}Current commit${ENDCOLOR}"
 
     commit_hash=$(git rev-parse HEAD)
     commit_message=$(git log -1 --pretty=%B | cat)
     echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR} ${commit_message}"
-
 fi
 
+
+### Enter name for a new tag
 echo
 echo -e "${YELLOW}Enter the name of a new tag${ENDCOLOR}"
 echo -e "If this tag will be using for release, use version number in semver format like '1.0.0-alpha'"
@@ -185,9 +363,10 @@ if [ "$tag_name" == "tag" ]; then
     echo -e "${RED}This name is forbidden!${ENDCOLOR}"
     exit
 fi
-
 echo
 
+
+### If annotated - enter tag message
 if [ -n "$annotated" ]; then
     tag_file=".tagmsg__"
     touch $tag_file
@@ -225,6 +404,8 @@ if [ -z "$select" ]; then
     commit_hash=""
 fi
 
+
+### Finally create tag
 if [ -n "$annotated" ]; then
     tag_output=$(git tag -a -m """$tag_message""" $tag_name $commit_hash 2>&1)
 else
@@ -256,33 +437,11 @@ echo -e "${GREEN}Successfully created${is_annotated} tag '${tag_name}'${is_commi
 if [ -n "$tag_message" ]; then
     echo -e "$tag_message"
 fi
-
 echo
 
+
+### Push tag
 echo -e "Do you want to push this tag to ${YELLOW}${origin_name}${ENDCOLOR} (y/n)?"
 yes_no_choice "Pushing..."
 
-push_output=$(git push ${origin_name} $tag_name 2>&1)
-push_code=$?
-
-if [ $push_code != 0 ] ; then
-    echo -e "${RED}Cannot push! Here is the error${ENDCOLOR}"
-    echo "$push_output"
-    exit $push_code
-fi
-
-if [[ $push_output == *"Everything up-to-date"* ]]; then
-    echo -e "${GREEN}Everything up-to-date${ENDCOLOR}"
-else
-    echo -e "${GREEN}Successful push tag '$tag_name'!${ENDCOLOR}"
-fi
-repo=$(git config --get remote.${origin_name}.url)
-repo="${repo/":"/"/"}" 
-repo="${repo/"git@"/"https://"}"
-repo="${repo/".git"/""}" 
-echo -e "${YELLOW}Repo:${ENDCOLOR}\t${repo}"
-if [[ $repo == *"github"* ]]; then
-    echo -e "${YELLOW}Tag:${ENDCOLOR}\t${repo}/releases/tag/${tag_name}"
-elif [[ $repo == *"gitlab"* ]]; then
-    echo -e "${YELLOW}MR:${ENDCOLOR}\t${repo}/-/tags/${tag_name}"
-fi
+push_tag $tag_name

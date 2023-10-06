@@ -53,6 +53,19 @@ Usage `make *command*`
 | **commit-revert**     | Choose commit to revert (`git revert -no-edit <commit>`)                                        |
 
 
+| **Tags**           | **Description**                                                           |
+|--------------------|---------------------------------------------------------------------------|
+| **tag**            | Create a new tag from a current commit and push it to a remote            |
+| **tag-commit**     | Create a new tag from a selected commit and push it to a remote           |
+| **tag-full**       | Create a new annotated tag from a selected commit and push it to a remote |
+| **tag-list**       | Print a list of local tags                                                |
+| **tag-fetch**      | Fetch tags from a remote and print it                                     |
+| **tag-push**       | Select a local tag for pushing to a remote                                |
+| **tag-push-all**   | Select a tag to delete                                                    |
+| **tag-delete**     | Select a tag to delete in local and remote                                |
+| **tag-delete-all** | Delete all local tags                                                     |
+
+
 | **Pull and Push** | **Description**                                                                    |
 |-------------------|------------------------------------------------------------------------------------|
 | **pull**          | Fetch current branch and then merge changes with conflicts fixing                  |

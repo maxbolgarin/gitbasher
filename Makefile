@@ -69,21 +69,25 @@ tag-full: ##@Tag Create a new annotated tag from a selected commit and push it t
 tag-list: ##@Tag Print a list of local tags
 	@${GITBASHER_S} -r tag -a "-l -e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
 
-.PHONY: tag-delete
-tag-delete: ##@Commit Select a tag to delete
-	@${GITBASHER_S} -r tag -a "-d -e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
-
-.PHONY: tag-remote
-tag-pull: ##@Commit Pull tags from a remote and print it
+.PHONY: tag-fetch
+tag-fetch: ##@Tag Fetch tags from a remote and print it
 	@${GITBASHER_S} -r tag -a "-r -l -e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
 
 .PHONY: tag-push
-tag-push: ##@Commit Select a tag to push to a remote
+tag-push: ##@Tag Select a tag to push to a remote
 	@${GITBASHER_S} -r tag -a "-p -s -e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
 
 .PHONY: tag-push-all
-tag-push-all: ##@Commit Push all local tags to a remote
+tag-push-all: ##@Tag Push all local tags to a remote
 	@${GITBASHER_S} -r tag -a "-p -e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
+
+.PHONY: tag-delete
+tag-delete: ##@Tag Select a tag to delete
+	@${GITBASHER_S} -r tag -a "-s -d -e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
+
+.PHONY: tag-delete-all
+tag-delete-all: ##@Tag Delete all local tags
+	@${GITBASHER_S} -r tag -a "-d -e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
 
 ################################################
 

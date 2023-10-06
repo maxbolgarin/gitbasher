@@ -34,7 +34,7 @@ function prepare_path {
 ### Function reverts array
 # $1: array to reverse
 # $2: output array
-function reverse() {
+function reverse {
     declare -n arr="$1" rev="$2"
     for i in "${arr[@]}"
     do
@@ -47,6 +47,8 @@ function reverse() {
 # $1: return code
 # $2: command output (error message)
 # $3: command name
+# Using of global:
+#     * git_add
 function check_code {
     if [ $1 != 0 ]; then
         echo
@@ -61,8 +63,8 @@ function check_code {
 }
 
 
-### This function asks user to enter yes or no, it will exit at no answer
-# $1: What to write to console on success
+### Function asks user to enter yes or no, it will exit if user answers 'no'
+# $1: what to write in console on success
 function yes_no_choice {
     while [ true ]; do
         read -n 1 -s choice
@@ -80,10 +82,75 @@ function yes_no_choice {
 }
 
 
+### Function echoes (true return) url to current user's repo (remote)
+# $1: origin name
+# Return: url to repo
+function get_repo {
+    repo=$(git config --get remote.$1.url)
+    repo="${repo/":"/"/"}" 
+    repo="${repo/"git@"/"https://"}"
+    repo="${repo/".git"/""}" 
+    echo "$repo"
+}
+
+
+### Function waits a number from user and returns result of choice from a provided list
+# $1: list of values
+# Returns: 
+#     * choice_result
+# Using of global:
+#     * git_add
+function choose {
+    values=("$@")
+    number_of_values=${#values[@]}
+
+    while [ true ]; do
+        if [ $number_of_values -gt 9 ]; then
+            read -n 2 choice
+        else
+            read -n 1 -s choice
+        fi
+
+        if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
+            if [ -n "$git_add" ]; then
+                git restore --staged $git_add
+            fi
+            if [ $number_of_values -le 9 ]; then
+                printf $choice
+            fi
+            exit
+        fi
+
+        re='^[0-9]+$'
+        if ! [[ $choice =~ $re ]]; then
+            if [ $number_of_values -gt 9 ]; then
+                exit
+            fi
+            continue
+        fi
+
+        index=$(($choice-1))
+        choice_result=${values[index]}
+        if [ -n "$choice_result" ]; then
+            if [ $number_of_values -le 9 ]; then
+                printf $choice
+            fi
+            break
+        else
+            if [ $number_of_values -gt 9 ]; then
+                exit
+            fi
+        fi
+    done
+}
+
+
 ### Function prints the list of commits and user should choose one
 # $1: number of last commits to show
 # Returns: 
 #     commit_hash - hash of selected commit
+# Using of global:
+#     * git_add
 function choose_commit {
     commits_info_str=$(git log --pretty="%h | %s | %an | %cr" -n $1 | column -ts'|')
     commits_hash_str=$(git log --pretty="%h" -n $1)
@@ -109,51 +176,15 @@ function choose_commit {
     echo
     printf "Enter commit number: "
 
-    while [ true ]; do
-        if [ $number_of_commits -gt 9 ]; then
-            read -n 2 choice
-        else
-            read -n 1 -s choice
-        fi
-
-        if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
-            if [ -n "$git_add" ]; then
-                git restore --staged $git_add
-            fi
-            if [ $number_of_commits -le 9 ]; then
-                printf $choice
-            fi
-            exit
-        fi
-
-        re='^[0-9]+$'
-        if ! [[ $choice =~ $re ]]; then
-            if [ $number_of_commits -gt 9 ]; then
-                exit
-            fi
-            continue
-        fi
-
-        index=$(($choice-1))
-        commit_hash=${commits_hash[index]}
-        if [ -n "$commit_hash" ]; then
-            if [ $number_of_commits -le 9 ]; then
-                printf $choice
-            fi
-            break
-        else
-            if [ $number_of_commits -gt 9 ]; then
-                exit
-            fi
-        fi
-    done
+    choose "${commits_hash[@]}"
+    commit_hash=$choice_result
 
     echo
     return
 }
 
 
-### Function prints provided stat in nice format with colors
+### Function prints provided stat in a nice format with colors
 # $1: stats after pull or commit like 'README.md | 1 +\n1 file changed, 1 insertion(+)'
 function print_changes_stat {
     IFS=$'\n' read -rd '' -a stats <<< "$1"
@@ -177,7 +208,7 @@ function print_changes_stat {
 }
 
 
-### Function returns git log diff between provided argument and HEAD
+### Function echoes git log diff between provided argument and HEAD
 # $1: branch or commit from which to calc diff
 function gitlog_diff {
     git --no-pager log --pretty=format:"\t%h - %an, %ar:\t%s\n" $1..HEAD 2>&1
@@ -229,13 +260,15 @@ function list_branches {
     if [[ "$1" == "remote" ]]; then
         args="--list --sort=-committerdate -r"
     fi
-    all_branches=$(git branch $args | cat 2>&1)
-    all_branches_wih_commits=$(git branch -v $args  | cat 2>&1)
+    branches_str=$(git branch $args | cat 2>&1)
+    branches_wih_commits_str=$(git branch -v $args  | cat 2>&1)
 
-    all_branches="${all_branches//\*}"
-    all_branches=${all_branches//[[:blank:]]/}
+    # Remove '*' and spaces to get plain branches
+    branches_str="${branches_str//\*}"
+    branches_str=${branches_str//[[:blank:]]/}
 
-    IFS=$'\n' read -rd '' -a branches <<<"$all_branches"
+    IFS=$'\n' read -rd '' -a branches <<< "$branches_str"
+    IFS=$'\n' read -rd '' -a branches_with_commits <<<"$branches_wih_commits_str"
 
     number_of_branches=${#branches[@]}
     if [[ "$1" == "remote" ]]; then
@@ -251,6 +284,7 @@ function list_branches {
 
     branch_to_check="${branches[0]}"
     if [[ "$1" == "remote" ]]; then
+        # Remove 'origin/'
         branch_to_check="$(sed "s/${origin_name}\///g" <<< ${branch_to_check})"
     fi
 
@@ -266,8 +300,7 @@ function list_branches {
         exit
     fi
 
-    IFS=$'\n' read -rd '' -a branches_with_commits <<<"$all_branches_wih_commits"
-
+    ### Main should be the first
     branches_first_main=(${main_branch})
     branches_with_commits_first_main=("dummy")
     if [[ "$1" == "delete" ]]; then
@@ -291,11 +324,15 @@ function list_branches {
                 continue
             fi
         fi
-        if [[ "$branch_to_check" != "${main_branch}"* ]]; then
+        if [[ "$1" == "remote" ]]; then
+            branch_to_check="$(sed "s/${origin_name}\///g" <<< ${branch_to_check})"
+        fi
+
+        if [[ "$branch_to_check" == "${main_branch}"* ]]; then
+            branches_with_commits_first_main[0]="${branches_with_commits[index]}"
+        elif [[ "$branch_to_check" != "HEAD->"* ]]; then 
             branches_first_main+=(${branches[index]})
             branches_with_commits_first_main+=("${branches_with_commits[index]}")
-        elif [[ "$branch_to_check" != "HEAD->"* ]]; then 
-            branches_with_commits_first_main[0]="${branches_with_commits[index]}"
         fi
     done
 
@@ -311,8 +348,11 @@ function list_branches {
 #     * no value prints all local branches
 #     * 'remote' - choose from all remote
 #     * 'delete' - choose from all local without main and current
+#     * 'merge' - all local without current
 # Using of global:
 #     * origin_name
+#     * current_branch
+#     * main_branch
 # Returns:
 #     * branch_name
 function choose_branch {
@@ -322,30 +362,8 @@ function choose_branch {
     echo
     printf "Enter branch number: "
 
-    while [ true ]; do
-        if [ $number_of_branches -gt 9 ]; then
-            read -n 2 choice
-        else
-            read -n 1 -s choice
-        fi
-
-        if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
-            printf $choice
-            exit
-        fi
-
-        re='^[0-9]+$'
-        if ! [[ $choice =~ $re ]]; then
-           continue
-        fi
-
-        index=$(($choice-1))
-        branch_name="${branches_first_main[index]}"
-        if [ -n "$branch_name" ]; then
-            printf $choice
-            break
-        fi
-    done
+    choose "${branches_first_main[@]}"
+    branch_name=$choice_result
 
     if [[ "$1" == "remote" ]]; then
         branch_name=$(sed "s/${origin_name}\///g" <<< ${branch_name})
@@ -370,7 +388,7 @@ function fetch {
     fi
 
     if [[ ${fetch_output} != *"couldn't find remote ref"* ]]; then
-        echo -e "${RED}Cannot fetch '$1'! Here is the error!${ENDCOLOR}"
+        echo -e "${RED}Cannot fetch '$1'! Here is the error${ENDCOLOR}"
         echo -e "${fetch_output}"
         exit $fetch_code
     fi

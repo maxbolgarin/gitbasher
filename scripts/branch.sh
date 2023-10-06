@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 
-### Script for working with branches: create, switch, remove
+### Script for working with branches: create, switch, delete
 # Use a separate branch for writing new code, then merge it to main
 # Read README.md to get more information how to use it
 # Use this script only with gitbasher.sh
 
 ### Options
 # no options: switch to local branch
-# r: switch to remote branch
-# m: switch to main branch
+# r: switch to a remote branch
+# m: switch to the main branch
 # n: create a new branch
 # c: create a new branch from a current one instead of the main branch
 # d: delete a local branch
@@ -50,6 +50,7 @@ source $utils
 
 ### Function handles switch result
 # $1: name of the branch to switch
+# $2: pass it if you want to disable push log and moved changes
 function switch {
     switch_output=$(git switch $1 2>&1)
     switch_code=$?
@@ -61,20 +62,22 @@ function switch {
         else
             echo -e "${GREEN}Switched to branch '$1'${ENDCOLOR}"
             changes=$(git status -s)
-            if [ -n "$changes" ]; then
+            if [ -n "$changes" ] && [ -z $2 ]; then
                 echo
                 echo -e "${YELLOW}Moved changes:${ENDCOLOR}"
                 git status -s
             fi
         fi
 
-        get_push_log $1 ${main_branch} ${origin_name}
-        if [ -n "$push_log" ]; then
-            echo
-            echo -e "Your branch ${YELLOW}$1${ENDCOLOR} is ahead of ${YELLOW}${history_from}${ENDCOLOR} by this commits:"
-            echo -e $push_log
+        if [ -z $2 ]; then
+            get_push_log $1 ${main_branch} ${origin_name}
+            if [ -n "$push_log" ]; then
+                echo
+                echo -e "Your branch ${YELLOW}$1${ENDCOLOR} is ahead of ${YELLOW}${history_from}${ENDCOLOR} by this commits:"
+                echo -e $push_log
+            fi
         fi
-        exit
+        return
     fi
 
     ## There are uncommited files with conflicts
@@ -87,23 +90,29 @@ function switch {
         exit
     fi
 
-    exit
+    if [ $switch_code -ne 0 ]; then
+        echo -e "${RED}Cannot switch to '$main_branch'! Here is the error${ENDCOLOR}"
+        echo -e "$switch_output"
+        exit $switch_code
+    fi
 }
-
 
 ###
 ### Script logic below
 ###
 
 ### Print header
+header="BRANCH MANAGER"
 if [ -n "${new}" ]; then
-    echo -e "${YELLOW}BRANCH MANAGER${ENDCOLOR} NEW"
+    header="$header NEW"
 elif [ -n "${remote}" ]; then
-    echo -e "${YELLOW}BRANCH MANAGER${ENDCOLOR} REMOTE"
+    header="$header REMOTE"
 elif [ -n "${delete}" ]; then
-    echo -e "${YELLOW}BRANCH MANAGER${ENDCOLOR} DELETE"
-elif [ -z "${main}" ]; then
-    echo -e "${YELLOW}BRANCH MANAGER${ENDCOLOR}"
+    header="$header DELETE"
+fi
+
+if [ -z "${main}" ]; then
+    echo -e "${YELLOW}${header}${ENDCOLOR}"
 fi
 echo
 
@@ -111,7 +120,9 @@ echo
 ### Run switch to main logic
 if [[ -n "${main}" ]]; then
     switch ${main_branch}
+    exit
 fi
+
 
 ### Run switch to local logic
 if [[ -z "$new" ]] && [[ -z "$remote" ]] && [[ -z "$delete" ]]; then
@@ -122,6 +133,7 @@ if [[ -z "$new" ]] && [[ -z "$remote" ]] && [[ -z "$delete" ]]; then
     echo
 
     switch ${branch_name}
+    exit
 
 
 ### Run switch to remote logic
@@ -144,6 +156,7 @@ elif [[ -z "$new" ]] && [[ -n "$remote" ]] && [[ -z "$delete" ]]; then
     echo
 
     switch ${branch_name}
+    exit
 
 
 ### Run delete local logic
@@ -257,11 +270,11 @@ fi
 echo -e "${YELLOW}Step 1.${ENDCOLOR} What type of branch do you want to create?"
 echo "1. feat:      new feature or logic changes, 'feat' and 'perf' commits"
 echo "2. fix:       small changes, eg. not critical bug fix"
-echo "3. hotfix:    fix, that should be mreged as fast as possible"
-echo "4. refactor:  non important and/or style changes in code"
-echo "5. misc:      non-code changes, e.g. 'ci', 'docs', 'build'"
+echo "3. hotfix:    fix, that should be merged as fast as possible"
+echo "4. refactor:  non important and/or style changes"
+echo "5. misc:      non-code changes, e.g. 'ci', 'docs', 'build' commits"
 echo "6. wip:       'work in progress', for changes not ready for merging in the near future"
-echo "7.            don't use prefix for branch"
+echo "7.            don't use prefix for branch naming"
 echo "0. Exit without changes"
 
 declare -A types=(
@@ -311,73 +324,34 @@ fi
 
 branch_name="${branch_type_and_sep}${branch_name##*( )}"
 
+if [[ "$branch_name" == "HEAD" ]]; then
+    echo
+    echo -e "${RED}This name is forbidden${ENDCOLOR}"
+    exit
+fi
 
-### Step 3. Switch to main, pull it and then create a new branch from main
+### Step 3. Switch to main and pull it
+from_branch=$current_branch
 if [ -z "${current}" ]; then
-    switch_output=$(git switch $main_branch 2>&1)
-    switch_code=$?
-
-    if [ $switch_code -ne 0 ]; then
-        echo -e "${RED}Cannot switch to '$main_branch': $switch_output${ENDCOLOR}"
-        exit $switch_code
-    fi
-
     echo
-    echo -e "${GREEN}Switched to '$main_branch'${ENDCOLOR}"
-    echo -e "${YELLOW}Pulling...${ENDCOLOR}"
-    
-    pull_output=$(git pull $origin_name $main_branch --no-rebase 2>&1)
-    pull_code=$?
+    switch $main_branch "true"
 
+    echo -e "${YELLOW}Pulling '$origin_name/$main_branch'...${ENDCOLOR}"
     echo
+    pull $main_branch $origin_name $editor
 
-    # Handle pull errors, don't use single function with push beacause there is different output
-    if [ $pull_code -ne 0 ] ; then
-        if [[ $pull_output == *"Please commit your changes or stash them before you merge"* ]]; then
-            echo -e "${RED}Cannot pull! There is uncommited changes, that will be overwritten by merge${ENDCOLOR}"
-            files_to_commit=$(echo "$pull_output" | tail -n +4 | head -n +1)
-            echo -e "${YELLOW}Files:${ENDCOLOR}"
-            echo "$files_to_commit"
-            echo
-            echo -e "Commit changes and then use ${YELLOW}make branch-new${ENDCOLOR} again"
-            exit $pull_code
-        fi
-
-        if [[ $pull_output == *"fix conflicts and then commit the result"* ]]; then
-            echo -e "${RED}Cannot pull! You should fix conflicts${ENDCOLOR}"
-            files_with_conflicts=$(git diff --name-only --diff-filter=U --relative | cat)
-            echo -e "${YELLOW}Files:${ENDCOLOR}"
-            echo "$files_with_conflicts"
-            echo
-            echo -e "Fix conflicts and commit result, then use ${YELLOW}make branch-new${ENDCOLOR} again"
-            echo
-            echo -e "Press ${YELLOW}n${ENDCOLOR} if you want to abort merge or any key to exit"
-            read -n 1 -s choice
-            if [ "$choice" == "n" ]; then
-                echo -e "${YELLOW}Aborting merge...${ENDCOLOR}"
-                git merge --abort
-            fi
-            exit $pull_code
-        fi
-
-        echo -e "${RED}Cannot pull '$main_branch'! Here is an error${ENDCOLOR}\n$pull_output"
-        echo
-        echo -e "Pull ${YELLOW}$main_branch${ENDCOLOR} firstly and then use ${YELLOW}make branch-new${ENDCOLOR} again"
-        exit $pull_code
-    fi
-
-    echo -e "${GREEN}Successful pull!${ENDCOLOR}"
+    from_branch=$main_branch
 fi
 
 
 ### Step 4. Create a new branch and switch to it
-switch_output=$(git switch -c $branch_name 2>&1)
-switch_code=$?
+create_output=$(git switch -c $branch_name 2>&1)
+create_code=$?
 
 echo
 
-if [ $switch_code -eq 0 ]; then
-    echo -e "${GREEN}${switch_output}${ENDCOLOR}"
+if [ $create_code -eq 0 ]; then
+    echo -e "${GREEN}${create_output} from '$from_branch'${ENDCOLOR}"
     changes=$(git status -s)
     if [ -n "$changes" ]; then
         echo
@@ -387,10 +361,10 @@ if [ $switch_code -eq 0 ]; then
     exit
 fi
 
-if [[ $switch_output == *"already exists"* ]]; then
+if [[ $create_output == *"already exists"* ]]; then
     echo -e "${RED}Branch with name '${branch_name}' already exists!${ENDCOLOR}"
-    exit $switch_code
+    exit $create_code
 fi
 
-echo -e "${RED}Switch error: ${switch_output}${ENDCOLOR}"
-exit $switch_code
+echo -e "${RED}Switch error: ${create_output}${ENDCOLOR}"
+exit $create_code

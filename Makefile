@@ -110,31 +110,31 @@ push-list: ##@Remote Print a list of unpushed local commits without actual pushi
 ################################################
 
 .PHONY: branch
-branch: ##@Branch Switch to an available local branch
+branch: ##@Branch Select a local branch to switch
 	@${GITBASHER_S} -r branch -a "-b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR} -o ${GITBASHER_ORIGIN_NAME}"
 
 .PHONY: branch-remote
-branch-remote: ##@Branch Switch to an available remote branch
+branch-remote: ##@Branch Fetch origin and select a remote branch to switch
 	@${GITBASHER_S} -r branch -a "-r -b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR} -o ${GITBASHER_ORIGIN_NAME}"
 
 .PHONY: branch-main
-branch-main: ##@Branch Switch to main branch
+branch-main: ##@Branch Switch to main branch without additional confirmations
 	@${GITBASHER_S} -r branch -a "-m -b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR} -o ${GITBASHER_ORIGIN_NAME}"
 
 .PHONY: branch-new
-branch-new: ##@Branch Create a new branch from 'main' according to conventional naming
+branch-new: ##@Branch Build conventional name for a new branch, switch to main, pull it and create new branch from main
 	@${GITBASHER_S} -r branch -a "-n -b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR} -o ${GITBASHER_ORIGIN_NAME}"
 
 .PHONY: branch-new-current
-branch-new-current: ##@Branch Create a new branch from current state according to conventional naming
+branch-new-current: ##@Branch Build conventional name for a new branch and create it from a current branch
 	@${GITBASHER_S} -r branch -a "-n -c -b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR} -o ${GITBASHER_ORIGIN_NAME}"
 
 .PHONY: branch-delete
-branch-delete: ##@Branch Choose a branch to delete
+branch-delete: ##@Branch Select branch to delete
 	@${GITBASHER_S} -r branch -a "-d -b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR} -o ${GITBASHER_ORIGIN_NAME}"
 
 .PHONY: branch-prune
-branch-prune: ##@Branch Remove all not merged branches and run 'git remote prune origin'
+branch-prune: ##@Branch Delete all merged branches except `master`, `main` and `develop` and prune remote branches
 	@git branch --merged | egrep -v "(^\*|master|main|develop|${GITBASHER_MAIN_BRANCH})" | xargs git branch -d
 	@git remote prune ${GITBASHER_ORIGIN_NAME}
 

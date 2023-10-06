@@ -96,15 +96,15 @@ pull: ##@Remote Pull current branch from remote
 	@${GITBASHER_S} -r pull -a "-e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
 
 .PHONY: push
-push: ##@Remote Run Push Manager to push changes and pull origin if there are unpulled changes
+push: ##@Remote Push commits to current branch and pull changes if there are new ones in origin
 	@${GITBASHER_S} -r push -a "-e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
 
 .PHONY: push-fast
-push-fast: ##@Remote Run Push Manager to push changes and pull origin if there are unpulled changes
+push-fast: ##@Remote `make push` without pressing 'y'
 	@${GITBASHER_S} -r push -a "-y -e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
 
 .PHONY: push-list
-push-list: ##@Remote Print a list of unpushed commits
+push-list: ##@Remote Print a list of unpushed local commits without actual pushing it
 	@${GITBASHER_S} -r push -a "-l -e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
 
 ################################################

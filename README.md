@@ -69,9 +69,9 @@ Usage `make *command*`
 | **Pull and Push** | **Description**                                                                    |
 |-------------------|------------------------------------------------------------------------------------|
 | **pull**          | Fetch current branch and then merge changes with conflicts fixing                  |
-| **push**          | Push commits to current branch and pull changes if there are new changes in origin |
+| **push**          | Push commits to current branch and pull changes if there are new ones in origin    |
 | **push-fast**     | `make push` without pressing 'y'                                                   |
-| **push-list**     | Show list of commits to push without actual pushing it                             |
+| **push-list**     | Print a list of unpushed local commits without actual pushing it                   |
 
 
 | **Branch**             | **Description**                                                                                |

@@ -161,12 +161,12 @@ else
     while [ true ]; do
         read -p "$(echo -n -e "${TODO}git add${ENDCOLOR} ")" -e git_add
 
-        if [ -z $git_add ]; then
+        # Trim spaces
+        git_add=$(echo "$git_add" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        if [ "$git_add" == "" ]; then
             exit
         fi
 
-        # Trim spaces
-        git_add=$(echo "$git_add" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
         git add $git_add
         if [ $? -eq 0 ]; then
             break
@@ -240,7 +240,6 @@ declare -A types=(
     [9]="docs"
 )
 
-commit_type=""
 while [ true ]; do
     read -n 1 -s choice
 

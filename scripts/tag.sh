@@ -255,41 +255,8 @@ if [ -n "${delete}" ] || [ -n "$push" ]; then
         printf "Enter tag number to push: "
     fi
 
-    while [ true ]; do
-        if [ $number_of_tags -gt 9 ]; then
-            read -n 2 choice
-        else
-            read -n 1 -s choice
-        fi
-
-        if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
-            if [ $number_of_tags -le 9 ]; then
-                printf $choice
-            fi
-            exit
-        fi
-
-        re='^[0-9]+$'
-        if ! [[ $choice =~ $re ]]; then
-            if [ $number_of_tags -gt 9 ]; then
-                exit
-            fi
-            continue
-        fi
-
-        index=$(($choice-1))
-        tag_name=${tags[index]}
-        if [ -n "$tag_name" ]; then
-            if [ $number_of_tags -le 9 ]; then
-                printf $choice
-            fi
-            break
-        else
-            if [ $number_of_tags -gt 9 ]; then
-                exit
-            fi
-        fi
-    done
+    choose "${tags[@]}"
+    tag_name=$choice_result
 
     if [ $number_of_tags -gt 9 ] && [ $choice -gt 9 ]; then
         echo  # User press enter if choice < 10
@@ -328,16 +295,19 @@ echo
 if [ -n "$select" ]; then
     echo -e "${YELLOW}Select commit for a new tag on branch '$current_branch'${ENDCOLOR}"
     choose_commit 9
-    commit_message=$(git log -1 --pretty=%B $commit_hash | cat)
+
+    echo 
+    echo -e "${YELLOW}Selected commit${ENDCOLOR}"
+
 
 ### Use current commit for new tag
 else
-    echo -e "${YELLOW}Current commit${ENDCOLOR}"
-
     commit_hash=$(git rev-parse HEAD)
-    commit_message=$(git log -1 --pretty=%B | cat)
-    echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR} ${commit_message}"
+    echo -e "${YELLOW}Current commit${ENDCOLOR}"
 fi
+
+commit_message=$(git log -1 --pretty=%B $commit_hash | cat)
+echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR} ${commit_message}"
 
 
 ### Enter name for a new tag

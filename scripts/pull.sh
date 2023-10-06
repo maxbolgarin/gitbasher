@@ -57,11 +57,12 @@ fi
 
 
 ### Merge mode - print header
+header="PULL MANAGER"
 if [ -n "${to_main}" ]; then
-    echo -e "${YELLOW}MERGE MANAGER${ENDCOLOR} TO MAIN"
-else
-    echo -e "${YELLOW}MERGE MANAGER${ENDCOLOR}"
+    header="$header TO MAIN"
 fi
+
+echo -e "${YELLOW}${header}${ENDCOLOR}"
 echo
 
 

@@ -92,7 +92,7 @@ tag-delete-all: ##@Tag Delete all local tags
 ################################################
 
 .PHONY: pull
-pull: ##@Remote Pull current branch from remote
+pull: ##@Remote Fetch current branch and then merge changes with conflicts fixing
 	@${GITBASHER_S} -r pull -a "-e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
 
 .PHONY: push
@@ -141,15 +141,15 @@ branch-prune: ##@Branch Remove all not merged branches and run 'git remote prune
 ################################################
 
 .PHONY: merge
-merge: ##@Merge Select branch to merge into current
+merge: ##@Merge Select branch to merge info current one and fix conflicts
 	@${GITBASHER_S} -r pull -a "-m -e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
 
 .PHONY: merge-main
-merge-main: ##@Merge Merge main branch into current
+merge-main: ##@Merge Merge `main` to current branch and fix conflicts
 	@${GITBASHER_S} -r pull -a "-m -a -e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
 
 .PHONY: merge-to-main
-merge-to-main: ##@Merge Merge current branch into main
+merge-to-main: ##@Merge Switch to `main` and merge current branch into `main`
 	@${GITBASHER_S} -r pull -a "-m -t -e ${GITBASHER_TEXTEDITOR} -b ${GITBASHER_MAIN_BRANCH} -o ${GITBASHER_ORIGIN_NAME}"
 
 ################################################

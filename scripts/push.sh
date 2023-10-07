@@ -114,6 +114,7 @@ if [ -n "$list" ]; then
     exit
 fi
 
+echo
 
 ### If not in fast mode - ask if user wants to push
 if [ -z "${fast}" ]; then

@@ -26,8 +26,21 @@ current_branch=$(git branch --show-current)
 
 ### Function for evaluating path with '~' symbol
 # $1: path
+# Returns: evaluated path
 function prepare_path {
     eval echo "$1"
+}
+
+
+### Function to escape substring in string
+# $1: string
+# $2: substring to escape
+# Returns: provided string with escaped substring
+function escape {
+    string="$1"
+    sub="$2"
+    escaped="\\$sub"
+    echo "${string//${sub}/${escaped}}"
 }
 
 
@@ -144,18 +157,20 @@ function choose {
     done
 }
 
-
-### Function prints the list of commits and user should choose one
+### Function prints the list of commits
 # $1: number of last commits to show
+# $2: what to add before commit line
+#     * <empty> - nothing
+#     * tab
+#     * number
+# $3: from which place (commit, branch) show commits (empty for default)
 # Returns: 
-#     commit_hash - hash of selected commit
-# Using of global:
-#     * git_add
-function choose_commit {
-    commits_info_str=$(git log --pretty="%h | %s | %an | %cr" -n $1 | column -ts'|')
-    commits_hash_str=$(git log --pretty="%h" -n $1)
-    commits_author_str=$(git log --pretty="%an" -n $1)
-    commits_date_str=$(git log --pretty="%cr" -n $1)
+#     number_of_commits
+function commit_list {
+    commits_info_str=$(git --no-pager log --pretty="%h | %s | %an | %cr" -n $1 $3 | column -ts'|')
+    commits_hash_str=$(git --no-pager log --pretty="%h" -n $1 $3)
+    commits_author_str=$(git --no-pager log --pretty="%an" -n $1 $3)
+    commits_date_str=$(git --no-pager log --pretty="%cr" -n $1 $3)
     IFS=$'\n' read -rd '' -a commits_info <<<"$commits_info_str"
     IFS=$'\n' read -rd '' -a commits_hash <<<"$commits_hash_str"
     IFS=$'\n' read -rd '' -a commits_author <<<"$commits_author_str"
@@ -168,8 +183,26 @@ function choose_commit {
         commit_line=$(sed "1,/${commits_hash[index]}/ s/${commits_hash[index]}/${YELLOW_ES}${commits_hash[index]}${ENDCOLOR_ES}/" <<< ${commits_info[index]})
         commit_line=$(sed "s/\(.*\)${commits_author[index]}/\1${BLUE_ES}${commits_author[index]}${ENDCOLOR_ES}/" <<< "${commit_line}")
         commit_line=$(sed "s/\(.*\)${commits_date[index]}/\1${GREEN_ES}${commits_date[index]}${ENDCOLOR_ES}/" <<< "${commit_line}")
-        echo -e "$(($index+1)). ${commit_line}"
+
+        if [ $2 == "number" ]; then
+            commit_line="$(($index+1)). ${commit_line}"
+        elif [ $2 == "tab" ]; then
+            commit_line="\t${commit_line}"
+        fi
+
+        echo -e "$commit_line"
     done
+}
+
+
+### Function prints the list of commits and user should choose one
+# $1: number of last commits to show
+# Returns: 
+#     commit_hash - hash of selected commit
+# Using of global:
+#     * git_add
+function choose_commit {
+    commit_list $1 "number"
     echo "0. Exit..."
     # TODO: add navigation
 
@@ -208,35 +241,28 @@ function print_changes_stat {
 }
 
 
-### Function echoes git log diff between provided argument and HEAD
-# $1: branch or commit from which to calc diff
-function gitlog_diff {
-    git --no-pager log --pretty=format:"\t%h - %an, %ar:\t%s\n" $1..HEAD 2>&1
-}
-
-
-### Function sets to variables push_log and history_from actual push log information
+### Function sets to variables push_list and history_from actual push log information
 # $1: current branch
 # $2: main branch
 # $3: origin name
 # Returns: 
-#     push_log - unpushed commits
+#     push_list - unpushed commits
 #     history_from - branch or commit from which history was calculated
-function get_push_log {
+function get_push_list {
     origin_name="origin"
     if [ -n "$3" ]; then
         origin_name="$3"
     fi 
-    push_log=$(gitlog_diff ${origin_name}/$1)
+    push_list=$(commit_list 999 "tab" ${origin_name}/$1..HEAD)
     history_from="${origin_name}/$1"
 
-    if [[ $push_log == *"unknown revision or path not in the working tree"* ]]; then
+    if [[ $push_list == *"unknown revision or path not in the working tree"* ]]; then
         base_commit=$(diff -u <(git rev-list --first-parent $1) <(git rev-list --first-parent $2) | sed -ne 's/^ //p' | head -1)
         if [ -n "$base_commit" ]; then
-            push_log=$(gitlog_diff ${base_commit})
+            push_list=$(commit_list 999 "tab" ${base_commit}..HEAD)
             history_from="${base_commit::7}"
         else
-            push_log=$(gitlog_diff "${origin_name}/$2")
+            push_list=$(commit_list 999 "tab" ${origin_name}/$2..HEAD)
             history_from="${origin_name}/$2"
         fi
     fi
@@ -256,19 +282,17 @@ function get_push_log {
 #     * number_of_branches
 #     * branches_first_main
 function list_branches {
-    args="--list --sort=-committerdate"
+    args="--sort=-committerdate"
     if [[ "$1" == "remote" ]]; then
-        args="--list --sort=-committerdate -r"
+        args="--sort=-committerdate -r"
     fi
-    branches_str=$(git branch $args | cat 2>&1)
-    branches_wih_commits_str=$(git branch -v $args  | cat 2>&1)
-
-    # Remove '*' and spaces to get plain branches
-    branches_str="${branches_str//\*}"
-    branches_str=${branches_str//[[:blank:]]/}
+    branches_str=$(git --no-pager branch $args --format="%(refname:short)")
+    branches_with_info_str=$(git --no-pager branch $args --format="%(refname:short) | %(committerdate:relative) | %(objectname:short) - %(contents:subject)" | column -ts'|' )
+    commits_hash_str=$(git --no-pager branch $args --format="%(objectname:short)")
 
     IFS=$'\n' read -rd '' -a branches <<< "$branches_str"
-    IFS=$'\n' read -rd '' -a branches_with_commits <<<"$branches_wih_commits_str"
+    IFS=$'\n' read -rd '' -a branches_with_info <<< "$branches_with_info_str"
+    IFS=$'\n' read -rd '' -a commits_hash <<< "$commits_hash_str"
 
     number_of_branches=${#branches[@]}
     if [[ "$1" == "remote" ]]; then
@@ -302,14 +326,17 @@ function list_branches {
 
     ### Main should be the first
     branches_first_main=(${main_branch})
-    branches_with_commits_first_main=("dummy")
+    branches_with_info_first_main=("dummy")
+    commits_hash_first_main=("dummy")
     if [[ "$1" == "delete" ]]; then
         branches_first_main=()
-        branches_with_commits_first_main=()
+        branches_with_info_first_main=()
+        commits_hash_first_main=()
     fi
     if [[ "$1" == "merge" ]] && [[ "$current_branch" == "$main_branch" ]]; then
         branches_first_main=()
-        branches_with_commits_first_main=()
+        branches_with_info_first_main=()
+        commits_hash_first_main=()
     fi
     for index in "${!branches[@]}"
     do
@@ -329,16 +356,25 @@ function list_branches {
         fi
 
         if [[ "$branch_to_check" == "${main_branch}"* ]]; then
-            branches_with_commits_first_main[0]="${branches_with_commits[index]}"
-        elif [[ "$branch_to_check" != "HEAD->"* ]]; then 
+            branches_with_info_first_main[0]="${branches_with_info[index]}"
+            commits_hash_first_main[0]="${commits_hash[index]}"
+        elif [[ "$branch_to_check" != "HEAD->"* ]] || [[ "$branch_to_check" != "$origin_name" ]]; then 
             branches_first_main+=(${branches[index]})
-            branches_with_commits_first_main+=("${branches_with_commits[index]}")
+            branches_with_info_first_main+=("${branches_with_info[index]}")
+            commits_hash_first_main+=("${commits_hash[index]}")
         fi
     done
 
-    for index in "${!branches_with_commits_first_main[@]}"
+    for index in "${!branches_with_info_first_main[@]}"
     do
-        echo "$(($index+1)). ${branches_with_commits_first_main[index]}"
+        branch=$(escape "${branches[index]}" "/")
+        branch_line=$(sed "1,/${branch}/ s/${branch}/${GREEN_ES}${branch}${ENDCOLOR_ES}/" <<< ${branches_with_info_first_main[index]})
+        branch_line=$(sed "1,/${commits_hash_first_main[index]}/ s/${commits_hash_first_main[index]}/${YELLOW_ES}${commits_hash_first_main[index]}${ENDCOLOR_ES}/" <<< ${branch_line})
+        if [ "${branches[index]}" == "$current_branch" ]; then
+            echo "$(($index+1)). * $branch_line"
+        else
+            echo "$(($index+1)).   $branch_line"
+        fi
     done
 }
 
@@ -395,11 +431,11 @@ function switch {
         fi
 
         if [ -z $2 ]; then
-            get_push_log $1 ${main_branch} ${origin_name}
-            if [ -n "$push_log" ]; then
+            get_push_list $1 ${main_branch} ${origin_name}
+            if [ -n "$push_list" ]; then
                 echo
                 echo -e "Your branch ${YELLOW}$1${ENDCOLOR} is ahead of ${YELLOW}${history_from}${ENDCOLOR} by this commits:"
-                echo -e $push_log
+                echo -e "$push_list"
             fi
         fi
         return

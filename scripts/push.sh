@@ -81,13 +81,13 @@ function push {
 ###
 
 ### Check if there are commits to push
-get_push_log ${current_branch} ${main_branch} ${origin_name}
+get_push_list ${current_branch} ${main_branch} ${origin_name}
 
 if [ "${history_from}" != "${origin_name}/${current_branch}" ]; then
     echo -e "Branch ${YELLOW}${current_branch}${ENDCOLOR} doesn't exist in ${origin_name}, so get commit diff from base commit"
 fi
 
-if [ -z "$push_log" ]; then
+if [ -z "$push_list" ]; then
     echo
     echo -e "${GREEN}Nothing to push${ENDCOLOR}"
     exit
@@ -106,7 +106,7 @@ fi
 
 ### Print list of unpushed commits
 echo -e "${YELLOW}Commit history from ${history_from}:${ENDCOLOR}"
-echo -e $push_log
+echo -e "$push_list"
 
 
 ### List mode - print only unpushed commits

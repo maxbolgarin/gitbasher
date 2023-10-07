@@ -105,7 +105,7 @@ fi
 
 
 ### Print list of unpushed commits
-echo -e "${YELLOW}Commit history from ${history_from}:${ENDCOLOR}"
+echo -e "${YELLOW}Commit history from '${history_from}'${ENDCOLOR}"
 echo -e "$push_list"
 
 

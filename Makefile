@@ -133,11 +133,6 @@ branch-new-current: ##@Branch Build conventional name for a new branch and creat
 branch-delete: ##@Branch Select branch to delete
 	@${GITBASHER_S} -r branch -a "-d -b ${GITBASHER_MAIN_BRANCH} -s ${GITBASHER_BRANCH_SEPARATOR} -o ${GITBASHER_ORIGIN_NAME}"
 
-.PHONY: branch-prune
-branch-prune: ##@Branch Delete all merged branches except `master`, `main` and `develop` and prune remote branches
-	@git branch --merged | egrep -v "(^\*|master|main|develop|${GITBASHER_MAIN_BRANCH})" | xargs git branch -d
-	@git remote prune ${GITBASHER_ORIGIN_NAME}
-
 ################################################
 
 .PHONY: merge

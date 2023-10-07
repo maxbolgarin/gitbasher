@@ -99,6 +99,9 @@ elif [[ -z "$new" ]] && [[ -n "$remote" ]] && [[ -z "$delete" ]]; then
         exit $fetch_code
     fi
 
+    ## TODO: should I ask?
+    prune_output=$(git remote prune $origin_name 2>&1)
+
     echo -e "${YELLOW}Switch from '${current_branch}' to remote branch${ENDCOLOR}"
     
     choose_branch "remote"
@@ -127,7 +130,7 @@ elif [[ -z "$new" ]] && [[ -n "$delete" ]]; then
 
     if [ $number_of_branches != 0 ]; then
         echo -e "${YELLOW}Do you want to delete merged local branches?${ENDCOLOR}"
-        echo -e "These are branches without new changes regarding ${main_branch}"
+        echo -e "These are branches without new changes regarding ${YELLOW}${main_branch}${ENDCOLOR}"
         for index in "${!merged_branches_without_main[@]}"
         do
             printf "\t${merged_branches_without_main[index]}\n"
@@ -175,15 +178,13 @@ elif [[ -z "$new" ]] && [[ -n "$delete" ]]; then
     delete_code=$?
 
     if [ "$delete_code" == 0 ]; then
-        echo -e "${GREEN}Deleted branch '$branch_name'${ENDCOLOR}"
-        exit
-    fi
+        echo -e "${GREEN}Deleted branch '$branch_name'!${ENDCOLOR}"
 
-    if [[ ${delete_output} == *"is not fully merged"* ]]; then
+    elif [[ ${delete_output} == *"is not fully merged"* ]]; then
         echo -e "${RED}The branch '$branch_name' is not fully merged${ENDCOLOR}"
         echo "Do you want to force delete (-D flag) this branch?"
 
-        printf "\nAnswer (y/n): "
+        printf "Answer (y/n): "
         
         while [ true ]; do
             read -n 1 -s choice
@@ -191,13 +192,13 @@ elif [[ -z "$new" ]] && [[ -n "$delete" ]]; then
                 printf "y\n\n"
                 delete_output=$(git branch -D $branch_name 2>&1)
                 delete_code=$?
-                if [ "$delete_code" == 0 ]; then
-                    echo -e "${GREEN}Deleted branch '$branch_name'${ENDCOLOR}"
+                if [ "$delete_code" != 0 ]; then
+                    echo -e "${RED}Cannot delete branch '$branch_name'!${ENDCOLOR}"
+                    echo -e "${delete_output}"
                     exit
                 fi
-                echo -e "${RED}Cannot delete branch '$branch_to_delete'!${ENDCOLOR}"
-                echo -e "${delete_output}"
-                exit
+                echo -e "${GREEN}Deleted branch '$branch_name'!${ENDCOLOR}"
+                break
 
             elif [ "$choice" == "n" ]; then
                 printf "n\n"
@@ -205,11 +206,42 @@ elif [[ -z "$new" ]] && [[ -n "$delete" ]]; then
             fi
         done
 
+    else
+        echo -e "${RED}Cannot delete branch '$branch_name'!${ENDCOLOR}"
+        echo -e "${delete_output}"
         exit
     fi
 
-    echo -e "${RED}Cannot delete branch '$branch_to_delete'!${ENDCOLOR}"
-    echo -e "${delete_output}"
+    remote_check=$(git --no-pager log $origin_name/$branch_name..HEAD 2>&1)
+    if [[ $remote_check != *"unknown revision or path not in the working tree"* ]]; then
+        echo
+        echo -e "${YELLOW}Do you want to delete this branch in remote?${ENDCOLOR}"
+
+        printf "Answer (y/n): "
+        
+        while [ true ]; do
+            read -n 1 -s choice
+            if [ "$choice" == "y" ]; then
+                printf "y\n"
+                echo -e "${YELLOW}Deleting...${ENDCOLOR}"
+
+                push_output=$(git push $origin_name -d $branch_name 2>&1)
+                push_code=$?
+                if [ "$push_code" != 0 ]; then
+                    echo -e "${RED}Cannot delete branch '$branch_name'!${ENDCOLOR}"
+                    echo -e "${delete_output}"
+                    exit
+                fi
+                echo
+                echo -e "${GREEN}Deleted branch '$branch_name' in remote!${ENDCOLOR}"
+                break
+
+            elif [ "$choice" == "n" ]; then
+                printf "n\n"
+                exit
+            fi
+        done
+    fi
    
     exit
 fi
@@ -274,7 +306,7 @@ fi
 
 branch_name="${branch_type_and_sep}${branch_name##*( )}"
 
-if [[ "$branch_name" == "HEAD" ]]; then
+if [[ "$branch_name" == "HEAD" ]] || [[ "$branch_name" == "$origin_name" ]]; then
     echo
     echo -e "${RED}This name is forbidden${ENDCOLOR}"
     exit
@@ -316,5 +348,6 @@ if [[ $create_output == *"already exists"* ]]; then
     exit $create_code
 fi
 
-echo -e "${RED}Switch error: ${create_output}${ENDCOLOR}"
+echo -e "${RED}Cannot create! Here is the error${ENDCOLOR}"
+echo "${create_output}"
 exit $create_code

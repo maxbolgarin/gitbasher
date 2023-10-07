@@ -249,22 +249,20 @@ function print_changes_stat {
 #     push_list - unpushed commits
 #     history_from - branch or commit from which history was calculated
 function get_push_list {
-    origin_name="origin"
-    if [ -n "$3" ]; then
-        origin_name="$3"
-    fi 
-    push_list=$(commit_list 999 "tab" ${origin_name}/$1..HEAD)
-    history_from="${origin_name}/$1"
-
-    if [[ $push_list == *"unknown revision or path not in the working tree"* ]]; then
-        base_commit=$(diff -u <(git rev-list --first-parent $1) <(git rev-list --first-parent $2) | sed -ne 's/^ //p' | head -1)
-        if [ -n "$base_commit" ]; then
-            push_list=$(commit_list 999 "tab" ${base_commit}..HEAD)
-            history_from="${base_commit::7}"
-        else
-            push_list=$(commit_list 999 "tab" ${origin_name}/$2..HEAD)
-            history_from="${origin_name}/$2"
-        fi
+    push_list_check=$(git --no-pager log $3/$1..HEAD 2>&1)
+    if [[ $push_list_check != *"unknown revision or path not in the working tree"* ]]; then
+        push_list=$(commit_list 999 "tab" $3/$1..HEAD)
+        history_from="$3/$1"
+        return
+    fi
+    
+    base_commit=$(diff -u <(git rev-list --first-parent $1) <(git rev-list --first-parent $2) | sed -ne 's/^ //p' | head -1)
+    if [ -n "$base_commit" ]; then
+        push_list=$(commit_list 999 "tab" $base_commit..HEAD)
+        history_from="${base_commit::7}"
+    else
+        push_list=$(commit_list 999 "tab" $3/$2..HEAD)
+        history_from="$3/$2"
     fi
 }
 
@@ -309,6 +307,7 @@ function list_branches {
     branch_to_check="${branches[0]}"
     if [[ "$1" == "remote" ]]; then
         # Remove 'origin/'
+        branch_to_check="${branches[1]}"
         branch_to_check="$(sed "s/${origin_name}\///g" <<< ${branch_to_check})"
     fi
 
@@ -358,7 +357,7 @@ function list_branches {
         if [[ "$branch_to_check" == "${main_branch}"* ]]; then
             branches_with_info_first_main[0]="${branches_with_info[index]}"
             commits_hash_first_main[0]="${commits_hash[index]}"
-        elif [[ "$branch_to_check" != "HEAD->"* ]] || [[ "$branch_to_check" != "$origin_name" ]]; then 
+        elif [[ "$branch_to_check" != "HEAD->"* ]] && [[ "$branch_to_check" != "$origin_name" ]]; then 
             branches_first_main+=(${branches[index]})
             branches_with_info_first_main+=("${branches_with_info[index]}")
             commits_hash_first_main+=("${commits_hash[index]}")
@@ -367,10 +366,13 @@ function list_branches {
 
     for index in "${!branches_with_info_first_main[@]}"
     do
-        branch=$(escape "${branches[index]}" "/")
+        branch=$(escape "${branches_first_main[index]}" "/")
+        if [[ "$1" == "remote" ]]; then
+            branch="$origin_name\/$branch"
+        fi
         branch_line=$(sed "1,/${branch}/ s/${branch}/${GREEN_ES}${branch}${ENDCOLOR_ES}/" <<< ${branches_with_info_first_main[index]})
         branch_line=$(sed "1,/${commits_hash_first_main[index]}/ s/${commits_hash_first_main[index]}/${YELLOW_ES}${commits_hash_first_main[index]}${ENDCOLOR_ES}/" <<< ${branch_line})
-        if [ "${branches[index]}" == "$current_branch" ]; then
+        if [ "${branches_first_main[index]}" == "$current_branch" ]; then
             echo "$(($index+1)). * $branch_line"
         else
             echo "$(($index+1)).   $branch_line"

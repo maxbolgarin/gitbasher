@@ -210,7 +210,8 @@ else
 
     for index in "${!tags[@]}"
     do
-        tag_line=$(sed "1,/${tags[index]}/ s/${tags[index]}/${GREEN_ES}${tags[index]}${ENDCOLOR_ES}/" <<< ${tags_info[index]})
+        tag=$(escape "${tags[index]}" "/")
+        tag_line=$(sed "1,/${tag}/ s/${tag}/${GREEN_ES}${tag}${ENDCOLOR_ES}/" <<< ${tags_info[index]})
         tag_line=$(sed "1,/${commit_hashes[index]}/ s/${commit_hashes[index]}/${YELLOW_ES}${commit_hashes[index]}${ENDCOLOR_ES}/" <<< "$tag_line")
         if [ -n "${delete}" ] || [ -n "${push}" ]; then
             echo -e "$(($index+1)). ${tag_line}"

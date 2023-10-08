@@ -41,7 +41,7 @@ You should try **gitbasher** if you use Git from the command line. What benefits
     * calling `git push ... -> git pull ... -> git push ...` if there are unpulled changes in branch, `make push` handles such changes in a single call
     * misunderstanding of using `git reset` to undo a commit, there are `make undo-commit` and `make undo-action`
 * Following a one style of writing commits, making developnment process clearer and more consistent, facilitating the creation of releases and working of several developers on one project; **gitbasher** uses [Conventional style of commits](https://www.conventionalcommits.org/en) ([example](https://gist.github.com/brianclements/841ea7bffdb01346392c))
-* Easy following of the [GitHub flow](https://gitversion.net/docs/learn/branching-strategies/githubflow/) in development process by simplifying the work with branches
+* Easy following of the [GitHub flow](https://docs.github.com/en/get-started/quickstart/github-flow) in development process by simplifying the work with branches
 
 </br>
 

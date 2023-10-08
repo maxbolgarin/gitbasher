@@ -202,7 +202,7 @@ Here are the possible values for `scope` in a commit message header. Use only th
 | **make**     | Fixes and new features in `Makefile`                                            |
 | **misc**     | Changes in `README` and other informational files                               |
 | **global**   | Some common or many-files changes such as auto refactoring (don't abuse it)     |
-| **lang**     | Changes in `lang` directory                                                     |
+
 
 ### Maintainers
 

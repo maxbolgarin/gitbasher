@@ -43,7 +43,7 @@ gitbasher_directory=$( cat ${SETTINGS_FILE} 2> /dev/null )
 if ((BASH_VERSINFO[0] < 4)); then 
     printf "Sorry, you need at least ${YELLOW}bash-4.0${ENDCOLOR} to run this script.\n
 If your OS is debian-based, use:
-    ${GREEN}apt-get install --only-upgrade bash${ENDCOLOR}\n
+    ${GREEN}apt install --only-upgrade bash${ENDCOLOR}\n
 If your OS is mac, use:
     ${GREEN}brew install bash${ENDCOLOR}\n\n" 
     exit 1; 

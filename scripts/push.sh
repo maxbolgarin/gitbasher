@@ -21,7 +21,6 @@ while getopts yle:b:o:u: flag; do
 
         e) editor=${OPTARG};;
         b) main_branch=${OPTARG};;
-        o) origin_name=${OPTARG};;
         u) utils=${OPTARG};;
     esac
 done
@@ -32,10 +31,6 @@ fi
 
 if [ -z "$main_branch" ]; then
     main_branch="main"
-fi
-
-if [ -z "$origin_name" ]; then
-    origin_name="origin"
 fi
 
 source $utils

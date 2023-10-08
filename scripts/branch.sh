@@ -28,17 +28,12 @@ while getopts rmncds:b:o:u: flag; do
         s) sep=${OPTARG};;
 
         b) main_branch=${OPTARG};;
-        o) origin_name=${OPTARG};;
         u) utils=${OPTARG};;
     esac
 done
 
 if [ -z "$main_branch" ]; then
     main_branch="main"
-fi
-
-if [ -z "$origin_name" ]; then
-    origin_name="origin"
 fi
 
 if [ -z "$sep" ]; then

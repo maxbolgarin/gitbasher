@@ -22,7 +22,7 @@ ENDCOLOR_ES="\x1b[0m"
 
 ### Useful consts
 current_branch=$(git branch --show-current)
-
+origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')
 
 ### Function for evaluating path with '~' symbol
 # $1: path

@@ -20,6 +20,17 @@ CYAN_ES="\x1b[36m"
 ENDCOLOR_ES="\x1b[0m"
 
 
+### Cannot use bash version less than 4 because of many features that was added to language in that version
+if ((BASH_VERSINFO[0] < 4)); then 
+    printf "Sorry, you need at least ${YELLOW}bash-4.0${ENDCOLOR} to run this script.\n
+If your OS is debian-based, use:
+    ${GREEN}apt install --only-upgrade bash${ENDCOLOR}\n
+If your OS is mac, use:
+    ${GREEN}brew install bash${ENDCOLOR}\n\n" 
+    exit 1; 
+fi
+
+
 ### Useful consts
 current_branch=$(git branch --show-current)
 origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')
@@ -57,11 +68,21 @@ function set_config_value {
 }
 
 
-### Function for evaluating path with '~' symbol
-# $1: path
-# Returns: evaluated path
-function prepare_path {
-    eval echo "$1"
+### Function echoes (true return) url to current user's repo (remote)
+# Return: url to repo
+function get_repo {
+    repo=$(git config --get remote.${origin_name}.url)
+    repo="${repo/":"/"/"}" 
+    repo="${repo/"git@"/"https://"}"
+    repo="${repo/".git"/""}" 
+    echo "$repo"
+}
+
+
+### Function echoes (true return) name of current repo
+function get_repo_name {
+    repo=$(get_repo)
+    echo "${repo##*/}"
 }
 
 
@@ -74,18 +95,6 @@ function escape {
     sub="$2"
     escaped="\\$sub"
     echo "${string//${sub}/${escaped}}"
-}
-
-
-### Function reverts array
-# $1: array to reverse
-# $2: output array
-function reverse {
-    declare -n arr="$1" rev="$2"
-    for i in "${arr[@]}"
-    do
-        rev=("$i" "${rev[@]}")
-    done
 }
 
 
@@ -128,24 +137,6 @@ function yes_no_choice {
             exit
         fi
     done
-}
-
-
-### Function echoes (true return) url to current user's repo (remote)
-# Return: url to repo
-function get_repo {
-    repo=$(git config --get remote.${origin_name}.url)
-    repo="${repo/":"/"/"}" 
-    repo="${repo/"git@"/"https://"}"
-    repo="${repo/".git"/""}" 
-    echo "$repo"
-}
-
-
-### Function echoes (true return) name of current repo
-function get_repo_name {
-    repo=$(get_repo)
-    echo "${repo##*/}"
 }
 
 
@@ -198,6 +189,7 @@ function choose {
         fi
     done
 }
+
 
 ### Function prints the list of commits
 # $1: number of last commits to show

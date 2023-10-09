@@ -15,6 +15,8 @@ function merge_script {
         main|master|m)          main="true";;
         to-main|to-master|tm)   to_main="true";;
         help|h)                 help="true";;
+        *)
+            wrong_mode "merge" $1
     esac
 
     if [ -n "$help" ]; then

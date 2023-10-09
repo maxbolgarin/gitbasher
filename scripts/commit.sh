@@ -63,6 +63,8 @@ function commit_script {
         autosquash|s)   autosquash="true";;
         revert|r)       revert="true";;
         help|h)         help="true";;
+        *)
+            wrong_mode "commit" $1
     esac
 
     if [ -n "$help" ]; then
@@ -74,7 +76,7 @@ function commit_script {
         echo -e "msg|m\t\tSame as in <empty>, but create multiline commit message using text editor"
         echo -e "ticket|t\tSame as previous, but add tracker's ticket info to the end of commit header"
         echo -e "amend|a\t\tChoose files and make --amend commit to the last one (git commit --amend --no-edit)"
-        echo -e "fixup|x\t\tChoose files and select commit to --fixup (git commit --fixup <commit>) "
+        echo -e "fixup|x\t\tChoose files and select commit to --fixup (git commit --fixup <commit>)"
         echo -e "autosquash|s\tChoose commit from which to squash fixup commits and run git rebase -i --autosquash <commit>"
         echo -e "revert|r\tChoose commit to revert (git revert -no-edit <commit>)"
         echo -e "help|h\t\tShow this help"

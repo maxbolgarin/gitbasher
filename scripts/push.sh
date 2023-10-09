@@ -52,6 +52,8 @@ function push_script {
         fast|f|y)   fast="true";;
         list|log|l) list="true";;
         help|h)     help="true";;
+        *)
+            wrong_mode "push" $1
     esac
 
     if [ -n "$help" ]; then

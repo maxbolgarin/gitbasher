@@ -9,6 +9,8 @@
 function pull_script {
     case "$1" in
         help|h) help="true";;
+        *)
+            wrong_mode "pull" $1
     esac
 
     if [ -n "$help" ]; then

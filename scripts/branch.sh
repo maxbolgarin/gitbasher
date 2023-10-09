@@ -25,6 +25,8 @@ function branch_script {
         ;;
         delete|del|d)   delete="true";;
         help|h)         help="true";;
+        *)
+            wrong_mode "branch" $1
     esac
     
 

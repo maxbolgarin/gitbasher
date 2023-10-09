@@ -139,7 +139,7 @@ Usage `make *command*`
 | **tag-list**       | Print a list of local tags                                                |
 | **tag-fetch**      | Fetch tags from a remote and print it                                     |
 | **tag-push**       | Select a local tag for pushing to a remote                                |
-| **tag-push-all**   | Select a tag to delete                                                    |
+| **tag-push-all**   | Push all tags to a remote                                                 |
 | **tag-delete**     | Select a tag to delete in local and remote                                |
 | **tag-delete-all** | Delete all local tags                                                     |
 

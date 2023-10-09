@@ -103,6 +103,8 @@ Usage `gitb <command> <mode>`
 * use `gitb help` to get global help
 * use `gitb <command> help` to get info about `<command>` and it's modes
 
+</br>
+
 ### `gitb commit <mode>`
 
 | **Modes**     | **Short** | **Description**                                                                                 |

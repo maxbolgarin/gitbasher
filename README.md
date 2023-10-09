@@ -74,16 +74,16 @@ Usage `gitb <command> <mode>`
 
 ### `gitb commit <mode>`
 
-| **Modes**             | **Description**                                                                                 |
-|-----------------------|-------------------------------------------------------------------------------------------------|
-| `<empty>`             | Choose files to commit and create conventional message in format: 'type(scope): message'        |
-| `fast` \| `f`         | Add all files (`git add .`) and create commit message as in `gitb commit`                       |
-| `msg` \| `m`          | Same as in `gitb commit`, but create multiline commit message using text editor                 |
-| `ticket` \| `t`       | Same as `git commit msg`, but add tracker's ticket info to the end of commit header             |
-| `amend` \| `a`        | Choose files and make `--amend` commit to the last one `git commit --amend --no-edit`           |
-| `fixup` \| `x`        | Choose files and select commit for `--fixup` `git commit --fixup <commit>`                      |
-| `autosquash` \| `s`   | Choose commit from which to squash fixup commits and run `git rebase -i --autosquash <commit>`  |
-| `revert` \| `r`       | Choose commit to revert `git revert -no-edit <commit>`                                          |
+| **Modes**   | **Short**    | **Description**                                                                                 |
+|------------- | ----------|-------------------------------------------------------------------------------------------------|
+| `<empty>`  |           | Choose files to commit and create conventional message in format: 'type(scope): message'        |
+| `fast` | `f`         | Add all files (`git add .`) and create commit message as in `gitb commit`                       |
+| `msg` | `m`          | Same as in `gitb commit`, but create multiline commit message using text editor                 |
+| `ticket` | `t`       | Same as `git commit msg`, but add tracker's ticket info to the end of commit header             |
+| `amend` | `a`        | Choose files and make `--amend` commit to the last one `git commit --amend --no-edit`           |
+| `fixup` | `x`        | Choose files and select commit for `--fixup` `git commit --fixup <commit>`                      |
+| `autosquash` | `s`   | Choose commit from which to squash fixup commits and run `git rebase -i --autosquash <commit>`  |
+| `revert` | `r`       | Choose commit to revert `git revert -no-edit <commit>`                                          |
 
 <br/>
 

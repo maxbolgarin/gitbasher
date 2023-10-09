@@ -3,6 +3,7 @@
 ### Function returns contents of the final gitb script
 # $1: original gitb script
 function build {
+    IFS=''
     while read line; do
     if [[ "$line" =~ (\.|source)\s+.+ ]]; then
         file="$(echo $line | cut -d' ' -f2)"
@@ -14,4 +15,4 @@ function build {
 }
 
 contents=$(build $1)
-echo "$contents" > "./dist/gitb"
+echo "$contents" > $2

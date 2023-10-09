@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
+### Here is main script for running gitbasher
+# https://github.com/maxbolgarin/gitbasher
 
-### Main script for running gitbasher
 
 git_check=$(git branch --show-current 2>&1)
 if [[ "$git_check" == *"fatal: not a git repository"* ]]; then

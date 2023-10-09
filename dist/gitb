@@ -1,7 +1,15 @@
 #!/usr/bin/env bash
+### Here is main script for running gitbasher
+# https://github.com/maxbolgarin/gitbasher
 
-### Main script for running gitbasher
 
+git_check=$(git branch --show-current 2>&1)
+if [[ "$git_check" == *"fatal: not a git repository"* ]]; then
+    echo "You can use gitb only from directory with inited git repository"
+    exit
+fi
+
+### Get common and config first
 #!/usr/bin/env bash
 
 ### Consts for colors
@@ -22,6 +30,17 @@ BLUE_ES="\x1b[34m"
 PURPLE_ES="\x1b[35m"
 CYAN_ES="\x1b[36m"
 ENDCOLOR_ES="\x1b[0m"
+
+
+### Cannot use bash version less than 4 because of many features that was added to language in that version
+if ((BASH_VERSINFO[0] < 4)); then 
+    printf "Sorry, you need at least ${YELLOW}bash-4.0${ENDCOLOR} to run this script.\n
+If your OS is debian-based, use:
+    ${GREEN}apt install --only-upgrade bash${ENDCOLOR}\n
+If your OS is mac, use:
+    ${GREEN}brew install bash${ENDCOLOR}\n\n" 
+    exit 1; 
+fi
 
 
 ### Useful consts
@@ -61,11 +80,33 @@ function set_config_value {
 }
 
 
-### Function for evaluating path with '~' symbol
-# $1: path
-# Returns: evaluated path
-function prepare_path {
-    eval echo "$1"
+### Function should be used in default case in script mode selection
+# $1: script name
+# $2: entered mode
+function wrong_mode {
+    if [ -n "$2" ]; then
+        echo -e "Unknown mode ${YELLOW}$2${ENDCOLOR} for ${YELLOW}gitb $1${ENDCOLOR}"
+        echo -e "Use ${GREEN}gitb $1 help${ENDCOLOR} to get usage info"
+        exit
+    fi
+}
+
+
+### Function echoes (true return) url to current user's repo (remote)
+# Return: url to repo
+function get_repo {
+    repo=$(git config --get remote.${origin_name}.url)
+    repo="${repo/":"/"/"}" 
+    repo="${repo/"git@"/"https://"}"
+    repo="${repo/".git"/""}" 
+    echo "$repo"
+}
+
+
+### Function echoes (true return) name of current repo
+function get_repo_name {
+    repo=$(get_repo)
+    echo "${repo##*/}"
 }
 
 
@@ -78,18 +119,6 @@ function escape {
     sub="$2"
     escaped="\\$sub"
     echo "${string//${sub}/${escaped}}"
-}
-
-
-### Function reverts array
-# $1: array to reverse
-# $2: output array
-function reverse {
-    declare -n arr="$1" rev="$2"
-    for i in "${arr[@]}"
-    do
-        rev=("$i" "${rev[@]}")
-    done
 }
 
 
@@ -132,24 +161,6 @@ function yes_no_choice {
             exit
         fi
     done
-}
-
-
-### Function echoes (true return) url to current user's repo (remote)
-# Return: url to repo
-function get_repo {
-    repo=$(git config --get remote.${origin_name}.url)
-    repo="${repo/":"/"/"}" 
-    repo="${repo/"git@"/"https://"}"
-    repo="${repo/".git"/""}" 
-    echo "$repo"
-}
-
-
-### Function echoes (true return) name of current repo
-function get_repo_name {
-    repo=$(get_repo)
-    echo "${repo##*/}"
 }
 
 
@@ -202,6 +213,7 @@ function choose {
         fi
     done
 }
+
 
 ### Function prints the list of commits
 # $1: number of last commits to show
@@ -539,7 +551,7 @@ function fetch {
 #      * merge_output
 #      * merge_code - 0 if everything is ok, not zero if there are conflicts
 function merge {
-    merge_output=$(git merge ${merge_branch} 2>&1)
+    merge_output=$(git merge $1 2>&1)
     merge_code=$?
 
     if [ $merge_code == 0 ] ; then
@@ -908,12 +920,13 @@ function config_script {
 
     echo -e "usage: ${YELLOW}gitb config <name>${ENDCOLOR}"
     echo
-    echo "Available names for configuration:"
-    echo -e "${YELLOW}main:${ENDCOLOR}\tupdate gitbasher's default branch (not remote git repo!)"
-    echo -e "${YELLOW}sep:${ENDCOLOR}\tupdate separator between type and name in branch"
-    echo -e "${YELLOW}editor:${ENDCOLOR}\tupdate text editor for commit messages"
+    echo -e "${YELLOW}Available names for configuration${ENDCOLOR}"
+    echo -e "main\t\tUpdate gitbasher's default branch (not remote git repo!)"
+    echo -e "sep\t\tUpdate separator between type and name in branch"
+    echo -e "editor\t\tUpdate text editor for commit messages"
 }
 
+### Include all scripts
 #!/usr/bin/env bash
 
 ### Script for creating commits in angular style (conventional commits)
@@ -953,8 +966,8 @@ function after_commit {
     # Some info to help users
     if [ -z "${fast}" ]; then
         echo
-        echo -e "Push your changes: ${YELLOW}make push${ENDCOLOR}"
-        echo -e "Undo commit: ${YELLOW}make undo-commit${ENDCOLOR}"
+        echo -e "Push your changes: ${YELLOW}gitb push${ENDCOLOR}"
+        echo -e "Undo commit: ${YELLOW}gitb undo-commit${ENDCOLOR}"
     fi
 }
 
@@ -978,7 +991,27 @@ function commit_script {
         fixup|x)        fixup="true";;
         autosquash|s)   autosquash="true";;
         revert|r)       revert="true";;
+        help|h)         help="true";;
+        *)
+            wrong_mode "commit" $1
     esac
+
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb commit <mode>${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\tChoose files to commit and create conventional message in format: 'type(scope): message'"
+        echo -e "fast|f\t\tAdd all files (git add .) and create commit message as in <empty>"
+        echo -e "msg|m\t\tSame as in <empty>, but create multiline commit message using text editor"
+        echo -e "ticket|t\tSame as previous, but add tracker's ticket info to the end of commit header"
+        echo -e "amend|a\t\tChoose files and make --amend commit to the last one (git commit --amend --no-edit)"
+        echo -e "fixup|x\t\tChoose files and select commit to --fixup (git commit --fixup <commit>)"
+        echo -e "autosquash|s\tChoose commit from which to squash fixup commits and run git rebase -i --autosquash <commit>"
+        echo -e "revert|r\tChoose commit to revert (git revert -no-edit <commit>)"
+        echo -e "help|h\t\tShow this help"
+        exit
+    fi
+
 
     ### Print header
     header_msg="GIT COMMIT"
@@ -1305,13 +1338,11 @@ ${staged_with_tab}
     ### Finally
     result=$(git commit -m """$commit""" 2>&1)
     check_code $? "$result" "commit"
-
     after_commit
-
 }
 #!/usr/bin/env bash
 
-### Script for pushing commits to remote git repository
+### Script for pushing commits to a remote git repository
 # It will pull current branch if there are unpulled changes
 # Read README.md to get more information how to use it
 # Use this script only with gitbasher
@@ -1360,14 +1391,36 @@ function push {
     # list: print list of commits to push and exit
 function push_script {
     case "$1" in
-        fast|yes|y) fast="true";;
+        fast|f|y)   fast="true";;
         list|log|l) list="true";;
+        help|h)     help="true";;
+        *)
+            wrong_mode "push" $1
     esac
 
-    ### Print header only in normal mode `make push`
-    if [ -z "$list" ] && [ -z "$fast" ]; then
-        echo -e "${YELLOW}PUSH MANAGER${ENDCOLOR}"
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb push <mode>${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\tPrint list of commits, push them to current branch or pull changes first"
+        echo -e "fast|f|y\tSame as previous but without pressing 'y'"
+        echo -e "list|log|l\tPrint a list of unpushed local commits without actual pushing it"
+        echo -e "help|h\t\tShow this help"
+        exit
     fi
+
+
+    ### Print header
+    header_msg="GIT PUSH"
+    if [ -n "${fast}" ]; then
+        header_msg="$header_msg FAST"
+    elif [ -n "${list}" ]; then
+        header_msg="$header_msg LIST"
+    fi
+
+    echo -e "${YELLOW}${header_msg}${ENDCOLOR}"
+    echo
+
 
     ### Check if there are commits to push
     get_push_list ${current_branch} ${main_branch} ${origin_name}
@@ -1377,14 +1430,8 @@ function push_script {
     fi
 
     if [ -z "$push_list" ]; then
-        echo
         echo -e "${GREEN}Nothing to push${ENDCOLOR}"
         exit
-    fi
-
-
-    if [ -z "$fast" ]; then
-        echo
     fi
 
 
@@ -1439,7 +1486,27 @@ function push_script {
 
 ### Main function - pull current branch and exit (empty flags mode)
 function pull_script {
+    case "$1" in
+        help|h) help="true";;
+        *)
+            wrong_mode "pull" $1
+    esac
+
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb pull${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\tFetch current branch and then merge changes with conflicts fixing"
+        echo -e "help|h\t\tShow this help"
+        exit
+    fi
+
+
+    ### Print header
+    header_msg="GIT PULL"
+    echo -e "${YELLOW}${header_msg}${ENDCOLOR}"
     echo
+    
     echo -e "${YELLOW}Pulling '$origin_name/$current_branch'...${ENDCOLOR}"
     echo
     pull $current_branch $origin_name $editor
@@ -1456,16 +1523,33 @@ function pull_script {
 # $1: mode
     # empty: merge selected branch to current one (ask to fetch before merge)
     # main: merge main to current one (ask to fetch before merge)
-    # tomain: merge current branch to main
+    # to-main: merge current branch to main
 function merge_script {
     case "$1" in
-        main|m) main="true";;
-        tomain|to-main|tm) to_main="true";;
+        main|master|m)          main="true";;
+        to-main|to-master|tm)   to_main="true";;
+        help|h)                 help="true";;
+        *)
+            wrong_mode "merge" $1
     esac
 
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb merge <mode>${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\t\tSelect branch to merge info current one and fix conflicts"
+        echo -e "main|master|m\t\tMerge $main_branch to current branch and fix conflicts"
+        echo -e "to-main|to-master|tm\tSwitch to $main_branch and merge current branch into $main_branch"
+        echo -e "help|h\t\t\tShow this help"
+        exit
+    fi
+
+
     ### Merge mode - print header
-    header="PULL MANAGER"
+    header="GIT MERGE"
     if [ -n "${to_main}" ]; then
+        header="$header MAIN"
+    elif [ -n "${to_main}" ]; then
         header="$header TO MAIN"
     fi
 
@@ -1562,26 +1646,49 @@ function merge_script {
     # delete: delete a local branch
 function branch_script {
     case "$1" in
-        remote|r|re) remote="true";;
-        main|master|m) main="true";;
-        new|n) new="true";;
-        newc|nc) current="true";;
-        delete|remove|d|del|rm) delete="true";;
+        remote|r|re)    remote="true";;
+        main|master|m)  main="true";;
+        new|n)          new="true";;
+        newc|nc)        
+            current="true"
+            new="true"
+        ;;
+        delete|del|d)   delete="true";;
+        help|h)         help="true";;
+        *)
+            wrong_mode "branch" $1
     esac
+    
+
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb commit <mode>${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\tSelect a local branch to switch"
+        echo -e "remote|re|r\tFetch $origin_name and select a remote branch to switch"
+        echo -e "main|master|m\tSwitch to $main_branch without additional confirmations"
+        echo -e "new|n\t\tBuild conventional name for a new branch, switch to $main_branch, pull it and create new branch from $main_branch"
+        echo -e "newc|nc\t\tBuild conventional name for a new branch and create it from a current branch"
+        echo -e "delete|del|d\tSelect branch to delete"
+        echo -e "help|h\t\tShow this help"
+        exit
+    fi
         
     ### Print header
-    header="BRANCH MANAGER"
-    if [ -n "${new}" ]; then
-        header="$header NEW"
-    elif [ -n "${remote}" ]; then
+    header="GIT BRANCH"
+    if [ -n "${remote}" ]; then
         header="$header REMOTE"
+    elif [ -n "${main}" ]; then
+        header="$header MAIN"
+    elif [ -n "${new}" ]; then
+        header="$header NEW"
+    elif [ -n "${current}" ]; then
+        header="$header NEW FROM CURRENT"
     elif [ -n "${delete}" ]; then
         header="$header DELETE"
     fi
 
-    if [ -z "${main}" ]; then
-        echo -e "${YELLOW}${header}${ENDCOLOR}"
-    fi
+    echo -e "${YELLOW}${header}${ENDCOLOR}"
     echo
 
 
@@ -1974,29 +2081,87 @@ function push_tag {
     # annotated: create an annotated tag with message
     # full: create an annotated tag with message and select commit instead of using current one
     # list: print list of local tags and exit
-    # delete: delete tag (pass -s to select tag, or it will delete everything)
-    # remote: fetch tags from the remote
-    # push: push tags (pass -s to select what tag to push)
+    # remote: fetch tags from the remote and print the list
+    # push: select tag to push
+    # push-all: push all tags
+    # delete: select tag to delete
+    # delete: delete all tags
 function tag_script {
     case "$1" in
-        commit|c|co|cm|com) select="true";; # TODO: commit
-        annotated|a|an|ann) annotated="true";;
-        full|fu|fl) full="true";; # TODO
+        commit|c|co|cm) 
+            select="true"
+            commit="true"
+        ;;
+        annotated|a|an) annotated="true";;
+        full|f|fl) 
+            select="true"
+            annotated="true"
+            full="true"
+        ;;
         list|log|l) list="true";;
-        delete|remove|d|del|rm) delete="true";;
-        remote|r|re) remote="true";;
-        push|ps|ph|p) push="true";;
+        remote|r|re)
+            list="true"
+            remote="true"
+        ;;
+        push|ps|ph|p)
+            push="true"
+            select="true"
+            push_single="true"
+        ;;
+        push-all|pa) push="true";;
+        delete|del|d) 
+            delete="true"
+            select="true"
+            delete_single="true"
+        ;;
+        delete-all|da) delete="true";;
+        help|h) help="true";;
+
+        *)
+            wrong_mode "tag" $1
     esac
 
-    ### Print header
-    header="TAG MANAGER"
-    if [ -n "${annotated}" ]; then
-        header="$header ANNOTATED"
-    elif [ -n "${delete}" ]; then
-        header="$header DELETE"
-    elif [ -n "${push}" ]; then
-        header="$header PUSH"    
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb tag <mode>${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\tCreate a new tag from a current commit and push it to a remote"
+        echo -e "commit|c|co|cm\tCreate a new tag from a selected commit and push it to a remote"
+        echo -e "annotated|a|an\tCreate a new annotated tag from a selected commit and push it to a remote"
+        echo -e "full|fu|fl\tCreate a new annotated tag from a selected commit and push it to a remote"
+        echo -e "list|log|l\tPrint a list of local tags"
+        echo -e "remote|r|re\tFetch tags from a remote and print it"
+        echo -e "push|ps|ph|p\tSelect a local tag for pushing to a remote"
+        echo -e "push-all|pa\tPush all tags to a remote"
+        echo -e "delete|del|d\tSelect a tag to delete in local and remote"
+        echo -e "delete-all|da\tDelete all local tags"
+        echo -e "help|h\t\tShow this help"
+        exit
     fi
+
+
+    ### Print header
+    header="GIT TAG"
+    if [ -n "${commit}" ]; then
+        header="$header COMMIT"
+    elif [ -n "${full}" ]; then
+        header="$header FULL"
+    elif [ -n "${annotated}" ]; then
+        header="$header ANNOTATED"
+    elif [ -n "${list}" ]; then
+        header="$header LIST"
+    elif [ -n "${remote}" ]; then
+        header="$header REMOTE"
+    elif [ -n "${push_single}" ]; then
+        header="$header PUSH"
+    elif [ -n "${push}" ]; then
+        header="$header PUSH ALL"
+    elif [ -n "${delete_single}" ]; then
+        header="$header DELETE"
+    elif [ -n "${delete}" ]; then
+        header="$header DELETE ALL"    
+    fi
+
     echo -e "${YELLOW}${header}${ENDCOLOR}"
     echo
 
@@ -2172,11 +2337,11 @@ function tag_script {
 
     read -p "$prompt" -e tag_name
 
-    if [ -z $tag_name ]; then
+    if [ -z "$tag_name" ]; then
         exit
     fi
 
-    if [ "$tag_name" == "tag" ]; then
+    if [[ "$tag_name" == "tag" ]] || [[ "$tag_name" == *" "* ]]; then
         echo
         echo -e "${RED}This name is forbidden!${ENDCOLOR}"
         exit
@@ -2264,79 +2429,149 @@ function tag_script {
 
     push_tag $tag_name
 }
+#!/usr/bin/env bash
+
+### Script for providing some info from git log and movind HEAD
+# Read README.md to get more information how to use it
+# Use this script only with gitbasher
+
+
+### Function opens git log in pretty format
+function gitlog {
+    git log --pretty="%C(Yellow)%h  %C(reset)%ad (%C(Green)%cr%C(reset))%x09 %C(Cyan)%an: %C(reset)%s"
+}
+
+
+### Function opens git reflog in pretty format
+function reflog {
+    git reflog --pretty="%C(Yellow)%h  %C(reset)%ad (%C(Green)%cr%C(reset))%x09 %C(Cyan)%gd%C(reset) %gs"
+}
+
+
+### Function prints last commit info (from git log)
+function last_commit {
+    echo -e "$(git --no-pager log --pretty="${YELLOW}%h${ENDCOLOR} | %s | ${BLUE}%an${ENDCOLOR} | %cd" -1 | column -ts'|')"
+}
+
+
+### Function prints last action info (from git reflog)
+function last_action {
+    echo -e "$(git --no-pager reflog --pretty="${YELLOW}%gd${ENDCOLOR} | %gs | ${BLUE}%an${ENDCOLOR} | %cd" -1 | column -ts'|')"
+}
+
+
+### Function undoes previous commit (move HEAD pointer up for one record, HEAD^)
+function undo_commit {
+    cancelled_commit=$(git --no-pager log --pretty="${YELLOW}%h${ENDCOLOR} | %s | ${BLUE}%an${ENDCOLOR} | %cd" -1)
+    git reset HEAD^ > /dev/null
+    new_commit=$(git --no-pager log --pretty="${YELLOW}%h${ENDCOLOR} | %s | ${BLUE}%an${ENDCOLOR} | %cd" -1)
+
+    msg=$(echo -e "${GREEN}New last commit:${ENDCOLOR}|${new_commit}\n${GREEN}Cancelled commit:${ENDCOLOR}|${cancelled_commit}" | column -ts'|')
+    echo -e "$msg"
+}
+
+
+### Function undoes previous action (reset HEAD{1})
+function undo_action {
+    cancelled_commit=$(git --no-pager log --pretty="${YELLOW}%h${ENDCOLOR} | %s | ${BLUE}%an${ENDCOLOR} | %cd" -1)
+    cancelled_action=$(git --no-pager reflog --pretty="${YELLOW}%gd${ENDCOLOR} | %gs | ${BLUE}%an${ENDCOLOR} | %cd" -1)
+    git reset HEAD@{1} > /dev/null
+    new_commit=$(git --no-pager log --pretty="${YELLOW}%h${ENDCOLOR} | %s | ${BLUE}%an${ENDCOLOR} | %cd" -1)
+
+    msg=$(echo -e "${GREEN}New last commit:${ENDCOLOR}|${new_commit}\n${GREEN}Cancelled commit:${ENDCOLOR}|${cancelled_commit}\n${GREEN}Cancelled action:${ENDCOLOR}|${cancelled_action}" | column -ts'|')
+    echo -e "$msg"
+}
 
 project_name="$(get_repo_name)"
 
 
-### Cannot use bash version less than 4 because of many features that was added to language in that version
-if ((BASH_VERSINFO[0] < 4)); then
-printf "Sorry, you need at least ${YELLOW}bash-4.0${ENDCOLOR} to run this script.n
-If your OS is debian-based, use:
-${GREEN}apt install --only-upgrade bash${ENDCOLOR}n
-If your OS is mac, use:
-${GREEN}brew install bash${ENDCOLOR}nn"
-exit 1;
-fi
+### Print usage information
+function print_help {
+    echo -e "usage: ${YELLOW}gitb <command> <mode>${ENDCOLOR}"
+    echo
+    msg="${YELLOW}Command${ENDCOLOR}_t${YELLOW}Description${ENDCOLOR}"
+    msg="$msgncommit_Everything about commit creation_commit|c|co|cm|com"
+    msg="$msgnpush_Pushing changes to a remote repository_push|ps|ph"
+    msg="$msgnpull_Pulling changes from a remote repository_pull|pl|pll"
+    msg="$msgnmerge_Merge changes from different branches_merge"
+    msg="$msgnbranch_Managing branches_branch|b|br|bh|bra"
+    msg="$msgntag_Managing tags_tag|t|tg"
+    msg="$msgnconfig_Configurate gitbasher_config|cfg|conf"
+    echo -e "$(echo -e "$msg" | column -ts '_')"
 
-if [ $is_first == "true" ]; then
-echo -e "${GREEN}Thank for using gitbasher in project '$project_name'${ENDCOLOR}"
-echo -e "Current settings:"
-echo -e "tmain: '$main_branch'"
-echo -e "tsep: '$sep'"
-echo -e "teditor: '$editor'"
+    echo
+    echo -e "${YELLOW}Commands without modes${ENDCOLOR}"
+    echo -e "logttOpen git log in a pretty format"
+    echo -e "reflogttOpen git reflog in a pretty format"
+    echo -e "undo-committUndo last commit (record from git log)"
+    echo -e "undo-actiontUndo last action (record from git reflog)"
 
-echo -e "You can change these settings by using ${YELLOW}gitb config <name>${ENDCOLOR}"
-echo
-fi
-
-
-declare -a commit=("commit" "c" "co" "cm" "com")
-declare -a push=("push" "ps" "ph")
-declare -a pull=("pull" "pl" "pll")
-declare -a merge=("merge")
-declare -a branch=("branch" "b" "br" "bh" "bch" "bra")
-declare -a tag=("tag" "t" "tg" "release")
-declare -a config=("config" "cfg" "conf" "settings")
-
-declare -a scripts=("commit" "push" "pull" "merge" "branch" "tag" "config")
-
-function get_script_name {
-for script in "${scripts[@]}"; do
-commands="$script[@]"
-for name in "${!commands}"; do
-if [ $name == $1 ]; then
-echo ${script}
-return
-fi
-done
-done
+    exit
 }
 
-
-script_to_run=$(get_script_name $1)
-if [ "$script_to_run" == "commit" ]; then
-commit_script $2
-elif [ "$script_to_run" == "push" ]; then
-push_script $2
-elif [ "$script_to_run" == "pull" ]; then
-pull_script $2
-elif [ "$script_to_run" == "merge" ]; then
-merge_script $2
-elif [ "$script_to_run" == "branch" ]; then
-branch_script $2
-elif [ "$script_to_run" == "tag" ]; then
-tag_script $2
-elif [ "$script_to_run" == "config" ]; then
-config_script $2
+if [ -z $1 ] || [ "$1" == "--help" ] || [ "$1" == "help" ] || [ "$1" == "man" ]; then
+    print_help
 fi
 
-# TODO: gitlog?
-# log
-# reflog
-# last-commit
-# last-action
-# undo-commit
-# undo-action
 
+### Print settings if this is first run
+if [ $is_first == "true" ]; then 
+    echo -e "${GREEN}Thank for using gitbasher in project '$project_name'${ENDCOLOR}"
+    echo -e "Current settings:"
+    echo -e "tmain: '$main_branch'"
+    echo -e "tsep: '$sep'"
+    echo -e "teditor: '$editor'"
+
+    echo -e "You can change these settings by using ${YELLOW}gitb config <name>${ENDCOLOR}"
+    echo
+fi
+
+
+### Run script
+case "$1" in
+    commit|c|co|cm|com)         
+        commit_script $2
+    ;;
+    push|ps|ph)         
+        push_script $2
+    ;;
+    pull|pl|pll)         
+        pull_script $2
+    ;;
+    merge)         
+        merge_script $2
+    ;;
+    branch|b|br|bh|bra)         
+        branch_script $2
+    ;;
+    tag|t|tg)         
+        tag_script $2
+    ;;
+    config|cfg|conf)         
+        config_script $2
+    ;;
+    log|l)
+        gitlog
+    ;;
+    reflog|rl)
+        reflog
+    ;;
+    undo-commit)
+        undo_commit
+    ;;
+    undo-action)
+        undo_action
+    ;;
+    last-commit|lc)
+        last_commit
+    ;;
+    last-action|la)
+        last_action
+    ;;
+
+    *)
+        print_help
+    ;;
+esac
 
 exit $?

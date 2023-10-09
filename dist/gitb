@@ -716,7 +716,8 @@ ${staged_with_tab}
 
     commit_hash="$(git --no-pager log --pretty="%h" -1)"
     echo -e "${GREEN}Successful merge!${ENDCOLOR}"
-    echo -e "${BLUE}[$4 $commit_hash]${ENDCOLOR} $commit_message"
+    current_branch=$(git branch --show-current)
+    echo -e "${BLUE}[$4 $commit_hash${ENDCOLOR} -> ${BLUE}${current_branch}]${ENDCOLOR} $commit_message"
     echo
     merge_commit_code=0
 }
@@ -774,6 +775,7 @@ is_first=$(get_config_value gitbasher.isfirst "true")
 set_config_value gitbasher.isfirst false > /dev/null
 
 project_name="$(get_repo_name)"
+repo_url="$(get_repo)"
 
 
 ### Function asks user to select default gitbasher branch
@@ -1369,6 +1371,7 @@ function push {
         repo=$(get_repo)
         echo -e "${YELLOW}Repo:${ENDCOLOR}\t${repo}"
         if [[ ${current_branch} != ${main_branch} ]]; then
+            ### TODO: if PR have created?
             if [[ $repo == *"github"* ]]; then
                 echo -e "${YELLOW}PR:${ENDCOLOR}\t${repo}/pull/new/${current_branch}"
             elif [[ $repo == *"gitlab"* ]]; then
@@ -1614,9 +1617,9 @@ function merge_script {
 
 
     ### If we get here - it is success
-    echo -e "${GREEN}Successful merge!${ENDCOLOR}"
-    echo -e "${BLUE}[${merge_branch}${ENDCOLOR} -> ${BLUE}${current_branch}]${ENDCOLOR}"
-    echo
+    #echo -e "${GREEN}Successful merge!${ENDCOLOR}"
+    #echo -e "${BLUE}[${merge_branch}${ENDCOLOR} -> ${BLUE}${current_branch}]${ENDCOLOR}"
+    #echo
 
 
     ### Merged without conflicts
@@ -2095,7 +2098,7 @@ function tag_script {
             commit="true"
         ;;
         annotated|a|an) annotated="true";;
-        full|f|fl) 
+        full|f) 
             select="true"
             annotated="true"
             full="true"
@@ -2130,7 +2133,7 @@ function tag_script {
         echo -e "<empty>\t\tCreate a new tag from a current commit and push it to a remote"
         echo -e "commit|c|co|cm\tCreate a new tag from a selected commit and push it to a remote"
         echo -e "annotated|a|an\tCreate a new annotated tag from a current commit and push it to a remote"
-        echo -e "full|fu|fl\tCreate a new annotated tag from a selected commit and push it to a remote"
+        echo -e "full|f\tCreate a new annotated tag from a selected commit and push it to a remote"
         echo -e "list|log|l\tPrint a list of local tags"
         echo -e "remote|r|re\tFetch tags from a remote and print it"
         echo -e "push|ps|ph|p\tSelect a local tag for pushing to a remote"
@@ -2438,6 +2441,16 @@ function tag_script {
 # Use this script only with gitbasher
 
 
+function status {
+    echo -e "${YELLOW}Project:${ENDCOLOR}\t${GREEN}$project_name${ENDCOLOR}"
+    echo -e "${YELLOW}Repo URL:${ENDCOLOR}\t${GREEN}$repo_url${ENDCOLOR}"
+    echo -e "${YELLOW}Branch:${ENDCOLOR}\t\t${GREEN}$current_branch${ENDCOLOR}"
+    echo -e "${YELLOW}Last commit:${ENDCOLOR}\t$(git --no-pager log --pretty="%s | ${BLUE}%an${ENDCOLOR} | %cd" -1 | column -ts'|')"
+    echo -e "Git status"
+    git status -s
+}
+
+
 ### Function opens git log in pretty format
 function gitlog {
     git log --pretty="%C(Yellow)%h  %C(reset)%ad (%C(Green)%cr%C(reset))%x09 %C(Cyan)%an: %C(reset)%s"
@@ -2503,6 +2516,7 @@ function print_help {
 
     echo
     echo -e "${YELLOW}Commands without modes${ENDCOLOR}"
+    echo -e "status\t\tShow general info about repo and changed files"
     echo -e "log\t\tOpen git log in a pretty format"
     echo -e "reflog\t\tOpen git reflog in a pretty format"
     echo -e "last-commit\tShow info about last commit (last record from 'git log')"
@@ -2571,6 +2585,9 @@ case "$1" in
     ;;
     last-action|la)
         last_action
+    ;;
+    status|s)
+        status
     ;;
 
     *)

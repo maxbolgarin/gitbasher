@@ -1,0 +1,2581 @@
+#!/usr/bin/env bash
+### Here is main script for running gitbasher
+# https://github.com/maxbolgarin/gitbasher
+
+
+git_check=$(git branch --show-current 2>&1)
+if [[ "$git_check" == *"fatal: not a git repository"* ]]; then
+echo "You can use gitb only from directory with inited git repository"
+exit
+fi
+
+### Get common and config first
+#!/usr/bin/env bash
+
+### Consts for colors
+RED="\e[31m"
+GREEN="\e[32m"
+YELLOW="\e[33m"
+BLUE="\e[34m"
+PURPLE="\e[35m"
+CYAN="\e[36m"
+ENDCOLOR="\e[0m"
+
+
+### Consts for colors to use inside 'sed'
+RED_ES="\x1b[31m"
+GREEN_ES="\x1b[32m"
+YELLOW_ES="\x1b[33m"
+BLUE_ES="\x1b[34m"
+PURPLE_ES="\x1b[35m"
+CYAN_ES="\x1b[36m"
+ENDCOLOR_ES="\x1b[0m"
+
+
+### Cannot use bash version less than 4 because of many features that was added to language in that version
+if ((BASH_VERSINFO[0] < 4)); then 
+    printf "Sorry, you need at least ${YELLOW}bash-4.0${ENDCOLOR} to run this script.\n
+If your OS is debian-based, use:
+    ${GREEN}apt install --only-upgrade bash${ENDCOLOR}\n
+If your OS is mac, use:
+    ${GREEN}brew install bash${ENDCOLOR}\n\n" 
+    exit 1; 
+fi
+
+
+### Useful consts
+current_branch=$(git branch --show-current)
+origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')
+main_branch=$(git symbolic-ref refs/remotes/$origin_name/HEAD | sed "s@^refs/remotes/$origin_name/@@")
+
+
+### Function tries to get config from local, then from global, then returns default
+# $1: config name
+# $2: default value
+# Returns: config value
+function get_config_value {
+    value=$(git config --local --get $1)
+    if [ -z $value ]; then
+        value=$(git config --global --get $1)
+        if [ -z $value ]; then
+            value=$2
+        fi
+    fi
+    echo -e "$value"
+}
+
+
+### Function sets git config value
+# $1: name
+# $2: value
+# $3: global flag
+# Returns: value
+function set_config_value {
+    if [ -z $3 ]; then
+        git config --local --add $1 "$2"
+    else
+        git config --global --add $1 "$2"
+    fi
+    echo "$2"
+}
+
+
+### Function should be used in default case in script mode selection
+# $1: script name
+# $2: entered mode
+function wrong_mode {
+    if [ -n "$2" ]; then
+        echo -e "Unknown mode ${YELLOW}$2${ENDCOLOR} for ${YELLOW}gitb $1${ENDCOLOR}"
+        echo -e "Use ${GREEN}gitb $1 help${ENDCOLOR} to get usage info"
+        exit
+    fi
+}
+
+
+### Function echoes (true return) url to current user's repo (remote)
+# Return: url to repo
+function get_repo {
+    repo=$(git config --get remote.${origin_name}.url)
+    repo="${repo/":"/"/"}" 
+    repo="${repo/"git@"/"https://"}"
+    repo="${repo/".git"/""}" 
+    echo "$repo"
+}
+
+
+### Function echoes (true return) name of current repo
+function get_repo_name {
+    repo=$(get_repo)
+    echo "${repo##*/}"
+}
+
+
+### Function to escape substring in string
+# $1: string
+# $2: substring to escape
+# Returns: provided string with escaped substring
+function escape {
+    string="$1"
+    sub="$2"
+    escaped="\\$sub"
+    echo "${string//${sub}/${escaped}}"
+}
+
+
+### Function checks code against 0 and show error
+# $1: return code
+# $2: command output (error message)
+# $3: command name
+# Using of global:
+#     * git_add
+function check_code {
+    if [ $1 != 0 ]; then
+        echo
+        echo
+        echo -e "${RED}Error during $3!${ENDCOLOR}"
+        echo -e "$2"
+        if [ -n "$git_add" ]; then
+            git restore --staged $git_add
+        fi
+        exit $1
+    fi
+}
+
+
+### Function asks user to enter yes or no, it will exit if user answers 'no'
+# $1: what to write in console on success
+# $2: flag no echo
+function yes_no_choice {
+    while [ true ]; do
+        read -n 1 -s choice
+        if [ "$choice" == "y" ]; then
+            if [ -n "$1" ]; then
+                echo -e "${YELLOW}$1${ENDCOLOR}"
+                if [ -z $2 ]; then
+                    echo
+                fi
+            fi
+            return
+        fi
+        if [ "$choice" == "n" ]; then
+            exit
+        fi
+    done
+}
+
+
+### Function waits a number from user and returns result of choice from a provided list
+# $1: list of values
+# Returns: 
+#     * choice_result
+# Using of global:
+#     * git_add
+function choose {
+    values=("$@")
+    number_of_values=${#values[@]}
+
+    while [ true ]; do
+        if [ $number_of_values -gt 9 ]; then
+            read -n 2 choice
+        else
+            read -n 1 -s choice
+        fi
+
+        if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
+            if [ -n "$git_add" ]; then
+                git restore --staged $git_add
+            fi
+            if [ $number_of_values -le 9 ]; then
+                printf $choice
+            fi
+            exit
+        fi
+
+        re='^[0-9]+$'
+        if ! [[ $choice =~ $re ]]; then
+            if [ $number_of_values -gt 9 ]; then
+                exit
+            fi
+            continue
+        fi
+
+        index=$(($choice-1))
+        choice_result=${values[index]}
+        if [ -n "$choice_result" ]; then
+            if [ $number_of_values -le 9 ]; then
+                printf $choice
+            fi
+            break
+        else
+            if [ $number_of_values -gt 9 ]; then
+                exit
+            fi
+        fi
+    done
+}
+
+
+### Function prints the list of commits
+# $1: number of last commits to show
+# $2: what to add before commit line
+#     * <empty> - nothing
+#     * tab
+#     * number
+# $3: from which place (commit, branch) show commits (empty for default)
+# Returns: 
+#     number_of_commits
+function commit_list {
+    commits_info_str=$(git --no-pager log --pretty="%h | %s | %an | %cr" -n $1 $3 | column -ts'|')
+    commits_hash_str=$(git --no-pager log --pretty="%h" -n $1 $3)
+    commits_author_str=$(git --no-pager log --pretty="%an" -n $1 $3)
+    commits_date_str=$(git --no-pager log --pretty="%cr" -n $1 $3)
+    IFS=$'\n' read -rd '' -a commits_info <<<"$commits_info_str"
+    IFS=$'\n' read -rd '' -a commits_hash <<<"$commits_hash_str"
+    IFS=$'\n' read -rd '' -a commits_author <<<"$commits_author_str"
+    IFS=$'\n' read -rd '' -a commits_date <<<"$commits_date_str"
+
+    number_of_commits=${#commits_info[@]}
+
+    for index in "${!commits_info[@]}"
+    do
+        commit_line=$(sed "1,/${commits_hash[index]}/ s/${commits_hash[index]}/${YELLOW_ES}${commits_hash[index]}${ENDCOLOR_ES}/" <<< ${commits_info[index]})
+        commit_line=$(sed "s/\(.*\)${commits_author[index]}/\1${BLUE_ES}${commits_author[index]}${ENDCOLOR_ES}/" <<< "${commit_line}")
+        commit_line=$(sed "s/\(.*\)${commits_date[index]}/\1${GREEN_ES}${commits_date[index]}${ENDCOLOR_ES}/" <<< "${commit_line}")
+
+        if [ $2 == "number" ]; then
+            commit_line="$(($index+1)). ${commit_line}"
+        elif [ $2 == "tab" ]; then
+            commit_line="\t${commit_line}"
+        fi
+
+        echo -e "$commit_line"
+    done
+}
+
+
+### Function prints the list of commits and user should choose one
+# $1: number of last commits to show
+# Returns: 
+#     commit_hash - hash of selected commit
+# Using of global:
+#     * git_add
+function choose_commit {
+    commit_list $1 "number"
+    echo "0. Exit..."
+    # TODO: add navigation
+
+    echo
+    printf "Enter commit number: "
+
+    choose "${commits_hash[@]}"
+    commit_hash=$choice_result
+
+    echo
+    return
+}
+
+
+### Function prints provided stat in a nice format with colors
+# $1: stats after pull or commit like 'README.md | 1 +\n1 file changed, 1 insertion(+)'
+function print_changes_stat {
+    IFS=$'\n' read -rd '' -a stats <<< "$1"
+    result_stat=""
+    bottom_line=""
+    number_of_stats=${#stats[@]}
+    for index in "${!stats[@]}"
+    do
+        s=$(echo ${stats[index]} | sed -e 's/^[[:space:]]*//')
+        s=$(sed "s/+/${GREEN_ES}+${ENDCOLOR_ES}/g" <<< ${s})
+        s=$(sed "s/-/${RED_ES}-${ENDCOLOR_ES}/g" <<< ${s})
+        if [ $(($index+1)) == $number_of_stats ]; then
+            #s=$(sed '1 s/,/|/' <<< ${s})
+            bottom_line="${s}"
+            break
+        fi
+        result_stat="${result_stat}\n${s}"
+    done
+    echo -e "$(echo -e "${result_stat}" | column -ts'|')"
+    echo -e "$bottom_line"
+}
+
+
+### Function sets to variables push_list and history_from actual push log information
+# $1: current branch
+# $2: main branch
+# $3: origin name
+# Returns: 
+#     push_list - unpushed commits
+#     history_from - branch or commit from which history was calculated
+function get_push_list {
+    push_list_check=$(git --no-pager log $3/$1..HEAD 2>&1)
+    if [[ $push_list_check != *"unknown revision or path not in the working tree"* ]]; then
+        push_list=$(commit_list 999 "tab" $3/$1..HEAD)
+        history_from="$3/$1"
+        return
+    fi
+    
+    base_commit=$(diff -u <(git rev-list --first-parent $1) <(git rev-list --first-parent $2) | sed -ne 's/^ //p' | head -1)
+    if [ -n "$base_commit" ]; then
+        push_list=$(commit_list 999 "tab" $base_commit..HEAD)
+        history_from="${base_commit::7}"
+    else
+        push_list=$(commit_list 999 "tab" $3/$2..HEAD)
+        history_from="$3/$2"
+    fi
+}
+
+
+### Function prints list of branches
+# $1: possible values:
+#     * no value prints all local branches
+#     * 'remote' - all remote
+#     * 'delete' - all local without main and current
+#     * 'merge' - all local without current
+# Using of global:
+#     * current_branch
+#     * main_branch
+# Returns:
+#     * number_of_branches
+#     * branches_first_main
+function list_branches {
+    args="--sort=-committerdate"
+    if [[ "$1" == "remote" ]]; then
+        args="--sort=-committerdate -r"
+    fi
+    branches_str=$(git --no-pager branch $args --format="%(refname:short)")
+    branches_with_info_str=$(git --no-pager branch $args --format="%(refname:short) | %(committerdate:relative) | %(objectname:short) - %(contents:subject)" | column -ts'|' )
+    commits_hash_str=$(git --no-pager branch $args --format="%(objectname:short)")
+
+    IFS=$'\n' read -rd '' -a branches <<< "$branches_str"
+    IFS=$'\n' read -rd '' -a branches_with_info <<< "$branches_with_info_str"
+    IFS=$'\n' read -rd '' -a commits_hash <<< "$commits_hash_str"
+
+    number_of_branches=${#branches[@]}
+    if [[ "$1" == "remote" ]]; then
+        # There is origin/HEAD
+        ((number_of_branches=number_of_branches-1))
+    fi
+
+    if [[ "$number_of_branches" == 0 ]]; then
+        echo
+        echo -e "${YELLOW}There is no branches${ENDCOLOR}"
+        exit
+    fi
+
+    branch_to_check="${branches[0]}"
+    if [[ "$1" == "remote" ]]; then
+        # Remove 'origin/'
+        branch_to_check="${branches[1]}"
+        branch_to_check="$(sed "s/${origin_name}\///g" <<< ${branch_to_check})"
+    fi
+
+    if [[ "$number_of_branches" == 1 ]] && [[ "${branch_to_check}" == "${current_branch}" ]]; then
+        echo
+        echo -e "You have only one branch: ${YELLOW}${current_branch}${ENDCOLOR}"
+        exit
+    fi
+
+    if [[ "$1" == "delete" ]] && [[ "$number_of_branches" == 2 ]] && [[ "${current_branch}" != "${main_branch}" ]]; then
+        echo
+        echo -e "${YELLOW}There is no branches to delete${ENDCOLOR}"
+        exit
+    fi
+
+    ### Main should be the first
+    branches_first_main=(${main_branch})
+    branches_with_info_first_main=("dummy")
+    commits_hash_first_main=("dummy")
+    if [[ "$1" == "delete" ]]; then
+        branches_first_main=()
+        branches_with_info_first_main=()
+        commits_hash_first_main=()
+    fi
+    if [[ "$1" == "merge" ]] && [[ "$current_branch" == "$main_branch" ]]; then
+        branches_first_main=()
+        branches_with_info_first_main=()
+        commits_hash_first_main=()
+    fi
+    for index in "${!branches[@]}"
+    do
+        branch_to_check="${branches[index]}"
+        if [[ "$1" == "delete" ]]; then
+            if [[ "$branch_to_check" == "${current_branch}"* ]] || [[ "$branch_to_check" == "${main_branch}"* ]]; then
+                continue    
+            fi
+        fi
+        if [[ "$1" == "merge" ]]; then
+            if [[ "$branch_to_check" == "${current_branch}"* ]]; then
+                continue
+            fi
+        fi
+        if [[ "$1" == "remote" ]]; then
+            branch_to_check="$(sed "s/${origin_name}\///g" <<< ${branch_to_check})"
+        fi
+
+        if [[ "$branch_to_check" == "${main_branch}"* ]]; then
+            branches_with_info_first_main[0]="${branches_with_info[index]}"
+            commits_hash_first_main[0]="${commits_hash[index]}"
+        elif [[ "$branch_to_check" != "HEAD->"* ]] && [[ "$branch_to_check" != "$origin_name" ]]; then 
+            branches_first_main+=(${branches[index]})
+            branches_with_info_first_main+=("${branches_with_info[index]}")
+            commits_hash_first_main+=("${commits_hash[index]}")
+        fi
+    done
+
+    for index in "${!branches_with_info_first_main[@]}"
+    do
+        branch=$(escape "${branches_first_main[index]}" "/")
+        if [[ "$1" == "remote" ]] && [[ "$branch" != "origin"* ]]; then
+            branch="$origin_name\/$branch"
+        fi
+        branch_line=$(sed "1,/${branch}/ s/${branch}/${GREEN_ES}${branch}${ENDCOLOR_ES}/" <<< ${branches_with_info_first_main[index]})
+        branch_line=$(sed "1,/${commits_hash_first_main[index]}/ s/${commits_hash_first_main[index]}/${YELLOW_ES}${commits_hash_first_main[index]}${ENDCOLOR_ES}/" <<< ${branch_line})
+        if [ "${branches_first_main[index]}" == "$current_branch" ]; then
+            echo "$(($index+1)). * $branch_line"
+        else
+            echo "$(($index+1)).   $branch_line"
+        fi
+    done
+}
+
+
+### This function prints the list of branches and user should choose one
+# $1: possible values:
+#     * no value prints all local branches
+#     * 'remote' - choose from all remote
+#     * 'delete' - choose from all local without main and current
+#     * 'merge' - all local without current
+# Using of global:
+#     * origin_name
+#     * current_branch
+#     * main_branch
+# Returns:
+#     * branch_name
+function choose_branch {
+    list_branches $1
+    printf "0. Exit...\n"
+
+    echo
+    printf "Enter branch number: "
+
+    choose "${branches_first_main[@]}"
+    branch_name=$choice_result
+
+    if [[ "$1" == "remote" ]]; then
+        branch_name=$(sed "s/${origin_name}\///g" <<< ${branch_name})
+    fi
+
+    echo
+}
+
+
+### Function handles switch result
+# $1: name of the branch to switch
+# $2: pass it if you want to disable push log and moved changes
+function switch {
+    switch_output=$(git switch $1 2>&1)
+    switch_code=$?
+
+    ## Switch is OK
+    if [ "$switch_code" == 0 ]; then
+        if [ "$current_branch" == "$1" ]; then
+            echo -e "${GREEN}Already on '$1'${ENDCOLOR}"
+        else
+            echo -e "${GREEN}Switched to branch '$1'${ENDCOLOR}"
+            changes=$(git status -s)
+            if [ -n "$changes" ] && [ -z $2 ]; then
+                echo
+                echo -e "${YELLOW}Moved changes:${ENDCOLOR}"
+                git status -s
+            fi
+        fi
+
+        if [ -z $2 ]; then
+            get_push_list $1 ${main_branch} ${origin_name}
+            if [ -n "$push_list" ]; then
+                echo
+                echo -e "Your branch ${YELLOW}$1${ENDCOLOR} is ahead of ${YELLOW}${history_from}${ENDCOLOR} by this commits:"
+                echo -e "$push_list"
+            fi
+        fi
+        return
+    fi
+
+    ## There are uncommited files with conflicts
+    if [[ $switch_output == *"Your local changes to the following files would be overwritten"* ]]; then
+        conflicts="$(echo "$switch_output" | tail -r | tail -n +3 | tail -r | tail -n +2)"
+        echo -e "${RED}Changes would be overwritten by switch to '$1':${ENDCOLOR}"       
+        echo -e "${conflicts//[[:blank:]]/}"
+        echo
+        echo -e "${YELLOW}Commit these files and try to switch for one more time${ENDCOLOR}"
+        exit
+    fi
+
+    if [ $switch_code -ne 0 ]; then
+        echo -e "${RED}Cannot switch to '$main_branch'! Here is the error${ENDCOLOR}"
+        echo -e "$switch_output"
+        exit $switch_code
+    fi
+}
+
+
+### Function fetchs provided branch and handles errors
+# $1: branch name
+# $2: origin name
+# $3: editor
+# Returns:
+#      * fetch_code - if it is not zero - there is no such branch in origin
+function fetch {
+    fetch_output=$(git fetch $2 $1 2>&1)
+    fetch_code=$?
+
+    if [ $fetch_code == 0 ] ; then
+        return
+    fi
+
+    if [[ ${fetch_output} != *"couldn't find remote ref"* ]]; then
+        echo -e "${RED}Cannot fetch '$1'! Here is the error${ENDCOLOR}"
+        echo -e "${fetch_output}"
+        exit $fetch_code
+    fi
+    echo -e "${YELLOW}There is no '$1' in $2${ENDCOLOR}"
+}
+
+
+### Function merges provided branch and handles errors
+# $1: branch name from
+# $2: origin name
+# $3: editor
+# $4: operation name (e.g. merge or pull)
+# Returns:
+#      * merge_output
+#      * merge_code - 0 if everything is ok, not zero if there are conflicts
+function merge {
+    merge_output=$(git merge $1 2>&1)
+    merge_code=$?
+
+    if [ $merge_code == 0 ] ; then
+        return
+    fi
+
+    operation="$4"
+    if [ "$operation" == "" ]; then
+        operation="merge"
+    fi
+
+    ### Cannot merge because there is uncommitted files that changed in origin
+    if [[ $merge_output == *"Please commit your changes or stash them before you merge"* ]]; then
+        echo -e "${RED}Cannot $operation! There is uncommited changes, that will be overwritten by $operation${ENDCOLOR}"
+        files_to_commit=$(echo "$merge_output" | tail -n +2 | tail -r | tail -n +4 | tail -r)
+        echo -e "${YELLOW}Files with changes${ENDCOLOR}"
+        echo "$files_to_commit"
+        echo
+        exit $merge_code
+    fi
+
+    ### Cannot merge because of some other error
+    if [[ $merge_output != *"fix conflicts and then commit the result"* ]]; then
+        echo -e "${RED}Cannot $operation! Here is the error${ENDCOLOR}"
+        echo "$merge_output"
+        exit $merge_code
+    fi
+
+    echo -e "${RED}Cannot $operation! There are conflicts in staged files${ENDCOLOR}"
+    resolve_conflicts $1 $2 $3
+}
+
+
+### Function pulls provided branch, handles errors and makes a merge
+# $1: branch name
+# $2: origin name
+# $3: editor
+function resolve_conflicts {
+
+    ### Print files with conflicts
+    echo -e "${YELLOW}Files with conflicts${ENDCOLOR}"
+    IFS=$'\n' read -rd '' -a files_with_conflicts <<<"$(git --no-pager diff --name-only --diff-filter=U --relative)"
+    echo -e "$(sed 's/^/\t/' <<< "$files_with_conflicts")"
+    echo
+
+
+    ### Ask user what he wants to do
+    default_message="Merge branch '$2/$1' into '$1'"
+    echo -e "${YELLOW}You should fix conflicts manually.${ENDCOLOR} There are some options:"
+    echo -e "1. Create merge commit with generated message"
+    printf "\tMessage: ${BLUE}${default_message}${ENDCOLOR}\n"
+    echo -e "2. Create merge commit with entered message"
+    echo -e "3. Abort merge (undo pulling)"
+    echo -e "Press any another key to exit from this script without merge abort"
+
+
+    ### Merge process
+    while [ true ]; do
+        read -n 1 -s choice
+
+        re='^[0-9]+$'
+        if ! [[ $choice =~ $re ]]; then
+            exit
+        fi
+
+        if [ "$choice" == "1" ] || [ "$choice" == "2" ]; then
+            echo
+            merge_commit $choice $files_with_conflicts "${default_message}" $1 $2 $3
+            if [ -z "$merge_commit_code" ] || [ $merge_commit_code == 0 ]; then
+                return
+            fi
+        fi
+
+        if [ "$choice" == "3" ]; then
+            echo
+            echo -e "${YELLOW}Cancel merge${ENDCOLOR}"
+            git merge --abort
+            exit $?
+        fi
+
+        if [ "$choice" == "0" ]; then
+            exit
+        fi
+    done
+}
+
+
+### Function creates merge commit
+# $1: 1 for merge with default message, 2 for merge with editor
+# $2: files with conflicts that should be added to commit
+# $3: default message for merge with $1 -eq 1
+# $4: branch name
+# $5: origin name
+# $6: editor
+# Returns: 
+#     merge_commit_code - 0 if everything is ok
+function merge_commit {
+
+    ### Check if there are files with conflicts
+    IFS=$'\n' read -rd '' -a files_with_conflicts_new <<<"$(grep --files-with-matches -r -E "[<=>]{7} HEAD" .)"
+    number_of_conflicts=${#files_with_conflicts_new[@]}
+    if [ $number_of_conflicts -gt 0 ]; then
+        echo -e "${YELLOW}There are still some files with conflicts${ENDCOLOR}"
+        for index in "${!files_with_conflicts_new[@]}"
+        do
+            echo -e $(sed '1 s/.\///' <<< "\t${files_with_conflicts_new[index]}")
+        done
+
+        echo
+        echo -e "Fix conflicts and press ${YELLOW}$1${ENDCOLOR} for one more time"
+        merge_commit_code=1
+        return
+    fi
+
+
+    ### Add files with resolved conflicts to commit
+    files_with_conflicts_one_line="$(tr '\n' ' ' <<< "$2")"
+    git add $files_with_conflicts_one_line
+
+    ### 1. Commit with default message
+    if [ "$1" == "1" ]; then
+        result=$(git commit -m "$3" 2>&1)
+        check_code $? "$result" "merge commit"
+        commit_message="$3"
+
+    ### 2. Commit with entered message
+    else
+        staged_with_tab="$(sed 's/^/###\t/' <<< "$2")"
+        commitmsg_file=".commitmsg__"
+        touch $commitmsg_file
+        echo """
+###
+### Write a message about merge from '$5/$4' into '$4'. Lines starting with '#' will be ignored. 
+### 
+### On branch $4
+### Changes to be commited:
+${staged_with_tab}
+""" >> $commitmsg_file
+        while [ true ]; do
+            $6 $commitmsg_file
+            commit_message=$(cat $commitmsg_file | sed '/^#/d')
+
+            if [ -n "$commit_message" ]; then
+                break
+            fi
+            echo -e "${YELLOW}Merge commit message cannot be empty${ENDCOLOR}"
+            echo
+            read -n 1 -p "Try for one more time? (y/n) " -s -e choice
+            if [ "$choice" != "y" ]; then
+                git restore --staged $files_with_conflicts_one_line
+                find . -name "$commitmsg_file*" -delete
+                merge_commit_code=2
+                exit
+            fi    
+        done
+
+        find . -name "$commitmsg_file*" -delete
+        
+        result=$(git commit -m """$commit_message""" 2>&1)
+        check_code $? "$result" "merge commit"
+    fi
+
+    commit_hash="$(git --no-pager log --pretty="%h" -1)"
+    echo -e "${GREEN}Successful merge!${ENDCOLOR}"
+    echo -e "${BLUE}[$4 $commit_hash]${ENDCOLOR} $commit_message"
+    echo
+    merge_commit_code=0
+}
+
+
+### Function pulls provided branch and handles errors
+# $1: branch name
+# $2: origin name
+# $3: editor
+function pull {
+    ### Fetch, it will exit if critical error and return if branch doesn't exists in origin
+    fetch $1 $2
+
+    if [ $fetch_code != 0 ] ; then
+        return
+    fi
+
+    ### Merge and resulve conflicts
+    merge $1 $2 $3 "pull"
+
+    ### Nothing to pull
+    if [[ $merge_output == *"Already up to date"* ]]; then
+        echo -e "${GREEN}Already up to date${ENDCOLOR}"
+        return
+    fi
+
+    ### It will exit if critical error or resolve conflicts, so here we can get only in case of success
+    echo -e "${GREEN}Successful pull!${ENDCOLOR}"
+    echo
+
+    ### Merge without conflicts
+    if [ $merge_code == 0 ] ; then
+        print_changes_stat "$(echo "$merge_output" | tail -n +3)" 
+
+    ### Merge with conflicts, but they were resolved
+    else
+        commit_hash="$(git --no-pager log --pretty="%h" -1)"
+        print_changes_stat "$(git --no-pager show $commit_hash --stat --format="")" 
+    fi
+}
+#!/usr/bin/env bash
+
+### Script for configurate gitbasher
+# Read README.md to get more information how to use it
+# Use this script only with gitbasher because it is using global variables
+
+
+### Get configuration from git config
+main_branch=$(get_config_value gitbasher.branch "$main_branch")
+sep=$(get_config_value gitbasher.sep "/")
+editor=$(get_config_value core.editor "vim")
+
+### Is this is a first run of gitbasher in this project?
+is_first=$(get_config_value gitbasher.isfirst "true")
+set_config_value gitbasher.isfirst false > /dev/null
+
+project_name="$(get_repo_name)"
+
+
+### Function asks user to select default gitbasher branch
+function set_main_branch {
+    echo -e "${YELLOW}Fetching remote branches...${ENDCOLOR}"
+    echo
+
+    fetch_output=$(git fetch 2>&1)
+    fetch_code=$?
+    if [ $fetch_code -ne 0 ] ; then
+        echo -e "${RED}Cannot fetch remote!${ENDCOLOR}"
+        echo -e "${fetch_output}"
+        exit $fetch_code
+    fi
+
+    prune_output=$(git remote prune $origin_name 2>&1)
+
+    echo -e "Current gitbasher default branch: ${YELLOW}$main_branch${ENDCOLOR}"
+    echo
+    
+    echo -e "${YELLOW}Select a branch to make it default in gitbasher${ENDCOLOR}"
+    choose_branch "remote"
+
+    echo 
+
+    main_branch=$(set_config_value gitbasher.branch $branch_name)
+    echo -e "${GREEN}Set '${branch_name}' as default gitbasher branch in '${project_name}' repo${ENDCOLOR}"
+
+    echo -e "Do you want to set it globally for all projects (y/n)?"
+    yes_no_choice "\nSet '${branch_name}' globally" "true"
+    main_branch=$(set_config_value gitbasher.branch $branch_name "true")
+}
+
+
+### Function asks user to select branch name separator
+function set_sep {
+    echo -e "${YELLOW}Select a branch name separator${ENDCOLOR}"
+    echo -e "Separator is a symbol between type and name, e.g. ${YELLOW}name${sep}name${ENDCOLOR}"
+    echo -e "Current separator: ${YELLOW}$sep${ENDCOLOR}"
+    echo -e "1. type${YELLOW}/${ENDCOLOR}name"
+    echo -e "2. type${YELLOW}_${ENDCOLOR}name"
+    echo -e "3. type${YELLOW}-${ENDCOLOR}name"
+    echo -e "4. type${YELLOW}.${ENDCOLOR}name"
+    echo -e "5. type${YELLOW},${ENDCOLOR}name"
+    echo -e "6. type${YELLOW}+${ENDCOLOR}name"
+    echo -e "7. type${YELLOW}=${ENDCOLOR}name"
+    echo -e "8. type${YELLOW}@${ENDCOLOR}name"
+    echo "0. Exit without changes"
+    
+    declare -A seps=(
+            [1]="/"
+            [2]="_"
+            [3]="-"
+            [4]="."
+            [5]=","
+            [6]="+"
+            [7]="="
+            [8]="@"
+        )
+
+    while [ true ]; do
+        read -n 1 -s choice
+
+        if [ "$choice" == "0" ]; then
+            exit
+        fi
+
+        re='^[0-9]+$'
+        if ! [[ $choice =~ $re ]]; then
+            continue
+        fi
+
+        new_sep="${seps[$choice]}"
+        if [ -n "$new_sep" ]; then
+            break
+        fi
+    done
+
+    echo
+
+    sep=$(set_config_value gitbasher.sep $new_sep)
+    echo -e "${GREEN}Set '${sep}' as branch name separator in '${project_name}' repo${ENDCOLOR}"
+
+    echo -e "Do you want to set it globally for all projects (y/n)?"
+    yes_no_choice "\nSet '${sep}' globally" "true"
+    sep=$(set_config_value gitbasher.sep $branch_name $new_sep)
+}
+
+
+### Function asks user to enter editor for commit messages
+function set_editor {
+    echo -e "${YELLOW}Enter an editor for commit messages${ENDCOLOR}"
+    echo -e "Enter the bin name of editor to run for creating commit messages (e.g. 'vim' or 'nano')"
+    echo -e "It will override ${YELLOW}core.editor${ENDCOLOR} git config value, leave it blank to exit without changes"
+    echo -e "Current editor: ${YELLOW}${editor}${ENDCOLOR}"
+    read -p "Editor: " choice
+
+    if [ "$choice" == "" ]; then
+        exit
+    fi
+
+    echo
+
+    which_output=$(which $choice)
+    if [ "${which_output}" == *"not found"* ] || [ "${which_output}" == "" ]; then
+        echo -e "${RED}Binary '${choice}' not found!${ENDCOLOR}"
+        exit
+    fi
+
+    editor=$(set_config_value core.editor $choice)
+    echo -e "${GREEN}Use editor '$editor' located at '$which_output'${ENDCOLOR}"
+
+    echo -e "Do you want to set it globally for all projects (y/n)?"
+    yes_no_choice "\nSet '${editor}' globally" "true"
+    sep=$(set_config_value core.editor $branch_name $new_sep)
+}
+
+
+### Main function
+# $1: mode
+    # empty: NOT WOIRKIGN
+    # main: set main branch
+    # sep: set branch separator
+    # editor: set commit message editor
+function config_script {
+    case "$1" in
+        main|master)  set_main_cfg="true";;
+        separator|sep)          set_sep_cfg="true";;
+        editor)       set_editor_cfg="true";;
+    esac
+
+    if [ "$set_main_cfg" == "true" ]; then
+        set_main_branch
+        exit
+    fi
+
+    if [ "$set_sep_cfg" == "true" ]; then
+        set_sep
+        exit
+    fi
+
+    if [ "$set_editor_cfg" == "true" ]; then
+        set_editor
+        exit
+    fi
+
+    echo -e "usage: ${YELLOW}gitb config <name>${ENDCOLOR}"
+    echo
+    echo -e "${YELLOW}Available names for configuration${ENDCOLOR}"
+    echo -e "main\t\tUpdate gitbasher's default branch (not remote git repo!)"
+    echo -e "sep\t\tUpdate separator between type and name in branch"
+    echo -e "editor\t\tUpdate text editor for commit messages"
+}
+
+### Include all scripts
+#!/usr/bin/env bash
+
+### Script for creating commits in angular style (conventional commits)
+# Read README.md to get more information how to use it
+# Use this script only with gitbasher
+
+
+### Function prints information about the last commit, use it after `git commit`
+# $1: name of operation, e.g. `amend`
+# Using of global:
+#     * current_branch
+#     * commit - message
+function after_commit {
+    echo
+    if [ -n "$1" ]; then
+        echo -e "${GREEN}Successful commit $1!${ENDCOLOR}"
+    else
+        echo -e "${GREEN}Successful commit!${ENDCOLOR}"
+    fi
+    
+    echo
+
+    # Print commit hash and message
+    commit_hash=$(git rev-parse HEAD)
+    echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR}"
+    if [ -z "${commit}" ]; then
+        echo $(git log -1 --pretty=%B | cat)
+    else
+        printf "$commit\n"
+    fi
+
+    echo
+
+    # Print stat of last commit - updated files and lines
+    print_changes_stat "$(git --no-pager show $commit_hash --stat --format="")"
+
+    # Some info to help users
+    if [ -z "${fast}" ]; then
+        echo
+        echo -e "Push your changes: ${YELLOW}gitb push${ENDCOLOR}"
+        echo -e "Undo commit: ${YELLOW}gitb undo-commit${ENDCOLOR}"
+    fi
+}
+
+
+### Main function
+# $1: mode
+    # <empty> - regular commit mode
+    # fast: fast commit with git add .
+    # msg: use editor to write commit message
+    # ticket: add ticket info to the end of message header
+    # amend: amend without edit (add to last commit)
+    # fixup: fixup commit
+    # autosquash: autosquash fixup commits
+    # revert: revert commit
+function commit_script {
+    case "$1" in
+        fast|f)         fast="true";;
+        msg|m)          msg="true";;
+        ticket|t)       ticket="true";;
+        amend|a)        amend="true";;
+        fixup|x)        fixup="true";;
+        autosquash|s)   autosquash="true";;
+        revert|r)       revert="true";;
+        help|h)         help="true";;
+        *)
+            wrong_mode "commit" $1
+    esac
+
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb commit <mode>${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\tChoose files to commit and create conventional message in format: 'type(scope): message'"
+        echo -e "fast|f\t\tAdd all files (git add .) and create commit message as in <empty>"
+        echo -e "msg|m\t\tSame as in <empty>, but create multiline commit message using text editor"
+        echo -e "ticket|t\tSame as previous, but add tracker's ticket info to the end of commit header"
+        echo -e "amend|a\t\tChoose files and make --amend commit to the last one (git commit --amend --no-edit)"
+        echo -e "fixup|x\t\tChoose files and select commit to --fixup (git commit --fixup <commit>)"
+        echo -e "autosquash|s\tChoose commit from which to squash fixup commits and run git rebase -i --autosquash <commit>"
+        echo -e "revert|r\tChoose commit to revert (git revert -no-edit <commit>)"
+        echo -e "help|h\t\tShow this help"
+        exit
+    fi
+
+
+    ### Print header
+    header_msg="GIT COMMIT"
+    if [ -n "${fast}" ]; then
+        header_msg="$header_msg FAST"
+    elif [ -n "${msg}" ]; then
+        header_msg="$header_msg MSG"
+    elif [ -n "${ticket}" ]; then
+        header_msg="$header_msg TICKET"
+    elif [ -n "${amend}" ]; then
+        header_msg="$header_msg AMEND"
+    elif [ -n "${fixup}" ]; then
+        header_msg="$header_msg FIXUP"
+    elif [ -n "${autosquash}" ]; then
+        header_msg="$header_msg AUTOSQUASH"
+    elif [ -n "${revert}" ]; then
+        header_msg="$header_msg REVERT"
+    fi
+
+    echo -e "${YELLOW}${header_msg}${ENDCOLOR}"
+    echo
+
+
+    ### Check if there are unstaged files
+    is_clean=$(git status | tail -n 1)
+    if [ "$is_clean" = "nothing to commit, working tree clean" ]; then
+        if [ -z "${autosquash}" ] && [ -z "${revert}" ]; then
+            echo -e "${GREEN}Nothing to commit, working tree clean${ENDCOLOR}"
+            exit
+        fi
+    elif [ -n "${autosquash}" ]; then
+        echo -e "${RED}Cannot autosquash: there is uncommited changes!${ENDCOLOR}"
+        exit
+    elif [ -n "${revert}" ]; then
+        echo -e "${RED}Cannot revert: there is uncommited changes!${ENDCOLOR}"
+        exit
+    fi
+
+
+    ### Run autosquash logic
+    if [ -n "${autosquash}" ]; then
+        echo -e "${YELLOW}Step 1.${ENDCOLOR} Choose commit from which to squash fixup commits (third one or older):"
+
+        choose_commit 20
+
+        git rebase -i --autosquash ${commit_hash}
+        check_code $? "" "autosquash"
+        exit
+    fi
+
+
+    ### Run revert logic
+    if [ -n "${revert}" ]; then
+        echo -e "${YELLOW}Step 1.${ENDCOLOR} Choose commit to revert:"
+        
+        choose_commit 20
+
+        result=$(git revert --no-edit ${commit_hash} 2>&1)
+        check_code $? "$result" "revert"
+
+        after_commit "revert"
+        exit
+    fi
+
+    ### TODO: better
+
+    ### Print status (don't need to print in fast mode because we add everything)
+    if [ -z "${fast}" ]; then 
+        #echo -e "On branch ${YELLOW}${current_branch}${ENDCOLOR}"
+        #echo
+        echo -e "${YELLOW}Changed fiels${ENDCOLOR}"
+        git status -s
+    fi
+
+
+    ### Commit Step 1: add files to commit
+    if [ -n "${fast}" ]; then
+        git add .
+        git_add="."
+    else
+        echo
+        echo -e "${YELLOW}Step 1.${ENDCOLOR} List the files that need to be commited on ${YELLOW}${current_branch}${ENDCOLOR}"
+        echo "You can specify entire folders or use a '.' if you want to add everything, tab also works here"
+        echo "Leave it blank if you want to exit"
+
+        while [ true ]; do
+            read -p "$(echo -n -e "${TODO}git add${ENDCOLOR} ")" -e git_add
+
+            # Trim spaces
+            git_add=$(echo "$git_add" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+            if [ "$git_add" == "" ]; then
+                exit
+            fi
+
+            git add $git_add
+            if [ $? -eq 0 ]; then
+                break
+            fi
+        done
+    fi
+
+
+    ### Run amend logic - add staged files to last commit
+    if [ -n "${amend}" ]; then
+        result=$(git commit --amend --no-edit 2>&1)
+        check_code $? "$result" "amend"
+
+        after_commit "amend"
+        exit
+    fi
+
+    if [ -z "${fast}" ]; then
+        echo
+    fi
+
+
+    ### Print staged files that we add at step 1
+    echo -e "${YELLOW}Staged files:${ENDCOLOR}"
+    staged="$(sed 's/^/\t/' <<< "$(git diff --name-only --cached)")"
+    echo -e "${GREEN}${staged}${ENDCOLOR}"
+
+
+    ### Run fixup logic
+    if [ -n "${fixup}" ]; then
+        echo
+        echo -e "${YELLOW}Step 2.${ENDCOLOR} Choose commit to fixup:"
+
+        choose_commit 9
+        
+        result=$(git commit --fixup $commit_hash 2>&1)
+        check_code $? "$result" "fixup"
+
+        after_commit "fixup"
+        exit
+    fi
+
+
+    ### Commit Step 2: choose commit type
+    echo
+    step="2"
+    if [ -n "${fast}" ]; then
+        step="1"
+    fi
+    echo -e "${YELLOW}Step ${step}.${ENDCOLOR} What type of change do you want to commit?"
+    echo "1. feat:      new feature or logic changes"
+    echo "2. fix:       small changes, eg. bug fix"
+    echo "3. refactor:  code change that neither fixes a bug nor adds a feature, style changes"
+    echo "4. test:      adding missing tests or correcting existing tests"
+    echo "5. perf:      code change that improves performance"
+    echo "6. build:     changes that affect the build system or external dependencies"
+    echo "7. ci:        changes to CI configuration files and scripts"
+    echo "8. chore:     maintanance and housekeeping"
+    echo "9. docs:      documentation only changes"
+    echo "0. Exit without changes"
+
+    declare -A types=(
+        [1]="feat"
+        [2]="fix"
+        [3]="refactor"
+        [4]="test"
+        [5]="perf"
+        [6]="build"
+        [7]="ci"
+        [8]="chore"
+        [9]="docs"
+    )
+
+    while [ true ]; do
+        read -n 1 -s choice
+
+        if [ "$choice" == "0" ]; then
+            git restore --staged $git_add
+            exit
+        fi
+
+        re='^[0-9]+$'
+        if ! [[ $choice =~ $re ]]; then
+            continue
+        fi
+
+        commit_type="${types[$choice]}"
+        if [ -n "$commit_type" ]; then
+            break
+        fi
+    done
+
+    commit="$commit_type"
+
+
+    ### Commit Step 3: enter commit scope
+    echo
+    step="3"
+    if [ -n "${fast}" ]; then
+        step="2"
+    fi
+    echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Enter a scope of your changes to provide additional context"
+    echo -e "Final meesage will be ${YELLOW}${commit_type}(<scope>): <summary>${ENDCOLOR}"
+    echo -e "Leave it blank if you don't want to enter a scope or 0 to exit"
+
+    read -p "$(echo -n -e "${TODO}<scope>:${ENDCOLOR} ")" -e commit_scope
+
+    if [ "$commit_scope" == "0" ]; then
+        git restore --staged $git_add
+        exit
+    fi
+
+    commit_scope=$(echo "$commit_scope" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    if [ "$commit_scope" != "" ]; then
+        commit="$commit($commit_scope):"
+    else
+        commit="$commit:"
+    fi
+
+
+    ### Commit Step 4: enter commit message, use editor in msg mode
+    step="4"
+    if [ -n "${fast}" ]; then
+        step="3"
+    fi
+    echo
+    echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Write a <summary> about your changes"
+    echo -e "Final meesage will be ${YELLOW}${commit} <summary>${ENDCOLOR}"
+
+    # Use editor and commitmsg file
+    if [ -n "$msg" ]; then
+        commitmsg_file=".commitmsg__"
+        touch $commitmsg_file
+
+        staged_with_tab="$(sed 's/^/###\t/' <<< "${staged}")"
+
+        echo """
+###
+### Step ${step}. Write a <summary> about your changes. Lines starting with '#' will be ignored. 
+### 
+### On branch ${current_branch}
+### Changes to be commited:
+${staged_with_tab}
+###
+### Here is expected format:
+### ${commit} <summary>
+### <BLANK LINE>
+### <optional body>
+### <BLANK LINE>
+### <optional footer>
+###
+### Summary should provide a succinct description of the change:
+###     use the imperative, present tense: 'change' not 'changed' nor 'changes'
+###     no dot (.) at the end
+###     don't capitalize the first letter
+###
+### The body is optional. should explain why you are making the change. 
+### You can include a comparison of the previous behavior with the new behavior in order to illustrate the impact of the change.
+###
+### The footer is optional and should contain any information about 'Breaking Changes'.
+### Breaking Change section should start with the phrase 'BREAKING CHANGE: ' followed by a summary of the breaking change, 
+### a blank line, and a detailed description of the breaking change that also includes migration instructions.
+###
+### Similarly, a Deprecation section should start with 'DEPRECATED: ' followed by a short description of what is deprecated,
+### a blank line, and a detailed description of the deprecation that also mentions the recommended update path.
+""" >> $commitmsg_file
+
+        while [ true ]; do
+            $editor $commitmsg_file
+            commit_message=$(cat $commitmsg_file | sed '/^#/d')
+
+            if [ -n "$commit_message" ]; then
+                break
+            fi
+            echo
+            echo -e "${YELLOW}Commit message cannot be empty${ENDCOLOR}"
+            echo
+            read -n 1 -p "Try for one more time? (y/n) " -s -e choice
+            if [ "$choice" != "y" ]; then
+                git restore --staged $git_add
+                find . -name "$commitmsg_file*" -delete
+                exit
+            fi    
+        done
+
+        find . -name "$commitmsg_file*" -delete
+
+    # Use read from console
+    else
+        echo -e "Leave it blank if you want to exit"
+        read -p "$(echo -n -e "${TODO}${commit}${ENDCOLOR} ")" -e commit_message
+        if [ -z "$commit_message" ]; then
+            git restore --staged $git_add
+            exit
+        fi
+    fi
+
+
+    ### Commit Step 5: enter tracker ticket
+    if [ -n "${ticket}" ]; then
+        echo
+        echo -e "${YELLOW}Step 5.${ENDCOLOR} Enter the number of issue in your tracking system (e.g. JIRA or Youtrack)"
+        echo -e "It will be added to the end of summary"
+        echo -e "Leave it blank if you don't want to enter a ticket or 0 to exit"
+
+        read -p "<ticket>: " -e commit_ticket
+
+        if [ "$commit_ticket" == "0" ]; then
+            git restore --staged $git_add
+            exit
+        fi
+
+        if [ "$commit_ticket" != "" ]; then
+            commit_ticket=$(echo "$commit_ticket" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+
+            summary=$(echo "$commit_message" | head -n 1)
+            remaining_message=""
+            if [ "$summary" != "$commit_message" ]; then
+                remaining_message=$(echo "$commit_message" | tail -n +2)
+                remaining_message="""
+    $remaining_message"
+            fi
+            commit_message="$summary ($commit_ticket)$remaining_message"
+        fi
+    fi
+
+    commit="$commit $commit_message"
+
+
+    ### Finally
+    result=$(git commit -m """$commit""" 2>&1)
+    check_code $? "$result" "commit"
+    after_commit
+}
+#!/usr/bin/env bash
+
+### Script for pushing commits to a remote git repository
+# It will pull current branch if there are unpulled changes
+# Read README.md to get more information how to use it
+# Use this script only with gitbasher
+
+
+### Use this function to push changes to origin
+### It will exit if everyrhing is ok or there is a critical error, return if there is unpulled changes
+# Using of global:
+#     * current_branch
+#     * main_branch
+#     * origin_name
+# Returns:
+#     * push_output
+#     * push_code
+function push {
+    push_output=$(git push ${origin_name} ${current_branch} 2>&1)
+    push_code=$?
+
+    if [ $push_code -eq 0 ] ; then 
+        echo -e "${GREEN}Successful push!${ENDCOLOR}"
+
+        repo=$(get_repo)
+        echo -e "${YELLOW}Repo:${ENDCOLOR}\t${repo}"
+        if [[ ${current_branch} != ${main_branch} ]]; then
+            if [[ $repo == *"github"* ]]; then
+                echo -e "${YELLOW}PR:${ENDCOLOR}\t${repo}/pull/new/${current_branch}"
+            elif [[ $repo == *"gitlab"* ]]; then
+                echo -e "${YELLOW}MR:${ENDCOLOR}\t${repo}/-/merge_requests/new?merge_request%5Bsource_branch%5D=${current_branch}"
+            fi
+        fi
+        exit
+    fi
+
+    if [[ $push_output != *"[rejected]"* ]]; then
+        echo -e "${RED}Cannot push! Here is the error${ENDCOLOR}"
+        echo "$push_output"
+        exit $push_code
+    fi
+}
+
+
+### Main function
+# $1: mode
+    # <empty> - regular commit mode
+    # yes: fast push (answer 'yes')
+    # list: print list of commits to push and exit
+function push_script {
+    case "$1" in
+        fast|f|y)   fast="true";;
+        list|log|l) list="true";;
+        help|h)     help="true";;
+        *)
+            wrong_mode "push" $1
+    esac
+
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb push <mode>${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\tPrint list of commits, push them to current branch or pull changes first"
+        echo -e "fast|f|y\tSame as previous but without pressing 'y'"
+        echo -e "list|log|l\tPrint a list of unpushed local commits without actual pushing it"
+        echo -e "help|h\t\tShow this help"
+        exit
+    fi
+
+
+    ### Print header
+    header_msg="GIT PUSH"
+    if [ -n "${fast}" ]; then
+        header_msg="$header_msg FAST"
+    elif [ -n "${list}" ]; then
+        header_msg="$header_msg LIST"
+    fi
+
+    echo -e "${YELLOW}${header_msg}${ENDCOLOR}"
+    echo
+
+
+    ### Check if there are commits to push
+    get_push_list ${current_branch} ${main_branch} ${origin_name}
+
+    if [ "${history_from}" != "${origin_name}/${current_branch}" ]; then
+        echo -e "Branch ${YELLOW}${current_branch}${ENDCOLOR} doesn't exist in ${origin_name}, so get commit diff from base commit"
+    fi
+
+    if [ -z "$push_list" ]; then
+        echo -e "${GREEN}Nothing to push${ENDCOLOR}"
+        exit
+    fi
+
+
+    ### Print list of unpushed commits
+    echo -e "${YELLOW}Commit history from '${history_from}'${ENDCOLOR}"
+    echo -e "$push_list"
+
+
+    ### List mode - print only unpushed commits
+    if [ -n "$list" ]; then
+        exit
+    fi
+
+    echo
+
+    ### If not in fast mode - ask if user wants to push
+    if [ -z "${fast}" ]; then
+        echo -e "Do you want to push it to ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} (y/n)?"
+        yes_no_choice "Pushing..."
+    else
+        echo -e "${YELLOW}Pushing...${ENDCOLOR}"
+        echo
+    fi
+
+
+    ### Pushing
+    push
+
+
+    ### Get push error - there is unpulled changes
+    echo -e "${RED}Cannot push! There is unpulled changes in '${origin_name}/${current_branch}'${ENDCOLOR}"
+    echo
+    echo -e "Do you want to pull ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} with --no-rebase (y/n)?"
+    yes_no_choice "Pulling..."
+
+    pull $current_branch $origin_name $editor
+
+
+    ### Push after pull
+    echo
+    echo -e "${YELLOW}Pushing...${ENDCOLOR}"
+    echo
+    push
+
+}
+#!/usr/bin/env bash
+
+### Script for pulling commits from remote git repository
+# Read README.md to get more information how to use it
+# Use this script only with gitbasher
+
+
+### Main function - pull current branch and exit (empty flags mode)
+function pull_script {
+    case "$1" in
+        help|h) help="true";;
+        *)
+            wrong_mode "pull" $1
+    esac
+
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb pull${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\tFetch current branch and then merge changes with conflicts fixing"
+        echo -e "help|h\t\tShow this help"
+        exit
+    fi
+
+
+    ### Print header
+    header_msg="GIT PULL"
+    echo -e "${YELLOW}${header_msg}${ENDCOLOR}"
+    echo
+    
+    echo -e "${YELLOW}Pulling '$origin_name/$current_branch'...${ENDCOLOR}"
+    echo
+    pull $current_branch $origin_name $editor
+    exit
+}
+#!/usr/bin/env bash
+
+### Script for merging changes between branches
+# Read README.md to get more information how to use it
+# Use this script only with gitbasher
+
+
+### Main function - pull current branch and exit (empty flags mode)
+# $1: mode
+    # empty: merge selected branch to current one (ask to fetch before merge)
+    # main: merge main to current one (ask to fetch before merge)
+    # to-main: merge current branch to main
+function merge_script {
+    case "$1" in
+        main|master|m)          main="true";;
+        to-main|to-master|tm)   to_main="true";;
+        help|h)                 help="true";;
+        *)
+            wrong_mode "merge" $1
+    esac
+
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb merge <mode>${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\t\tSelect branch to merge info current one and fix conflicts"
+        echo -e "main|master|m\t\tMerge $main_branch to current branch and fix conflicts"
+        echo -e "to-main|to-master|tm\tSwitch to $main_branch and merge current branch into $main_branch"
+        echo -e "help|h\t\t\tShow this help"
+        exit
+    fi
+
+
+    ### Merge mode - print header
+    header="GIT MERGE"
+    if [ -n "${to_main}" ]; then
+        header="$header MAIN"
+    elif [ -n "${to_main}" ]; then
+        header="$header TO MAIN"
+    fi
+
+    echo -e "${YELLOW}${header}${ENDCOLOR}"
+    echo
+
+
+    ### Select branch which will be merged
+    if [ -n "$main" ]; then
+        if [ "$current_branch" == "${main_branch}" ]; then
+            echo -e "${YELLOW}Already on ${main_branch}${ENDCOLOR}"
+            exit
+        fi
+        merge_branch=${main_branch}
+
+    elif [ -n "$to_main" ]; then
+        if [ "$current_branch" == "${main_branch}" ]; then
+            echo -e "${YELLOW}Already on ${main_branch}${ENDCOLOR}"
+            exit
+        fi
+        merge_branch=${current_branch}
+
+    else
+        echo -e "${YELLOW}Which branch merge into '${current_branch}'?${ENDCOLOR}"
+        choose_branch "merge"
+        merge_branch=${branch_name}
+        echo
+    fi
+
+
+    ### Fetch before merge
+    echo -e "Do you want to fetch ${YELLOW}${merge_branch}${ENDCOLOR} before merge (y/n)?"
+    read -n 1 -s choice
+    if [ "$choice" == "y" ]; then
+        echo
+        echo -e "${YELLOW}Fetching...${ENDCOLOR}"
+
+        fetch $merge_branch $origin_name
+    fi
+    echo
+
+
+    ### Run merge-to-main logic - switch to main and merge
+    if [ -n "$to_main" ]; then
+        switch $main_branch "true"
+        echo
+        current_branch=$main_branch
+    fi
+
+
+    ### Run merge and handle conflicts
+    merge $merge_branch $origin_name $editor
+
+
+    ### Nothing to merge
+    if [[ $merge_output == *"Already up to date"* ]]; then
+        echo -e "${GREEN}Nothing to merge - already up to date${ENDCOLOR}"
+        exit
+    fi
+
+
+    ### If we get here - it is success
+    echo -e "${GREEN}Successful merge!${ENDCOLOR}"
+    echo -e "${BLUE}[${merge_branch}${ENDCOLOR} -> ${BLUE}${current_branch}]${ENDCOLOR}"
+    echo
+
+
+    ### Merged without conflicts
+    if [ $merge_code == 0 ] ; then
+        print_changes_stat "$(echo "$merge_output" | tail -n +3)" 
+
+    ### Merged with conflicts, but they were resolved
+    else
+        commit_hash="$(git --no-pager log --pretty="%h" -1)"
+        print_changes_stat "$(git --no-pager show $commit_hash --stat --format="")" 
+    fi
+
+}
+#!/usr/bin/env bash
+
+### Script for working with branches: create, switch, delete
+# Use a separate branch for writing new code, then merge it to main
+# Read README.md to get more information how to use it
+# Use this script only with gitbasher
+
+
+### Main function
+# $1: mode
+    # <empty>: switch to local branch
+    # remote: switch to a remote branch
+    # main: switch to the main branch
+    # new: create a new branch
+    # newc: create a new branch from a current one instead of the main branch
+    # delete: delete a local branch
+function branch_script {
+    case "$1" in
+        remote|r|re)    remote="true";;
+        main|master|m)  main="true";;
+        new|n)          new="true";;
+        newc|nc)        
+            current="true"
+            new="true"
+        ;;
+        delete|del|d)   delete="true";;
+        help|h)         help="true";;
+        *)
+            wrong_mode "branch" $1
+    esac
+    
+
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb commit <mode>${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\tSelect a local branch to switch"
+        echo -e "remote|re|r\tFetch $origin_name and select a remote branch to switch"
+        echo -e "main|master|m\tSwitch to $main_branch without additional confirmations"
+        echo -e "new|n\t\tBuild conventional name for a new branch, switch to $main_branch, pull it and create new branch from $main_branch"
+        echo -e "newc|nc\t\tBuild conventional name for a new branch and create it from a current branch"
+        echo -e "delete|del|d\tSelect branch to delete"
+        echo -e "help|h\t\tShow this help"
+        exit
+    fi
+        
+    ### Print header
+    header="GIT BRANCH"
+    if [ -n "${remote}" ]; then
+        header="$header REMOTE"
+    elif [ -n "${main}" ]; then
+        header="$header MAIN"
+    elif [ -n "${new}" ]; then
+        header="$header NEW"
+    elif [ -n "${current}" ]; then
+        header="$header NEW FROM CURRENT"
+    elif [ -n "${delete}" ]; then
+        header="$header DELETE"
+    fi
+
+    echo -e "${YELLOW}${header}${ENDCOLOR}"
+    echo
+
+
+    ### Run switch to main logic
+    if [[ -n "${main}" ]]; then
+        switch ${main_branch}
+        exit
+    fi
+
+
+    ### Run switch to local logic
+    if [[ -z "$new" ]] && [[ -z "$remote" ]] && [[ -z "$delete" ]]; then
+        echo -e "${YELLOW}Switch from '${current_branch}' to local branch${ENDCOLOR}"
+
+        choose_branch
+
+        echo
+
+        switch ${branch_name}
+        exit
+
+
+    ### Run switch to remote logic
+    elif [[ -z "$new" ]] && [[ -n "$remote" ]] && [[ -z "$delete" ]]; then
+        echo -e "${YELLOW}Fetching remote...${ENDCOLOR}"
+        echo
+
+        fetch_output=$(git fetch 2>&1)
+        fetch_code=$?
+        if [ $fetch_code -ne 0 ] ; then
+            echo -e "${RED}Cannot fetch remote!${ENDCOLOR}"
+            echo -e "${fetch_output}"
+            exit $fetch_code
+        fi
+
+        ## TODO: should I ask?
+        prune_output=$(git remote prune $origin_name 2>&1)
+
+        echo -e "${YELLOW}Switch from '${current_branch}' to remote branch${ENDCOLOR}"
+        
+        choose_branch "remote"
+
+        echo
+
+        switch ${branch_name}
+        exit
+
+
+    ### Run delete local logic
+    elif [[ -z "$new" ]] && [[ -n "$delete" ]]; then
+
+        # Try to delete all merged branches
+        IFS=$'\n' read -rd '' -a merged_branches <<<"$(git branch -v --sort=-committerdate --merged | cat 2>&1)"
+
+        merged_branches_without_main=()
+        for index in "${!merged_branches[@]}"
+        do
+            branch_with_info="$(echo "${merged_branches[index]}" | sed -e 's/^[[:space:]]*//')"
+            if [[ ${branch_with_info} != "${main_branch}"* ]] && [[ ${branch_with_info} != "*"* ]] ; then
+                merged_branches_without_main+=("$branch_with_info")
+            fi
+        done
+        number_of_branches=${#merged_branches_without_main[@]}
+
+        if [ $number_of_branches != 0 ]; then
+            echo -e "${YELLOW}Do you want to delete merged local branches?${ENDCOLOR}"
+            echo -e "These are branches without new changes regarding ${YELLOW}${main_branch}${ENDCOLOR}"
+            for index in "${!merged_branches_without_main[@]}"
+            do
+                printf "\t${merged_branches_without_main[index]}\n"
+            done
+
+            printf "\nAnswer (y/n): "
+            
+            while [ true ]; do
+                read -n 1 -s choice
+                if [ "$choice" == "y" ]; then
+                    printf "y\n\n"
+                    branches_to_delete="$(git branch --merged | egrep -v "(^\*|master|main|develop|${main_branch})" | xargs)"
+                    IFS=$' ' read -rd '' -a branches <<<"$branches_to_delete"
+                    for index in "${!branches[@]}"
+                    do
+                        branch_to_delete="$(echo "${branches[index]}" | xargs)"
+                        delete_output=$(git branch -d $branch_to_delete 2>&1)
+                        delete_code=$?
+                        if [ $delete_code == 0 ]; then
+                            echo -e "${GREEN}Deleted branch '$branch_to_delete'${ENDCOLOR}"
+                        else
+                            echo -e "${RED}Cannot delete branch '$branch_to_delete'!${ENDCOLOR}"
+                            echo -e "${delete_output}"
+                            break
+                        fi
+                    done
+                    echo
+                    break
+
+                elif [ "$choice" == "n" ]; then
+                    printf "n\n\n"
+                    break
+                fi
+            done
+        fi
+
+        # Delete in normal way
+        echo -e "${YELLOW}Delete local branch${ENDCOLOR}"
+
+        choose_branch "delete"
+
+        echo
+
+        delete_output=$(git branch -d $branch_name 2>&1)
+        delete_code=$?
+
+        if [ "$delete_code" == 0 ]; then
+            echo -e "${GREEN}Deleted branch '$branch_name'!${ENDCOLOR}"
+
+        elif [[ ${delete_output} == *"is not fully merged"* ]]; then
+            echo -e "${RED}The branch '$branch_name' is not fully merged${ENDCOLOR}"
+            echo "Do you want to force delete (-D flag) this branch?"
+
+            printf "Answer (y/n): "
+            
+            while [ true ]; do
+                read -n 1 -s choice
+                if [ "$choice" == "y" ]; then
+                    printf "y\n\n"
+                    delete_output=$(git branch -D $branch_name 2>&1)
+                    delete_code=$?
+                    if [ "$delete_code" != 0 ]; then
+                        echo -e "${RED}Cannot delete branch '$branch_name'!${ENDCOLOR}"
+                        echo -e "${delete_output}"
+                        exit
+                    fi
+                    echo -e "${GREEN}Deleted branch '$branch_name'!${ENDCOLOR}"
+                    break
+
+                elif [ "$choice" == "n" ]; then
+                    printf "n\n"
+                    exit
+                fi
+            done
+
+        else
+            echo -e "${RED}Cannot delete branch '$branch_name'!${ENDCOLOR}"
+            echo -e "${delete_output}"
+            exit
+        fi
+
+        remote_check=$(git --no-pager log $origin_name/$branch_name..HEAD 2>&1)
+        if [[ $remote_check != *"unknown revision or path not in the working tree"* ]]; then
+            echo
+            echo -e "${YELLOW}Do you want to delete this branch in remote?${ENDCOLOR}"
+
+            printf "Answer (y/n): "
+            
+            while [ true ]; do
+                read -n 1 -s choice
+                if [ "$choice" == "y" ]; then
+                    printf "y\n"
+                    echo -e "${YELLOW}Deleting...${ENDCOLOR}"
+
+                    push_output=$(git push $origin_name -d $branch_name 2>&1)
+                    push_code=$?
+                    if [ "$push_code" != 0 ]; then
+                        echo -e "${RED}Cannot delete branch '$branch_name'!${ENDCOLOR}"
+                        echo -e "${delete_output}"
+                        exit
+                    fi
+                    echo
+                    echo -e "${GREEN}Deleted branch '$branch_name' in remote!${ENDCOLOR}"
+                    break
+
+                elif [ "$choice" == "n" ]; then
+                    printf "n\n"
+                    exit
+                fi
+            done
+        fi
+    
+        exit
+    fi
+
+
+    ### Run create new branch logic
+    ### Step 1. Choose branch type
+    echo -e "${YELLOW}Step 1.${ENDCOLOR} What type of branch do you want to create?"
+    echo "1. feat:      new feature or logic changes, 'feat' and 'perf' commits"
+    echo "2. fix:       small changes, eg. not critical bug fix"
+    echo "3. hotfix:    fix, that should be merged as fast as possible"
+    echo "4. refactor:  non important and/or style changes"
+    echo "5. misc:      non-code changes, e.g. 'ci', 'docs', 'build' commits"
+    echo "6. wip:       'work in progress', for changes not ready for merging in the near future"
+    echo "7.            don't use prefix for branch naming"
+    echo "0. Exit without changes"
+
+    declare -A types=(
+        [1]="feat"
+        [2]="fix"
+        [3]="hotfix"
+        [4]="refactor"
+        [5]="misc"
+        [6]="wip"
+    )
+
+    branch_type=""
+    while [ true ]; do
+        read -n 1 -s choice
+
+        if [ "$choice" == "0" ]; then
+            exit
+        fi
+        
+        if [ "$choice" == "7" ]; then
+            break
+        fi
+
+        re='^[0-9]+$'
+        if ! [[ $choice =~ $re ]]; then
+            continue
+        fi
+
+        branch_type="${types[$choice]}"
+        if [ -n "$branch_type" ]; then
+            branch_type_and_sep="${branch_type}${sep}"
+            break
+        fi
+    done
+
+
+    ### Step 2. Enter branch name
+    echo
+    echo -e "${YELLOW}Step 2.${ENDCOLOR} Enter the name of the branch, using '-' as a separator between words"
+    echo "Leave it blank if you want to exit"
+
+    read -p "Branch: ${branch_type_and_sep}" -e branch_name
+
+    if [ -z $branch_name ]; then
+        exit
+    fi
+
+    branch_name="${branch_type_and_sep}${branch_name##*( )}"
+
+    if [[ "$branch_name" == "HEAD" ]] || [[ "$branch_name" == "$origin_name" ]]; then
+        echo
+        echo -e "${RED}This name is forbidden${ENDCOLOR}"
+        exit
+    fi
+
+    ### Step 3. Switch to main and pull it
+    from_branch=$current_branch
+    if [ -z "${current}" ]; then
+        echo
+        switch $main_branch "true"
+
+        echo -e "${YELLOW}Pulling '$origin_name/$main_branch'...${ENDCOLOR}"
+        echo
+        pull $main_branch $origin_name $editor
+
+        from_branch=$main_branch
+    fi
+
+
+    ### Step 4. Create a new branch and switch to it
+    create_output=$(git switch -c $branch_name 2>&1)
+    create_code=$?
+
+    echo
+
+    if [ $create_code -eq 0 ]; then
+        echo -e "${GREEN}${create_output} from '$from_branch'${ENDCOLOR}"
+        changes=$(git status -s)
+        if [ -n "$changes" ]; then
+            echo
+            echo -e "${YELLOW}Moved changes:${ENDCOLOR}"
+            git status -s
+        fi
+        exit
+    fi
+
+    if [[ $create_output == *"already exists"* ]]; then
+        echo -e "${RED}Branch with name '${branch_name}' already exists!${ENDCOLOR}"
+        exit $create_code
+    fi
+
+    echo -e "${RED}Cannot create! Here is the error${ENDCOLOR}"
+    echo "${create_output}"
+    exit $create_code
+
+}
+#!/usr/bin/env bash
+
+### Script for managing git tags
+# Read README.md to get more information how to use it
+# Semver reference: https://semver.org/
+# Use this script only with gitbasher
+
+
+### Function pushes tag and prints url to repo or error
+# $1: tag to push, empty for pushing all tags
+# $2: delete flag, pass it if you want to delete provided tag
+# Using of global:
+#     * origin_name
+function push_tag {
+    if [ -z "$1" ] || [ "$1" == "" ]; then
+        all="true"
+        push_output=$(git push $origin_name --tags 2>&1)
+    elif [ -n "$2" ]; then
+        push_output=$(git push --delete $origin_name $1 2>&1)
+    else
+        push_output=$(git push $origin_name $1 2>&1)
+    fi
+    push_code=$?
+
+    # Handle delete case
+    if [ -n "$delete" ]; then
+        if [[ "$push_output" == *"remote ref does not exist"* ]]; then
+            echo -e "${RED}Tag '$1' doesn't exist in '${origin_name}'${ENDCOLOR}"
+            exit
+        fi
+        echo -e "${GREEN}Successful deleted tag '$1' in '${origin_name}'!${ENDCOLOR}"
+        exit
+    fi
+    
+    repo=$(get_repo)
+
+    # Print `push-all` result
+    if [ -n "$all" ]; then
+        echo
+
+        IFS=$'\n' read -rd '' -a lines_with_success <<< "$(sed -n '/\[new tag\]/p' <<< "$push_output")"
+
+        number_of_tags=${#lines_with_success[@]}
+        if [ $number_of_tags != 0 ]; then
+            echo -e "${GREEN}Pushed successfully${ENDCOLOR}"
+            
+            for index in "${!lines_with_success[@]}"
+            do
+                echo -e "\t$(sed -e 's#.*\-> \(\)#\1#' <<< "${lines_with_success[index]}" )"
+            done
+            echo
+        fi
+    fi
+
+    # Handle errors
+    if [ $push_code != 0 ] ; then
+        if [[ "$push_output" == *"Updates were rejected because the tag already exists in the remote"* ]]; then
+            echo -e "${RED}Some tags were rejected${ENDCOLOR}"
+
+            IFS=$'\n' read -rd '' -a lines_with_rejected <<< "$(sed -n '/\[rejected\]/p' <<< "$push_output")"
+            for index in "${!lines_with_rejected[@]}"
+            do
+                echo -e "\t$(sed -e 's#.*\-> \(\)#\1#' <<< "${lines_with_rejected[index]}" )"
+            done
+
+            echo
+            echo -e "${YELLOW}Repo:${ENDCOLOR} ${repo}"
+            exit
+        fi
+        
+        echo -e "${RED}Cannot push! Here is the error${ENDCOLOR}"
+        echo "$push_output"
+        exit $push_code
+    fi
+
+    # Print result
+    if [[ $push_output == *"Everything up-to-date"* ]]; then
+        echo -e "${GREEN}Everything up-to-date${ENDCOLOR}"
+    elif [ -z "$all" ]; then
+        echo -e "${GREEN}Successful push tag '$1'!${ENDCOLOR}"
+    else
+        echo -e "${GREEN}Successful push all local tags!${ENDCOLOR}"
+    fi
+
+    echo -e "${YELLOW}Repo:${ENDCOLOR}\t${repo}"
+
+    if [ -z "$all" ]; then
+        if [[ $repo == *"github"* ]]; then
+            echo -e "${YELLOW}Tag:${ENDCOLOR}\t${repo}/releases/tag/$1"
+        elif [[ $repo == *"gitlab"* ]]; then
+            echo -e "${YELLOW}Tag:${ENDCOLOR}\t${repo}/-/tags/$1"
+        fi
+    fi
+}
+
+
+### Main function
+# $1: mode
+    # <empty>: create a new tag from a current branch and commit
+    # commit: select commit instead of using current one (or select tag when pushing or deleting)
+    # annotated: create an annotated tag with message
+    # full: create an annotated tag with message and select commit instead of using current one
+    # list: print list of local tags and exit
+    # remote: fetch tags from the remote and print the list
+    # push: select tag to push
+    # push-all: push all tags
+    # delete: select tag to delete
+    # delete: delete all tags
+function tag_script {
+    case "$1" in
+        commit|c|co|cm) 
+            select="true"
+            commit="true"
+        ;;
+        annotated|a|an) annotated="true";;
+        full|f|fl) 
+            select="true"
+            annotated="true"
+            full="true"
+        ;;
+        list|log|l) list="true";;
+        remote|r|re)
+            list="true"
+            remote="true"
+        ;;
+        push|ps|ph|p)
+            push="true"
+            select="true"
+            push_single="true"
+        ;;
+        push-all|pa) push="true";;
+        delete|del|d) 
+            delete="true"
+            select="true"
+            delete_single="true"
+        ;;
+        delete-all|da) delete="true";;
+        help|h) help="true";;
+
+        *)
+            wrong_mode "tag" $1
+    esac
+
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb tag <mode>${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\tCreate a new tag from a current commit and push it to a remote"
+        echo -e "commit|c|co|cm\tCreate a new tag from a selected commit and push it to a remote"
+        echo -e "annotated|a|an\tCreate a new annotated tag from a current commit and push it to a remote"
+        echo -e "full|fu|fl\tCreate a new annotated tag from a selected commit and push it to a remote"
+        echo -e "list|log|l\tPrint a list of local tags"
+        echo -e "remote|r|re\tFetch tags from a remote and print it"
+        echo -e "push|ps|ph|p\tSelect a local tag for pushing to a remote"
+        echo -e "push-all|pa\tPush all tags to a remote"
+        echo -e "delete|del|d\tSelect a tag to delete in local and remote"
+        echo -e "delete-all|da\tDelete all local tags"
+        echo -e "help|h\t\tShow this help"
+        exit
+    fi
+
+
+    ### Print header
+    header="GIT TAG"
+    if [ -n "${commit}" ]; then
+        header="$header COMMIT"
+    elif [ -n "${full}" ]; then
+        header="$header FULL"
+    elif [ -n "${annotated}" ]; then
+        header="$header ANNOTATED"
+    elif [ -n "${list}" ]; then
+        header="$header LIST"
+    elif [ -n "${remote}" ]; then
+        header="$header REMOTE"
+    elif [ -n "${push_single}" ]; then
+        header="$header PUSH"
+    elif [ -n "${push}" ]; then
+        header="$header PUSH ALL"
+    elif [ -n "${delete_single}" ]; then
+        header="$header DELETE"
+    elif [ -n "${delete}" ]; then
+        header="$header DELETE ALL"    
+    fi
+
+    echo -e "${YELLOW}${header}${ENDCOLOR}"
+    echo
+
+
+    ### Fetch tags from the remote
+    if [ -n "${remote}" ]; then
+        echo -e "${YELLOW}Fetching all tags from remote...${ENDCOLOR}"
+        fetch_output=$(git fetch $origin_name --tags 2>&1)
+        fetch_code=$?
+
+        echo
+        
+        if [ $fetch_code != 0 ]; then
+            echo -e "${RED}Cannot fetch tags! Here is the error${ENDCOLOR}"
+            echo -e "${fetch_output}"
+            exit $fetch_code
+        fi
+
+        if [ "$fetch_output" != "" ]; then
+            echo -e "${YELLOW}New tags${ENDCOLOR}"
+            IFS=$'\n' read -rd '' -a lines_with_tags <<< "$(sed -n '/\[new tag\]/p' <<< "$fetch_output")"
+            for index in "${!lines_with_tags[@]}"
+            do
+                echo -e "\t$(sed -e 's#.*\-> \(\)#\1#' <<< "${lines_with_tags[index]}" )"
+            done
+            echo
+        fi
+    fi
+
+
+    ### Print tag list
+    count=14
+    if [ -n "${delete}" ] || [ -n "${list}" ]; then
+        count=999  # Show all tags
+    fi
+
+    tags_info_str=$(git for-each-ref --count=$count --format="%(refname:short) | %(creatordate:relative) | %(objectname:short) - %(contents:subject)" --sort=-creatordate refs/tags | column -ts'|' )
+    tags_str=$(git for-each-ref --count=$count --format="%(refname:short)" --sort=-creatordate refs/tags)
+    commit_hashes_str=$(git for-each-ref --count=$count --format="%(objectname:short)" --sort=-creatordate refs/tags)
+
+    IFS=$'\n' read -rd '' -a tags_info <<<"$tags_info_str"
+    IFS=$'\n' read -rd '' -a tags <<<"$tags_str"
+    IFS=$'\n' read -rd '' -a commit_hashes <<<"$commit_hashes_str"
+
+    number_of_tags=${#tags[@]}
+
+    if [ $number_of_tags == 0 ]; then
+        echo -e "${YELLOW}There is no local tags${ENDCOLOR}"
+        if [ -n "${delete}" ]; then
+            exit
+        fi
+    else
+        tags_header="Last ${number_of_tags} local tags"
+        if [ -n "${delete}" ] || [ -n "${list}" ]; then
+            tags_header="All ${number_of_tags} local tags"
+        fi
+        echo -e "${YELLOW}${tags_header}${ENDCOLOR}"
+
+        for index in "${!tags[@]}"
+        do
+            tag=$(escape "${tags[index]}" "/")
+            tag_line=$(sed "1,/${tag}/ s/${tag}/${GREEN_ES}${tag}${ENDCOLOR_ES}/" <<< ${tags_info[index]})
+            tag_line=$(sed "1,/${commit_hashes[index]}/ s/${commit_hashes[index]}/${YELLOW_ES}${commit_hashes[index]}${ENDCOLOR_ES}/" <<< "$tag_line")
+            if [ -n "${delete}" ] || [ -n "${push}" ]; then
+                echo -e "$(($index+1)). ${tag_line}"
+            else
+                echo -e "${tag_line}"
+            fi
+        done
+    fi
+
+    if [ -n "$list" ]; then
+        exit
+    fi
+
+
+    ### Push all case
+    if [ -n "$push" ] && [ -z "$select" ]; then
+        echo
+        echo -e "${YELLOW}Pushing all tags..."${ENDCOLOR}
+
+        push_tag
+        exit
+    fi
+
+
+    ### Delete all case
+    if [ -n "${delete}" ] && [ -z "$select" ]; then
+        echo
+        echo -e "${YELLOW}Do you really want to delete all local tags (y/n)?${ENDCOLOR}"
+        yes_no_choice "Deleting..."
+        git tag | xargs git tag -d 
+        exit
+    fi
+
+
+    ### Select tag for delete / push
+    if [ -n "${delete}" ] || [ -n "$push" ]; then
+        echo "0. Exit..."
+        echo
+        if [ -n "${delete}" ]; then
+            printf "Enter tag number to delete: "
+        else
+            printf "Enter tag number to push: "
+        fi
+
+        choose "${tags[@]}"
+        tag_name=$choice_result
+
+        if [ $number_of_tags -gt 9 ] && [ $choice -gt 9 ]; then
+            echo  # User press enter if choice < 10
+        fi
+        echo
+
+        # Push case
+        if [ -n "${push}" ]; then
+            echo -e "${YELLOW}Pushing..."${ENDCOLOR}
+            echo
+            push_tag $tag_name
+            exit
+        fi
+
+        delete_result=$(git tag -d $tag_name 2>&1)
+        delete_code=$?
+
+        if [ $delete_code != 0 ]; then
+            echo -e "${RED}Cannot delete tag '${tag_name}'!${ENDCOLOR}"
+            echo -e "$delete_result"
+            exit
+        fi
+
+        echo -e "${GREEN}Successfully deleted tag '${tag_name}'${ENDCOLOR}"
+        echo
+        echo -e "Do you want to delete this tag in ${YELLOW}${origin_name}${ENDCOLOR} (y/n)?"
+        yes_no_choice "Deleting..."
+        push_tag $tag_name "true"
+
+        exit
+    fi
+    echo
+
+
+    ### Select commit for new tag
+    if [ -n "$select" ]; then
+        echo -e "${YELLOW}Select commit for a new tag on branch '$current_branch'${ENDCOLOR}"
+        choose_commit 9
+
+        echo 
+        echo -e "${YELLOW}Selected commit${ENDCOLOR}"
+
+
+    ### Use current commit for new tag
+    else
+        commit_hash=$(git rev-parse HEAD)
+        echo -e "${YELLOW}Current commit${ENDCOLOR}"
+    fi
+
+    commit_message=$(git log -1 --pretty=%B $commit_hash | cat)
+    echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR} ${commit_message}"
+
+
+    ### Enter name for a new tag
+    echo
+    echo -e "${YELLOW}Enter the name of a new tag${ENDCOLOR}"
+    echo -e "If this tag will be using for release, use version number in semver format like '1.0.0-alpha'"
+    echo -e "Leave it blank to exit"
+
+    if [ -n "${annotated}" ]; then
+        prompt="$(echo -n -e "${TODO}git tag -a${ENDCOLOR} ")"
+    else
+        prompt="$(echo -n -e "${TODO}git tag${ENDCOLOR} ")"
+    fi
+
+    read -p "$prompt" -e tag_name
+
+    if [ -z "$tag_name" ]; then
+        exit
+    fi
+
+    if [[ "$tag_name" == "tag" ]] || [[ "$tag_name" == *" "* ]]; then
+        echo
+        echo -e "${RED}This name is forbidden!${ENDCOLOR}"
+        exit
+    fi
+    echo
+
+
+    ### If annotated - enter tag message
+    if [ -n "$annotated" ]; then
+        tag_file=".tagmsg__"
+        touch $tag_file
+
+        echo """
+###
+### Write some words about a new tag '${tag_name}'
+### [$current_branch ${commit_hash::7}] ${commit_message}
+### 
+### You can place changelog here, if this tag means a new release
+""" >> $tag_file
+
+        while [ true ]; do
+            $editor $tag_file
+            tag_message=$(cat $tag_file | sed '/^#/d')
+
+            if [ -n "$tag_message" ]; then
+                break
+            fi
+            echo
+            echo -e "${YELLOW}Tag message cannot be empty${ENDCOLOR}"
+            echo
+            read -n 1 -p "Try for one more time? (y/n) " -s -e choice
+            if [ "$choice" != "y" ]; then
+                find . -name "$tag_file*" -delete
+                exit
+            fi    
+        done
+
+        find . -name "$tag_file*" -delete
+    fi
+
+
+    if [ -z "$select" ]; then
+        commit_hash=""
+    fi
+
+
+    ### Finally create tag
+    if [ -n "$annotated" ]; then
+        tag_output=$(git tag -a -m """$tag_message""" $tag_name $commit_hash 2>&1)
+    else
+        tag_output=$(git tag $tag_name $commit_hash 2>&1)
+    fi
+
+    tag_code=$?
+
+    if [ $tag_code != 0 ]; then
+        if [[ $tag_output == *"already exists" ]]; then
+            echo -e "${RED}Tag '${tag_name}' already exists!${ENDCOLOR}"
+        else
+            echo -e "${RED}Cannot create tag '${tag_name}'!${ENDCOLOR}"
+            echo -e "$tag_output"
+        fi
+        exit
+    fi
+
+    if [ -n "$annotated" ]; then
+        is_annotated=" annotated"
+    fi
+
+    if [ -n "$select" ]; then
+        is_commit_hash=" from commit '${commit_hash}'"
+    fi
+
+    echo -e "${GREEN}Successfully created${is_annotated} tag '${tag_name}'${is_commit_hash}!${ENDCOLOR}"
+
+    if [ -n "$tag_message" ]; then
+        echo -e "$tag_message"
+    fi
+    echo
+
+
+    ### Push tag
+    echo -e "Do you want to push this tag to ${YELLOW}${origin_name}${ENDCOLOR} (y/n)?"
+    yes_no_choice "Pushing..."
+
+    push_tag $tag_name
+}
+#!/usr/bin/env bash
+
+### Script for providing some info from git log and movind HEAD
+# Read README.md to get more information how to use it
+# Use this script only with gitbasher
+
+
+### Function opens git log in pretty format
+function gitlog {
+    git log --pretty="%C(Yellow)%h  %C(reset)%ad (%C(Green)%cr%C(reset))%x09 %C(Cyan)%an: %C(reset)%s"
+}
+
+
+### Function opens git reflog in pretty format
+function reflog {
+    git reflog --pretty="%C(Yellow)%h  %C(reset)%ad (%C(Green)%cr%C(reset))%x09 %C(Cyan)%gd%C(reset) %gs"
+}
+
+
+### Function prints last commit info (from git log)
+function last_commit {
+    echo -e "$(git --no-pager log --pretty="${YELLOW}%h${ENDCOLOR} | %s | ${BLUE}%an${ENDCOLOR} | %cd" -1 | column -ts'|')"
+}
+
+
+### Function prints last action info (from git reflog)
+function last_action {
+    echo -e "$(git --no-pager reflog --pretty="${YELLOW}%gd${ENDCOLOR} | %gs | ${BLUE}%an${ENDCOLOR} | %cd" -1 | column -ts'|')"
+}
+
+
+### Function undoes previous commit (move HEAD pointer up for one record, HEAD^)
+function undo_commit {
+    cancelled_commit=$(git --no-pager log --pretty="${YELLOW}%h${ENDCOLOR} | %s | ${BLUE}%an${ENDCOLOR} | %cd" -1)
+    git reset HEAD^ > /dev/null
+    new_commit=$(git --no-pager log --pretty="${YELLOW}%h${ENDCOLOR} | %s | ${BLUE}%an${ENDCOLOR} | %cd" -1)
+
+    msg=$(echo -e "${GREEN}New last commit:${ENDCOLOR}|${new_commit}\n${GREEN}Cancelled commit:${ENDCOLOR}|${cancelled_commit}" | column -ts'|')
+    echo -e "$msg"
+}
+
+
+### Function undoes previous action (reset HEAD{1})
+function undo_action {
+    cancelled_commit=$(git --no-pager log --pretty="${YELLOW}%h${ENDCOLOR} | %s | ${BLUE}%an${ENDCOLOR} | %cd" -1)
+    cancelled_action=$(git --no-pager reflog --pretty="${YELLOW}%gd${ENDCOLOR} | %gs | ${BLUE}%an${ENDCOLOR} | %cd" -1)
+    git reset HEAD@{1} > /dev/null
+    new_commit=$(git --no-pager log --pretty="${YELLOW}%h${ENDCOLOR} | %s | ${BLUE}%an${ENDCOLOR} | %cd" -1)
+
+    msg=$(echo -e "${GREEN}New last commit:${ENDCOLOR}|${new_commit}\n${GREEN}Cancelled commit:${ENDCOLOR}|${cancelled_commit}\n${GREEN}Cancelled action:${ENDCOLOR}|${cancelled_action}" | column -ts'|')
+    echo -e "$msg"
+}
+
+#!/usr/bin/env bash
+
+
+### Print usage information
+function print_help {
+    echo -e "usage: ${YELLOW}gitb <command> <mode>${ENDCOLOR}"
+    echo
+    msg="${YELLOW}Command${ENDCOLOR}_\t${YELLOW}Description${ENDCOLOR}"
+    msg="$msg\ncommit_Everything about commit creation_commit|c|co|cm|com"
+    msg="$msg\npush_Pushing changes to a remote repository_push|ps|ph"
+    msg="$msg\npull_Pulling changes from a remote repository_pull|pl|pll"
+    msg="$msg\nmerge_Merge changes from different branches_merge"
+    msg="$msg\nbranch_Managing branches_branch|b|br|bh|bra"
+    msg="$msg\ntag_Managing tags_tag|t|tg"
+    msg="$msg\nconfig_Configurate gitbasher_config|cfg|conf"
+    echo -e "$(echo -e "$msg" | column -ts '_')"
+
+    echo
+    echo -e "${YELLOW}Commands without modes${ENDCOLOR}"
+    echo -e "log\t\tOpen git log in a pretty format"
+    echo -e "reflog\t\tOpen git reflog in a pretty format"
+    echo -e "last-commit\tShow info about last commit (last record from 'git log')"
+    echo -e "last-action\tShow info about last commit (last record from 'git reflog')"
+    echo -e "undo-commit\tUndo last commit (record from git log)"
+    echo -e "undo-action\tUndo last action (record from git reflog)"
+
+    exit
+}
+
+if [ -z $1 ] || [ "$1" == "--help" ] || [ "$1" == "help" ] || [ "$1" == "man" ]; then
+    print_help
+fi
+
+
+### Print settings if this is first run
+if [ $is_first == "true" ]; then 
+    echo -e "${GREEN}Thank for using gitbasher in project '$project_name'${ENDCOLOR}"
+    echo -e "Current settings:"
+    echo -e "\tmain: '$main_branch'"
+    echo -e "\tsep: '$sep'"
+    echo -e "\teditor: '$editor'"
+
+    echo -e "You can change these settings by using ${YELLOW}gitb config <name>${ENDCOLOR}"
+    echo
+fi
+
+
+### Run script
+case "$1" in
+    commit|c|co|cm|com)         
+        commit_script $2
+    ;;
+    push|ps|ph)         
+        push_script $2
+    ;;
+    pull|pl|pll)         
+        pull_script $2
+    ;;
+    merge)         
+        merge_script $2
+    ;;
+    branch|b|br|bh|bra)         
+        branch_script $2
+    ;;
+    tag|t|tg)         
+        tag_script $2
+    ;;
+    config|cfg|conf)         
+        config_script $2
+    ;;
+    log|l)
+        gitlog
+    ;;
+    reflog|rl)
+        reflog
+    ;;
+    undo-commit)
+        undo_commit
+    ;;
+    undo-action)
+        undo_action
+    ;;
+    last-commit|lc)
+        last_commit
+    ;;
+    last-action|la)
+        last_action
+    ;;
+
+    *)
+        print_help
+    ;;
+esac
+
+exit $?

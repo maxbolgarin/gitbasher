@@ -20,15 +20,81 @@ CYAN_ES="\x1b[36m"
 ENDCOLOR_ES="\x1b[0m"
 
 
+### Cannot use bash version less than 4 because of many features that was added to language in that version
+if ((BASH_VERSINFO[0] < 4)); then 
+    printf "Sorry, you need at least ${YELLOW}bash-4.0${ENDCOLOR} to run this script.\n
+If your OS is debian-based, use:
+    ${GREEN}apt install --only-upgrade bash${ENDCOLOR}\n
+If your OS is mac, use:
+    ${GREEN}brew install bash${ENDCOLOR}\n\n" 
+    exit 1; 
+fi
+
+
 ### Useful consts
 current_branch=$(git branch --show-current)
+origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')
+main_branch=$(git symbolic-ref refs/remotes/$origin_name/HEAD | sed "s@^refs/remotes/$origin_name/@@")
 
 
-### Function for evaluating path with '~' symbol
-# $1: path
-# Returns: evaluated path
-function prepare_path {
-    eval echo "$1"
+### Function tries to get config from local, then from global, then returns default
+# $1: config name
+# $2: default value
+# Returns: config value
+function get_config_value {
+    value=$(git config --local --get $1)
+    if [ -z $value ]; then
+        value=$(git config --global --get $1)
+        if [ -z $value ]; then
+            value=$2
+        fi
+    fi
+    echo -e "$value"
+}
+
+
+### Function sets git config value
+# $1: name
+# $2: value
+# $3: global flag
+# Returns: value
+function set_config_value {
+    if [ -z $3 ]; then
+        git config --local --add $1 "$2"
+    else
+        git config --global --add $1 "$2"
+    fi
+    echo "$2"
+}
+
+
+### Function should be used in default case in script mode selection
+# $1: script name
+# $2: entered mode
+function wrong_mode {
+    if [ -n "$2" ]; then
+        echo -e "Unknown mode ${YELLOW}$2${ENDCOLOR} for ${YELLOW}gitb $1${ENDCOLOR}"
+        echo -e "Use ${GREEN}gitb $1 help${ENDCOLOR} to get usage info"
+        exit
+    fi
+}
+
+
+### Function echoes (true return) url to current user's repo (remote)
+# Return: url to repo
+function get_repo {
+    repo=$(git config --get remote.${origin_name}.url)
+    repo="${repo/":"/"/"}" 
+    repo="${repo/"git@"/"https://"}"
+    repo="${repo/".git"/""}" 
+    echo "$repo"
+}
+
+
+### Function echoes (true return) name of current repo
+function get_repo_name {
+    repo=$(get_repo)
+    echo "${repo##*/}"
 }
 
 
@@ -41,18 +107,6 @@ function escape {
     sub="$2"
     escaped="\\$sub"
     echo "${string//${sub}/${escaped}}"
-}
-
-
-### Function reverts array
-# $1: array to reverse
-# $2: output array
-function reverse {
-    declare -n arr="$1" rev="$2"
-    for i in "${arr[@]}"
-    do
-        rev=("$i" "${rev[@]}")
-    done
 }
 
 
@@ -78,13 +132,16 @@ function check_code {
 
 ### Function asks user to enter yes or no, it will exit if user answers 'no'
 # $1: what to write in console on success
+# $2: flag no echo
 function yes_no_choice {
     while [ true ]; do
         read -n 1 -s choice
         if [ "$choice" == "y" ]; then
             if [ -n "$1" ]; then
                 echo -e "${YELLOW}$1${ENDCOLOR}"
-                echo
+                if [ -z $2 ]; then
+                    echo
+                fi
             fi
             return
         fi
@@ -92,18 +149,6 @@ function yes_no_choice {
             exit
         fi
     done
-}
-
-
-### Function echoes (true return) url to current user's repo (remote)
-# $1: origin name
-# Return: url to repo
-function get_repo {
-    repo=$(git config --get remote.$1.url)
-    repo="${repo/":"/"/"}" 
-    repo="${repo/"git@"/"https://"}"
-    repo="${repo/".git"/""}" 
-    echo "$repo"
 }
 
 
@@ -156,6 +201,7 @@ function choose {
         fi
     done
 }
+
 
 ### Function prints the list of commits
 # $1: number of last commits to show
@@ -367,7 +413,7 @@ function list_branches {
     for index in "${!branches_with_info_first_main[@]}"
     do
         branch=$(escape "${branches_first_main[index]}" "/")
-        if [[ "$1" == "remote" ]]; then
+        if [[ "$1" == "remote" ]] && [[ "$branch" != "origin"* ]]; then
             branch="$origin_name\/$branch"
         fi
         branch_line=$(sed "1,/${branch}/ s/${branch}/${GREEN_ES}${branch}${ENDCOLOR_ES}/" <<< ${branches_with_info_first_main[index]})
@@ -493,7 +539,7 @@ function fetch {
 #      * merge_output
 #      * merge_code - 0 if everything is ok, not zero if there are conflicts
 function merge {
-    merge_output=$(git merge ${merge_branch} 2>&1)
+    merge_output=$(git merge $1 2>&1)
     merge_code=$?
 
     if [ $merge_code == 0 ] ; then

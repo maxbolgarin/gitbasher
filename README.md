@@ -60,7 +60,7 @@ You should try **gitbasher** if you use Git from the command line. What benefits
 ## Installation
 
 ```
-curl -SL https://raw.githubusercontent.com/maxbolgarin/gitbasher/wip/v2/dist/gitb -o ./gitb && chmod +x ./gitb
+curl -SL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/dist/gitb -o ./gitb && chmod +x ./gitb
 ```
 
 </br>
@@ -69,26 +69,29 @@ curl -SL https://raw.githubusercontent.com/maxbolgarin/gitbasher/wip/v2/dist/git
 
 Usage `gitb <command> <mode>`
 
-* use `gitb help` to get global info
+* use `gitb help` to get global help
 * use `gitb <command> help` to get info about `<command>` and it's modes
 
+### `gitb commit <mode>`
 
-| **Commit**            | **Description**                                                                                 |
+| **Modes**             | **Description**                                                                                 |
 |-----------------------|-------------------------------------------------------------------------------------------------|
-| **commit**            | Choose files to commit and create conventional message in format: 'type(scope): message'        |
-| **commit fast**       | Add all files (`git add .`) and create commit message as in `commit`                            |
-| **commit msg**        | Same as in `commit`, but create multiline commit message using text editor                      |
-| **commit ticket**     | Same as `commit msg`, but add tracker's ticket info to the end of commit header                 |
-| **commit amend**      | Choose files and make --amend commit to the last one (`git commit --amend --no-edit`)           |
-| **commit fixup**      | Choose files and select commit to --fixup (`git commit --fixup <commit>`)                       |
-| **commit autosquash** | Choose commit from which to squash fixup commits and run `git rebase -i --autosquash <commit>`  |
-| **commit revert**     | Choose commit to revert (`git revert -no-edit <commit>`)                                        |
+| `<empty>`             | Choose files to commit and create conventional message in format: 'type(scope): message'        |
+| `fast` \| `f`         | Add all files (`git add .`) and create commit message as in `gitb commit`                       |
+| `msg` \| `m`          | Same as in `gitb commit`, but create multiline commit message using text editor                 |
+| `ticket` \| `t`       | Same as `git commit msg`, but add tracker's ticket info to the end of commit header             |
+| `amend` \| `a`        | Choose files and make `--amend` commit to the last one `git commit --amend --no-edit`           |
+| `fixup` \| `x`        | Choose files and select commit for `--fixup` `git commit --fixup <commit>`                      |
+| `autosquash` \| `s`   | Choose commit from which to squash fixup commits and run `git rebase -i --autosquash <commit>`  |
+| `revert` \| `r`       | Choose commit to revert `git revert -no-edit <commit>`                                          |
 
 <br/>
 
-| **Pull and Push** | **Description**                                                                    |
+| **gitb pull**     | **Description**                                                                    |
 |-------------------|------------------------------------------------------------------------------------|
 | **pull**          | Fetch current branch and then merge changes with conflicts fixing                  |
+
+
 | **push**          | Print list of commits, push them to current branch or pull changes first           |
 | **push fast**     | Same as `push`, but without pressing 'y' to confirm push                           |
 | **push list**     | Print a list of unpushed local commits without actual pushing it                   |

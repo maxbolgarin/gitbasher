@@ -68,6 +68,18 @@ function set_config_value {
 }
 
 
+### Function should be used in default case in script mode selection
+# $1: script name
+# $2: entered mode
+function wrong_mode {
+    if [ -n "$2" ]; then
+        echo -e "Unknown mode ${YELLOW}$2${ENDCOLOR} for ${YELLOW}gitb $1${ENDCOLOR}"
+        echo -e "Use ${GREEN}gitb $1 help${ENDCOLOR} to get usage info"
+        exit
+    fi
+}
+
+
 ### Function echoes (true return) url to current user's repo (remote)
 # Return: url to repo
 function get_repo {

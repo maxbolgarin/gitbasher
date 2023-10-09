@@ -101,29 +101,87 @@ function push_tag {
     # annotated: create an annotated tag with message
     # full: create an annotated tag with message and select commit instead of using current one
     # list: print list of local tags and exit
-    # delete: delete tag (pass -s to select tag, or it will delete everything)
-    # remote: fetch tags from the remote
-    # push: push tags (pass -s to select what tag to push)
+    # remote: fetch tags from the remote and print the list
+    # push: select tag to push
+    # push-all: push all tags
+    # delete: select tag to delete
+    # delete: delete all tags
 function tag_script {
     case "$1" in
-        commit|c|co|cm|com) select="true";; # TODO: commit
-        annotated|a|an|ann) annotated="true";;
-        full|fu|fl) full="true";; # TODO
+        commit|c|co|cm) 
+            select="true"
+            commit="true"
+        ;;
+        annotated|a|an) annotated="true";;
+        full|f|fl) 
+            select="true"
+            annotated="true"
+            full="true"
+        ;;
         list|log|l) list="true";;
-        delete|remove|d|del|rm) delete="true";;
-        remote|r|re) remote="true";;
-        push|ps|ph|p) push="true";;
+        remote|r|re)
+            list="true"
+            remote="true"
+        ;;
+        push|ps|ph|p)
+            push="true"
+            select="true"
+            push_single="true"
+        ;;
+        push-all|pa) push="true";;
+        delete|del|d) 
+            delete="true"
+            select="true"
+            delete_single="true"
+        ;;
+        delete-all|da) delete="true";;
+        help|h) help="true";;
+
+        *)
+            wrong_mode "tag" $1
     esac
 
-    ### Print header
-    header="TAG MANAGER"
-    if [ -n "${annotated}" ]; then
-        header="$header ANNOTATED"
-    elif [ -n "${delete}" ]; then
-        header="$header DELETE"
-    elif [ -n "${push}" ]; then
-        header="$header PUSH"    
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb tag <mode>${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\tCreate a new tag from a current commit and push it to a remote"
+        echo -e "commit|c|co|cm\tCreate a new tag from a selected commit and push it to a remote"
+        echo -e "annotated|a|an\tCreate a new annotated tag from a selected commit and push it to a remote"
+        echo -e "full|fu|fl\tCreate a new annotated tag from a selected commit and push it to a remote"
+        echo -e "list|log|l\tPrint a list of local tags"
+        echo -e "remote|r|re\tFetch tags from a remote and print it"
+        echo -e "push|ps|ph|p\tSelect a local tag for pushing to a remote"
+        echo -e "push-all|pa\tPush all tags to a remote"
+        echo -e "delete|del|d\tSelect a tag to delete in local and remote"
+        echo -e "delete-all|da\tDelete all local tags"
+        echo -e "help|h\t\tShow this help"
+        exit
     fi
+
+
+    ### Print header
+    header="GIT TAG"
+    if [ -n "${commit}" ]; then
+        header="$header COMMIT"
+    elif [ -n "${full}" ]; then
+        header="$header FULL"
+    elif [ -n "${annotated}" ]; then
+        header="$header ANNOTATED"
+    elif [ -n "${list}" ]; then
+        header="$header LIST"
+    elif [ -n "${remote}" ]; then
+        header="$header REMOTE"
+    elif [ -n "${push_single}" ]; then
+        header="$header PUSH"
+    elif [ -n "${push}" ]; then
+        header="$header PUSH ALL"
+    elif [ -n "${delete_single}" ]; then
+        header="$header DELETE"
+    elif [ -n "${delete}" ]; then
+        header="$header DELETE ALL"    
+    fi
+
     echo -e "${YELLOW}${header}${ENDCOLOR}"
     echo
 
@@ -299,11 +357,11 @@ function tag_script {
 
     read -p "$prompt" -e tag_name
 
-    if [ -z $tag_name ]; then
+    if [ -z "$tag_name" ]; then
         exit
     fi
 
-    if [ "$tag_name" == "tag" ]; then
+    if [[ "$tag_name" == "tag" ]] || [[ "$tag_name" == *" "* ]]; then
         echo
         echo -e "${RED}This name is forbidden!${ENDCOLOR}"
         exit

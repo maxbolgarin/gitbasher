@@ -76,9 +76,9 @@
 
 ## Installation
 
-### MacOS
+### Linux and MacOS
 
-Providing an application via `homebrew` is a task for the future, so it is necessary to manually install the executable:
+Providing an application via `apt` or `homebrew` is a task for the future, so it is necessary to manually install/update the executable:
 
 ```
 PATH_TO_GITB=/usr/local/bin/gitb &&

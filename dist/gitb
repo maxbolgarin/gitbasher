@@ -5,8 +5,8 @@
 
 git_check=$(git branch --show-current 2>&1)
 if [[ "$git_check" == *"fatal: not a git repository"* ]]; then
-    echo "You can use gitb only from directory with inited git repository"
-    exit
+echo "You can use gitb only from directory with inited git repository"
+exit
 fi
 
 ### Get common and config first
@@ -772,6 +772,8 @@ editor=$(get_config_value core.editor "vim")
 ### Is this is a first run of gitbasher in this project?
 is_first=$(get_config_value gitbasher.isfirst "true")
 set_config_value gitbasher.isfirst false > /dev/null
+
+project_name="$(get_repo_name)"
 
 
 ### Function asks user to select default gitbasher branch
@@ -2127,7 +2129,7 @@ function tag_script {
         echo -e "${YELLOW}Available modes${ENDCOLOR}"
         echo -e "<empty>\t\tCreate a new tag from a current commit and push it to a remote"
         echo -e "commit|c|co|cm\tCreate a new tag from a selected commit and push it to a remote"
-        echo -e "annotated|a|an\tCreate a new annotated tag from a selected commit and push it to a remote"
+        echo -e "annotated|a|an\tCreate a new annotated tag from a current commit and push it to a remote"
         echo -e "full|fu|fl\tCreate a new annotated tag from a selected commit and push it to a remote"
         echo -e "list|log|l\tPrint a list of local tags"
         echo -e "remote|r|re\tFetch tags from a remote and print it"
@@ -2482,29 +2484,31 @@ function undo_action {
     echo -e "$msg"
 }
 
-project_name="$(get_repo_name)"
+#!/usr/bin/env bash
 
 
 ### Print usage information
 function print_help {
     echo -e "usage: ${YELLOW}gitb <command> <mode>${ENDCOLOR}"
     echo
-    msg="${YELLOW}Command${ENDCOLOR}_t${YELLOW}Description${ENDCOLOR}"
-    msg="$msgncommit_Everything about commit creation_commit|c|co|cm|com"
-    msg="$msgnpush_Pushing changes to a remote repository_push|ps|ph"
-    msg="$msgnpull_Pulling changes from a remote repository_pull|pl|pll"
-    msg="$msgnmerge_Merge changes from different branches_merge"
-    msg="$msgnbranch_Managing branches_branch|b|br|bh|bra"
-    msg="$msgntag_Managing tags_tag|t|tg"
-    msg="$msgnconfig_Configurate gitbasher_config|cfg|conf"
+    msg="${YELLOW}Command${ENDCOLOR}_\t${YELLOW}Description${ENDCOLOR}"
+    msg="$msg\ncommit_Everything about commit creation_commit|c|co|cm|com"
+    msg="$msg\npush_Pushing changes to a remote repository_push|ps|ph"
+    msg="$msg\npull_Pulling changes from a remote repository_pull|pl|pll"
+    msg="$msg\nmerge_Merge changes from different branches_merge"
+    msg="$msg\nbranch_Managing branches_branch|b|br|bh|bra"
+    msg="$msg\ntag_Managing tags_tag|t|tg"
+    msg="$msg\nconfig_Configurate gitbasher_config|cfg|conf"
     echo -e "$(echo -e "$msg" | column -ts '_')"
 
     echo
     echo -e "${YELLOW}Commands without modes${ENDCOLOR}"
-    echo -e "logttOpen git log in a pretty format"
-    echo -e "reflogttOpen git reflog in a pretty format"
-    echo -e "undo-committUndo last commit (record from git log)"
-    echo -e "undo-actiontUndo last action (record from git reflog)"
+    echo -e "log\t\tOpen git log in a pretty format"
+    echo -e "reflog\t\tOpen git reflog in a pretty format"
+    echo -e "last-commit\tShow info about last commit (last record from 'git log')"
+    echo -e "last-action\tShow info about last commit (last record from 'git reflog')"
+    echo -e "undo-commit\tUndo last commit (record from git log)"
+    echo -e "undo-action\tUndo last action (record from git reflog)"
 
     exit
 }
@@ -2518,9 +2522,9 @@ fi
 if [ $is_first == "true" ]; then 
     echo -e "${GREEN}Thank for using gitbasher in project '$project_name'${ENDCOLOR}"
     echo -e "Current settings:"
-    echo -e "tmain: '$main_branch'"
-    echo -e "tsep: '$sep'"
-    echo -e "teditor: '$editor'"
+    echo -e "\tmain: '$main_branch'"
+    echo -e "\tsep: '$sep'"
+    echo -e "\teditor: '$editor'"
 
     echo -e "You can change these settings by using ${YELLOW}gitb config <name>${ENDCOLOR}"
     echo

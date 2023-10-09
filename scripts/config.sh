@@ -14,6 +14,8 @@ editor=$(get_config_value core.editor "vim")
 is_first=$(get_config_value gitbasher.isfirst "true")
 set_config_value gitbasher.isfirst false > /dev/null
 
+project_name="$(get_repo_name)"
+
 
 ### Function asks user to select default gitbasher branch
 function set_main_branch {

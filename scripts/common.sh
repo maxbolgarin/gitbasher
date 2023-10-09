@@ -60,9 +60,9 @@ function get_config_value {
 # Returns: value
 function set_config_value {
     if [ -z $3 ]; then
-        git config --local --add $1 "$2"
+        git config --local $1 $2
     else
-        git config --global --add $1 "$2"
+        git config --global $1 $2
     fi
     echo "$2"
 }

@@ -37,9 +37,9 @@ fi
 if [ $is_first == "true" ]; then 
     echo -e "${GREEN}Thank for using gitbasher in project '$project_name'${ENDCOLOR}"
     echo -e "Current settings:"
-    echo -e "\tmain: '$main_branch'"
-    echo -e "\tsep: '$sep'"
-    echo -e "\teditor: '$editor'"
+    echo -e "\tmain:\t${YELLOW}$main_branch${ENDCOLOR}"
+    echo -e "\tsep:\t${YELLOW}$sep${ENDCOLOR}"
+    echo -e "\teditor:\t${YELLOW}$editor${ENDCOLOR}"
 
     echo -e "You can change these settings by using ${YELLOW}gitb config <name>${ENDCOLOR}"
     echo

@@ -17,6 +17,7 @@ function print_help {
 
     echo
     echo -e "${YELLOW}Commands without modes${ENDCOLOR}"
+    echo -e "status\t\tShow general info about repo and changed files"
     echo -e "log\t\tOpen git log in a pretty format"
     echo -e "reflog\t\tOpen git reflog in a pretty format"
     echo -e "last-commit\tShow info about last commit (last record from 'git log')"
@@ -85,6 +86,9 @@ case "$1" in
     ;;
     last-action|la)
         last_action
+    ;;
+    status|s)
+        status
     ;;
 
     *)

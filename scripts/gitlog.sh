@@ -5,6 +5,16 @@
 # Use this script only with gitbasher
 
 
+function status {
+    echo -e "${YELLOW}Project:${ENDCOLOR}\t${GREEN}$project_name${ENDCOLOR}"
+    echo -e "${YELLOW}Repo URL:${ENDCOLOR}\t${GREEN}$repo_url${ENDCOLOR}"
+    echo -e "${YELLOW}Branch:${ENDCOLOR}\t\t${GREEN}$current_branch${ENDCOLOR}"
+    echo -e "${YELLOW}Last commit:${ENDCOLOR}\t$(git --no-pager log --pretty="%s | ${BLUE}%an${ENDCOLOR} | %cd" -1 | column -ts'|')"
+    echo -e "Git status"
+    git status -s
+}
+
+
 ### Function opens git log in pretty format
 function gitlog {
     git log --pretty="%C(Yellow)%h  %C(reset)%ad (%C(Green)%cr%C(reset))%x09 %C(Cyan)%an: %C(reset)%s"

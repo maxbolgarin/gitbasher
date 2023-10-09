@@ -15,6 +15,7 @@ is_first=$(get_config_value gitbasher.isfirst "true")
 set_config_value gitbasher.isfirst false > /dev/null
 
 project_name="$(get_repo_name)"
+repo_url="$(get_repo)"
 
 
 ### Function asks user to select default gitbasher branch

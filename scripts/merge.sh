@@ -98,9 +98,9 @@ function merge_script {
 
 
     ### If we get here - it is success
-    echo -e "${GREEN}Successful merge!${ENDCOLOR}"
-    echo -e "${BLUE}[${merge_branch}${ENDCOLOR} -> ${BLUE}${current_branch}]${ENDCOLOR}"
-    echo
+    #echo -e "${GREEN}Successful merge!${ENDCOLOR}"
+    #echo -e "${BLUE}[${merge_branch}${ENDCOLOR} -> ${BLUE}${current_branch}]${ENDCOLOR}"
+    #echo
 
 
     ### Merged without conflicts

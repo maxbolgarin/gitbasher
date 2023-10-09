@@ -704,7 +704,8 @@ ${staged_with_tab}
 
     commit_hash="$(git --no-pager log --pretty="%h" -1)"
     echo -e "${GREEN}Successful merge!${ENDCOLOR}"
-    echo -e "${BLUE}[$4 $commit_hash]${ENDCOLOR} $commit_message"
+    current_branch=$(git branch --show-current)
+    echo -e "${BLUE}[$4 $commit_hash${ENDCOLOR} -> ${BLUE}${current_branch}]${ENDCOLOR} $commit_message"
     echo
     merge_commit_code=0
 }

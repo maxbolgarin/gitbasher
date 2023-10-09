@@ -407,7 +407,5 @@ ${staged_with_tab}
     ### Finally
     result=$(git commit -m """$commit""" 2>&1)
     check_code $? "$result" "commit"
-
     after_commit
-
 }

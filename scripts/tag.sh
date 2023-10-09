@@ -113,7 +113,7 @@ function tag_script {
             commit="true"
         ;;
         annotated|a|an) annotated="true";;
-        full|f|fl) 
+        full|f) 
             select="true"
             annotated="true"
             full="true"
@@ -148,7 +148,7 @@ function tag_script {
         echo -e "<empty>\t\tCreate a new tag from a current commit and push it to a remote"
         echo -e "commit|c|co|cm\tCreate a new tag from a selected commit and push it to a remote"
         echo -e "annotated|a|an\tCreate a new annotated tag from a current commit and push it to a remote"
-        echo -e "full|fu|fl\tCreate a new annotated tag from a selected commit and push it to a remote"
+        echo -e "full|f\tCreate a new annotated tag from a selected commit and push it to a remote"
         echo -e "list|log|l\tPrint a list of local tags"
         echo -e "remote|r|re\tFetch tags from a remote and print it"
         echo -e "push|ps|ph|p\tSelect a local tag for pushing to a remote"

@@ -216,7 +216,7 @@ function commit_script {
     echo "7. ci:        changes to CI configuration files and scripts"
     echo "8. chore:     maintanance and housekeeping"
     echo "9. docs:      documentation only changes"
-    echo "0. EXIT without changes"
+    echo "0. Exit without changes"
 
     declare -A types=(
         [1]="feat"

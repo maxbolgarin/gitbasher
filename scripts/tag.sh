@@ -32,7 +32,7 @@ function push_tag {
         exit
     fi
     
-    repo=$(get_repo $origin_name)
+    repo=$(get_repo)
 
     # Print `push-all` result
     if [ -n "$all" ]; then

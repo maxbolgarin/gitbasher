@@ -22,7 +22,7 @@ function push {
     if [ $push_code -eq 0 ] ; then 
         echo -e "${GREEN}Successful push!${ENDCOLOR}"
 
-        repo=$(get_repo $origin_name)
+        repo=$(get_repo)
         echo -e "${YELLOW}Repo:${ENDCOLOR}\t${repo}"
         if [[ ${current_branch} != ${main_branch} ]]; then
             if [[ $repo == *"github"* ]]; then

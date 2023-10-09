@@ -31,22 +31,22 @@ function last_action {
 
 ### Function undoes previous commit (move HEAD pointer up for one record, HEAD^)
 function undo_commit {
-    commit_to_undo=$(last_commit)
+    cancelled_commit=$(git --no-pager log --pretty="${YELLOW}%h${ENDCOLOR} | %s | ${BLUE}%an${ENDCOLOR} | %cd" -1)
     git reset HEAD^ > /dev/null
+    new_commit=$(git --no-pager log --pretty="${YELLOW}%h${ENDCOLOR} | %s | ${BLUE}%an${ENDCOLOR} | %cd" -1)
 
-    echo -e "${YELLOW}New last commit:\t${ENDCOLOR}$(last_commit)"
-    echo -e "${YELLOW}Cancelled commit:\t${ENDCOLOR}${commit_to_undo}"
+    msg=$(echo -e "${GREEN}New last commit:${ENDCOLOR}|${new_commit}\n${GREEN}Cancelled commit:${ENDCOLOR}|${cancelled_commit}" | column -ts'|')
+    echo -e "$msg"
 }
 
 
 ### Function undoes previous action (reset HEAD{1})
 function undo_action {
-    @printf "$(GITBASHER_YELLOW)Old last commit:\t$(GITBASHER_ENDCOLOR)"
-	@$(MAKE) last-commit
-	@printf "$(GITBASHER_YELLOW)Action to undo:\t\t$(GITBASHER_ENDCOLOR)"
-	@$(MAKE) last-action
-	@git reset HEAD@{1} > /dev/null
-	@printf "$(GITBASHER_YELLOW)New last commit:\t$(GITBASHER_ENDCOLOR)"
-	@$(MAKE) last-commit
-}
+    cancelled_commit=$(git --no-pager log --pretty="${YELLOW}%h${ENDCOLOR} | %s | ${BLUE}%an${ENDCOLOR} | %cd" -1)
+    cancelled_action=$(git --no-pager reflog --pretty="${YELLOW}%gd${ENDCOLOR} | %gs | ${BLUE}%an${ENDCOLOR} | %cd" -1)
+    git reset HEAD@{1} > /dev/null
+    new_commit=$(git --no-pager log --pretty="${YELLOW}%h${ENDCOLOR} | %s | ${BLUE}%an${ENDCOLOR} | %cd" -1)
 
+    msg=$(echo -e "${GREEN}New last commit:${ENDCOLOR}|${new_commit}\n${GREEN}Cancelled commit:${ENDCOLOR}|${cancelled_commit}\n${GREEN}Cancelled action:${ENDCOLOR}|${cancelled_action}" | column -ts'|')
+    echo -e "$msg"
+}

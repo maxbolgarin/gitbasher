@@ -24,30 +24,30 @@ source scripts/gitlog.sh
 project_name="$(get_repo_name)"
 
 
+### Print usage information
 function print_help {
-    echo -e "usage: ${YELLOW}gitb <command> <argument>${ENDCOLOR}"
+    echo -e "usage: ${YELLOW}gitb <command> <mode>${ENDCOLOR}"
     echo
     msg="${YELLOW}Command${ENDCOLOR}_\t${YELLOW}Description${ENDCOLOR}"
-    msg="$msg\ncommit_everything about commit creation_commit|c|co|cm|com"
-    msg="$msg\npush_pushing changes to a remote repository_push|ps|ph"
-    msg="$msg\npull_pulling changes from a remote repository_pull|pl|pll"
-    msg="$msg\nmerge_merge changes from different branches_merge"
-    msg="$msg\nbranch_managing branches_branch|b|br|bh|bra"
-    msg="$msg\ntag_managing tags_tag|t|tg"
-    msg="$msg\nconfig_configurate gitbasher_config|cfg|conf"
+    msg="$msg\ncommit_Everything about commit creation_commit|c|co|cm|com"
+    msg="$msg\npush_Pushing changes to a remote repository_push|ps|ph"
+    msg="$msg\npull_Pulling changes from a remote repository_pull|pl|pll"
+    msg="$msg\nmerge_Merge changes from different branches_merge"
+    msg="$msg\nbranch_Managing branches_branch|b|br|bh|bra"
+    msg="$msg\ntag_Managing tags_tag|t|tg"
+    msg="$msg\nconfig_Configurate gitbasher_config|cfg|conf"
     echo -e "$(echo -e "$msg" | column -ts '_')"
 
     echo
-    echo -e "${YELLOW}Commands without arguments${ENDCOLOR}"
-    echo -e "log\t\topen git log in a pretty format"
-    echo -e "reflog\t\topen git reflog in a pretty format"
-    echo -e "undo-commit\tundo last commit (record from git log)"
-    echo -e "undo-action\tundo last action (record from git reflog)"
+    echo -e "${YELLOW}Commands without modes${ENDCOLOR}"
+    echo -e "log\t\tOpen git log in a pretty format"
+    echo -e "reflog\t\tOpen git reflog in a pretty format"
+    echo -e "undo-commit\tUndo last commit (record from git log)"
+    echo -e "undo-action\tUndo last action (record from git reflog)"
 
     exit
 }
 
-### Print usage information
 if [ -z $1 ] || [ "$1" == "--help" ] || [ "$1" == "help" ] || [ "$1" == "man" ]; then
     print_help
 fi
@@ -112,30 +112,5 @@ case "$1" in
         print_help
     ;;
 esac
-
-exit
-
-# if [ "$script_to_run" == "commit" ]; then
-#     commit_script $2
-# elif [ "$script_to_run" == "push" ]; then
-#     push_script $2
-# elif [ "$script_to_run" == "pull" ]; then
-#     pull_script $2
-# elif [ "$script_to_run" == "merge" ]; then
-#     merge_script $2
-# elif [ "$script_to_run" == "branch" ]; then
-#     branch_script $2
-# elif [ "$script_to_run" == "tag" ]; then
-#     tag_script $2
-# elif [ "$script_to_run" == "config" ]; then
-#     config_script $2
-# else
-#     if [ "$1" == "log" ]; then
-
-#     elif [ "$1" == "reflog" ]; then
-
-#     fi
-
-# fi
 
 exit $?

@@ -91,12 +91,12 @@ Usage `make *command*`
 
 | **Commit**            | **Description**                                                                                 |
 |-----------------------|-------------------------------------------------------------------------------------------------|
-| **commit**            | Choose files to commit and create conventional commit message in format: 'type(scope): message' |
-| **commit-ticket**     | Same as previous, but add tracker's ticket info to the end of commit header                     |
-| **commit-fast**       | Add all files (`git add .`) and create commit message as in **commit**                          |
+| **commit**            | Choose files to commit and create conventional message in format: 'type(scope): message'        |
+| **commit-fast**       | Add all files (`git add .`) and create commit message as in `commit`                            |
 | **commit-fast-push**  | Add all files (`git add .`), create commit message and immediately push changes to origin       |
-| **commit-amend**      | Choose files to commit and make --amend commit to the last one (`git commit --amend --no-edit`) |
-| **commit-fixup**      | Choose files to commit and select commit to --fixup (`git commit --fixup <commit>`)             |
+| **commit-ticket**     | Same as `commit`, but add tracker's ticket info to the end of commit header                     |
+| **commit-amend**      | Choose files and make --amend commit to the last one (`git commit --amend --no-edit`)           |
+| **commit-fixup**      | Choose files and select commit to --fixup (`git commit --fixup <commit>`)                       |
 | **commit-autosquash** | Choose commit from which to squash fixup commits and run `git rebase -i --autosquash <commit>`  |
 | **commit-revert**     | Choose commit to revert (`git revert -no-edit <commit>`)                                        |
 

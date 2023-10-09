@@ -62,7 +62,25 @@ function commit_script {
         fixup|x)        fixup="true";;
         autosquash|s)   autosquash="true";;
         revert|r)       revert="true";;
+        help|h)         help="true";;
     esac
+
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb commit <mode>${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\tChoose files to commit and create conventional message in format: 'type(scope): message'"
+        echo -e "fast|f\t\tAdd all files (git add .) and create commit message as in <empty>"
+        echo -e "msg|m\t\tSame as in <empty>, but create multiline commit message using text editor"
+        echo -e "ticket|t\tSame as previous, but add tracker's ticket info to the end of commit header"
+        echo -e "amend|a\t\tChoose files and make --amend commit to the last one (git commit --amend --no-edit)"
+        echo -e "fixup|x\t\tChoose files and select commit to --fixup (git commit --fixup <commit>) "
+        echo -e "autosquash|s\tChoose commit from which to squash fixup commits and run git rebase -i --autosquash <commit>"
+        echo -e "revert|r\tChoose commit to revert (git revert -no-edit <commit>)"
+        echo -e "help|h\t\tShow this help"
+        exit
+    fi
+
 
     ### Print header
     header_msg="GIT COMMIT"

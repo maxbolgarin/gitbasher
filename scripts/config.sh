@@ -161,8 +161,8 @@ function config_script {
 
     echo -e "usage: ${YELLOW}gitb config <name>${ENDCOLOR}"
     echo
-    echo "Available names for configuration:"
-    echo -e "${YELLOW}main:${ENDCOLOR}\tupdate gitbasher's default branch (not remote git repo!)"
-    echo -e "${YELLOW}sep:${ENDCOLOR}\tupdate separator between type and name in branch"
-    echo -e "${YELLOW}editor:${ENDCOLOR}\tupdate text editor for commit messages"
+    echo -e "${YELLOW}Available names for configuration${ENDCOLOR}"
+    echo -e "main\t\tUpdate gitbasher's default branch (not remote git repo!)"
+    echo -e "sep\t\tUpdate separator between type and name in branch"
+    echo -e "editor\t\tUpdate text editor for commit messages"
 }

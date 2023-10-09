@@ -17,12 +17,24 @@ function reflog {
 }
 
 
+### Function prints last commit info (from git log)
+function last_commit {
+    echo -e "$(git --no-pager log --pretty="${YELLOW}%h${ENDCOLOR} | %s | ${BLUE}%an${ENDCOLOR} | %cd" -1 | column -ts'|')"
+}
+
+
+### Function prints last action info (from git reflog)
+function last_action {
+    echo -e "$(git --no-pager reflog --pretty="${YELLOW}%gd${ENDCOLOR} | %gs | ${BLUE}%an${ENDCOLOR} | %cd" -1 | column -ts'|')"
+}
+
+
 ### Function undoes previous commit (move HEAD pointer up for one record, HEAD^)
 function undo_commit {
-    commit_to_undo=$(last-commit)
+    commit_to_undo=$(last_commit)
     git reset HEAD^ > /dev/null
 
-    echo -e "${YELLOW}New last commit:\t${ENDCOLOR}$(last-commit)"
+    echo -e "${YELLOW}New last commit:\t${ENDCOLOR}$(last_commit)"
     echo -e "${YELLOW}Cancelled commit:\t${ENDCOLOR}${commit_to_undo}"
 }
 
@@ -38,14 +50,3 @@ function undo_action {
 	@$(MAKE) last-commit
 }
 
-
-### Function prints last commit info (from git log)
-function last_commit {
-    echo -e "$(git --no-pager log --pretty="${YELLOW}%h${ENDCOLOR} | %s | ${BLUE}%an${ENDCOLOR} | %cd" -1 | column -ts'|')"
-}
-
-
-### Function prints last action info (from git reflog)
-function last_action {
-    echo -e "$(git --no-pager reflog --pretty="${YELLOW}%gd${ENDCOLOR} | %gs | ${BLUE}%an${ENDCOLOR} | %cd" -1 | column -ts'|')"
-}

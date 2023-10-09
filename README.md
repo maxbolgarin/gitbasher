@@ -213,3 +213,5 @@ Here are the possible values for `scope` in a commit message header. Use only th
 ## License
 
 The source code license is MIT, as described in the [LICENSE](./LICENSE) file.
+
+

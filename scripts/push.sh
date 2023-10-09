@@ -25,6 +25,7 @@ function push {
         repo=$(get_repo)
         echo -e "${YELLOW}Repo:${ENDCOLOR}\t${repo}"
         if [[ ${current_branch} != ${main_branch} ]]; then
+            ### TODO: if PR have created?
             if [[ $repo == *"github"* ]]; then
                 echo -e "${YELLOW}PR:${ENDCOLOR}\t${repo}/pull/new/${current_branch}"
             elif [[ $repo == *"gitlab"* ]]; then

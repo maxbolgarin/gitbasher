@@ -46,7 +46,10 @@ fi
 ### Useful consts
 current_branch=$(git branch --show-current)
 origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')
-main_branch=$(git symbolic-ref refs/remotes/$origin_name/HEAD | sed "s@^refs/remotes/$origin_name/@@")
+main_branch="main"
+if [ "$(git branch | grep -w master)" != "" ]; then
+    main_branch="master"
+fi
 
 
 ### Function tries to get config from local, then from global, then returns default

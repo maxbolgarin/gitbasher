@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-### Script for pushing commits to remote git repository
+### Script for pushing commits to a remote git repository
 # It will pull current branch if there are unpulled changes
 # Read README.md to get more information how to use it
 # Use this script only with gitbasher
@@ -49,14 +49,34 @@ function push {
     # list: print list of commits to push and exit
 function push_script {
     case "$1" in
-        fast|yes|y) fast="true";;
+        fast|f|y)   fast="true";;
         list|log|l) list="true";;
+        help|h)     help="true";;
     esac
 
-    ### Print header only in normal mode `make push`
-    if [ -z "$list" ] && [ -z "$fast" ]; then
-        echo -e "${YELLOW}PUSH MANAGER${ENDCOLOR}"
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb push <mode>${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\tPrint list of commits, push them to current branch or pull changes first"
+        echo -e "fast|f|y\tSame as previous but without pressing 'y'"
+        echo -e "list|log|l\tPrint a list of unpushed local commits without actual pushing it"
+        echo -e "help|h\t\tShow this help"
+        exit
     fi
+
+
+    ### Print header
+    header_msg="GIT PUSH"
+    if [ -n "${fast}" ]; then
+        header_msg="$header_msg FAST"
+    elif [ -n "${list}" ]; then
+        header_msg="$header_msg LIST"
+    fi
+
+    echo -e "${YELLOW}${header_msg}${ENDCOLOR}"
+    echo
+
 
     ### Check if there are commits to push
     get_push_list ${current_branch} ${main_branch} ${origin_name}
@@ -66,14 +86,8 @@ function push_script {
     fi
 
     if [ -z "$push_list" ]; then
-        echo
         echo -e "${GREEN}Nothing to push${ENDCOLOR}"
         exit
-    fi
-
-
-    if [ -z "$fast" ]; then
-        echo
     fi
 
 

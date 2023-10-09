@@ -9,16 +9,31 @@
 # $1: mode
     # empty: merge selected branch to current one (ask to fetch before merge)
     # main: merge main to current one (ask to fetch before merge)
-    # tomain: merge current branch to main
+    # to-main: merge current branch to main
 function merge_script {
     case "$1" in
-        main|m) main="true";;
-        tomain|to-main|tm) to_main="true";;
+        main|master|m)          main="true";;
+        to-main|to-master|tm)   to_main="true";;
+        help|h)                 help="true";;
     esac
 
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb merge <mode>${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\t\tSelect branch to merge info current one and fix conflicts"
+        echo -e "main|master|m\t\tMerge $main_branch to current branch and fix conflicts"
+        echo -e "to-main|to-master|tm\tSwitch to $main_branch and merge current branch into $main_branch"
+        echo -e "help|h\t\t\tShow this help"
+        exit
+    fi
+
+
     ### Merge mode - print header
-    header="PULL MANAGER"
+    header="GIT MERGE"
     if [ -n "${to_main}" ]; then
+        header="$header MAIN"
+    elif [ -n "${to_main}" ]; then
         header="$header TO MAIN"
     fi
 

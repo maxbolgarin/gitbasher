@@ -3,37 +3,7 @@
 ### Script for pushing commits to remote git repository
 # It will pull current branch if there are unpulled changes
 # Read README.md to get more information how to use it
-# Use this script only with gitbasher.sh
-
-### Options
-# y: fast push (answer 'yes')
-# l: print list of commits to push and exit
-# e: text editor to write commit message (in case of merge, default 'nano')
-# b: name of main branch (default 'main')
-# o: name of remote (default 'origin')
-# u: path to common.sh (mandatory, auto pass by gitbasher.sh)
-
-
-while getopts yle:b:o:u: flag; do
-    case "${flag}" in
-        y) fast="true";;
-        l) list="true";;
-
-        e) editor=${OPTARG};;
-        b) main_branch=${OPTARG};;
-        u) utils=${OPTARG};;
-    esac
-done
-
-if [ -z "$editor" ]; then
-    editor="nano"
-fi
-
-if [ -z "$main_branch" ]; then
-    main_branch="main"
-fi
-
-source $utils
+# Use this script only with gitbasher
 
 
 ### Use this function to push changes to origin
@@ -71,71 +41,81 @@ function push {
     fi
 }
 
-###
-### Script logic here
-###
 
-### Check if there are commits to push
-get_push_list ${current_branch} ${main_branch} ${origin_name}
+### Main function
+# $1: mode
+    # <empty> - regular commit mode
+    # yes: fast push (answer 'yes')
+    # list: print list of commits to push and exit
+function push_script {
+    case "$1" in
+        fast|yes|y) fast="true";;
+        list|log|l) list="true";;
+    esac
 
-if [ "${history_from}" != "${origin_name}/${current_branch}" ]; then
-    echo -e "Branch ${YELLOW}${current_branch}${ENDCOLOR} doesn't exist in ${origin_name}, so get commit diff from base commit"
-fi
+    ### Print header only in normal mode `make push`
+    if [ -z "$list" ] && [ -z "$fast" ]; then
+        echo -e "${YELLOW}PUSH MANAGER${ENDCOLOR}"
+    fi
 
-if [ -z "$push_list" ]; then
+    ### Check if there are commits to push
+    get_push_list ${current_branch} ${main_branch} ${origin_name}
+
+    if [ "${history_from}" != "${origin_name}/${current_branch}" ]; then
+        echo -e "Branch ${YELLOW}${current_branch}${ENDCOLOR} doesn't exist in ${origin_name}, so get commit diff from base commit"
+    fi
+
+    if [ -z "$push_list" ]; then
+        echo
+        echo -e "${GREEN}Nothing to push${ENDCOLOR}"
+        exit
+    fi
+
+
+    if [ -z "$fast" ]; then
+        echo
+    fi
+
+
+    ### Print list of unpushed commits
+    echo -e "${YELLOW}Commit history from '${history_from}'${ENDCOLOR}"
+    echo -e "$push_list"
+
+
+    ### List mode - print only unpushed commits
+    if [ -n "$list" ]; then
+        exit
+    fi
+
     echo
-    echo -e "${GREEN}Nothing to push${ENDCOLOR}"
-    exit
-fi
+
+    ### If not in fast mode - ask if user wants to push
+    if [ -z "${fast}" ]; then
+        echo -e "Do you want to push it to ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} (y/n)?"
+        yes_no_choice "Pushing..."
+    else
+        echo -e "${YELLOW}Pushing...${ENDCOLOR}"
+        echo
+    fi
 
 
-### Print header only in normal mode `make push`
-if [ -z "$list" ] && [ -z "$fast" ]; then
-    echo -e "${YELLOW}PUSH MANAGER${ENDCOLOR}"
-fi
+    ### Pushing
+    push
 
-if [ -z "$fast" ]; then
+
+    ### Get push error - there is unpulled changes
+    echo -e "${RED}Cannot push! There is unpulled changes in '${origin_name}/${current_branch}'${ENDCOLOR}"
     echo
-fi
+    echo -e "Do you want to pull ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} with --no-rebase (y/n)?"
+    yes_no_choice "Pulling..."
+
+    pull $current_branch $origin_name $editor
 
 
-### Print list of unpushed commits
-echo -e "${YELLOW}Commit history from '${history_from}'${ENDCOLOR}"
-echo -e "$push_list"
-
-
-### List mode - print only unpushed commits
-if [ -n "$list" ]; then
-    exit
-fi
-
-echo
-
-### If not in fast mode - ask if user wants to push
-if [ -z "${fast}" ]; then
-    echo -e "Do you want to push it to ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} (y/n)?"
-    yes_no_choice "Pushing..."
-else
+    ### Push after pull
+    echo
     echo -e "${YELLOW}Pushing...${ENDCOLOR}"
     echo
-fi
+    push
 
-
-### Pushing
-push
-
-
-### Get push error - there is unpulled changes
-echo -e "${RED}Cannot push! There is unpulled changes in '${origin_name}/${current_branch}'${ENDCOLOR}"
-echo
-echo -e "Do you want to pull ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} with --no-rebase (y/n)?"
-yes_no_choice "Pulling..."
-
-pull $current_branch $origin_name $editor
-
-
-### Push after pull
-echo
-echo -e "${YELLOW}Pushing...${ENDCOLOR}"
-echo
-push
+}

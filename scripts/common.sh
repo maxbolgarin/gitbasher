@@ -20,9 +20,39 @@ CYAN_ES="\x1b[36m"
 ENDCOLOR_ES="\x1b[0m"
 
 
+### Function tries to get config from local, then from global, then returns default
+# $1: config name
+# $2: default value
+# Returns: config value
+function get_config_value {
+    value=$(git config --local --get $1)
+    if [ -z $value ]; then
+        value=$(git config --global --get $1)
+        if [ -z $value ]; then
+            value=$2
+        fi
+    fi
+    echo -e "$value"
+}
+
+
 ### Useful consts
 current_branch=$(git branch --show-current)
 origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')
+main_branch=$(git symbolic-ref refs/remotes/$origin_name/HEAD | sed "s@^refs/remotes/$origin_name/@@")
+
+main_branch=$(get_config_value gitbasher.branch "$main_branch")
+sep=$(get_config_value gitbasher.sep "/")
+editor=$(get_config_value core.editor "vim")
+
+
+### TODO:
+# 1. Run everything from single file in default settings
+# 2. Editor settings -> default for vim and command for set another + set it to git config + command for global
+# 3. Sep setting -> same
+# 4. Main branch setting -> same
+# 5. Make better appearance
+
 
 ### Function for evaluating path with '~' symbol
 # $1: path

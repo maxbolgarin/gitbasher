@@ -72,9 +72,9 @@ function get_config_value {
 # Returns: value
 function set_config_value {
     if [ -z $3 ]; then
-        git config --local --add $1 "$2"
+        git config --local $1 $2
     else
-        git config --global --add $1 "$2"
+        git config --global $1 $2
     fi
     echo "$2"
 }
@@ -2446,9 +2446,10 @@ function status {
     echo -e "${YELLOW}Repo URL:${ENDCOLOR}\t${GREEN}$repo_url${ENDCOLOR}"
     echo -e "${YELLOW}Branch:${ENDCOLOR}\t\t${GREEN}$current_branch${ENDCOLOR}"
     echo -e "${YELLOW}Last commit:${ENDCOLOR}\t$(git --no-pager log --pretty="%s | ${BLUE}%an${ENDCOLOR} | %cd" -1 | column -ts'|')"
+    echo
     status=$(git status -s)
     if [ -n "$status" ]; then
-        echo -e "Git status"
+        echo -e "${YELLOW}Git status${ENDCOLOR}"
         git status -s
     else
         echo -e "${GREEN}There are no unstaged files${ENDCOLOR}"
@@ -2541,9 +2542,9 @@ fi
 if [ $is_first == "true" ]; then 
     echo -e "${GREEN}Thank for using gitbasher in project '$project_name'${ENDCOLOR}"
     echo -e "Current settings:"
-    echo -e "\tmain: '$main_branch'"
-    echo -e "\tsep: '$sep'"
-    echo -e "\teditor: '$editor'"
+    echo -e "\tmain:\t${YELLOW}$main_branch${ENDCOLOR}"
+    echo -e "\tsep:\t${YELLOW}$sep${ENDCOLOR}"
+    echo -e "\teditor:\t${YELLOW}$editor${ENDCOLOR}"
 
     echo -e "You can change these settings by using ${YELLOW}gitb config <name>${ENDCOLOR}"
     echo

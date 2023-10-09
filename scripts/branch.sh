@@ -16,26 +16,47 @@
     # delete: delete a local branch
 function branch_script {
     case "$1" in
-        remote|r|re) remote="true";;
-        main|master|m) main="true";;
-        new|n) new="true";;
-        newc|nc) current="true";;
-        delete|remove|d|del|rm) delete="true";;
+        remote|r|re)    remote="true";;
+        main|master|m)  main="true";;
+        new|n)          new="true";;
+        newc|nc)        
+            current="true"
+            new="true"
+        ;;
+        delete|del|d)   delete="true";;
+        help|h)         help="true";;
     esac
+    
+
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb commit <mode>${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\tSelect a local branch to switch"
+        echo -e "remote|re|r\tFetch $origin_name and select a remote branch to switch"
+        echo -e "main|master|m\tSwitch to $main_branch without additional confirmations"
+        echo -e "new|n\t\tBuild conventional name for a new branch, switch to $main_branch, pull it and create new branch from $main_branch"
+        echo -e "newc|nc\t\tBuild conventional name for a new branch and create it from a current branch"
+        echo -e "delete|del|d\tSelect branch to delete"
+        echo -e "help|h\t\tShow this help"
+        exit
+    fi
         
     ### Print header
-    header="BRANCH MANAGER"
-    if [ -n "${new}" ]; then
-        header="$header NEW"
-    elif [ -n "${remote}" ]; then
+    header="GIT BRANCH"
+    if [ -n "${remote}" ]; then
         header="$header REMOTE"
+    elif [ -n "${main}" ]; then
+        header="$header MAIN"
+    elif [ -n "${new}" ]; then
+        header="$header NEW"
+    elif [ -n "${current}" ]; then
+        header="$header NEW FROM CURRENT"
     elif [ -n "${delete}" ]; then
         header="$header DELETE"
     fi
 
-    if [ -z "${main}" ]; then
-        echo -e "${YELLOW}${header}${ENDCOLOR}"
-    fi
+    echo -e "${YELLOW}${header}${ENDCOLOR}"
     echo
 
 

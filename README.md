@@ -102,8 +102,10 @@ Usage `gitb <command> <mode>`
 
 * use `gitb help` to get global help
 * use `gitb <command> help` to get info about `<command>` and it's modes
+* use `gitb config main` if you want to change the name of gitbasher's default branch (e.g. on `develop`)
+* use `gitb config sep` if you want to change the separator between type and name in branch name (maybe `/` doesn't suite for you)
 
-</br>
+<br/>
 
 ### `gitb commit <mode>`
 
@@ -178,6 +180,16 @@ Usage `gitb <command> <mode>`
 
 <br/>
 
+### `gitb config <name>`
+
+| **Names**     | **Short** | **Description**                                                                       |
+|---------------|-----------|---------------------------------------------------------------------------------------|
+| `main`        |           | Update gitbasher's default branch (not for remote git repo!)                          |
+| `sep`         |           | Update separator between type and name in branch                                      |
+| `editor`      |           | Update text editor for commit messages (it will override `core.editor`)               |
+
+<br/>
+
 ### `gitb <command>`
 
 | **Commands**    | **Description**                                                              |
@@ -204,7 +216,6 @@ Most likely, if you have Linux, the necessary software is already installed on y
 * `git`  version from 2.23
 	* Debian-based: `git --version || apt install git`
 	* MacOS: `git --version || brew install git`
-* Tested on `MacOS 13.5.1`, on other systems may be problems with utilities like `sed` because of different implementations / versions
 
 </br>
 

@@ -10,8 +10,14 @@ function status {
     echo -e "${YELLOW}Repo URL:${ENDCOLOR}\t${GREEN}$repo_url${ENDCOLOR}"
     echo -e "${YELLOW}Branch:${ENDCOLOR}\t\t${GREEN}$current_branch${ENDCOLOR}"
     echo -e "${YELLOW}Last commit:${ENDCOLOR}\t$(git --no-pager log --pretty="%s | ${BLUE}%an${ENDCOLOR} | %cd" -1 | column -ts'|')"
-    echo -e "Git status"
-    git status -s
+    echo
+    status=$(git status -s)
+    if [ -n "$status" ]; then
+        echo -e "${YELLOW}Git status${ENDCOLOR}"
+        git status -s
+    else
+        echo -e "${GREEN}There are no unstaged files${ENDCOLOR}"
+    fi
 }
 
 

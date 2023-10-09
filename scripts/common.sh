@@ -527,7 +527,7 @@ function fetch {
 #      * merge_output
 #      * merge_code - 0 if everything is ok, not zero if there are conflicts
 function merge {
-    merge_output=$(git merge ${merge_branch} 2>&1)
+    merge_output=$(git merge $1 2>&1)
     merge_code=$?
 
     if [ $merge_code == 0 ] ; then

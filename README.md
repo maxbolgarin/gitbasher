@@ -31,6 +31,8 @@
 
 ## Examples
 
+<img src="./dist/demo/commit.gif" width="60%" height="60%"/>
+
 #### [`gitb commit`](#gitb-commit-mode)
 * Choose files to commit and create conventional commit message in format: 'type(scope): message'
 * Single command replaces these three calls: 

@@ -220,7 +220,7 @@ Usage `gitb <command> <mode>`
 | `config`      | `cfg` `conf`                          |
 | `status`      | `s`                                   |
 
-For example, using shorthands you can create a branch using `gitb b n`, make fast commit using `gitb c f` and then push  changes using `gitb ph`.
+For example, using shorthands you can create a branch using `gitb b n`, make fast commit using `gitb c f` and then push  changes using `gitb ps`.
 
 </br>
 

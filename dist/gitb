@@ -550,11 +550,16 @@ function fetch {
 # $2: origin name
 # $3: editor
 # $4: operation name (e.g. merge or pull)
+# $5: is merge from origin?
 # Returns:
 #      * merge_output
 #      * merge_code - 0 if everything is ok, not zero if there are conflicts
 function merge {
-    merge_output=$(git merge $1 2>&1)
+    if [ $5 == true ]; then
+        merge_output=$(git merge $2 $1 2>&1)
+    else
+        merge_output=$(git merge $1 2>&1)
+    fi
     merge_code=$?
 
     if [ $merge_code == 0 ] ; then
@@ -739,7 +744,7 @@ function pull {
     fi
 
     ### Merge and resulve conflicts
-    merge $1 $2 $3 "pull"
+    merge $1 $2 $3 "pull" "true"
 
     ### Nothing to pull
     if [[ $merge_output == *"Already up to date"* ]]; then
@@ -1474,6 +1479,9 @@ function push_script {
     ### If not in fast mode - ask if user wants to push
     if [ -z "${fast}" ]; then
         echo -e "Do you want to push it to ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} (y/n)?"
+        if [ "${current_branch}" == "${main_branch}" ]; then
+            echo -e "${RED}Warning!${ENDCOLOR} You are going to push right in default ${YELLOW}${main_branch}${ENDCOLOR} branch"
+        fi
         yes_no_choice "Pushing..."
     else
         echo -e "${YELLOW}Pushing...${ENDCOLOR}"
@@ -1605,13 +1613,14 @@ function merge_script {
 
 
     ### Fetch before merge
-    echo -e "Do you want to fetch ${YELLOW}${merge_branch}${ENDCOLOR} before merge (y/n)?"
+    echo -e "Do you want to merge ${YELLOW}${$origin_name}/${merge_branch}${ENDCOLOR} instead of local ${YELLOW}${merge_branch}${ENDCOLOR} (y/n)?"
     read -n 1 -s choice
     if [ "$choice" == "y" ]; then
         echo
         echo -e "${YELLOW}Fetching...${ENDCOLOR}"
 
         fetch $merge_branch $origin_name
+        merge_from_origin=true
     fi
     echo
 
@@ -1625,7 +1634,7 @@ function merge_script {
 
 
     ### Run merge and handle conflicts
-    merge $merge_branch $origin_name $editor
+    merge $merge_branch $origin_name $editor $merge_from_origin
 
 
     ### Nothing to merge

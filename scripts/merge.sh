@@ -67,13 +67,14 @@ function merge_script {
 
 
     ### Fetch before merge
-    echo -e "Do you want to fetch ${YELLOW}${merge_branch}${ENDCOLOR} before merge (y/n)?"
+    echo -e "Do you want to merge ${YELLOW}${origin_name}/${merge_branch}${ENDCOLOR} instead of local ${YELLOW}${merge_branch}${ENDCOLOR} (y/n)?"
     read -n 1 -s choice
     if [ "$choice" == "y" ]; then
         echo
         echo -e "${YELLOW}Fetching...${ENDCOLOR}"
 
         fetch $merge_branch $origin_name
+        merge_from_origin=true
     fi
     echo
 
@@ -87,7 +88,7 @@ function merge_script {
 
 
     ### Run merge and handle conflicts
-    merge $merge_branch $origin_name $editor
+    merge $merge_branch $origin_name $editor $merge_from_origin
 
 
     ### Nothing to merge

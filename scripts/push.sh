@@ -109,6 +109,9 @@ function push_script {
     ### If not in fast mode - ask if user wants to push
     if [ -z "${fast}" ]; then
         echo -e "Do you want to push it to ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} (y/n)?"
+        if [ "${current_branch}" == "${main_branch}" ]; then
+            echo -e "${RED}Warning!${ENDCOLOR} You are going to push right in default ${YELLOW}${main_branch}${ENDCOLOR} branch"
+        fi
         yes_no_choice "Pushing..."
     else
         echo -e "${YELLOW}Pushing...${ENDCOLOR}"

@@ -100,10 +100,11 @@ sudo rm /usr/local/bin/gitb
 
 Usage `gitb <command> <mode>`
 
-* use `gitb help` to get global help
-* use `gitb <command> help` to get info about `<command>` and it's modes
-* use `gitb config main` if you want to change the name of gitbasher's default branch (e.g. on `develop`)
-* use `gitb config sep` if you want to change the separator between type and name in branch name (maybe `/` doesn't suite for you)
+* `gitb help` to get global help
+* `gitb <command> help` to get info about `<command>` and it's modes
+* `gitb config main` if you want to change the name of gitbasher's default branch (e.g. on `develop`)
+* `gitb config sep` if you want to change the separator between type and name in branch name (maybe `/` doesn't suite for you)
+* use [shorthands](#shorthands) to make your working with `gitb` faster
 
 <br/>
 
@@ -192,15 +193,31 @@ Usage `gitb <command> <mode>`
 
 ### `gitb <command>`
 
-| **Commands**    | **Description**                                                              |
-|-----------------|------------------------------------------------------------------------------|
-| **status**      | Show general info about repo and changed files                               |
-| **log**         | Run `git log` with pretty oneline formatting                                 |
-| **reflog**      | Run `git reflog` with pretty oneline formatting                              |
-| **last-commit** | Show info about the last commit (last record from `git log`)                 |
-| **last-action** | Show info about the last action (last record from `git reflog`)              |
-| **undo-commit** | Run `git reset HEAD^` to move pointer up for one record and undo last commit |
-| **undo-action** | Run `git reset HEAD@{1}` to reset last record in reflog                      |
+| **Commands**  | **Description**                                                              |
+|-------------- |------------------------------------------------------------------------------|
+| `status`      | Show general info about repo and changed files                               |
+| `log`         | Run `git log` with pretty oneline formatting                                 |
+| `reflog`      | Run `git reflog` with pretty oneline formatting                              |
+| `last-commit` | Show info about the last commit (last record from `git log`)                 |
+| `last-action` | Show info about the last action (last record from `git reflog`)              |
+| `undo-commit` | Run `git reset HEAD^` to move pointer up for one record and undo last commit |
+| `undo-action` | Run `git reset HEAD@{1}` to reset last record in reflog                      |
+
+<br/>
+
+### Shorthands
+
+| **Command**   | **Short aliases**                     |
+|---------------|---------------------------------------|
+| `commit`      | `c` `co` `cm` `com`                   |
+| `push`        | `ps` `ph`                             |
+| `pull`        | `pl` `pll`                            |
+| `branch`      | `b` `br` `bh` `bra`                   |
+| `tag`         | `t` `tg`                              |
+| `config`      | `cfg` `conf`                          |
+| `status`      | `s`                                   |
+
+For example, using shorthands you can create a branch using `gitb b n`, make fast commit using `gitb c f` and then push  changes using `gitb ph`.
 
 </br>
 

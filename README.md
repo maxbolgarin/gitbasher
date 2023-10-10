@@ -31,7 +31,7 @@
 
 ## Examples
 
-<img src="./dist/demo/commit.gif" width="75%" height="75%"/>
+<img src="./dist/demo/commit.gif" width="80%" height="80%"/>
 
 #### [`gitb commit`](#gitb-commit-mode)
 * Choose files to commit and create conventional commit message in format: 'type(scope): message'
@@ -78,9 +78,7 @@
 
 ## Installation
 
-### Linux and MacOS
-
-Providing an application via `apt` or `homebrew` is a task for the future, so it is necessary to manually install/update the executable:
+Providing the application through package managers is a task for the future development, so you have to manually install/update the executable file:
 
 ```
 PATH_TO_GITB=/usr/local/bin/gitb &&
@@ -88,7 +86,10 @@ sudo curl -SL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/dist/
 sudo chmod +x $PATH_TO_GITB
 ```
 
-If you don't want to use `sudo` and place `gitb` to a global folder, you can place the script in a directory from user space, the path to which needs to be added to your PATH variable. To do this, in the example above, you should change the path in the `PATH_TO_GITB` variable to another, for example `~/.local/bin`, and [add this directory to PATH](https://discussions.apple.com/thread/254226896). After this, `sudo` may be omitted.
+It works on Linux and Mac systems as is, on Windows you should use WSL (open `cmd.exe` and type `wsl`).
+
+If you don't want to use `sudo` and place `gitb` in a global folder, you can put the script in a directory from user space, the path to which needs to be added to the PATH variable. To do this, in the example above, you should change the path in the `PATH_TO_GITB` variable to another, for example `~/.local/bin`, and [add this directory to PATH](https://discussions.apple.com/thread/254226896). After this, `sudo` may be omitted.
+
 
 ### Uninstall
 
@@ -219,7 +220,7 @@ Usage `gitb <command> <mode>`
 | `config`      | `cfg` `conf`                          |
 | `status`      | `s`                                   |
 
-For example, using shorthands you can create a branch using `gitb b n`, make fast commit using `gitb c f` and then push  changes using `gitb ph`.
+For example, using shorthands you can create a branch using `gitb b n`, make fast commit using `gitb c f` and then push  changes using `gitb ps`.
 
 </br>
 

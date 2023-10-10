@@ -1163,15 +1163,15 @@ function commit_script {
         step="1"
     fi
     echo -e "${YELLOW}Step ${step}.${ENDCOLOR} What type of change do you want to commit?"
-    echo "1. feat:      new feature or logic changes"
+    echo "1. feat:      new feature, logic change or performance improvement"
     echo "2. fix:       small changes, eg. bug fix"
     echo "3. refactor:  code change that neither fixes a bug nor adds a feature, style changes"
-    echo "4. test:      adding missing tests or correcting existing tests"
-    echo "5. perf:      code change that improves performance"
-    echo "6. build:     changes that affect the build system or external dependencies"
-    echo "7. ci:        changes to CI configuration files and scripts"
-    echo "8. chore:     maintanance and housekeeping"
-    echo "9. docs:      documentation only changes"
+    echo "4. test:      adding missing tests or changing existing tests"
+    echo "5. build:     changes that affect the build system or external dependencies"
+    echo "6. ci:        changes to CI configuration files and scripts"
+    echo "7. chore:     maintanance and housekeeping"
+    echo "8. docs:      documentation changes"
+    echo "9.            write plain commit without type and scope"
     echo "0. Exit without changes"
 
     declare -A types=(
@@ -1179,11 +1179,10 @@ function commit_script {
         [2]="fix"
         [3]="refactor"
         [4]="test"
-        [5]="perf"
-        [6]="build"
-        [7]="ci"
-        [8]="chore"
-        [9]="docs"
+        [5]="build"
+        [6]="ci"
+        [7]="chore"
+        [8]="docs"
     )
 
     while [ true ]; do
@@ -1199,48 +1198,61 @@ function commit_script {
             continue
         fi
 
+        if [ "$choice" == "9" ]; then
+            is_empty="true"
+            break
+        fi
+
         commit_type="${types[$choice]}"
         if [ -n "$commit_type" ]; then
             break
         fi
     done
 
-    commit="$commit_type"
+    commit=""
+    if [ -z "$is_empty" ]; then
+        commit="$commit_type"
+    fi
 
 
     ### Commit Step 3: enter commit scope
-    echo
-    step="3"
-    if [ -n "${fast}" ]; then
-        step="2"
-    fi
-    echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Enter a scope of your changes to provide additional context"
-    echo -e "Final meesage will be ${YELLOW}${commit_type}(<scope>): <summary>${ENDCOLOR}"
-    echo -e "Leave it blank if you don't want to enter a scope or 0 to exit"
+    if [ -z "$is_empty" ]; then
+        echo
+        step="3"
+        if [ -n "${fast}" ]; then
+            step="2"
+        fi
+        echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Enter a scope of your changes to provide additional context"
+        echo -e "Final meesage will be ${YELLOW}${commit_type}(<scope>): <summary>${ENDCOLOR}"
+        echo -e "Leave it blank if you don't want to enter a scope or 0 to exit"
 
-    read -p "$(echo -n -e "${TODO}<scope>:${ENDCOLOR} ")" -e commit_scope
+        read -p "$(echo -n -e "${TODO}<scope>:${ENDCOLOR} ")" -e commit_scope
 
-    if [ "$commit_scope" == "0" ]; then
-        git restore --staged $git_add
-        exit
-    fi
+        if [ "$commit_scope" == "0" ]; then
+            git restore --staged $git_add
+            exit
+        fi
 
-    commit_scope=$(echo "$commit_scope" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-    if [ "$commit_scope" != "" ]; then
-        commit="$commit($commit_scope):"
-    else
-        commit="$commit:"
+        commit_scope=$(echo "$commit_scope" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        if [ "$commit_scope" != "" ]; then
+            commit="$commit($commit_scope): "
+        else
+            commit="$commit: "
+        fi
     fi
 
 
     ### Commit Step 4: enter commit message, use editor in msg mode
-    step="4"
-    if [ -n "${fast}" ]; then
+    if [ -n "${fast}" ] && [ -n "$is_empty" ]; then
+        step="2"
+    elif [ -n "${fast}" ] || [ -n "$is_empty" ]; then
         step="3"
+    else
+        step="4"
     fi
     echo
     echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Write a <summary> about your changes"
-    echo -e "Final meesage will be ${YELLOW}${commit} <summary>${ENDCOLOR}"
+    echo -e "Final meesage will be ${YELLOW}${commit}<summary>${ENDCOLOR}"
 
     # Use editor and commitmsg file
     if [ -n "$msg" ]; then
@@ -1258,7 +1270,7 @@ function commit_script {
 ${staged_with_tab}
 ###
 ### Here is expected format:
-### ${commit} <summary>
+### ${commit}<summary>
 ### <BLANK LINE>
 ### <optional body>
 ### <BLANK LINE>
@@ -1303,7 +1315,7 @@ ${staged_with_tab}
     # Use read from console
     else
         echo -e "Leave it blank if you want to exit"
-        read -p "$(echo -n -e "${TODO}${commit}${ENDCOLOR} ")" -e commit_message
+        read -p "$(echo -n -e "${TODO}${commit}${ENDCOLOR}")" -e commit_message
         if [ -z "$commit_message" ]; then
             git restore --staged $git_add
             exit
@@ -1313,8 +1325,12 @@ ${staged_with_tab}
 
     ### Commit Step 5: enter tracker ticket
     if [ -n "${ticket}" ]; then
+        step="5"
+        if [ -n "$is_empty" ]; then
+            step="4"
+        fi
         echo
-        echo -e "${YELLOW}Step 5.${ENDCOLOR} Enter the number of issue in your tracking system (e.g. JIRA or Youtrack)"
+        echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Enter the number of issue in your tracking system (e.g. JIRA or Youtrack)"
         echo -e "It will be added to the end of summary"
         echo -e "Leave it blank if you don't want to enter a ticket or 0 to exit"
 
@@ -1339,7 +1355,7 @@ ${staged_with_tab}
         fi
     fi
 
-    commit="$commit $commit_message"
+    commit="${commit}${commit_message}"
 
 
     ### Finally

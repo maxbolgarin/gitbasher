@@ -555,7 +555,7 @@ function fetch {
 #      * merge_output
 #      * merge_code - 0 if everything is ok, not zero if there are conflicts
 function merge {
-    if [ $5 == true ]; then
+    if [ "$5" == "true" ]; then
         merge_output=$(git merge $2 $1 2>&1)
     else
         merge_output=$(git merge $1 2>&1)
@@ -1613,7 +1613,7 @@ function merge_script {
 
 
     ### Fetch before merge
-    echo -e "Do you want to merge ${YELLOW}${$origin_name}/${merge_branch}${ENDCOLOR} instead of local ${YELLOW}${merge_branch}${ENDCOLOR} (y/n)?"
+    echo -e "Do you want to merge ${YELLOW}${origin_name}/${merge_branch}${ENDCOLOR} instead of local ${YELLOW}${merge_branch}${ENDCOLOR} (y/n)?"
     read -n 1 -s choice
     if [ "$choice" == "y" ]; then
         echo

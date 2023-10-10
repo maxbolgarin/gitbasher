@@ -538,11 +538,16 @@ function fetch {
 # $2: origin name
 # $3: editor
 # $4: operation name (e.g. merge or pull)
+# $5: is merge from origin?
 # Returns:
 #      * merge_output
 #      * merge_code - 0 if everything is ok, not zero if there are conflicts
 function merge {
-    merge_output=$(git merge $1 2>&1)
+    if [ "$5" == "true" ]; then
+        merge_output=$(git merge $2 $1 2>&1)
+    else
+        merge_output=$(git merge $1 2>&1)
+    fi
     merge_code=$?
 
     if [ $merge_code == 0 ] ; then
@@ -727,7 +732,7 @@ function pull {
     fi
 
     ### Merge and resulve conflicts
-    merge $1 $2 $3 "pull"
+    merge $1 $2 $3 "pull" "true"
 
     ### Nothing to pull
     if [[ $merge_output == *"Already up to date"* ]]; then

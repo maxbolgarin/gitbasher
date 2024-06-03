@@ -87,7 +87,11 @@ function wrong_mode {
 # Return: url to repo
 function get_repo {
     repo=$(git config --get remote.${origin_name}.url)
-    repo="${repo/":"/"/"}" 
+    repo="${repo/"com:"/"com/"}"
+    repo="${repo/"io:"/"io/"}"
+    repo="${repo/"org:"/"org/"}"
+    repo="${repo/"net:"/"net/"}"
+    repo="${repo/"ru:"/"ru/"}"
     repo="${repo/"git@"/"https://"}"
     repo="${repo/".git"/""}" 
     echo "$repo"
@@ -303,6 +307,15 @@ function get_push_list {
         push_list=$(commit_list 999 "tab" $3/$1..HEAD)
         history_from="$3/$1"
         return
+    fi
+
+    # Case with new repo without any branch
+    if [[ $push_list_check == *"unknown revision or path not in the working tree"* ]]; then
+        if [[ $1 == $2 ]]; then
+            push_list=$(commit_list 999 "tab")
+            history_from="$3/$1"
+            return
+        fi
     fi
     
     base_commit=$(diff -u <(git rev-list --first-parent $1) <(git rev-list --first-parent $2) | sed -ne 's/^ //p' | head -1)

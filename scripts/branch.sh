@@ -248,7 +248,7 @@ function branch_script {
     echo "1. feat:      new feature or logic changes, 'feat' and 'perf' commits"
     echo "2. fix:       small changes, eg. not critical bug fix"
     echo "3. hotfix:    fix, that should be merged as fast as possible"
-    echo "4. refactor:  non important and/or style changes"
+    echo "4. chore:     non important and/or style changes"
     echo "5. misc:      non-code changes, e.g. 'ci', 'docs', 'build' commits"
     echo "6. wip:       'work in progress', for changes not ready for merging in the near future"
     echo "7.            don't use prefix for branch naming"
@@ -258,7 +258,7 @@ function branch_script {
         [1]="feat"
         [2]="fix"
         [3]="hotfix"
-        [4]="refactor"
+        [4]="chore"
         [5]="misc"
         [6]="wip"
     )

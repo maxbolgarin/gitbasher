@@ -7,7 +7,7 @@
 
 ### Get configuration from git config
 main_branch=$(get_config_value gitbasher.branch "$main_branch")
-sep=$(get_config_value gitbasher.sep "/")
+sep=$(get_config_value gitbasher.sep "_")
 editor=$(get_config_value core.editor "vim")
 
 ### Is this is a first run of gitbasher in this project?

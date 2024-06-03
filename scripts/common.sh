@@ -87,7 +87,11 @@ function wrong_mode {
 # Return: url to repo
 function get_repo {
     repo=$(git config --get remote.${origin_name}.url)
-    repo="${repo/":"/"/"}" 
+    repo="${repo/"com:"/"com/"}"
+    repo="${repo/"io:"/"io/"}"
+    repo="${repo/"org:"/"org/"}"
+    repo="${repo/"net:"/"net/"}"
+    repo="${repo/"ru:"/"ru/"}"
     repo="${repo/"git@"/"https://"}"
     repo="${repo/".git"/""}" 
     echo "$repo"

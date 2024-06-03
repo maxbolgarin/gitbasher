@@ -47,6 +47,7 @@ function after_commit {
 # $1: mode
     # <empty> - regular commit mode
     # fast: fast commit with git add .
+    # fastpush: fast commit with push
     # msg: use editor to write commit message
     # ticket: add ticket info to the end of message header
     # amend: amend without edit (add to last commit)
@@ -56,6 +57,7 @@ function after_commit {
 function commit_script {
     case "$1" in
         fast|f)         fast="true";;
+        fastpush|fp)    fast_push="true";;
         msg|m)          msg="true";;
         ticket|t)       ticket="true";;
         amend|a)        amend="true";;
@@ -72,7 +74,8 @@ function commit_script {
         echo
         echo -e "${YELLOW}Available modes${ENDCOLOR}"
         echo -e "<empty>\t\tChoose files to commit and create conventional message in format: 'type(scope): message'"
-        echo -e "fast|f\t\tAdd all files (git add .) and create commit message as in <empty>"
+        echo -e "fast|f\t\tAdd all files (git add .) and create conventional commit message"
+        echo -e "fastpush|fp\tAdd all files (git add .), create conventional commit message and push"
         echo -e "msg|m\t\tSame as in <empty>, but create multiline commit message using text editor"
         echo -e "ticket|t\tSame as previous, but add tracker's ticket info to the end of commit header"
         echo -e "amend|a\t\tChoose files and make --amend commit to the last one (git commit --amend --no-edit)"
@@ -83,10 +86,15 @@ function commit_script {
         exit
     fi
 
+    if [ -n "${fast_push}" ]; then
+        fast="true"
+    fi
 
     ### Print header
     header_msg="GIT COMMIT"
-    if [ -n "${fast}" ]; then
+    if [ -n "${fast_push}" ]; then
+        header_msg="$header_msg FAST PUSH"
+    elif [ -n "${fast}" ]; then
         header_msg="$header_msg FAST"
     elif [ -n "${msg}" ]; then
         header_msg="$header_msg MSG"
@@ -426,4 +434,9 @@ ${staged_with_tab}
     result=$(git commit -m """$commit""" 2>&1)
     check_code $? "$result" "commit"
     after_commit
+
+    if [ -n "${fast_push}" ]; then
+        echo
+        push_script f
+    fi
 }

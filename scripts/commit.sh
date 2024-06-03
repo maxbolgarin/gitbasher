@@ -436,6 +436,7 @@ ${staged_with_tab}
     after_commit
 
     if [ -n "${fast_push}" ]; then
+        echo
         push_script f
     fi
 }

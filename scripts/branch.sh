@@ -251,7 +251,8 @@ function branch_script {
     echo "4. chore:     non important and/or style changes"
     echo "5. misc:      non-code changes, e.g. 'ci', 'docs', 'build' commits"
     echo "6. wip:       'work in progress', for changes not ready for merging in the near future"
-    echo "7.            don't use prefix for branch naming"
+    echo "7. test:      testing changes that won't be merged to the main branch"
+    echo "8.            don't use prefix for branch naming"
     echo "0. Exit without changes"
 
     declare -A types=(
@@ -261,6 +262,7 @@ function branch_script {
         [4]="chore"
         [5]="misc"
         [6]="wip"
+        [7]="test"
     )
 
     branch_type=""
@@ -271,7 +273,7 @@ function branch_script {
             exit
         fi
         
-        if [ "$choice" == "7" ]; then
+        if [ "$choice" == "8" ]; then
             break
         fi
 

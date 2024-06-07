@@ -528,7 +528,7 @@ function switch {
     fi
 
     if [ $switch_code -ne 0 ]; then
-        echo -e "${RED}Cannot switch to '$main_branch'! Here is the error${ENDCOLOR}"
+        echo -e "${RED}Cannot switch to '$main_branch'! Error message:${ENDCOLOR}"
         echo -e "$switch_output"
         exit $switch_code
     fi
@@ -2032,7 +2032,7 @@ function branch_script {
         exit $create_code
     fi
 
-    echo -e "${RED}Cannot create! Here is the error${ENDCOLOR}"
+    echo -e "${RED}Cannot create! Error message:${ENDCOLOR}"
     echo "${create_output}"
     exit $create_code
 
@@ -2107,7 +2107,7 @@ function push_tag {
             exit
         fi
         
-        echo -e "${RED}Cannot push! Here is the error${ENDCOLOR}"
+        echo -e "${RED}Cannot push! Error message:${ENDCOLOR}"
         echo "$push_output"
         exit $push_code
     fi
@@ -2234,7 +2234,7 @@ function tag_script {
         echo
         
         if [ $fetch_code != 0 ]; then
-            echo -e "${RED}Cannot fetch tags! Here is the error${ENDCOLOR}"
+            echo -e "${RED}Cannot fetch tags! Error message:${ENDCOLOR}"
             echo -e "${fetch_output}"
             exit $fetch_code
         fi

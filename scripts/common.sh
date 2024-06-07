@@ -557,7 +557,7 @@ function fetch {
 #      * merge_code - 0 if everything is ok, not zero if there are conflicts
 function merge {
     if [ "$5" == "true" ]; then
-        merge_output=$(git merge $2 $1 2>&1)
+        merge_output=$(git merge $2/$1 2>&1)
     else
         merge_output=$(git merge $1 2>&1)
     fi

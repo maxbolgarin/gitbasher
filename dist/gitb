@@ -569,7 +569,7 @@ function fetch {
 #      * merge_code - 0 if everything is ok, not zero if there are conflicts
 function merge {
     if [ "$5" == "true" ]; then
-        merge_output=$(git merge $2 $1 2>&1)
+        merge_output=$(git merge $2/$1 2>&1)
     else
         merge_output=$(git merge $1 2>&1)
     fi
@@ -1476,19 +1476,17 @@ function push_script {
     echo -e "${YELLOW}${header_msg}${ENDCOLOR}"
     echo
 
-
     ### Check if there are commits to push
     get_push_list ${current_branch} ${main_branch} ${origin_name}
-
-    if [ "${history_from}" != "${origin_name}/${current_branch}" ]; then
-        echo -e "Branch ${YELLOW}${current_branch}${ENDCOLOR} doesn't exist in ${origin_name}, so get commit diff from base commit"
-    fi
 
     if [ -z "$push_list" ]; then
         echo -e "${GREEN}Nothing to push${ENDCOLOR}"
         exit
     fi
 
+    if [ "${history_from}" != "${origin_name}/${current_branch}" ]; then
+        echo -e "Branch ${YELLOW}${current_branch}${ENDCOLOR} doesn't exist in ${origin_name}, so get commit diff from base commit"
+    fi
 
     ### Print list of unpushed commits
     echo -e "${YELLOW}Commit history from '${history_from}'${ENDCOLOR}"
@@ -1940,7 +1938,8 @@ function branch_script {
     echo "4. chore:     non important and/or style changes"
     echo "5. misc:      non-code changes, e.g. 'ci', 'docs', 'build' commits"
     echo "6. wip:       'work in progress', for changes not ready for merging in the near future"
-    echo "7.            don't use prefix for branch naming"
+    echo "7. test:      testing changes that won't be merged to the main branch"
+    echo "8.            don't use prefix for branch naming"
     echo "0. Exit without changes"
 
     declare -A types=(
@@ -1950,6 +1949,7 @@ function branch_script {
         [4]="chore"
         [5]="misc"
         [6]="wip"
+        [7]="test"
     )
 
     branch_type=""
@@ -1960,7 +1960,7 @@ function branch_script {
             exit
         fi
         
-        if [ "$choice" == "7" ]; then
+        if [ "$choice" == "8" ]; then
             break
         fi
 

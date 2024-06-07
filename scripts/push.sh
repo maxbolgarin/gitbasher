@@ -80,19 +80,17 @@ function push_script {
     echo -e "${YELLOW}${header_msg}${ENDCOLOR}"
     echo
 
-
     ### Check if there are commits to push
     get_push_list ${current_branch} ${main_branch} ${origin_name}
-
-    if [ "${history_from}" != "${origin_name}/${current_branch}" ]; then
-        echo -e "Branch ${YELLOW}${current_branch}${ENDCOLOR} doesn't exist in ${origin_name}, so get commit diff from base commit"
-    fi
 
     if [ -z "$push_list" ]; then
         echo -e "${GREEN}Nothing to push${ENDCOLOR}"
         exit
     fi
 
+    if [ "${history_from}" != "${origin_name}/${current_branch}" ]; then
+        echo -e "Branch ${YELLOW}${current_branch}${ENDCOLOR} doesn't exist in ${origin_name}, so get commit diff from base commit"
+    fi
 
     ### Print list of unpushed commits
     echo -e "${YELLOW}Commit history from '${history_from}'${ENDCOLOR}"

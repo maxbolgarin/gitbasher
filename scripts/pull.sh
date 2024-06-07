@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 ### Script for pulling commits from remote git repository
-# Read README.md to get more information how to use it
+# Read README.md to get more information how to use it 
 # Use this script only with gitbasher
 
 

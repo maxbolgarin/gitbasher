@@ -2,7 +2,7 @@
 
 ### Script for pulling commits from remote git repository
 # Read README.md to get more information how to use it 
-# Use this script only with gitbasher
+# Use this script only with gitbasher  
 
 
 ### Main function - pull current branch and exit (empty flags mode)

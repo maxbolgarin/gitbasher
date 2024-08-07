@@ -7,12 +7,12 @@ function print_help {
     echo
     msg="${YELLOW}Command${ENDCOLOR}_\t${YELLOW}Description${ENDCOLOR}"
     msg="$msg\ncommit_Everything about commit creation_commit|c|co|cm|com"
-    msg="$msg\npush_Pushing changes to a remote repository_push|ps|ph"
-    msg="$msg\npull_Pulling changes from a remote repository_pull|pl|pll"
-    msg="$msg\nmerge_Merge changes from different branches_merge"
-    msg="$msg\nbranch_Managing branches_branch|b|br|bh|bra"
+    msg="$msg\npush_Pushing changes to a remote repository_push|p|ps|pus"
+    msg="$msg\npull_Pulling changes from a remote repository_pull|pu|pl|pul"
+    msg="$msg\nmerge_Merge changes from different branches_merge|m|me"
+    msg="$msg\nbranch_Managing branches_branch|b|br|bra|bran"
     msg="$msg\ntag_Managing tags_tag|t|tg"
-    msg="$msg\nconfig_Configurate gitbasher_config|cfg|conf"
+    msg="$msg\nconfig_Configurate gitbasher_config|cf|cfg|conf"
     echo -e "$(echo -e "$msg" | column -ts '_')"
 
     echo
@@ -51,22 +51,22 @@ case "$1" in
     commit|c|co|cm|com)         
         commit_script $2
     ;;
-    push|ps|ph)         
+    push|p|ps|pus)         
         push_script $2
     ;;
-    pull|pl|pll)         
+    pull|pu|pl|pul)         
         pull_script $2
     ;;
-    merge)         
+    merge|m|me)         
         merge_script $2
     ;;
-    branch|b|br|bh|bra)         
+    branch|b|br|bra|bran)         
         branch_script $2
     ;;
     tag|t|tg)         
         tag_script $2
     ;;
-    config|cfg|conf)         
+    config|cf|cfg|conf)         
         config_script $2
     ;;
     log|l)
@@ -75,10 +75,10 @@ case "$1" in
     reflog|rl)
         reflog
     ;;
-    undo-commit)
+    undo-commit|uc)
         undo_commit
     ;;
-    undo-action)
+    undo-action|ua)
         undo_action
     ;;
     last-commit|lc)

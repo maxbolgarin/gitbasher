@@ -755,15 +755,23 @@ function pull {
 
     ### It will exit if critical error or resolve conflicts, so here we can get only in case of success
     echo -e "${GREEN}Successful pull!${ENDCOLOR}"
-    echo
+    
 
     ### Merge without conflicts
     if [ $merge_code == 0 ] ; then
-        print_changes_stat "$(echo "$merge_output" | tail -n +3)" 
+        changes=$(echo "$merge_output" | tail -n +3)
+        if [[ -n "$changes" ]]; then
+            echo
+            print_changes_stat "$changes"
+        fi
 
     ### Merge with conflicts, but they were resolved
     else
         commit_hash="$(git --no-pager log --pretty="%h" -1)"
-        print_changes_stat "$(git --no-pager show $commit_hash --stat --format="")" 
+        changes=$(git --no-pager show $commit_hash --stat --format="")
+        if [[ -n "$changes" ]]; then
+            echo
+            print_changes_stat "$changes"
+        fi
     fi
 }

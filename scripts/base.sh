@@ -5,25 +5,25 @@
 function print_help {
     echo -e "usage: ${YELLOW}gitb <command> <mode>${ENDCOLOR}"
     echo
-    msg="${YELLOW}Command${ENDCOLOR}_\t${YELLOW}Description${ENDCOLOR}"
-    msg="$msg\ncommit_Everything about commit creation_commit|c|co|cm|com"
-    msg="$msg\npush_Pushing changes to a remote repository_push|p|ps|pus"
-    msg="$msg\npull_Pulling changes from a remote repository_pull|pu|pl|pul"
-    msg="$msg\nmerge_Merge changes from different branches_merge|m|me"
-    msg="$msg\nbranch_Managing branches_branch|b|br|bra|bran"
-    msg="$msg\ntag_Managing tags_tag|t|tg"
-    msg="$msg\nconfig_Configurate gitbasher_config|cf|cfg|conf"
-    echo -e "$(echo -e "$msg" | column -ts '_')"
+    msg="${YELLOW}Command${ENDCOLOR}_\t${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description of ${BOLD}workflow${NORMAL}${BLUE} commands${ENDCOLOR}"
+    msg="$msg\ncommit_c|co|com_Everything about commit creation"
+    msg="$msg\npush_p|ps|pus_Pushing changes to a remote repository"
+    msg="$msg\npull_pu|pl|pul_Pulling changes from a remote repository"
+    msg="$msg\nmerge_m|me_Merge changes from a different branch"
+    msg="$msg\nbranch_b|br|bran_Managing branches"
+    msg="$msg\ntag_t|tg_Managing tags"
+    msg="$msg\nconfig_cf|cfg|conf_Configurate gitbasher"
 
-    echo
-    echo -e "${YELLOW}Commands without modes${ENDCOLOR}"
-    echo -e "status\t\tShow general info about repo and changed files"
-    echo -e "log\t\tOpen git log in a pretty format"
-    echo -e "reflog\t\tOpen git reflog in a pretty format"
-    echo -e "last-commit\tShow info about last commit (last record from 'git log')"
-    echo -e "last-action\tShow info about last commit (last record from 'git reflog')"
-    echo -e "undo-commit\tUndo last commit (record from git log)"
-    echo -e "undo-action\tUndo last action (record from git reflog)"
+    msg="$msg\n_ _ _"
+    msg="$msg\n${YELLOW}Command${ENDCOLOR}_\t${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description of ${BOLD}informational${NORMAL}${BLUE} commands${ENDCOLOR}"
+    msg="$msg\nstatus_s|st_Show general info about repo and changed files"
+    msg="$msg\nlog_l|lg_Open git log in a pretty format"
+    msg="$msg\nreflog_rl|rlg_Open git reflog in a pretty format"
+    msg="$msg\nlast-commit_lc|lastc_Show info about the last commit"
+    msg="$msg\nlast-action_la|lasta_Show info about the last action"
+    msg="$msg\nreset-commit_rc|reset_Soft reset last commit"
+    msg="$msg\nundo-action_ua|undo_Undo last action"
+    echo -e "$(echo -e "$msg" | column -ts '_')"
 
     exit
 }
@@ -48,7 +48,7 @@ fi
 
 ### Run script
 case "$1" in
-    commit|c|co|cm|com)         
+    commit|c|co|com)         
         commit_script $2
     ;;
     push|p|ps|pus)         
@@ -60,7 +60,7 @@ case "$1" in
     merge|m|me)         
         merge_script $2
     ;;
-    branch|b|br|bra|bran)         
+    branch|b|br|bran)         
         branch_script $2
     ;;
     tag|t|tg)         
@@ -69,25 +69,25 @@ case "$1" in
     config|cf|cfg|conf)         
         config_script $2
     ;;
-    log|l)
+    log|l|lg)
         gitlog
     ;;
-    reflog|rl)
+    reflog|rl|rlg)
         reflog
     ;;
-    undo-commit|uc)
+    reset-commit|rc|reset)
         undo_commit
     ;;
-    undo-action|ua)
+    undo-action|ua|undo)
         undo_action
     ;;
-    last-commit|lc)
+    last-commit|lc|lastc)
         last_commit
     ;;
-    last-action|la)
+    last-action|la|lasta)
         last_action
     ;;
-    status|s)
+    status|s|st)
         status
     ;;
 

@@ -217,17 +217,18 @@ function branch_script {
             while [ true ]; do
                 read -n 1 -s choice
                 if [ "$choice" == "y" ]; then
-                    printf "y\n"
+                    printf "y\n\n"
                     echo -e "${YELLOW}Deleting...${ENDCOLOR}"
 
                     push_output=$(git push $origin_name -d $branch_name 2>&1)
                     push_code=$?
+
+                    echo
                     if [ "$push_code" != 0 ]; then
                         echo -e "${RED}Cannot delete branch '$branch_name'!${ENDCOLOR}"
                         echo -e "${delete_output}"
                         exit
                     fi
-                    echo
                     echo -e "${GREEN}Deleted branch '$branch_name' in remote!${ENDCOLOR}"
                     break
 

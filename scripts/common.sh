@@ -525,27 +525,6 @@ function switch {
 }
 
 
-### Function fetchs provided branch and handles errors
-# $1: branch name
-# $2: origin name
-# $3: editor
-# Returns:
-#      * fetch_code - if it is not zero - there is no such branch in origin
-function fetch {
-    fetch_output=$(git fetch $2 $1 2>&1)
-    fetch_code=$?
-
-    if [ $fetch_code == 0 ] ; then
-        return
-    fi
-
-    if [[ ${fetch_output} != *"couldn't find remote ref"* ]]; then
-        echo -e "${RED}Cannot fetch '$1'! Here is the error${ENDCOLOR}"
-        echo -e "${fetch_output}"
-        exit $fetch_code
-    fi
-    echo -e "${YELLOW}There is no '$1' in $2${ENDCOLOR}"
-}
 
 
 ### Function merges provided branch and handles errors
@@ -734,57 +713,3 @@ ${staged_with_tab}
     merge_commit_code=0
 }
 
-
-### Function pulls provided branch and handles errors
-# $1: branch name
-# $2: origin name
-# $3: editor
-# $4: mode - merge or rebase
-# $5: arguments
-function pull {
-    ### Fetch, it will exit if critical error and return if branch doesn't exists in origin
-    fetch $1 $2
-
-    if [ $fetch_code != 0 ] ; then
-        return
-    fi
-
-    if [ "$4" == "rebase" ]; then
-        # merge $1 $2 $3 "pull" "true" "--ff"
-
-        # TODO: rebase
-
-        exit
-    fi
-
-    ### Merge and resolve conflicts
-    merge $1 $2 $3 "pull" "true"
-
-    ### Nothing to pull
-    if [[ $merge_output == *"Already up to date"* ]]; then
-        echo -e "${GREEN}Already up to date${ENDCOLOR}"
-        return
-    fi
-
-    ### It will exit if critical error or resolve conflicts, so here we can get only in case of success
-    echo -e "${GREEN}Successful pull!${ENDCOLOR}"
-    
-
-    ### Merge without conflicts
-    if [ $merge_code == 0 ] ; then
-        changes=$(echo "$merge_output" | tail -n +3)
-        if [[ -n "$changes" ]]; then
-            echo
-            print_changes_stat "$changes"
-        fi
-
-    ### Merge with conflicts, but they were resolved
-    else
-        commit_hash="$(git --no-pager log --pretty="%h" -1)"
-        changes=$(git --no-pager show $commit_hash --stat --format="")
-        if [[ -n "$changes" ]]; then
-            echo
-            print_changes_stat "$changes"
-        fi
-    fi
-}

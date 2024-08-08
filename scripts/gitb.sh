@@ -14,10 +14,11 @@ source scripts/common.sh
 source scripts/config.sh
 
 ### Include all scripts
-source scripts/commit.sh
-source scripts/push.sh
-source scripts/pull.sh
 source scripts/merge.sh
+source scripts/rebase.sh
+source scripts/pull.sh
+source scripts/push.sh
+source scripts/commit.sh
 source scripts/branch.sh
 source scripts/tag.sh
 source scripts/gitlog.sh

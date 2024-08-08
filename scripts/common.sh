@@ -8,6 +8,8 @@ BLUE="\e[34m"
 PURPLE="\e[35m"
 CYAN="\e[36m"
 ENDCOLOR="\e[0m"
+BOLD="\033[1m"
+NORMAL="\033[0m"
 
 
 ### Consts for colors to use inside 'sed'
@@ -552,14 +554,15 @@ function fetch {
 # $3: editor
 # $4: operation name (e.g. merge or pull)
 # $5: is merge from origin?
+# $6: arguments
 # Returns:
 #      * merge_output
 #      * merge_code - 0 if everything is ok, not zero if there are conflicts
 function merge {
     if [ "$5" == "true" ]; then
-        merge_output=$(git merge $2/$1 2>&1)
+        merge_output=$(git merge $6 $2/$1 2>&1)
     else
-        merge_output=$(git merge $1 2>&1)
+        merge_output=$(git merge $6 $1 2>&1)
     fi
     merge_code=$?
 
@@ -610,11 +613,11 @@ function resolve_conflicts {
     ### Ask user what he wants to do
     default_message="Merge branch '$2/$1' into '$1'"
     echo -e "${YELLOW}You should fix conflicts manually.${ENDCOLOR} There are some options:"
-    echo -e "1. Create merge commit with generated message"
+    echo -e "1. Create a merge commit with a generated message"
     printf "\tMessage: ${BLUE}${default_message}${ENDCOLOR}\n"
-    echo -e "2. Create merge commit with entered message"
-    echo -e "3. Abort merge (undo pulling)"
-    echo -e "Press any another key to exit from this script without merge abort"
+    echo -e "2. Create a merge commit with an entered message"
+    echo -e "3. Abort merge"
+    echo -e "Press any another key to exit from this script without merge --abort"
 
 
     ### Merge process
@@ -736,6 +739,8 @@ ${staged_with_tab}
 # $1: branch name
 # $2: origin name
 # $3: editor
+# $4: mode - merge or rebase
+# $5: arguments
 function pull {
     ### Fetch, it will exit if critical error and return if branch doesn't exists in origin
     fetch $1 $2
@@ -744,7 +749,15 @@ function pull {
         return
     fi
 
-    ### Merge and resulve conflicts
+    if [ "$4" == "rebase" ]; then
+        merge $1 $2 $3 "pull" "true" "--ff"
+
+        # TODO: rebase
+
+        exit
+    fi
+
+    ### Merge and resolve conflicts
     merge $1 $2 $3 "pull" "true"
 
     ### Nothing to pull

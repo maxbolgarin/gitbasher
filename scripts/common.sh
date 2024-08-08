@@ -575,9 +575,9 @@ function merge {
         operation="merge"
     fi
 
-    ### Cannot merge because there is uncommitted files that changed in origin
+    ### Cannot merge because there are uncommitted files that changed in origin
     if [[ $merge_output == *"Please commit your changes or stash them before you merge"* ]]; then
-        echo -e "${RED}Cannot $operation! There is uncommited changes, that will be overwritten by $operation${ENDCOLOR}"
+        echo -e "${RED}Cannot $operation! There are uncommited changes that will be overwritten by $operation${ENDCOLOR}"
         files_to_commit=$(echo "$merge_output" | tail -n +2 | tail -r | tail -n +4 | tail -r)
         echo -e "${YELLOW}Files with changes${ENDCOLOR}"
         echo "$files_to_commit"
@@ -639,7 +639,7 @@ function resolve_conflicts {
 
         if [ "$choice" == "3" ]; then
             echo
-            echo -e "${YELLOW}Cancel merge${ENDCOLOR}"
+            echo -e "${YELLOW}Aborting merge...${ENDCOLOR}"
             git merge --abort
             exit $?
         fi
@@ -711,7 +711,7 @@ ${staged_with_tab}
             fi
             echo -e "${YELLOW}Merge commit message cannot be empty${ENDCOLOR}"
             echo
-            read -n 1 -p "Try for one more time? (y/n) " -s -e choice
+            read -n 1 -p "Do you want to try for one more time? (y/n) " -s -e choice
             if [ "$choice" != "y" ]; then
                 git restore --staged $files_with_conflicts_one_line
                 find . -name "$commitmsg_file*" -delete

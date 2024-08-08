@@ -5,11 +5,11 @@
 # Use this script only with gitbasher
 
 
-### Main function - pull current branch and exit (empty flags mode)
+### Main function
 # $1: mode
-    # empty: merge selected branch to current one (ask to fetch before merge)
-    # main: merge main to current one (ask to fetch before merge)
-    # to-main: merge current branch to main
+    # empty: merge selected branch to the current one (ask to fetch before merge)
+    # main: merge default branch to the current one (ask to fetch before merge)
+    # to-main: merge current branch to default
 function merge_script {
     case "$1" in
         main|master|m)          main="true";;
@@ -23,9 +23,9 @@ function merge_script {
         echo -e "usage: ${YELLOW}gitb merge <mode>${ENDCOLOR}"
         echo
         echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\t\tSelect branch to merge info current one and fix conflicts"
-        echo -e "main|master|m\t\tMerge $main_branch to current branch and fix conflicts"
-        echo -e "to-main|to-master|tm\tSwitch to $main_branch and merge current branch into $main_branch"
+        echo -e "<empty>\t\t\tSelect a branch to merge into the current one and fix conflicts"
+        echo -e "main|master|m\t\tMerge $main_branch to the current branch and fix conflicts"
+        echo -e "to-main|to-master|tm\tSwitch to $main_branch and merge the current branch into $main_branch"
         echo -e "help|h\t\t\tShow this help"
         exit
     fi
@@ -59,7 +59,7 @@ function merge_script {
         merge_branch=${current_branch}
 
     else
-        echo -e "${YELLOW}Which branch merge into '${current_branch}'?${ENDCOLOR}"
+        echo -e "${YELLOW}Choose which branch merge into '${current_branch}'${ENDCOLOR}"
         choose_branch "merge"
         merge_branch=${branch_name}
         echo

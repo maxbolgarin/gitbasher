@@ -67,11 +67,11 @@ function rebase_script {
 
 
     ### Fetch before rebase
-    echo -e "Do you want to use ${YELLOW}${origin_name}/${new_base_branch}${ENDCOLOR} instead of local ${YELLOW}${new_base_branch}${ENDCOLOR} (y/n)?"
+    echo -e "Do you want to use ${YELLOW}${origin_name}/${new_base_branch}${ENDCOLOR} (y/n)?"
     read -n 1 -s choice
     if [ "$choice" == "y" ]; then
         echo
-        echo -e "${YELLOW}Fetching...${ENDCOLOR}"
+        echo -e "${YELLOW}Fetching ${origin_name}/${new_base_branch}...${ENDCOLOR}"
 
         fetch $new_base_branch $origin_name
         from_origin=true
@@ -89,24 +89,13 @@ function rebase_script {
         exit
     fi
 
-
-    ### If we get here - it is success
-    #echo -e "${GREEN}Successful merge!${ENDCOLOR}"
-    #echo -e "${BLUE}[${merge_branch}${ENDCOLOR} -> ${BLUE}${current_branch}]${ENDCOLOR}"
-    #echo
-
-
-    ### Merged without conflicts
     if [ $rebase_code == 0 ] ; then
-        print_changes_stat "$(echo "$rebase_output" | tail -n +3)" 
-
-    ### Merged with conflicts, but they were resolved
+        echo -e "${GREEN}Successful rebase!${ENDCOLOR}"
+        echo -e "${BLUE}[${new_base_branch}${ENDCOLOR} -> ${BLUE}${current_branch}]${ENDCOLOR}"
     else
-        commit_hash="$(git --no-pager log --pretty="%h" -1)"
-        print_changes_stat "$(git --no-pager show $commit_hash --stat --format="")" 
+        echo -e "${RED}Cannot rebase! Error message:${ENDCOLOR}"
+        echo -e "$rebase_output"
     fi
-
-
 }
 
 
@@ -138,8 +127,8 @@ function rebase_branch {
     fi
 
     ### Cannot merge because of some other error
-    if [[ $rebase_output != *"fix conflicts and then commit the result"* ]]; then
-        echo -e "${RED}Cannot $operation! Here is the error${ENDCOLOR}"
+    if [[ $rebase_output != *"CONFLICT"* ]]; then
+        echo -e "${RED}Cannot rebase! Error message:${ENDCOLOR}"
         echo "$rebase_output"
         exit $rebase_code
     fi

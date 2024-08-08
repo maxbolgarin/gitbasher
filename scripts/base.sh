@@ -10,6 +10,7 @@ function print_help {
     msg="$msg\npush_p|ps|pus_Pushing changes to a remote repository"
     msg="$msg\npull_pu|pl|pul_Pulling changes from a remote repository"
     msg="$msg\nmerge_m|me_Merge changes from a different branch"
+    msg="$msg\nrebase_r|re|base_Rebase current branch"
     msg="$msg\nbranch_b|br|bran_Managing branches"
     msg="$msg\ntag_t|tg_Managing tags"
     msg="$msg\nconfig_cf|cfg|conf_Configurate gitbasher"
@@ -59,6 +60,9 @@ case "$1" in
     ;;
     merge|m|me)         
         merge_script $2
+    ;;
+    rebase|r|re|base)         
+        rebase_script $2
     ;;
     branch|b|br|bran)         
         branch_script $2

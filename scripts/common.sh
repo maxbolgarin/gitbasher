@@ -750,7 +750,7 @@ function pull {
     fi
 
     if [ "$4" == "rebase" ]; then
-        merge $1 $2 $3 "pull" "true" "--ff"
+        # merge $1 $2 $3 "pull" "true" "--ff"
 
         # TODO: rebase
 

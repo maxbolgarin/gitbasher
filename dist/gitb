@@ -830,10 +830,193 @@ function merge_script {
     fi
 }
 
-    # changes=$(git --no-pager show $commit_hash --stat --format="")
-    # if [ -n "$changes" ]; then
-    #     print_changes_stat "$changes"
-    # fi
+
+### Function merges provided branch and handles errors
+# $1: branch name from
+# $2: origin name
+# $3: editor
+# $4: operation name (e.g. merge or pull)
+# $5: is merge from origin?
+# $6: arguments
+# Returns:
+#      * merge_output
+#      * merge_code - 0 if everything is ok, not zero if there are conflicts
+function merge {
+    if [ "$5" == "true" ]; then
+        merge_output=$(git merge $6 $2/$1 2>&1)
+    else
+        merge_output=$(git merge $6 $1 2>&1)
+    fi
+    merge_code=$?
+
+    if [ $merge_code == 0 ] ; then
+        return
+    fi
+
+    operation="$4"
+    if [ "$operation" == "" ]; then
+        operation="merge"
+    fi
+
+    ### Cannot merge because there are uncommitted files that changed in origin
+    if [[ $merge_output == *"Please commit your changes or stash them before you merge"* ]]; then
+        echo -e "${RED}Cannot $operation! There are uncommited changes that will be overwritten by $operation${ENDCOLOR}"
+        files_to_commit=$(echo "$merge_output" | tail -n +2 | tail -r | tail -n +4 | tail -r)
+        echo -e "${YELLOW}Files with changes${ENDCOLOR}"
+        echo "$files_to_commit"
+        echo
+        exit $merge_code
+    fi
+
+    ### Cannot merge because of some other error
+    if [[ $merge_output != *"fix conflicts and then commit the result"* ]]; then
+        echo -e "${RED}Cannot $operation! Error message:${ENDCOLOR}"
+        echo "$merge_output"
+        exit $merge_code
+    fi
+
+    echo -e "${RED}Cannot $operation! There are conflicts in staged files${ENDCOLOR}"
+    resolve_conflicts $1 $2 $3
+
+    # if we got here - conflicts were resolved
+    merge_code=0
+    echo
+}
+
+
+### Function pulls provided branch, handles errors and makes a merge
+# $1: branch name
+# $2: origin name
+# $3: editor
+function resolve_conflicts {
+
+    ### Print files with conflicts
+    echo -e "${YELLOW}Files with conflicts${ENDCOLOR}"
+    IFS=$'\n' read -rd '' -a files_with_conflicts <<<"$(git --no-pager diff --name-only --diff-filter=U --relative)"
+    echo -e "$(sed 's/^/\t/' <<< "$files_with_conflicts")"
+    echo
+
+    ## TODO: better
+    ### Ask user what he wants to do
+    default_message="Merge branch '$2/$1' into '$1'"
+    echo -e "${YELLOW}You should resolve conflicts manually.${ENDCOLOR} There are some options:"
+    echo -e "1. Create a merge commit with a generated message"
+    printf "\tMessage: ${BLUE}${default_message}${ENDCOLOR}\n"
+    echo -e "2. Create a merge commit with an entered message"
+    echo -e "3. Abort merge"
+    echo -e "Press any another key to exit from this script ${BOLD}without${NORMAL} merge abort"
+
+
+    ### Merge process
+    while [ true ]; do
+        read -n 1 -s choice
+
+        re='^[1-9]+$'
+        if ! [[ $choice =~ $re ]]; then
+            exit
+        fi
+
+        if [ "$choice" == "1" ] || [ "$choice" == "2" ]; then
+            merge_commit $choice $files_with_conflicts "${default_message}" $1 $2 $3
+            if [ "$merge_error" == "false" ]; then
+                return
+            fi
+        fi
+
+        if [ "$choice" == "3" ]; then
+            echo
+            echo -e "${YELLOW}Aborting merge...${ENDCOLOR}"
+            git merge --abort
+            exit $?
+        fi
+    done
+}
+
+
+### Function creates merge commit
+# $1: 1 for merge with default message, 2 for merge with editor
+# $2: files with conflicts that should be added to commit
+# $3: default message for merge with $1 -eq 1
+# $4: branch name
+# $5: origin name
+# $6: editor
+# Returns: 
+#     merge_error - "true" if something is bad
+function merge_commit {
+    merge_error="false"
+
+    ### Check if there are files with conflicts
+    IFS=$'\n' read -rd '' -a files_with_conflicts_new <<<"$(grep --files-with-matches -r -E "[<=>]{7} HEAD" .)"
+    number_of_conflicts=${#files_with_conflicts_new[@]}
+    if [ $number_of_conflicts -gt 0 ]; then
+        echo
+        echo -e "${YELLOW}There are still some files with conflicts${ENDCOLOR}"
+        for index in "${!files_with_conflicts_new[@]}"
+        do
+            echo -e $(sed '1 s/.\///' <<< "\t${files_with_conflicts_new[index]}")
+        done
+
+        echo
+        echo -e "Fix conflicts and press ${YELLOW}$1${ENDCOLOR} for one more time"
+        merge_error="true"
+        return
+    fi
+
+
+    ### Add files with resolved conflicts to commit
+    files_with_conflicts_one_line="$(tr '\n' ' ' <<< "$2")"
+    git add $files_with_conflicts_one_line
+
+    ### 1. Commit with default message
+    if [ "$1" == "1" ]; then
+        commit_message="$3"
+        result=$(git commit -m "$commit_message" 2>&1)
+        if [[ $result != *"not staged for commit"* ]]; then
+            check_code $? "$result" "creating default merge commit"
+        fi  
+        
+
+    ### 2. Commit with entered message
+    else
+        staged_with_tab="$(sed 's/^/###\t/' <<< "$2")"
+        commitmsg_file=".commitmsg__"
+        touch $commitmsg_file
+        echo """
+###
+### Write a message about merge from '$5/$4' into '$4'. Lines starting with '#' will be ignored. 
+### 
+### On branch $4
+### Changes to be commited:
+${staged_with_tab}
+""" >> $commitmsg_file
+
+        while [ true ]; do
+            $6 $commitmsg_file
+            commit_message=$(cat $commitmsg_file | sed '/^#/d')
+
+            if [ -n "$commit_message" ]; then
+                break
+            fi
+            echo
+            echo -e "${YELLOW}Merge commit message cannot be empty${ENDCOLOR}"
+            echo
+            read -n 1 -p "Do you want to try for one more time? (y/n) " -s -e choice
+            if [ "$choice" != "y" ]; then
+                git restore --staged $files_with_conflicts_one_line
+                find . -name "$commitmsg_file*" -delete
+                merge_error="true"
+                exit
+            fi    
+        done
+
+        find . -name "$commitmsg_file*" -delete
+        
+        result=$(git commit -m """$commit_message""" 2>&1)
+
+        if [[ $result != *"not staged for commit"* ]]; then
+            check_code $? "$result" "creating merge commit"
+        fi  
+    fi
 }
 #!/usr/bin/env bash
 

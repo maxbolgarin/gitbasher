@@ -97,7 +97,7 @@ function fetch {
     fi
 
     if [[ ${fetch_output} != *"couldn't find remote ref"* ]]; then
-        echo -e "${RED}Cannot fetch '$1'! Here is the error${ENDCOLOR}"
+        echo -e "${RED}Cannot fetch '$1'! Error message:${ENDCOLOR}"
         echo -e "${fetch_output}"
         exit $fetch_code
     fi

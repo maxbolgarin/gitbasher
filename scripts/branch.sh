@@ -346,7 +346,7 @@ function branch_script {
         exit $create_code
     fi
 
-    echo -e "${RED}Cannot create! Here is the error${ENDCOLOR}"
+    echo -e "${RED}Cannot create! Error message:${ENDCOLOR}"
     echo "${create_output}"
     exit $create_code
 

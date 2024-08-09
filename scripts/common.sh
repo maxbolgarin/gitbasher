@@ -518,7 +518,7 @@ function switch {
     fi
 
     if [ $switch_code -ne 0 ]; then
-        echo -e "${RED}Cannot switch to '$main_branch'! Here is the error${ENDCOLOR}"
+        echo -e "${RED}Cannot switch to '$main_branch'! Error message:${ENDCOLOR}"
         echo -e "$switch_output"
         exit $switch_code
     fi

@@ -37,7 +37,7 @@ function push {
     fi
 
     if [[ $push_output != *"[rejected]"* ]]; then
-        echo -e "${RED}Cannot push! Here is the error${ENDCOLOR}"
+        echo -e "${RED}Cannot push! Error message:${ENDCOLOR}"
         echo "$push_output"
         exit $push_code
     fi

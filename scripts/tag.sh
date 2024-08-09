@@ -68,7 +68,7 @@ function push_tag {
             exit
         fi
         
-        echo -e "${RED}Cannot push! Here is the error${ENDCOLOR}"
+        echo -e "${RED}Cannot push! Error message:${ENDCOLOR}"
         echo "$push_output"
         exit $push_code
     fi
@@ -195,7 +195,7 @@ function tag_script {
         echo
         
         if [ $fetch_code != 0 ]; then
-            echo -e "${RED}Cannot fetch tags! Here is the error${ENDCOLOR}"
+            echo -e "${RED}Cannot fetch tags! Error message:${ENDCOLOR}"
             echo -e "${fetch_output}"
             exit $fetch_code
         fi

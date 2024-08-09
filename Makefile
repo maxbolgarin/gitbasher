@@ -3,6 +3,7 @@ build:
 	@./dist/build.sh ./scripts/gitb.sh ./dist/gitb
 	@chmod +x ./dist/gitb
 
+
 .PHONY: install
 install:
 	@./dist/build.sh ./scripts/gitb.sh ./dist/gitb

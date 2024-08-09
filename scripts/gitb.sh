@@ -5,9 +5,10 @@
 
 git_check=$(git branch --show-current 2>&1)
 if [[ "$git_check" == *"fatal: not a git repository"* ]]; then
-    echo "You can use gitb only from directory with inited git repository"
+    echo "You can use gitb only in a git repository"
     exit
 fi
+
 
 ### Get common and config first
 source scripts/common.sh
@@ -21,6 +22,7 @@ source scripts/push.sh
 source scripts/commit.sh
 source scripts/branch.sh
 source scripts/tag.sh
+source scripts/reset.sh
 source scripts/gitlog.sh
 
 source scripts/base.sh

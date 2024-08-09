@@ -38,7 +38,7 @@ function after_commit {
     if [ -z "${fast}" ]; then
         echo
         echo -e "Push your changes: ${YELLOW}gitb push${ENDCOLOR}"
-        echo -e "Undo commit: ${YELLOW}gitb undo-commit${ENDCOLOR}"
+        echo -e "Undo commit: ${YELLOW}gitb reset${ENDCOLOR}"
     fi
 }
 
@@ -52,19 +52,32 @@ function after_commit {
     # ticket: add ticket info to the end of message header
     # amend: amend without edit (add to last commit)
     # fixup: fixup commit
-    # autosquash: autosquash fixup commits
     # revert: revert commit
 function commit_script {
     case "$1" in
-        fast|f)         fast="true";;
-        fastpush|fp)    fast_push="true";;
-        msg|m)          msg="true";;
-        ticket|t)       ticket="true";;
-        amend|a)        amend="true";;
-        fixup|x)        fixup="true";;
-        autosquash|s)   autosquash="true";;
-        revert|r)       revert="true";;
-        help|h)         help="true";;
+        msg|m)              msg="true";;
+        ticket|jira|j|t)    ticket="true";;
+        amend|a)            amend="true";;
+        fixup|fix|x)        fixup="true";;
+        squash|sq|s)        squash="true";;
+        revert|r)           revert="true";;
+        edit|e)             edit="true";;
+        fast|f)             fast="true";;
+        push|p)             push="true";;
+        fastp|fp)  
+            fast="true"
+            push="true"
+        ;;
+        fastfix|fx) 
+            fixup="true"
+            fast="true"
+        ;;
+        fastfixp|fxp) 
+            fixup="true"
+            fast="true"
+            push="true"
+        ;;
+        help|h) help="true";;
         *)
             wrong_mode "commit" $1
     esac
@@ -73,15 +86,16 @@ function commit_script {
         echo -e "usage: ${YELLOW}gitb commit <mode>${ENDCOLOR}"
         echo
         echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\tChoose files to commit and create conventional message in format: 'type(scope): message'"
-        echo -e "fast|f\t\tAdd all files (git add .) and create conventional commit message"
-        echo -e "fastpush|fp\tAdd all files (git add .), create conventional commit message and push"
-        echo -e "msg|m\t\tSame as in <empty>, but create multiline commit message using text editor"
-        echo -e "ticket|t\tSame as previous, but add tracker's ticket info to the end of commit header"
-        echo -e "amend|a\t\tChoose files and make --amend commit to the last one (git commit --amend --no-edit)"
-        echo -e "fixup|x\t\tChoose files and select commit to --fixup (git commit --fixup <commit>)"
-        echo -e "autosquash|s\tChoose commit from which to squash fixup commits and run git rebase -i --autosquash <commit>"
-        echo -e "revert|r\tChoose commit to revert (git revert -no-edit <commit>)"
+        echo -e "<empty>\t\Select files to commit and create a conventional message in format: 'type(scope): message'"
+        echo -e "msg|m\t\tSame as <empty>, but create multiline commit message using text editor"
+        echo -e "ticket|t\tSame as <empty>, but add tracker's ticket info to the end of commit header"
+        echo -e "amend|a\t\Select files and make --amend commit to the last one (git commit --amend --no-edit)"
+        echo -e "fixup|x\t\Select files and commit to --fixup (git commit --fixup <commit>)"
+        echo -e "fast|f\t\tAdd all files (git add .) and create a conventional commit message without scope"
+        echo -e "fastpush|fp\tAdd all files (git add .), create a conventional commit message without scope and push"
+        
+        
+        echo -e "revert|r\Select a commit to revert (git revert -no-edit <commit>)"
         echo -e "help|h\t\tShow this help"
         exit
     fi
@@ -104,8 +118,6 @@ function commit_script {
         header_msg="$header_msg AMEND"
     elif [ -n "${fixup}" ]; then
         header_msg="$header_msg FIXUP"
-    elif [ -n "${autosquash}" ]; then
-        header_msg="$header_msg AUTOSQUASH"
     elif [ -n "${revert}" ]; then
         header_msg="$header_msg REVERT"
     fi
@@ -121,30 +133,15 @@ function commit_script {
             echo -e "${GREEN}Nothing to commit, working tree clean${ENDCOLOR}"
             exit
         fi
-    elif [ -n "${autosquash}" ]; then
-        echo -e "${RED}Cannot autosquash: there is uncommited changes!${ENDCOLOR}"
-        exit
     elif [ -n "${revert}" ]; then
-        echo -e "${RED}Cannot revert: there is uncommited changes!${ENDCOLOR}"
-        exit
-    fi
-
-
-    ### Run autosquash logic
-    if [ -n "${autosquash}" ]; then
-        echo -e "${YELLOW}Step 1.${ENDCOLOR} Choose commit from which to squash fixup commits (third one or older):"
-
-        choose_commit 20
-
-        git rebase -i --autosquash ${commit_hash}
-        check_code $? "" "autosquash"
+        echo -e "${RED}Cannot revert: there are uncommited changes!${ENDCOLOR}"
         exit
     fi
 
 
     ### Run revert logic
     if [ -n "${revert}" ]; then
-        echo -e "${YELLOW}Step 1.${ENDCOLOR} Choose commit to revert:"
+        echo -e "${YELLOW}Step 1.${ENDCOLOR} Select a commit to revert:"
         
         choose_commit 20
 
@@ -162,7 +159,7 @@ function commit_script {
         #echo -e "On branch ${YELLOW}${current_branch}${ENDCOLOR}"
         #echo
         echo -e "${YELLOW}Changed fiels${ENDCOLOR}"
-        git status -s
+        git_status
     fi
 
 
@@ -216,9 +213,9 @@ function commit_script {
     ### Run fixup logic
     if [ -n "${fixup}" ]; then
         echo
-        echo -e "${YELLOW}Step 2.${ENDCOLOR} Choose commit to fixup:"
+        echo -e "${YELLOW}Step 2.${ENDCOLOR} Select a commit to fixup:"
 
-        choose_commit 9
+        choose_commit 20
         
         result=$(git commit --fixup $commit_hash 2>&1)
         check_code $? "$result" "fixup"
@@ -228,7 +225,7 @@ function commit_script {
     fi
 
 
-    ### Commit Step 2: choose commit type
+    ### Commit Step 2: Select commit type
     echo
     step="2"
     if [ -n "${fast}" ]; then

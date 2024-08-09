@@ -59,7 +59,7 @@ function merge_script {
         merge_branch=${current_branch}
 
     else
-        echo -e "${YELLOW}Choose which branch merge into '${current_branch}'${ENDCOLOR}"
+        echo -e "${YELLOW}Select which branch to merge into '${current_branch}'${ENDCOLOR}"
         choose_branch "merge"
         merge_branch=${branch_name}
         echo
@@ -67,7 +67,7 @@ function merge_script {
 
 
     ### Fetch before merge
-    echo -e "Do you want to use ${YELLOW}${origin_name}/${merge_branch}${ENDCOLOR} for merge (y/n)?"
+    echo -e "Do you want to fetch ${YELLOW}${origin_name}/${merge_branch}${ENDCOLOR} before merge (y/n)?"
     read -n 1 -s choice
     if [ "$choice" == "y" ]; then
         echo
@@ -154,7 +154,6 @@ function merge {
         files_to_commit=$(echo "$merge_output" | tail -n +2 | tail -r | tail -n +4 | tail -r)
         echo -e "${YELLOW}Files with changes${ENDCOLOR}"
         echo "$files_to_commit"
-        echo
         exit $merge_code
     fi
 
@@ -180,31 +179,26 @@ function merge {
 # $3: editor
 function resolve_conflicts {
 
+    ### Ask user what he wants to do
+    echo
+    default_message="Merge branch '$2/$1' into '$1'"
+    echo -e "${YELLOW}You should resolve conflicts manually${ENDCOLOR}"
+    echo -e "After resolving, select an option to continue"
+    echo -e "1. Create a merge commit with a generated message:"
+    printf "\t${BLUE}${default_message}${ENDCOLOR}\n"
+    echo -e "2. Create a merge commit with an entered message"
+    echo -e "3. Abort merge and return to the original state: ${YELLOW}git merge --abort${ENDCOLOR}"
+    echo -e "0. Exit from this script ${BOLD}without${NORMAL} merge abort"
+
     ### Print files with conflicts
+    echo
     echo -e "${YELLOW}Files with conflicts${ENDCOLOR}"
     IFS=$'\n' read -rd '' -a files_with_conflicts <<<"$(git --no-pager diff --name-only --diff-filter=U --relative)"
     echo -e "$(sed 's/^/\t/' <<< "$files_with_conflicts")"
-    echo
-
-    ## TODO: better
-    ### Ask user what he wants to do
-    default_message="Merge branch '$2/$1' into '$1'"
-    echo -e "${YELLOW}You should resolve conflicts manually.${ENDCOLOR} There are some options:"
-    echo -e "1. Create a merge commit with a generated message"
-    printf "\tMessage: ${BLUE}${default_message}${ENDCOLOR}\n"
-    echo -e "2. Create a merge commit with an entered message"
-    echo -e "3. Abort merge"
-    echo -e "Press any another key to exit from this script ${BOLD}without${NORMAL} merge abort"
-
 
     ### Merge process
     while [ true ]; do
         read -n 1 -s choice
-
-        re='^[1-9]+$'
-        if ! [[ $choice =~ $re ]]; then
-            exit
-        fi
 
         if [ "$choice" == "1" ] || [ "$choice" == "2" ]; then
             merge_commit $choice $files_with_conflicts "${default_message}" $1 $2 $3
@@ -218,6 +212,10 @@ function resolve_conflicts {
             echo -e "${YELLOW}Aborting merge...${ENDCOLOR}"
             git merge --abort
             exit $?
+        fi
+
+        if [ "$choice" == "0" ]; then
+            exit
         fi
     done
 }
@@ -236,7 +234,8 @@ function merge_commit {
     merge_error="false"
 
     ### Check if there are files with conflicts
-    IFS=$'\n' read -rd '' -a files_with_conflicts_new <<<"$(grep --files-with-matches -r -E "[<=>]{7} HEAD" .)"
+    files_with_conflicts_one_line="$(tr '\n' ' ' <<< "$2")"
+    IFS=$'\n' read -rd '' -a files_with_conflicts_new <<<"$(grep --files-with-matches -r -E "[<=>]{7} HEAD" $files_with_conflicts_one_line)"
     number_of_conflicts=${#files_with_conflicts_new[@]}
     if [ $number_of_conflicts -gt 0 ]; then
         echo

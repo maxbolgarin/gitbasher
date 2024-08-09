@@ -24,12 +24,7 @@ function set_main_branch {
     echo
 
     fetch_output=$(git fetch 2>&1)
-    fetch_code=$?
-    if [ $fetch_code -ne 0 ] ; then
-        echo -e "${RED}Cannot fetch remote!${ENDCOLOR}"
-        echo -e "${fetch_output}"
-        exit $fetch_code
-    fi
+    check_code $? "$fetch_output" "fetch remote"
 
     prune_output=$(git remote prune $origin_name 2>&1)
 
@@ -42,7 +37,7 @@ function set_main_branch {
     echo 
 
     main_branch=$(set_config_value gitbasher.branch $branch_name)
-    echo -e "${GREEN}Set '${branch_name}' as default gitbasher branch in '${project_name}' repo${ENDCOLOR}"
+    echo -e "${GREEN}Set '${branch_name}' as a default gitbasher branch in '${project_name}' repo${ENDCOLOR}"
 
     echo -e "Do you want to set it globally for all projects (y/n)?"
     yes_no_choice "\nSet '${branch_name}' globally" "true"
@@ -97,7 +92,7 @@ function set_sep {
     echo
 
     sep=$(set_config_value gitbasher.sep $new_sep)
-    echo -e "${GREEN}Set '${sep}' as branch name separator in '${project_name}' repo${ENDCOLOR}"
+    echo -e "${GREEN}Set '${sep}' as a branch name separator in '${project_name}' repo${ENDCOLOR}"
 
     echo -e "Do you want to set it globally for all projects (y/n)?"
     yes_no_choice "\nSet '${sep}' globally" "true"

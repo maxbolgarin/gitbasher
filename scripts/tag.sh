@@ -96,16 +96,16 @@ function push_tag {
 
 ### Main function
 # $1: mode
-    # <empty>: create a new tag from a current branch and commit
-    # commit: select commit instead of using current one (or select tag when pushing or deleting)
-    # annotated: create an annotated tag with message
-    # full: create an annotated tag with message and select commit instead of using current one
-    # list: print list of local tags and exit
-    # remote: fetch tags from the remote and print the list
-    # push: select tag to push
+    # <empty>: create a new tag from a current branch and commit it
+    # commit: select a commit instead of using current one
+    # annotated: create an annotated tag with a message
+    # full: select commit instead of using current one and create an annotated tag 
+    # list: print a list of local tags
+    # remote: fetch tags from the remote and print it
+    # push: select a tag to push
     # push-all: push all tags
-    # delete: select tag to delete
-    # delete: delete all tags
+    # delete: select a tag to delete
+    # delete-all: delete all tags
 function tag_script {
     case "$1" in
         commit|c|co|cm) 
@@ -190,15 +190,9 @@ function tag_script {
     if [ -n "${remote}" ]; then
         echo -e "${YELLOW}Fetching all tags from remote...${ENDCOLOR}"
         fetch_output=$(git fetch $origin_name --tags 2>&1)
-        fetch_code=$?
+        check_code $? "$fetch_output" "fetch tags"
 
         echo
-        
-        if [ $fetch_code != 0 ]; then
-            echo -e "${RED}Cannot fetch tags! Error message:${ENDCOLOR}"
-            echo -e "${fetch_output}"
-            exit $fetch_code
-        fi
 
         if [ "$fetch_output" != "" ]; then
             echo -e "${YELLOW}New tags${ENDCOLOR}"
@@ -218,15 +212,10 @@ function tag_script {
         count=999  # Show all tags
     fi
 
-    tags_info_str=$(git for-each-ref --count=$count --format="%(refname:short) | %(creatordate:relative) | %(objectname:short) - %(contents:subject)" --sort=-creatordate refs/tags | column -ts'|' )
-    tags_str=$(git for-each-ref --count=$count --format="%(refname:short)" --sort=-creatordate refs/tags)
-    commit_hashes_str=$(git for-each-ref --count=$count --format="%(objectname:short)" --sort=-creatordate refs/tags)
-
+    tags_info_str=$(git for-each-ref --count=$count  --sort=-creatordate refs/tags --format="${BLUE_ES}%(refname:short)${ENDCOLOR_ES} | %(contents:subject) | ${YELLOW_ES}%(objectname:short)${ENDCOLOR_ES} | ${CYAN_ES}%(creatordate)${ENDCOLOR_ES} | ${GREEN_ES}%(creatordate:relative)${ENDCOLOR_ES}" | column -ts'|' )
     IFS=$'\n' read -rd '' -a tags_info <<<"$tags_info_str"
-    IFS=$'\n' read -rd '' -a tags <<<"$tags_str"
-    IFS=$'\n' read -rd '' -a commit_hashes <<<"$commit_hashes_str"
-
-    number_of_tags=${#tags[@]}
+   
+    number_of_tags=${#tags_info[@]}
 
     if [ $number_of_tags == 0 ]; then
         echo -e "${YELLOW}There is no local tags${ENDCOLOR}"
@@ -240,11 +229,9 @@ function tag_script {
         fi
         echo -e "${YELLOW}${tags_header}${ENDCOLOR}"
 
-        for index in "${!tags[@]}"
-        do
-            tag=$(escape "${tags[index]}" "/")
-            tag_line=$(sed "1,/${tag}/ s/${tag}/${GREEN_ES}${tag}${ENDCOLOR_ES}/" <<< ${tags_info[index]})
-            tag_line=$(sed "1,/${commit_hashes[index]}/ s/${commit_hashes[index]}/${YELLOW_ES}${commit_hashes[index]}${ENDCOLOR_ES}/" <<< "$tag_line")
+        for index in "${!tags_info[@]}"
+        do  
+            tag_line="${tags_info[index]}"
             if [ -n "${delete}" ] || [ -n "${push}" ]; then
                 echo -e "$(($index+1)). ${tag_line}"
             else
@@ -305,13 +292,7 @@ function tag_script {
         fi
 
         delete_result=$(git tag -d $tag_name 2>&1)
-        delete_code=$?
-
-        if [ $delete_code != 0 ]; then
-            echo -e "${RED}Cannot delete tag '${tag_name}'!${ENDCOLOR}"
-            echo -e "$delete_result"
-            exit
-        fi
+        check_code $? "$delete_result" "delete tag"
 
         echo -e "${GREEN}Successfully deleted tag '${tag_name}'${ENDCOLOR}"
         echo
@@ -326,7 +307,7 @@ function tag_script {
 
     ### Select commit for new tag
     if [ -n "$select" ]; then
-        echo -e "${YELLOW}Select commit for a new tag on branch '$current_branch'${ENDCOLOR}"
+        echo -e "${YELLOW}Select a commit for a new tag on branch '$current_branch'${ENDCOLOR}"
         choose_commit 9
 
         echo 
@@ -376,10 +357,10 @@ function tag_script {
 
         echo """
 ###
-### Write some words about a new tag '${tag_name}'
+### Write some words about the new tag '${tag_name}'
 ### [$current_branch ${commit_hash::7}] ${commit_message}
 ### 
-### You can place changelog here, if this tag means a new release
+### You can place changelog here if this tag means a new release
 """ >> $tag_file
 
         while [ true ]; do
@@ -392,7 +373,7 @@ function tag_script {
             echo
             echo -e "${YELLOW}Tag message cannot be empty${ENDCOLOR}"
             echo
-            read -n 1 -p "Try for one more time? (y/n) " -s -e choice
+            read -n 1 -p "Do you want to try for one more time? (y/n) " -s -e choice
             if [ "$choice" != "y" ]; then
                 find . -name "$tag_file*" -delete
                 exit
@@ -421,7 +402,7 @@ function tag_script {
         if [[ $tag_output == *"already exists" ]]; then
             echo -e "${RED}Tag '${tag_name}' already exists!${ENDCOLOR}"
         else
-            echo -e "${RED}Cannot create tag '${tag_name}'!${ENDCOLOR}"
+            echo -e "${RED}Cannot create tag '${tag_name}'! Error message:${ENDCOLOR}"
             echo -e "$tag_output"
         fi
         exit

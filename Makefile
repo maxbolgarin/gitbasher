@@ -11,3 +11,5 @@ install:
 	@sudo chmod +x /usr/local/bin/gitb
 	@git add ./dist/gitb
 	git commit -m "chore(misc): build new executable"
+
+asdasd

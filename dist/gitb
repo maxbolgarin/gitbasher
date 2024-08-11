@@ -1186,10 +1186,10 @@ function rebase_conflicts {
     #     README.md
     #     Makefile
 
-        status="$(git status)"
-        current_step=$(echo $status | sed -n 's/.*Last command done (\([0-9]*\) command done):/\1/p')
-        total_steps=$(echo $status | sed -n 's/.*Next commands to do (\([0-9]*\) remaining commands):/\1/p')
-        commit_name=$(echo $status | head -n 3 | tail -n 1)
+        status=$(git status)
+        current_step=$(echo "$status" | sed -n 's/.*Last command done (\([0-9]*\) command done):/\1/p')
+        total_steps=$(echo "$status" | sed -n 's/.*Next commands to do (\([0-9]*\) remaining commands):/\1/p')
+        commit_name=$(echo "$status" | head -n 3 | tail -n 1)
         files=$(echo $status | sed -n '/^Unmerged paths:/,/^$/p' | sed '/^Unmerged paths:/d;/^$/d;/^ *(/d')
 
         echo

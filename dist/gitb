@@ -1080,7 +1080,7 @@ function rebase_script {
         new_base_branch=${main_branch}
 
     else
-        echo -e "Choose which branch will become a ${BOLD}new base${NORMAL} for ${YELLOW}${current_branch}${ENDCOLOR}"
+        echo -e "${YELLOW}Choose which branch will become a new base for ${BOLD}${current_branch}${ENDCOLOR}"
         choose_branch "rebase"
         new_base_branch=${branch_name}
         echo

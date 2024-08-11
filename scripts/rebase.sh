@@ -167,9 +167,11 @@ function rebase_conflicts {
 
         status=$(git status)
         current_step=$(echo "$status" | sed -n 's/.*Last command done (\([0-9]*\) command done):/\1/p')
-        total_steps=$(echo "$status" | sed -n 's/.*Next commands to do (\([0-9]*\) remaining commands):/\1/p')
+        remaining_steps=$(echo "$status" | sed -n 's/.*Next commands to do (\([0-9]*\) remaining commands):/\1/p')
         commit_name=$(echo "$status" | head -n 3 | tail -n 1)
-        files=$(echo $status | sed -n '/^Unmerged paths:/,/^$/p' | sed '/^Unmerged paths:/d;/^$/d;/^ *(/d')
+        files=$(echo "$status" | sed -n '/^Unmerged paths:/,/^$/p' | sed '/^Unmerged paths:/d;/^$/d;/^ *(/d')
+
+        total_steps=$((current_step + total_steps))
 
         echo
         echo -e "${YELLOW}Step $current_step/$total_steps:${ENDCOLOR} $commit_name"
@@ -189,18 +191,10 @@ function rebase_conflicts {
             if [ $number_of_conflicts -gt 0 ]; then
                 echo
                 echo -e "${YELLOW}There are still some files with conflicts${ENDCOLOR}"
-                for index in "${!files_with_conflicts_new[@]}"
-                do
-                    echo -e $(sed '1 s/.\///' <<< "\t${files_with_conflicts_new[index]}")
-                done
-
-                echo
-                echo -e "Fix conflicts and press ${YELLOW}1${ENDCOLOR} for one more time"
-                merge_error="true"
                 continue
             fi
 
-            git add $files_with_conflicts_one_line
+            git add .
 
             rebase_output=$(git -c core.editor=true rebase --continue)
             rebase_code=$?

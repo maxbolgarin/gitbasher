@@ -152,13 +152,16 @@ function rebase_conflicts {
     echo -e "4. Abort rebase and return to the original state: ${YELLOW}git rebase --abort${ENDCOLOR}"
     echo -e "Press any another key to exit from this script ${BOLD}without${NORMAL} rebase abort"
 
+    new_step="true"
+
     ### Rebase process
     while [ true ]; do
-
-        ## Don't print after editing TODO
-        if [ "$choice" != "2" ]; then
+        if [ "$new_step" == "true" ]; then
             status=$(git status)
-            current_step=$(echo "$status" | sed -n 's/.*Last command done (\([0-9]*\) command done):/\1/p')
+            current_step=$(echo "$status" | sed -n 's/.*Last commands done (\([0-9]*\) commands done):/\1/p')
+            if [ "$current_step" == "" ]; then
+                current_step=$(echo "$status" | sed -n 's/.*Last command done (\([0-9]*\) command done):/\1/p')
+            fi
             remaining_steps=$(echo "$status" | sed -n 's/.*Next commands to do (\([0-9]*\) remaining commands):/\1/p')
             commit_name=$(echo "$status" | head -n 3 | tail -n 1 | sed 's/^[ \t]*//;s/[ \t]*$//' | sed "s/\([a-z]* [0-9a-f]*\)/${BLUE_ES}\[\1\]${ENDCOLOR_ES}/")
             files=$(echo "$status" | sed -n '/^Unmerged paths:/,/^$/p' | sed '/^Unmerged paths:/d;/^$/d;/^ *(/d')
@@ -170,6 +173,8 @@ function rebase_conflicts {
             echo
             echo -e "${YELLOW}Step $current_step/$total_steps:${ENDCOLOR} $commit_name"
             echo -e "$files"
+
+            new_step="false"
         fi
 
         read -n 1 -s choice
@@ -185,10 +190,14 @@ function rebase_conflicts {
             number_of_conflicts=${#files_with_conflicts_new[@]}
             if [ $number_of_conflicts -gt 0 ]; then
                 echo
-                echo -e "${YELLOW}There are still some files with conflicts${ENDCOLOR}"
+                echo -e "${YELLOW}There are files with conflicts${ENDCOLOR}"
+                for index in "${!files_with_conflicts_new[@]}"
+                do
+                    echo -e $(sed '1 s/.\///' <<< "\t${files_with_conflicts_new[index]}")
+                done
                 continue
             fi
-
+           
             git add .
 
             rebase_output=$(git -c core.editor=true rebase --continue)
@@ -203,6 +212,7 @@ function rebase_conflicts {
                 echo "$rebase_output"
                 exit $rebase_code
             fi
+            new_step="true"
         fi
 
         if [ "$choice" == "2" ]; then
@@ -212,6 +222,7 @@ function rebase_conflicts {
 
         if [ "$choice" == "3" ]; then
             git rebase --skip
+            new_step="true"
             ## TODO: handle skip
         fi
 

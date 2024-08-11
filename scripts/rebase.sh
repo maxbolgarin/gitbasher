@@ -148,7 +148,7 @@ function rebase_conflicts {
     echo -e "After resolving, select an option to continue:"
     echo -e "1. Add changes and continue: ${YELLOW}git rebase --continue${ENDCOLOR}"
     echo -e "2. Open editor to change rebase plan: ${YELLOW}git rebase --edit-todo${ENDCOLOR}"
-    echo -e "3. Skip this commit, ${RED}it will throw away the commit from the history${ENDCOLOR}: ${YELLOW}git rebase --skip${ENDCOLOR}"
+    echo -e "3. Throw away the commit from the history: ${RED}git rebase --skip${ENDCOLOR}"
     echo -e "4. Abort rebase and return to the original state: ${YELLOW}git rebase --abort${ENDCOLOR}"
     echo -e "Press any another key to exit from this script ${BOLD}without${NORMAL} rebase abort"
 
@@ -161,8 +161,8 @@ function rebase_conflicts {
             current_step=$(echo "$status" | sed -n 's/.*Last command done (\([0-9]*\) command done):/\1/p')
             remaining_steps=$(echo "$status" | sed -n 's/.*Next commands to do (\([0-9]*\) remaining commands):/\1/p')
             commit_name=$(echo "$status" | head -n 3 | tail -n 1 | sed "s/^\([a-z]* [0-9a-f]*\) /\[\1\] /;s/^[ \t]*//;s/[ \t]*$//")
-            commit_name="${commit_name/\[/\[${BLUE_ES}}"
-            commit_name="${commit_name/\]/${ENDCOLOR_ES}\]}"
+            # commit_name="${commit_name/\[/\[${BLUE}}"
+            # commit_name="${commit_name/\]/${ENDCOLOR}\]}"
             files=$(echo "$status" | sed -n '/^Unmerged paths:/,/^$/p' | sed '/^Unmerged paths:/d;/^$/d;/^ *(/d')
             files=$(sed "s/\(.*\)both modified:/\1${RED_ES}both modified:${ENDCOLOR_ES}/" <<< "${files}")
             files=$(sed "s/\(.*\)both added:/\1${GREEN_ES}both added:${ENDCOLOR_ES}/" <<< "${files}")

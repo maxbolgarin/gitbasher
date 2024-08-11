@@ -1088,7 +1088,7 @@ function rebase_script {
 
 
     ### Fetch before rebase
-    echo -e "Do you want to use ${YELLOW}${origin_name}/${new_base_branch}${ENDCOLOR} (y/n)?"
+    echo -e "Do you want to use ${YELLOW}${origin_name}/${new_base_branch}${ENDCOLOR} instead of local (y/n)?"
     read -n 1 -s choice
     if [ "$choice" == "y" ]; then
         echo

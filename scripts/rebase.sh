@@ -201,7 +201,7 @@ function rebase_conflicts {
            
             git add .
 
-            rebase_output=$(git -c core.editor=true rebase --continue)
+            rebase_output=$(git -c core.editor=true rebase --continue 2>&1)
             rebase_code=$?
 
             if [[ $rebase_output == *"Successfully rebased"* ]]; then
@@ -223,7 +223,7 @@ function rebase_conflicts {
         fi
 
         if [ "$choice" == "3" ]; then
-            rebase_output=$(git rebase --skip)
+            rebase_output=$(git rebase --skip 2>&1)
             rebase_code=$?
 
             if [[ $rebase_output == *"Successfully rebased"* ]]; then
@@ -236,7 +236,7 @@ function rebase_conflicts {
                 exit $rebase_code
             fi
 
-            echo -e "${RED}Skipped commit:${ENDCOLOR} $(echo $commit_name | sed 's/^[^ ]* [^ ]* //')"
+            echo -e "${YELLOW}Skipped commit:${ENDCOLOR} $(echo $commit_name | sed 's/^[^ ]* [^ ]* //')"
             new_step="true"
             continue
         fi
@@ -250,6 +250,8 @@ function rebase_conflicts {
                 echo -e "${YELLOW}Aborting rebase...${ENDCOLOR}"
                 git rebase --abort
                 exit $?
+            else
+                echo -e "${YELLOW}Continuing...${ENDCOLOR}"
             fi
             continue
         fi

@@ -150,7 +150,7 @@ function rebase_conflicts {
     echo -e "2. Open editor to change rebase plan: ${BLUE}git rebase --edit-todo${ENDCOLOR}"
     echo -e "3. Throw away the commit from the history: ${RED}git rebase --skip${ENDCOLOR}"
     echo -e "4. Abort rebase and return to the original state: ${YELLOW}git rebase --abort${ENDCOLOR}"
-    echo -e "Press any another key to exit from this script ${BOLD}without${NORMAL} rebase abort"
+    echo -e "0. Exit from this script ${BOLD}without${NORMAL} rebase abort"
 
     new_step="true"
 
@@ -179,9 +179,9 @@ function rebase_conflicts {
 
         read -n 1 -s choice
 
-        re='^[1-9]+$'
+        re='^[0-9]+$'
         if ! [[ $choice =~ $re ]]; then
-            exit
+            continue
         fi
 
         if [ "$choice" == "1" ]; then
@@ -221,9 +221,21 @@ function rebase_conflicts {
         fi
 
         if [ "$choice" == "3" ]; then
-            git rebase --skip
+            rebase_output=$(git rebase --skip)
+            rebase_code=$?
+
+            if [[ $rebase_output == *"Successfully rebased"* ]]; then
+                return
+            fi
+
+            if [[ $rebase_output != *"CONFLICT"* ]]; then
+                echo -e "${RED}Cannot rebase! Error message:${ENDCOLOR}"
+                echo "$rebase_output"
+                exit $rebase_code
+            fi
+
+            echo -e "${YELLOW}Skipped commit: $(echo $commit_name | sed 's/^[^ ]* [^ ]* //')|${ENDCOLOR}"
             new_step="true"
-            ## TODO: handle skip
         fi
 
 
@@ -232,6 +244,12 @@ function rebase_conflicts {
             echo -e "${YELLOW}Aborting rebase...${ENDCOLOR}"
             git rebase --abort
             exit $?
+
+            ## TODO: ask
+        fi
+
+         if [ "$choice" == "0" ]; then
+            exit
         fi
     done
 }

@@ -147,7 +147,7 @@ function rebase_conflicts {
     echo -e "${YELLOW}You should resolve conflicts manually${ENDCOLOR}"
     echo -e "After resolving, select an option to continue:"
     echo -e "1. Add changes and continue: ${YELLOW}git rebase --continue${ENDCOLOR}"
-    echo -e "2. Open editor to change rebase plan: ${YELLOW}git rebase --edit-todo${ENDCOLOR}"
+    echo -e "2. Open editor to change rebase plan: ${BLUE}git rebase --edit-todo${ENDCOLOR}"
     echo -e "3. Throw away the commit from the history: ${RED}git rebase --skip${ENDCOLOR}"
     echo -e "4. Abort rebase and return to the original state: ${YELLOW}git rebase --abort${ENDCOLOR}"
     echo -e "Press any another key to exit from this script ${BOLD}without${NORMAL} rebase abort"
@@ -165,7 +165,7 @@ function rebase_conflicts {
             files=$(sed "s/\(.*\)both modified:/\1${RED_ES}both modified:${ENDCOLOR_ES}/" <<< "${files}")
             files=$(sed "s/\(.*\)both added:/\1${GREEN_ES}both added:${ENDCOLOR_ES}/" <<< "${files}")
 
-            total_steps=$((current_step + total_steps))
+            total_steps=$((current_step + remaining_steps))
 
             echo
             echo -e "${YELLOW}Step $current_step/$total_steps:${ENDCOLOR} $commit_name"

@@ -1189,8 +1189,8 @@ function rebase_conflicts {
             commit_name=$(echo "$status" | sed -n '/done):/,/Next command/p' | sed 's/^[ \t]*//;s/[ \t]*$//' | sed '/^[LN(]/d' | tail -n 1 )
             commit_name=$(echo "$commit_name" | sed 's/^[ \t]*//;s/[ \t]*$//' | sed "s/\([a-z]* [0-9a-f]*\)/${BLUE_ES}\[\1\]${ENDCOLOR_ES}/")
             files=$(echo "$status" | sed -n '/^Unmerged paths:/,/^$/p' | sed '/^Unmerged paths:/d;/^$/d;/^ *(/d')
-            files=$(sed "s/\(.*\)both modified:/\1${YELLOW_ES}both modified:${ENDCOLOR_ES}/" <<< "${files}")
-            files=$(sed "s/\(.*\)both added:/\1${GREEN_ES}both added:${ENDCOLOR_ES}/" <<< "${files}")
+            files=$(sed "s/\(.*\)both modified:/\1${YELLOW_ES}modified:${ENDCOLOR_ES}/" <<< "${files}")
+            files=$(sed "s/\(.*\)both added:/\1${YELLOW_ES}added:${ENDCOLOR_ES}/" <<< "${files}")
 
             echo
             echo -e "${GREEN}Step $current_step/$total_steps:${ENDCOLOR} $commit_name"
@@ -1271,10 +1271,10 @@ function rebase_conflicts {
 
 
         if [ "$choice" == "4" ]; then
-            echo
             echo -e "Are you sure you want to abort rebase (y/n)?"
             read -n 1 -s choice_yes
             if [ "$choice_yes" == "y" ]; then
+                echo
                 echo -e "${YELLOW}Aborting rebase...${ENDCOLOR}"
                 git rebase --abort
                 exit $?

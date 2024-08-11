@@ -236,7 +236,8 @@ function merge_commit {
     merge_error="false"
 
     ### Check if there are files with conflicts
-    IFS=$'\n' read -rd '' -a files_with_conflicts_new <<<"$(grep --files-with-matches -r -E "[<=>]{7} HEAD" .)"
+    files_with_conflicts_one_line="$(tr '\n' ' ' <<< "$2")"
+    IFS=$'\n' read -rd '' -a files_with_conflicts_new <<<"$(grep --files-with-matches -r -E "[<=>]{7} HEAD" $files_with_conflicts_one_line)"
     number_of_conflicts=${#files_with_conflicts_new[@]}
     if [ $number_of_conflicts -gt 0 ]; then
         echo

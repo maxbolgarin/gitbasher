@@ -135,6 +135,8 @@ function rebase_branch {
 
     echo -e "${RED}Cannot rebase! There are conflicts${ENDCOLOR}"
     rebase_conflicts $rebase_output
+
+    # TODO: success
 }
 
 ### Function pulls provided branch, handles errors and makes a merge
@@ -145,18 +147,33 @@ function rebase_conflicts {
     echo -e "${YELLOW}You should resolve conflicts manually${ENDCOLOR}"
     echo -e "After resolving, select an option to continue:"
     echo -e "1. Add changes and continue: ${YELLOW}git rebase --continue${ENDCOLOR}"
-    echo -e "2. Skip this commit: ${YELLOW}git rebase --skip${ENDCOLOR}"
-    echo -e "3. Abort rebase and return to the original state: ${YELLOW}git rebase --abort${ENDCOLOR}"
+    echo -e "2. Open editor to change rebase plan: ${YELLOW}git rebase --edit-todo${ENDCOLOR}"
+    echo -e "3. Skip this commit (this will throw away this commit from history!): ${YELLOW}git rebase --skip${ENDCOLOR}"
+    echo -e "4. Abort rebase and return to the original state: ${YELLOW}git rebase --abort${ENDCOLOR}"
     echo -e "Press any another key to exit from this script ${BOLD}without${NORMAL} rebase abort"
 
     ### Rebase process
     while [ true ]; do
-         ### Print files with conflicts
+        ### Print files with conflicts
+        # echo
+        # echo -e "${YELLOW}Files with conflicts${ENDCOLOR}"
+        # IFS=$'\n' read -rd '' -a files_with_conflicts <<<"$(git --no-pager diff --name-only --diff-filter=U --relative)"
+        # echo -e "$(sed 's/^/\t/' <<< "$files_with_conflicts")"
+        # echo
+
+    # Step 1/18: pick 52e4928 test: for rebase
+    #     README.md
+    #     Makefile
+
+        status=$(git status)
+        current_step=$(echo $status | sed -n 's/.*Last command done (\([0-9]*\) command done):/\1/p')
+        total_steps=$(echo $status | sed -n 's/.*Next commands to do (\([0-9]*\) remaining commands):/\1/p')
+        commit_name=$(echo $status | head -n 3 | tail -n 1)
+        files=$(echo $status | sed -n '/^Unmerged paths:/,/^$/p' | sed '/^Unmerged paths:/d;/^$/d;/^ *(/d')
+
         echo
-        echo -e "${YELLOW}Files with conflicts${ENDCOLOR}"
-        IFS=$'\n' read -rd '' -a files_with_conflicts <<<"$(git --no-pager diff --name-only --diff-filter=U --relative)"
-        echo -e "$(sed 's/^/\t/' <<< "$files_with_conflicts")"
-        echo
+        echo -e "${YELLOW}Step $current_step/$total_steps:${ENDCOLOR} $commit_name"
+        echo -e "$files"
 
         read -n 1 -s choice
 
@@ -166,7 +183,8 @@ function rebase_conflicts {
         fi
 
         if [ "$choice" == "1" ]; then
-            IFS=$'\n' read -rd '' -a files_with_conflicts_new <<<"$(grep --files-with-matches -r -E "[<=>]{7} HEAD" .)"
+            files_with_conflicts_one_line="$(tr '\n' ' ' <<< "$files_with_conflicts")"
+            IFS=$'\n' read -rd '' -a files_with_conflicts_new <<<"$(grep --files-with-matches -r -E "[<=>]{7} HEAD" $files_with_conflicts_one_line)"
             number_of_conflicts=${#files_with_conflicts_new[@]}
             if [ $number_of_conflicts -gt 0 ]; then
                 echo
@@ -182,10 +200,34 @@ function rebase_conflicts {
                 continue
             fi
 
-            git -c core.editor=true rebase --continue
+            git add $files_with_conflicts_one_line
+
+            rebase_output=$(git -c core.editor=true rebase --continue)
+            rebase_code=$?
+
+            if [[ $rebase_output == *"Successfully rebased"* ]]; then
+                return
+            fi
+
+            if [[ $rebase_output != *"CONFLICT"* ]]; then
+                echo -e "${RED}Cannot rebase! Error message:${ENDCOLOR}"
+                echo "$rebase_output"
+                exit $rebase_code
+            fi
+        fi
+
+        if [ "$choice" == "2" ]; then
+            git rebase --edit-todo
+            ## TODO: handle todo
         fi
 
         if [ "$choice" == "3" ]; then
+            git rebase --skip
+            ## TODO: handle skip
+        fi
+
+
+        if [ "$choice" == "4" ]; then
             echo
             echo -e "${YELLOW}Aborting rebase...${ENDCOLOR}"
             git rebase --abort
@@ -194,55 +236,3 @@ function rebase_conflicts {
     done
 }
 
-
-### Function pulls provided branch, handles errors and makes a merge
-# $1: branch name
-# $2: origin name
-# $3: editor
-function resolve_conflicts {
-
-    ### Print files with conflicts
-    echo -e "${YELLOW}Files with conflicts${ENDCOLOR}"
-    IFS=$'\n' read -rd '' -a files_with_conflicts <<<"$(git --no-pager diff --name-only --diff-filter=U --relative)"
-    echo -e "$(sed 's/^/\t/' <<< "$files_with_conflicts")"
-    echo
-
-
-    ### Ask user what he wants to do
-    default_message="Merge branch '$2/$1' into '$1'"
-    echo -e "${YELLOW}You should fix conflicts manually.${ENDCOLOR} There are some options:"
-    echo -e "1. Create a merge commit with a generated message"
-    printf "\tMessage: ${BLUE}${default_message}${ENDCOLOR}\n"
-    echo -e "2. Create a merge commit with an entered message"
-    echo -e "3. Abort merge"
-    echo -e "Press any another key to exit from this script ${BOLD}without${NORMAL} merge --abort"
-
-
-    ### Merge process
-    while [ true ]; do
-        read -n 1 -s choice
-
-        re='^[0-9]+$'
-        if ! [[ $choice =~ $re ]]; then
-            exit
-        fi
-
-        if [ "$choice" == "1" ] || [ "$choice" == "2" ]; then
-            merge_commit $choice $files_with_conflicts "${default_message}" $1 $2 $3
-            if [ "$merge_error" == "false" ]; then
-                return
-            fi
-        fi
-
-        if [ "$choice" == "3" ]; then
-            echo
-            echo -e "${YELLOW}Aborting merge...${ENDCOLOR}"
-            git merge --abort
-            exit $?
-        fi
-
-        if [ "$choice" == "0" ]; then
-            exit
-        fi
-    done
-}

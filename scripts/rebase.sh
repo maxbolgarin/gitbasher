@@ -144,7 +144,7 @@ function rebase_branch {
 function rebase_conflicts {
     ### Ask user what he wants to do
     echo
-    echo -e "${YELLOW}You should resolve conflicts manually${ENDCOLOR}"
+    echo -e "${YELLOW}You should resolve conflicts ${BOLD}manually${ENDCOLOR}"
     echo -e "After resolving, select an option to continue:"
     echo -e "1. Add changes and continue: ${YELLOW}git rebase --continue${ENDCOLOR}"
     echo -e "2. Open editor to change rebase plan: ${BLUE}git rebase --edit-todo${ENDCOLOR}"
@@ -153,6 +153,7 @@ function rebase_conflicts {
     echo -e "0. Exit from this script ${BOLD}without${NORMAL} rebase abort"
 
     new_step="true"
+    rebase_output=$1
 
     ### Rebase process
     while [ true ]; do
@@ -213,6 +214,7 @@ function rebase_conflicts {
                 exit $rebase_code
             fi
             new_step="true"
+            continue
         fi
 
         if [ "$choice" == "2" ]; then
@@ -234,18 +236,22 @@ function rebase_conflicts {
                 exit $rebase_code
             fi
 
-            echo -e "${YELLOW}Skipped commit: $(echo $commit_name | sed 's/^[^ ]* [^ ]* //')|${ENDCOLOR}"
+            echo -e "${RED}Skipped commit:${ENDCOLOR} $(echo $commit_name | sed 's/^[^ ]* [^ ]* //')"
             new_step="true"
+            continue
         fi
 
 
         if [ "$choice" == "4" ]; then
             echo
-            echo -e "${YELLOW}Aborting rebase...${ENDCOLOR}"
-            git rebase --abort
-            exit $?
-
-            ## TODO: ask
+            echo -e "Are you sure you want to abort rebase (y/n)?"
+            read -n 1 -s choice_yes
+            if [ "$choice_yes" == "y" ]; then
+                echo -e "${YELLOW}Aborting rebase...${ENDCOLOR}"
+                git rebase --abort
+                exit $?
+            fi
+            continue
         fi
 
          if [ "$choice" == "0" ]; then

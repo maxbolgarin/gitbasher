@@ -1175,30 +1175,23 @@ function rebase_conflicts {
 
     ### Rebase process
     while [ true ]; do
-        ### Print files with conflicts
-        # echo
-        # echo -e "${YELLOW}Files with conflicts${ENDCOLOR}"
-        # IFS=$'\n' read -rd '' -a files_with_conflicts <<<"$(git --no-pager diff --name-only --diff-filter=U --relative)"
-        # echo -e "$(sed 's/^/\t/' <<< "$files_with_conflicts")"
-        # echo
 
-    # Step 1/18: pick 52e4928 test: for rebase
-    #     README.md
-    #     Makefile
+        ## Don't print after editing TODO
+        if [ "$choice" != "2" ]; then
+            status=$(git status)
+            current_step=$(echo "$status" | sed -n 's/.*Last command done (\([0-9]*\) command done):/\1/p')
+            remaining_steps=$(echo "$status" | sed -n 's/.*Next commands to do (\([0-9]*\) remaining commands):/\1/p')
+            commit_name=$(echo "$status" | head -n 3 | tail -n 1 | sed "s/^\([a-z]* [0-9a-f]*\) /${BLUE_ES}\[\1\]${ENDCOLOR_ES} /;s/^[ \t]*//;s/[ \t]*$//")
+            files=$(echo "$status" | sed -n '/^Unmerged paths:/,/^$/p' | sed '/^Unmerged paths:/d;/^$/d;/^ *(/d')
+            files=$(sed "s/\(.*\)both modified:/\1${RED_ES}both modified:${ENDCOLOR_ES}/" <<< "${files}")
+            files=$(sed "s/\(.*\)both added:/\1${GREEN_ES}both added:${ENDCOLOR_ES}/" <<< "${files}")
 
-        status=$(git status)
-        current_step=$(echo "$status" | sed -n 's/.*Last command done (\([0-9]*\) command done):/\1/p')
-        remaining_steps=$(echo "$status" | sed -n 's/.*Next commands to do (\([0-9]*\) remaining commands):/\1/p')
-        commit_name=$(echo "$status" | head -n 3 | tail -n 1 | sed 's/^[ \t]*//;s/[ \t]*$//')
-        files=$(echo "$status" | sed -n '/^Unmerged paths:/,/^$/p' | sed '/^Unmerged paths:/d;/^$/d;/^ *(/d')
-        files=$(sed "s/\(.*\)both modified:/\1${RED_ES}both modified:${ENDCOLOR_ES}/" <<< "${files}")
-        files=$(sed "s/\(.*\)both added:/\1${GREEN_ES}both added:${ENDCOLOR_ES}/" <<< "${files}")
+            total_steps=$((current_step + total_steps))
 
-        total_steps=$((current_step + total_steps))
-
-        echo
-        echo -e "${YELLOW}Step $current_step/$total_steps:${ENDCOLOR} $commit_name"
-        echo -e "$files"
+            echo
+            echo -e "${YELLOW}Step $current_step/$total_steps:${ENDCOLOR} $commit_name"
+            echo -e "$files"
+        fi
 
         read -n 1 -s choice
 
@@ -1235,7 +1228,7 @@ function rebase_conflicts {
 
         if [ "$choice" == "2" ]; then
             git rebase --edit-todo
-            ## TODO: handle todo
+            continue
         fi
 
         if [ "$choice" == "3" ]; then

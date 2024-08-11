@@ -1257,7 +1257,7 @@ function rebase_conflicts {
                 exit $rebase_code
             fi
 
-            echo -e "${YELLOW}Skipped commit:${ENDCOLOR} $(echo $commit_name | sed 's/^[^ ]* [^ ]* //')"
+            echo -e "${YELLOW}Skipped commit${ENDCOLOR}"
             new_step="true"
             continue
         fi

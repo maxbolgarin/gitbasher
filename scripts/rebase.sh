@@ -223,6 +223,13 @@ function rebase_conflicts {
         fi
 
         if [ "$choice" == "3" ]; then
+            echo -e "Are you sure you want to skip commit and throw it away (y/n)?"
+            read -n 1 -s choice_yes
+            if [ "$choice_yes" != "y" ]; then
+                echo -e "${YELLOW}Continuing...${ENDCOLOR}"
+                continue
+            fi
+            
             rebase_output=$(git rebase --skip 2>&1)
             rebase_code=$?
 

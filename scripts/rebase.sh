@@ -160,9 +160,7 @@ function rebase_conflicts {
             status=$(git status)
             current_step=$(echo "$status" | sed -n 's/.*Last command done (\([0-9]*\) command done):/\1/p')
             remaining_steps=$(echo "$status" | sed -n 's/.*Next commands to do (\([0-9]*\) remaining commands):/\1/p')
-            commit_name=$(echo "$status" | head -n 3 | tail -n 1 | sed "s/\([a-z]* [0-9a-f]*\) /\[\1\] /;s/^[ \t]*//;s/[ \t]*$//")
-            # commit_name="${commit_name/\[/\[${BLUE}}"
-            # commit_name="${commit_name/\]/${ENDCOLOR}\]}"
+            commit_name=$(echo "$status" | head -n 3 | tail -n 1 | sed 's/^[ \t]*//;s/[ \t]*$//' | sed "s/\([a-z]* [0-9a-f]*\)/${BLUE_ES}\[\1\]${ENDCOLOR_ES}/")
             files=$(echo "$status" | sed -n '/^Unmerged paths:/,/^$/p' | sed '/^Unmerged paths:/d;/^$/d;/^ *(/d')
             files=$(sed "s/\(.*\)both modified:/\1${RED_ES}both modified:${ENDCOLOR_ES}/" <<< "${files}")
             files=$(sed "s/\(.*\)both added:/\1${GREEN_ES}both added:${ENDCOLOR_ES}/" <<< "${files}")

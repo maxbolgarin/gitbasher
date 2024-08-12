@@ -529,7 +529,7 @@ function switch {
             if [ -n "$changes" ] && [ -z $2 ]; then
                 echo
                 echo -e "${YELLOW}Moved changes:${ENDCOLOR}"
-                git status -s
+                echo -e "$changes"
             fi
         fi
 
@@ -1773,7 +1773,7 @@ function commit_script {
         #echo -e "On branch ${YELLOW}${current_branch}${ENDCOLOR}"
         #echo
         echo -e "${YELLOW}Changed fiels${ENDCOLOR}"
-        git status -s
+        git_status
     fi
 
 
@@ -2382,11 +2382,11 @@ function branch_script {
 
     if [ $create_code -eq 0 ]; then
         echo -e "${GREEN}${create_output} from '$from_branch'${ENDCOLOR}"
-        changes=$(git status -s)
+        changes=$(git_status)
         if [ -n "$changes" ]; then
             echo
             echo -e "${YELLOW}Moved changes:${ENDCOLOR}"
-            git_status
+            echo -e "${changes}"
         fi
         exit
     fi

@@ -326,7 +326,7 @@ function tag_script {
 
     ### Select commit for new tag
     if [ -n "$select" ]; then
-        echo -e "${YELLOW}Select commit for a new tag on branch '$current_branch'${ENDCOLOR}"
+        echo -e "${YELLOW}Select a commit for a new tag on branch '$current_branch'${ENDCOLOR}"
         choose_commit 9
 
         echo 

@@ -13,6 +13,7 @@ function print_help {
     msg="$msg\nrebase_r|re|base_Rebase current branch"
     msg="$msg\nbranch_b|br|bran_Managing branches"
     msg="$msg\ntag_t|tg_Managing tags"
+    msg="$msg\nreset_res_Conventional using of git reset"
     msg="$msg\nconfig_cf|cfg|conf_Configurate gitbasher"
 
     msg="$msg\n_ _ _"
@@ -21,9 +22,7 @@ function print_help {
     msg="$msg\nlog_l|lg_Open git log in a pretty format"
     msg="$msg\nreflog_rl|rlg_Open git reflog in a pretty format"
     msg="$msg\nlast-commit_lc|lastc_Show info about the last commit"
-    msg="$msg\nlast-action_la|lasta_Show info about the last action"
-    msg="$msg\nreset-commit_rc|reset_Soft reset last commit"
-    msg="$msg\nundo-action_ua|undo_Undo last action"
+    msg="$msg\nlast-ref_lr|lastr_Show info about the last reference"
     echo -e "$(echo -e "$msg" | column -ts '_')"
 
     exit
@@ -73,26 +72,23 @@ case "$1" in
     config|cf|cfg|conf)         
         config_script $2
     ;;
+    reset|res)
+        reset_script $2
+    ;;
     log|l|lg)
         gitlog
     ;;
     reflog|rl|rlg)
         reflog
     ;;
-    reset-commit|rc|reset)
-        undo_commit
-    ;;
-    undo-action|ua|undo)
-        undo_action
-    ;;
     last-commit|lc|lastc)
         last_commit
     ;;
-    last-action|la|lasta)
-        last_action
+    last-ref|lr|lastr)
+        last_ref
     ;;
     status|s|st)
-        status
+        project_status
     ;;
 
     *)

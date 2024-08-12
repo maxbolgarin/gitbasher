@@ -5,16 +5,17 @@
 # Use this script only with gitbasher
 
 
-function status {
-    echo -e "${YELLOW}Project:${ENDCOLOR}\t${GREEN}$project_name${ENDCOLOR}"
-    echo -e "${YELLOW}Repo URL:${ENDCOLOR}\t${GREEN}$repo_url${ENDCOLOR}"
-    echo -e "${YELLOW}Branch:${ENDCOLOR}\t\t${GREEN}$current_branch${ENDCOLOR}"
-    echo -e "${YELLOW}Last commit:${ENDCOLOR}\t$(git --no-pager log --pretty="%s | ${BLUE}%an${ENDCOLOR} | %cd" -1 | column -ts'|')"
+function project_status {
+    echo -e "${YELLOW}$project_name${ENDCOLOR} | ${CYAN}$repo_url${ENDCOLOR}"
     echo
-    status=$(git status -s)
+    echo -e "${YELLOW}[$current_branch $(git log -n 1 --pretty="%h")]${ENDCOLOR}"
+    echo -e "$(git --no-pager log -n 1 --pretty="%s")"
+    echo -e "=============================="
+
+    status=$(git_status)
     if [ -n "$status" ]; then
-        echo -e "${YELLOW}Git status${ENDCOLOR}"
-        git status -s
+        
+        echo -e "$status"
     else
         echo -e "${GREEN}There are no unstaged files${ENDCOLOR}"
     fi
@@ -23,46 +24,34 @@ function status {
 
 ### Function opens git log in pretty format
 function gitlog {
-    git log --pretty="%C(Yellow)%h  %C(reset)%ad (%C(Green)%cr%C(reset))%x09 %C(Cyan)%an: %C(reset)%s"
+    git log --pretty="%C(Yellow)%h%C(reset) | %C(Cyan)%ad%C(reset) | %C(Blue)%an%C(reset) | %s (%C(Green)%cr%C(reset))"
 }
 
 
 ### Function opens git reflog in pretty format
 function reflog {
-    git reflog --pretty="%C(Yellow)%h  %C(reset)%ad (%C(Green)%cr%C(reset))%x09 %C(Cyan)%gd%C(reset) %gs"
+    git reflog --pretty="%C(Yellow)%h%C(reset) | %C(Blue)%gd%C(reset) | %C(Cyan)%ad%C(reset) | %gs (%C(Green)%cr%C(reset))"
 }
 
 
 ### Function prints last commit info (from git log)
 function last_commit {
-    echo -e "$(git --no-pager log --pretty="${YELLOW}%h${ENDCOLOR} | %s | ${BLUE}%an${ENDCOLOR} | %cd" -1 | column -ts'|')"
+    git --no-pager log -n 1 --pretty="%C(Yellow)%h%C(reset) | %s | %C(Blue)%an%C(reset) | %C(Green)%cr%C(reset) | %C(Cyan)%ad%C(reset)" 
 }
 
 
 ### Function prints last action info (from git reflog)
-function last_action {
-    echo -e "$(git --no-pager reflog --pretty="${YELLOW}%gd${ENDCOLOR} | %gs | ${BLUE}%an${ENDCOLOR} | %cd" -1 | column -ts'|')"
+function last_ref {
+    git --no-pager reflog -n 1 --pretty="%C(Yellow)%h%C(reset) | %C(Cyan)%gd%C(reset) | %gs | %C(Green)%cr%C(reset) | %C(Cyan)%ad%C(reset)"
 }
 
 
 ### Function undoes previous commit (move HEAD pointer up for one record, HEAD^)
-function undo_commit {
+function reset_last {
     cancelled_commit=$(git --no-pager log --pretty="${YELLOW}%h${ENDCOLOR} | %s | ${BLUE}%an${ENDCOLOR} | %cd" -1)
     git reset HEAD^ > /dev/null
     new_commit=$(git --no-pager log --pretty="${YELLOW}%h${ENDCOLOR} | %s | ${BLUE}%an${ENDCOLOR} | %cd" -1)
 
     msg=$(echo -e "${GREEN}New last commit:${ENDCOLOR}|${new_commit}\n${GREEN}Cancelled commit:${ENDCOLOR}|${cancelled_commit}" | column -ts'|')
-    echo -e "$msg"
-}
-
-
-### Function undoes previous action (reset HEAD{1})
-function undo_action {
-    cancelled_commit=$(git --no-pager log --pretty="${YELLOW}%h${ENDCOLOR} | %s | ${BLUE}%an${ENDCOLOR} | %cd" -1)
-    cancelled_action=$(git --no-pager reflog --pretty="${YELLOW}%gd${ENDCOLOR} | %gs | ${BLUE}%an${ENDCOLOR} | %cd" -1)
-    git reset HEAD@{1} > /dev/null
-    new_commit=$(git --no-pager log --pretty="${YELLOW}%h${ENDCOLOR} | %s | ${BLUE}%an${ENDCOLOR} | %cd" -1)
-
-    msg=$(echo -e "${GREEN}New last commit:${ENDCOLOR}|${new_commit}\n${GREEN}Cancelled commit:${ENDCOLOR}|${cancelled_commit}\n${GREEN}Cancelled action:${ENDCOLOR}|${cancelled_action}" | column -ts'|')
     echo -e "$msg"
 }

@@ -7,6 +7,7 @@ YELLOW="\e[33m"
 BLUE="\e[34m"
 PURPLE="\e[35m"
 CYAN="\e[36m"
+GRAY="\e[37m"
 ENDCOLOR="\e[0m"
 BOLD="\033[1m"
 NORMAL="\033[0m"
@@ -19,6 +20,7 @@ YELLOW_ES="\x1b[33m"
 BLUE_ES="\x1b[34m"
 PURPLE_ES="\x1b[35m"
 CYAN_ES="\x1b[36m"
+GRAY_ES="\x1b[37m"
 ENDCOLOR_ES="\x1b[0m"
 
 
@@ -212,6 +214,23 @@ function choose {
 }
 
 
+### Function prints fiels from git status in a pretty way
+function git_status {
+    status_output=$(git status --short)
+    status_output=$(echo "$status_output" | sed "s/^ D/${RED_ES}\tDeleted: ${ENDCOLOR_ES}/")
+    status_output=$(echo "$status_output" | sed "s/^D /${GREEN_ES}Staged\t${RED_ES}Deleted: ${ENDCOLOR_ES}/")
+
+    status_output=$(echo "$status_output" | sed "s/^ M/${YELLOW_ES}\tModified:${ENDCOLOR_ES}/")
+    status_output=$(echo "$status_output" | sed "s/^MM/${GRAY_ES}Old\t${YELLOW_ES}Modified:${ENDCOLOR_ES}/")
+    status_output=$(echo "$status_output" | sed "s/^AM/${GRAY_ES}Old\t${YELLOW_ES}Modified:${ENDCOLOR_ES}/")
+    status_output=$(echo "$status_output" | sed "s/^M /${GREEN_ES}Staged\t${YELLOW_ES}Modified:${ENDCOLOR_ES}/")
+
+    status_output=$(echo "$status_output" | sed "s/^A/${GREEN_ES}Staged\tAdded:   ${ENDCOLOR_ES}/")
+    status_output=$(echo "$status_output" | sed "s/^??/${GREEN_ES}\tAdded:   ${ENDCOLOR_ES}/")
+    echo -e "$status_output"
+}
+
+
 ### Function prints the list of commits
 # $1: number of last commits to show
 # $2: what to add before commit line
@@ -220,32 +239,44 @@ function choose {
 #     * number
 # $3: from which place (commit, branch) show commits (empty for default)
 # Returns: 
-#     number_of_commits
+#     commits_info
+#     commits_hash
 function commit_list {
-    commits_info_str=$(git --no-pager log --pretty="%h | %s | %an | %cr" -n $1 $3 | column -ts'|')
-    commits_hash_str=$(git --no-pager log --pretty="%h" -n $1 $3)
-    commits_author_str=$(git --no-pager log --pretty="%an" -n $1 $3)
-    commits_date_str=$(git --no-pager log --pretty="%cr" -n $1 $3)
-    IFS=$'\n' read -rd '' -a commits_info <<<"$commits_info_str"
-    IFS=$'\n' read -rd '' -a commits_hash <<<"$commits_hash_str"
-    IFS=$'\n' read -rd '' -a commits_author <<<"$commits_author_str"
-    IFS=$'\n' read -rd '' -a commits_date <<<"$commits_date_str"
-
-    number_of_commits=${#commits_info[@]}
+    IFS=$'\n' 
+    read -rd '' -a commits_info <<<"$(git --no-pager log -n $1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} | %s | ${GREEN_ES}%cr${ENDCOLOR_ES}" $3 | column -ts'|')"
+    read -rd '' -a commits_hash <<<"$(git --no-pager log -n $1 --pretty="%h"$3)"
 
     for index in "${!commits_info[@]}"
     do
-        commit_line=$(sed "1,/${commits_hash[index]}/ s/${commits_hash[index]}/${YELLOW_ES}${commits_hash[index]}${ENDCOLOR_ES}/" <<< ${commits_info[index]})
-        commit_line=$(sed "s/\(.*\)${commits_author[index]}/\1${BLUE_ES}${commits_author[index]}${ENDCOLOR_ES}/" <<< "${commit_line}")
-        commit_line=$(sed "s/\(.*\)${commits_date[index]}/\1${GREEN_ES}${commits_date[index]}${ENDCOLOR_ES}/" <<< "${commit_line}")
-
+        line=${commits_info[index]}
         if [ $2 == "number" ]; then
-            commit_line="$(($index+1)). ${commit_line}"
+            line="$(($index+1)). ${line}"
         elif [ $2 == "tab" ]; then
-            commit_line="\t${commit_line}"
+            line="\t${line}"
         fi
+        echo -e "$line"
+    done
+}
 
-        echo -e "$commit_line"
+
+### Function prints the list of refs from reflog
+# $1: number of last refs to show
+# Returns: 
+#     refs_info
+#     refs_hash
+function ref_list {
+    IFS=$'\n' 
+    read -rd '' -a refs_info <<<"$(git --no-pager reflog -n $1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} | ${BLUE_ES}%gd${ENDCOLOR_ES} | %gs | ${GREEN_ES}%cr${ENDCOLOR_ES}" | column -ts'|')"
+    read -rd '' -a refs_hash <<<"$(git --no-pager reflog -n $1 --pretty="%gd")"
+
+    # Remove HEAD@{0}
+    refs_info=("${refs_info[@]:1}")
+    refs_hash=("${refs_hash[@]:1}")
+
+    for index in "${!refs_info[@]}"
+    do
+        line="$(($index+1)). ${refs_info[index]}"
+        echo -e "$line"
     done
 }
 
@@ -268,7 +299,6 @@ function choose_commit {
     commit_hash=$choice_result
 
     echo
-    return
 }
 
 
@@ -435,7 +465,7 @@ function list_branches {
             branch="$origin_name\/$branch"
         fi
         branch_line=$(sed "1,/${branch}/ s/${branch}/${GREEN_ES}${branch}${ENDCOLOR_ES}/" <<< ${branches_with_info_first_main[index]})
-        branch_line=$(sed "1,/${commits_hash_first_main[index]}/ s/${commits_hash_first_main[index]}/${YELLOW_ES}${commits_hash_first_main[index]}${ENDCOLOR_ES}/" <<< ${branch_line})
+        branch_line=$(sed "1,/${commits_hash_first_main[index]}/ s/${commits_hash_first_main[index]}/${BLUE_ES}${commits_hash_first_main[index]}${ENDCOLOR_ES}/" <<< ${branch_line})
         if [ "${branches_first_main[index]}" == "$current_branch" ]; then
             echo "$(($index+1)). * $branch_line"
         else

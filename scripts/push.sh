@@ -76,14 +76,16 @@ function push_script {
     ### Print header
     header_msg="GIT PUSH"
     if [ -n "${fast}" ]; then
-        header_msg="$header_msg FAST"
+        header_msg="${YELLOW}$header_msg FAST${ENDCOLOR}"
     elif [ -n "${force}" ]; then
-        header_msg="$header_msg ${RED}FORCE${ENDCOLOR}"
+        header_msg="${RED}$header_msg FORCE${ENDCOLOR}"
     elif [ -n "${list}" ]; then
-        header_msg="$header_msg LIST"
+        header_msg="${YELLOW}$header_msg LIST${ENDCOLOR}"
+    else
+        header_msg="${YELLOW}$header_msg${ENDCOLOR}"
     fi
 
-    echo -e "${YELLOW}${header_msg}${ENDCOLOR}"
+    echo -e "${header_msg}"
     echo
 
     ### Check if there are commits to push

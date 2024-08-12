@@ -59,7 +59,7 @@ function rebase_script {
         new_base_branch=${main_branch}
 
     else
-        echo -e "Choose which branch will become a ${BOLD}new base${NORMAL} for ${YELLOW}${current_branch}${ENDCOLOR}"
+        echo -e "${YELLOW}Select which branch will become a new base for '${current_branch}'${ENDCOLOR}"
         choose_branch "rebase"
         new_base_branch=${branch_name}
         echo
@@ -67,7 +67,7 @@ function rebase_script {
 
 
     ### Fetch before rebase
-    echo -e "Do you want to use ${YELLOW}${origin_name}/${new_base_branch}${ENDCOLOR} (y/n)?"
+    echo -e "Do you want to use ${YELLOW}${origin_name}/${new_base_branch}${ENDCOLOR} instead of local (y/n)?"
     read -n 1 -s choice
     if [ "$choice" == "y" ]; then
         echo
@@ -121,7 +121,6 @@ function rebase_branch {
     ### Cannot rebase because there are uncommitted files
     if [[ $rebase_output == *"Please commit or stash them"* ]]; then
         echo -e "${RED}Cannot rebase! There are uncommited changes, you should commit them first"
-        echo 
         git status -s
         exit $rebase_code
     fi
@@ -145,7 +144,7 @@ function rebase_conflicts {
     ### Ask user what he wants to do
     echo
     echo -e "${YELLOW}You should resolve conflicts manually${ENDCOLOR}"
-    echo -e "After resolving, select an option to continue:"
+    echo -e "After resolving, select an option to continue"
     echo -e "1. Add changes and continue: ${YELLOW}git rebase --continue${ENDCOLOR}"
     echo -e "2. Open editor to change rebase plan: ${BLUE}git rebase --edit-todo${ENDCOLOR}"
     echo -e "3. Throw away the commit from the history: ${RED}git rebase --skip${ENDCOLOR}"
@@ -179,11 +178,6 @@ function rebase_conflicts {
         fi
 
         read -n 1 -s choice
-
-        re='^[0-9]+$'
-        if ! [[ $choice =~ $re ]]; then
-            continue
-        fi
 
         if [ "$choice" == "1" ]; then
             files_with_conflicts_one_line="$(tr '\n' ' ' <<< "$files_with_conflicts")"
@@ -263,7 +257,7 @@ function rebase_conflicts {
             continue
         fi
 
-         if [ "$choice" == "0" ]; then
+        if [ "$choice" == "0" ]; then
             exit
         fi
     done

@@ -9,6 +9,7 @@ if [[ "$git_check" == *"fatal: not a git repository"* ]]; then
     exit
 fi
 
+
 ### Get common and config first
 source scripts/common.sh
 source scripts/config.sh
@@ -21,6 +22,7 @@ source scripts/push.sh
 source scripts/commit.sh
 source scripts/branch.sh
 source scripts/tag.sh
+source scripts/reset.sh
 source scripts/gitlog.sh
 
 source scripts/base.sh

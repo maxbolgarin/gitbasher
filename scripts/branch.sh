@@ -244,7 +244,7 @@ function branch_script {
 
 
     ### Run create new branch logic
-    ### Step 1. Choose branch type
+    ### Step 1. Select branch type
     echo -e "${YELLOW}Step 1.${ENDCOLOR} What type of branch do you want to create?"
     echo "1. feat:      new feature or logic changes, 'feat' and 'perf' commits"
     echo "2. fix:       small changes, eg. not critical bug fix"

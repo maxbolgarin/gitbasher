@@ -73,15 +73,15 @@ function commit_script {
         echo -e "usage: ${YELLOW}gitb commit <mode>${ENDCOLOR}"
         echo
         echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\tChoose files to commit and create conventional message in format: 'type(scope): message'"
+        echo -e "<empty>\t\Select files to commit and create conventional message in format: 'type(scope): message'"
         echo -e "fast|f\t\tAdd all files (git add .) and create conventional commit message"
         echo -e "fastpush|fp\tAdd all files (git add .), create conventional commit message and push"
         echo -e "msg|m\t\tSame as in <empty>, but create multiline commit message using text editor"
         echo -e "ticket|t\tSame as previous, but add tracker's ticket info to the end of commit header"
-        echo -e "amend|a\t\tChoose files and make --amend commit to the last one (git commit --amend --no-edit)"
-        echo -e "fixup|x\t\tChoose files and select commit to --fixup (git commit --fixup <commit>)"
-        echo -e "autosquash|s\tChoose commit from which to squash fixup commits and run git rebase -i --autosquash <commit>"
-        echo -e "revert|r\tChoose commit to revert (git revert -no-edit <commit>)"
+        echo -e "amend|a\t\Select files and make --amend commit to the last one (git commit --amend --no-edit)"
+        echo -e "fixup|x\t\Select files and commit to --fixup (git commit --fixup <commit>)"
+        echo -e "autosquash|s\Select a commit from which to squash fixup commits and run git rebase -i --autosquash <commit>"
+        echo -e "revert|r\Select a commit to revert (git revert -no-edit <commit>)"
         echo -e "help|h\t\tShow this help"
         exit
     fi
@@ -132,7 +132,7 @@ function commit_script {
 
     ### Run autosquash logic
     if [ -n "${autosquash}" ]; then
-        echo -e "${YELLOW}Step 1.${ENDCOLOR} Choose commit from which to squash fixup commits (third one or older):"
+        echo -e "${YELLOW}Step 1.${ENDCOLOR} Select a commit from which to squash fixup commits (third one or older):"
 
         choose_commit 20
 
@@ -144,7 +144,7 @@ function commit_script {
 
     ### Run revert logic
     if [ -n "${revert}" ]; then
-        echo -e "${YELLOW}Step 1.${ENDCOLOR} Choose commit to revert:"
+        echo -e "${YELLOW}Step 1.${ENDCOLOR} Select a commit to revert:"
         
         choose_commit 20
 
@@ -216,9 +216,9 @@ function commit_script {
     ### Run fixup logic
     if [ -n "${fixup}" ]; then
         echo
-        echo -e "${YELLOW}Step 2.${ENDCOLOR} Choose commit to fixup:"
+        echo -e "${YELLOW}Step 2.${ENDCOLOR} Select a commit to fixup:"
 
-        choose_commit 9
+        choose_commit 20
         
         result=$(git commit --fixup $commit_hash 2>&1)
         check_code $? "$result" "fixup"
@@ -228,7 +228,7 @@ function commit_script {
     fi
 
 
-    ### Commit Step 2: choose commit type
+    ### Commit Step 2: Select commit type
     echo
     step="2"
     if [ -n "${fast}" ]; then

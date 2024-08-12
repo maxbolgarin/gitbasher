@@ -516,7 +516,7 @@ function switch {
             if [ -n "$changes" ] && [ -z $2 ]; then
                 echo
                 echo -e "${YELLOW}Moved changes:${ENDCOLOR}"
-                git status -s
+                echo -e "$changes"
             fi
         fi
 

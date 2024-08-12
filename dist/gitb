@@ -5,7 +5,7 @@
 
 git_check=$(git branch --show-current 2>&1)
 if [[ "$git_check" == *"fatal: not a git repository"* ]]; then
-echo "You can use gitb only from directory with inited git repository"
+echo "You can use gitb only in a git repository"
 exit
 fi
 
@@ -586,12 +586,7 @@ function set_main_branch {
     echo
 
     fetch_output=$(git fetch 2>&1)
-    fetch_code=$?
-    if [ $fetch_code -ne 0 ] ; then
-        echo -e "${RED}Cannot fetch remote!${ENDCOLOR}"
-        echo -e "${fetch_output}"
-        exit $fetch_code
-    fi
+    check_code $? "$fetch_output" "fetch remote"
 
     prune_output=$(git remote prune $origin_name 2>&1)
 
@@ -604,7 +599,7 @@ function set_main_branch {
     echo 
 
     main_branch=$(set_config_value gitbasher.branch $branch_name)
-    echo -e "${GREEN}Set '${branch_name}' as default gitbasher branch in '${project_name}' repo${ENDCOLOR}"
+    echo -e "${GREEN}Set '${branch_name}' as a default gitbasher branch in '${project_name}' repo${ENDCOLOR}"
 
     echo -e "Do you want to set it globally for all projects (y/n)?"
     yes_no_choice "\nSet '${branch_name}' globally" "true"
@@ -659,7 +654,7 @@ function set_sep {
     echo
 
     sep=$(set_config_value gitbasher.sep $new_sep)
-    echo -e "${GREEN}Set '${sep}' as branch name separator in '${project_name}' repo${ENDCOLOR}"
+    echo -e "${GREEN}Set '${sep}' as a branch name separator in '${project_name}' repo${ENDCOLOR}"
 
     echo -e "Do you want to set it globally for all projects (y/n)?"
     yes_no_choice "\nSet '${sep}' globally" "true"
@@ -2105,10 +2100,10 @@ function branch_script {
         header="$header REMOTE"
     elif [ -n "${main}" ]; then
         header="$header DEFAULT"
-    elif [ -n "${new}" ]; then
-        header="$header NEW FROM DEFAULT"
     elif [ -n "${current}" ]; then
         header="$header NEW"
+    elif [ -n "${new}" ]; then
+        header="$header NEW FROM DEFAULT"
     elif [ -n "${delete}" ]; then
         header="$header DELETE"
     fi
@@ -2195,7 +2190,7 @@ function branch_script {
                         delete_output=$(git branch -d $branch_to_delete 2>&1)
                         delete_code=$?
                         if [ $delete_code == 0 ]; then
-                            echo -e "${GREEN}Deleted branch '$branch_to_delete'${ENDCOLOR}"
+                            echo -e "${GREEN}Branch '$branch_to_delete' is deleted!${ENDCOLOR}"
                         else
                             echo -e "${RED}Cannot delete branch '$branch_to_delete'!${ENDCOLOR}"
                             echo -e "${delete_output}"
@@ -2223,7 +2218,7 @@ function branch_script {
         delete_code=$?
 
         if [ "$delete_code" == 0 ]; then
-            echo -e "${GREEN}Deleted branch '$branch_name'!${ENDCOLOR}"
+            echo -e "${GREEN}Branch '$branch_name' is deleted!${ENDCOLOR}"
 
         elif [[ ${delete_output} == *"is not fully merged"* ]]; then
             echo -e "${RED}The branch '$branch_name' is not fully merged${ENDCOLOR}"
@@ -2242,7 +2237,7 @@ function branch_script {
                         echo -e "${delete_output}"
                         exit
                     fi
-                    echo -e "${GREEN}Deleted branch '$branch_name'!${ENDCOLOR}"
+                    echo -e "${GREEN}Branch '$branch_name' is deleted!${ENDCOLOR}"
                     break
 
                 elif [ "$choice" == "n" ]; then
@@ -2498,16 +2493,16 @@ function push_tag {
 
 ### Main function
 # $1: mode
-    # <empty>: create a new tag from a current branch and commit
-    # commit: select commit instead of using current one (or select tag when pushing or deleting)
-    # annotated: create an annotated tag with message
-    # full: create an annotated tag with message and select commit instead of using current one
-    # list: print list of local tags and exit
-    # remote: fetch tags from the remote and print the list
-    # push: select tag to push
+    # <empty>: create a new tag from a current branch and commit it
+    # commit: select a commit instead of using current one
+    # annotated: create an annotated tag with a message
+    # full: select commit instead of using current one and create an annotated tag 
+    # list: print a list of local tags
+    # remote: fetch tags from the remote and print it
+    # push: select a tag to push
     # push-all: push all tags
-    # delete: select tag to delete
-    # delete: delete all tags
+    # delete: select a tag to delete
+    # delete-all: delete all tags
 function tag_script {
     case "$1" in
         commit|c|co|cm) 
@@ -2592,15 +2587,9 @@ function tag_script {
     if [ -n "${remote}" ]; then
         echo -e "${YELLOW}Fetching all tags from remote...${ENDCOLOR}"
         fetch_output=$(git fetch $origin_name --tags 2>&1)
-        fetch_code=$?
+        check_code $? "$fetch_output" "fetch tags"
 
         echo
-        
-        if [ $fetch_code != 0 ]; then
-            echo -e "${RED}Cannot fetch tags! Error message:${ENDCOLOR}"
-            echo -e "${fetch_output}"
-            exit $fetch_code
-        fi
 
         if [ "$fetch_output" != "" ]; then
             echo -e "${YELLOW}New tags${ENDCOLOR}"
@@ -2620,15 +2609,10 @@ function tag_script {
         count=999  # Show all tags
     fi
 
-    tags_info_str=$(git for-each-ref --count=$count --format="%(refname:short) | %(creatordate:relative) | %(objectname:short) - %(contents:subject)" --sort=-creatordate refs/tags | column -ts'|' )
-    tags_str=$(git for-each-ref --count=$count --format="%(refname:short)" --sort=-creatordate refs/tags)
-    commit_hashes_str=$(git for-each-ref --count=$count --format="%(objectname:short)" --sort=-creatordate refs/tags)
-
+    tags_info_str=$(git for-each-ref --count=$count  --sort=-creatordate refs/tags --format="${BLUE_ES}%(refname:short)${ENDCOLOR_ES} | %(contents:subject) | ${YELLOW_ES}%(objectname:short)${ENDCOLOR_ES} | ${CYAN_ES}%(creatordate)${ENDCOLOR_ES} | ${GREEN_ES}%(creatordate:relative)${ENDCOLOR_ES}" | column -ts'|' )
     IFS=$'\n' read -rd '' -a tags_info <<<"$tags_info_str"
-    IFS=$'\n' read -rd '' -a tags <<<"$tags_str"
-    IFS=$'\n' read -rd '' -a commit_hashes <<<"$commit_hashes_str"
-
-    number_of_tags=${#tags[@]}
+   
+    number_of_tags=${#tags_info[@]}
 
     if [ $number_of_tags == 0 ]; then
         echo -e "${YELLOW}There is no local tags${ENDCOLOR}"
@@ -2642,11 +2626,9 @@ function tag_script {
         fi
         echo -e "${YELLOW}${tags_header}${ENDCOLOR}"
 
-        for index in "${!tags[@]}"
-        do
-            tag=$(escape "${tags[index]}" "/")
-            tag_line=$(sed "1,/${tag}/ s/${tag}/${GREEN_ES}${tag}${ENDCOLOR_ES}/" <<< ${tags_info[index]})
-            tag_line=$(sed "1,/${commit_hashes[index]}/ s/${commit_hashes[index]}/${YELLOW_ES}${commit_hashes[index]}${ENDCOLOR_ES}/" <<< "$tag_line")
+        for index in "${!tags_info[@]}"
+        do  
+            tag_line="${tags_info[index]}"
             if [ -n "${delete}" ] || [ -n "${push}" ]; then
                 echo -e "$(($index+1)). ${tag_line}"
             else
@@ -2962,7 +2944,7 @@ function reset_script {
 }
 #!/usr/bin/env bash
 
-### Script for providing some info from git log and movind HEAD
+### Script for providing info from git log
 # Read README.md to get more information how to use it
 # Use this script only with gitbasher
 
@@ -3007,17 +2989,6 @@ function last_ref {
     git --no-pager reflog -n 1 --pretty="%C(Yellow)%h%C(reset) | %C(Cyan)%gd%C(reset) | %gs | %C(Green)%cr%C(reset) | %C(Cyan)%ad%C(reset)"
 }
 
-
-### Function undoes previous commit (move HEAD pointer up for one record, HEAD^)
-function reset_last {
-    cancelled_commit=$(git --no-pager log --pretty="${YELLOW}%h${ENDCOLOR} | %s | ${BLUE}%an${ENDCOLOR} | %cd" -1)
-    git reset HEAD^ > /dev/null
-    new_commit=$(git --no-pager log --pretty="${YELLOW}%h${ENDCOLOR} | %s | ${BLUE}%an${ENDCOLOR} | %cd" -1)
-
-    msg=$(echo -e "${GREEN}New last commit:${ENDCOLOR}|${new_commit}\n${GREEN}Cancelled commit:${ENDCOLOR}|${cancelled_commit}" | column -ts'|')
-    echo -e "$msg"
-}
-
 #!/usr/bin/env bash
 
 
@@ -3029,16 +3000,16 @@ function print_help {
     msg="$msg\ncommit_c|co|com_Everything about commit creation"
     msg="$msg\npush_p|ps|pus_Pushing changes to a remote repository"
     msg="$msg\npull_pu|pl|pul_Pulling changes from a remote repository"
-    msg="$msg\nmerge_m|me_Merge changes from a different branch"
+    msg="$msg\nmerge_m|me_Merge changes to the current branch"
     msg="$msg\nrebase_r|re|base_Rebase current branch"
     msg="$msg\nbranch_b|br|bran_Managing branches"
     msg="$msg\ntag_t|tg_Managing tags"
-    msg="$msg\nreset_res_Conventional using of git reset"
+    msg="$msg\nreset_res_Utils for git reset"
     msg="$msg\nconfig_cf|cfg|conf_Configurate gitbasher"
 
     msg="$msg\n_ _ _"
     msg="$msg\n${YELLOW}Command${ENDCOLOR}_\t${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description of ${BOLD}informational${NORMAL}${BLUE} commands${ENDCOLOR}"
-    msg="$msg\nstatus_s|st_Show general info about repo and changed files"
+    msg="$msg\nstatus_s|st_Show info about repo and changed files"
     msg="$msg\nlog_l|lg_Open git log in a pretty format"
     msg="$msg\nreflog_rl|rlg_Open git reflog in a pretty format"
     msg="$msg\nlast-commit_lc|lastc_Show info about the last commit"
@@ -3055,13 +3026,13 @@ fi
 
 ### Print settings if this is first run
 if [ $is_first == "true" ]; then 
-    echo -e "${GREEN}Thank for using gitbasher in project '$project_name'${ENDCOLOR}"
+    echo -e "${GREEN}Thanks for using gitbasher in project '$project_name'${ENDCOLOR}"
     echo -e "Current settings:"
     echo -e "\tmain:\t${YELLOW}$main_branch${ENDCOLOR}"
     echo -e "\tsep:\t${YELLOW}$sep${ENDCOLOR}"
     echo -e "\teditor:\t${YELLOW}$editor${ENDCOLOR}"
 
-    echo -e "You can change these settings by using ${YELLOW}gitb config <name>${ENDCOLOR}"
+    echo -e "You can change these settings using ${YELLOW}gitb config <name>${ENDCOLOR}"
     echo
 fi
 

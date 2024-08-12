@@ -52,10 +52,10 @@ function branch_script {
         header="$header REMOTE"
     elif [ -n "${main}" ]; then
         header="$header DEFAULT"
-    elif [ -n "${new}" ]; then
-        header="$header NEW FROM DEFAULT"
     elif [ -n "${current}" ]; then
         header="$header NEW"
+    elif [ -n "${new}" ]; then
+        header="$header NEW FROM DEFAULT"
     elif [ -n "${delete}" ]; then
         header="$header DELETE"
     fi
@@ -142,7 +142,7 @@ function branch_script {
                         delete_output=$(git branch -d $branch_to_delete 2>&1)
                         delete_code=$?
                         if [ $delete_code == 0 ]; then
-                            echo -e "${GREEN}Deleted branch '$branch_to_delete'${ENDCOLOR}"
+                            echo -e "${GREEN}Branch '$branch_to_delete' is deleted!${ENDCOLOR}"
                         else
                             echo -e "${RED}Cannot delete branch '$branch_to_delete'!${ENDCOLOR}"
                             echo -e "${delete_output}"
@@ -170,7 +170,7 @@ function branch_script {
         delete_code=$?
 
         if [ "$delete_code" == 0 ]; then
-            echo -e "${GREEN}Deleted branch '$branch_name'!${ENDCOLOR}"
+            echo -e "${GREEN}Branch '$branch_name' is deleted!${ENDCOLOR}"
 
         elif [[ ${delete_output} == *"is not fully merged"* ]]; then
             echo -e "${RED}The branch '$branch_name' is not fully merged${ENDCOLOR}"
@@ -189,7 +189,7 @@ function branch_script {
                         echo -e "${delete_output}"
                         exit
                     fi
-                    echo -e "${GREEN}Deleted branch '$branch_name'!${ENDCOLOR}"
+                    echo -e "${GREEN}Branch '$branch_name' is deleted!${ENDCOLOR}"
                     break
 
                 elif [ "$choice" == "n" ]; then
@@ -329,11 +329,11 @@ function branch_script {
 
     if [ $create_code -eq 0 ]; then
         echo -e "${GREEN}${create_output} from '$from_branch'${ENDCOLOR}"
-        changes=$(git status -s)
+        changes=$(git_status)
         if [ -n "$changes" ]; then
             echo
             echo -e "${YELLOW}Moved changes:${ENDCOLOR}"
-            git_status
+            echo -e "${changes}"
         fi
         exit
     fi

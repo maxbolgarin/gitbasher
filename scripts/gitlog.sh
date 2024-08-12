@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-### Script for providing some info from git log and movind HEAD
+### Script for providing info from git log
 # Read README.md to get more information how to use it
 # Use this script only with gitbasher
 
@@ -43,15 +43,4 @@ function last_commit {
 ### Function prints last action info (from git reflog)
 function last_ref {
     git --no-pager reflog -n 1 --pretty="%C(Yellow)%h%C(reset) | %C(Cyan)%gd%C(reset) | %gs | %C(Green)%cr%C(reset) | %C(Cyan)%ad%C(reset)"
-}
-
-
-### Function undoes previous commit (move HEAD pointer up for one record, HEAD^)
-function reset_last {
-    cancelled_commit=$(git --no-pager log --pretty="${YELLOW}%h${ENDCOLOR} | %s | ${BLUE}%an${ENDCOLOR} | %cd" -1)
-    git reset HEAD^ > /dev/null
-    new_commit=$(git --no-pager log --pretty="${YELLOW}%h${ENDCOLOR} | %s | ${BLUE}%an${ENDCOLOR} | %cd" -1)
-
-    msg=$(echo -e "${GREEN}New last commit:${ENDCOLOR}|${new_commit}\n${GREEN}Cancelled commit:${ENDCOLOR}|${cancelled_commit}" | column -ts'|')
-    echo -e "$msg"
 }

@@ -9,16 +9,16 @@ function print_help {
     msg="$msg\ncommit_c|co|com_Everything about commit creation"
     msg="$msg\npush_p|ps|pus_Pushing changes to a remote repository"
     msg="$msg\npull_pu|pl|pul_Pulling changes from a remote repository"
-    msg="$msg\nmerge_m|me_Merge changes from a different branch"
+    msg="$msg\nmerge_m|me_Merge changes to the current branch"
     msg="$msg\nrebase_r|re|base_Rebase current branch"
     msg="$msg\nbranch_b|br|bran_Managing branches"
     msg="$msg\ntag_t|tg_Managing tags"
-    msg="$msg\nreset_res_Conventional using of git reset"
+    msg="$msg\nreset_res_Utils for git reset"
     msg="$msg\nconfig_cf|cfg|conf_Configurate gitbasher"
 
     msg="$msg\n_ _ _"
     msg="$msg\n${YELLOW}Command${ENDCOLOR}_\t${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description of ${BOLD}informational${NORMAL}${BLUE} commands${ENDCOLOR}"
-    msg="$msg\nstatus_s|st_Show general info about repo and changed files"
+    msg="$msg\nstatus_s|st_Show info about repo and changed files"
     msg="$msg\nlog_l|lg_Open git log in a pretty format"
     msg="$msg\nreflog_rl|rlg_Open git reflog in a pretty format"
     msg="$msg\nlast-commit_lc|lastc_Show info about the last commit"
@@ -35,13 +35,13 @@ fi
 
 ### Print settings if this is first run
 if [ $is_first == "true" ]; then 
-    echo -e "${GREEN}Thank for using gitbasher in project '$project_name'${ENDCOLOR}"
+    echo -e "${GREEN}Thanks for using gitbasher in project '$project_name'${ENDCOLOR}"
     echo -e "Current settings:"
     echo -e "\tmain:\t${YELLOW}$main_branch${ENDCOLOR}"
     echo -e "\tsep:\t${YELLOW}$sep${ENDCOLOR}"
     echo -e "\teditor:\t${YELLOW}$editor${ENDCOLOR}"
 
-    echo -e "You can change these settings by using ${YELLOW}gitb config <name>${ENDCOLOR}"
+    echo -e "You can change these settings using ${YELLOW}gitb config <name>${ENDCOLOR}"
     echo
 fi
 

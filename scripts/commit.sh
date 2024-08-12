@@ -38,7 +38,7 @@ function after_commit {
     if [ -z "${fast}" ]; then
         echo
         echo -e "Push your changes: ${YELLOW}gitb push${ENDCOLOR}"
-        echo -e "Undo commit: ${YELLOW}gitb undo-commit${ENDCOLOR}"
+        echo -e "Undo commit: ${YELLOW}gitb reset${ENDCOLOR}"
     fi
 }
 
@@ -55,14 +55,29 @@ function after_commit {
     # revert: revert commit
 function commit_script {
     case "$1" in
-        fast|f)         fast="true";;
-        fastpush|fp)    fast_push="true";;
-        msg|m)          msg="true";;
-        ticket|t)       ticket="true";;
-        amend|a)        amend="true";;
-        fixup|x)        fixup="true";;
-        revert|r)       revert="true";;
-        help|h)         help="true";;
+        msg|m)              msg="true";;
+        ticket|jira|j|t)    ticket="true";;
+        amend|a)            amend="true";;
+        fixup|fix|x)        fixup="true";;
+        squash|sq|s)        squash="true";;
+        revert|r)           revert="true";;
+        edit|e)             edit="true";;
+        fast|f)             fast="true";;
+        push|p)             push="true";;
+        fastp|fp)  
+            fast="true"
+            push="true"
+        ;;
+        fastfix|fx) 
+            fixup="true"
+            fast="true"
+        ;;
+        fastfixp|fxp) 
+            fixup="true"
+            fast="true"
+            push="true"
+        ;;
+        help|h) help="true";;
         *)
             wrong_mode "commit" $1
     esac
@@ -71,13 +86,15 @@ function commit_script {
         echo -e "usage: ${YELLOW}gitb commit <mode>${ENDCOLOR}"
         echo
         echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\Select files to commit and create conventional message in format: 'type(scope): message'"
-        echo -e "fast|f\t\tAdd all files (git add .) and create conventional commit message"
-        echo -e "fastpush|fp\tAdd all files (git add .), create conventional commit message and push"
-        echo -e "msg|m\t\tSame as in <empty>, but create multiline commit message using text editor"
-        echo -e "ticket|t\tSame as previous, but add tracker's ticket info to the end of commit header"
+        echo -e "<empty>\t\Select files to commit and create a conventional message in format: 'type(scope): message'"
+        echo -e "msg|m\t\tSame as <empty>, but create multiline commit message using text editor"
+        echo -e "ticket|t\tSame as <empty>, but add tracker's ticket info to the end of commit header"
         echo -e "amend|a\t\Select files and make --amend commit to the last one (git commit --amend --no-edit)"
         echo -e "fixup|x\t\Select files and commit to --fixup (git commit --fixup <commit>)"
+        echo -e "fast|f\t\tAdd all files (git add .) and create a conventional commit message without scope"
+        echo -e "fastpush|fp\tAdd all files (git add .), create a conventional commit message without scope and push"
+        
+        
         echo -e "revert|r\Select a commit to revert (git revert -no-edit <commit>)"
         echo -e "help|h\t\tShow this help"
         exit
@@ -142,7 +159,7 @@ function commit_script {
         #echo -e "On branch ${YELLOW}${current_branch}${ENDCOLOR}"
         #echo
         echo -e "${YELLOW}Changed fiels${ENDCOLOR}"
-        git status -s
+        git_status
     fi
 
 

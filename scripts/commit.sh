@@ -52,7 +52,6 @@ function after_commit {
     # ticket: add ticket info to the end of message header
     # amend: amend without edit (add to last commit)
     # fixup: fixup commit
-    # autosquash: autosquash fixup commits
     # revert: revert commit
 function commit_script {
     case "$1" in
@@ -62,7 +61,6 @@ function commit_script {
         ticket|t)       ticket="true";;
         amend|a)        amend="true";;
         fixup|x)        fixup="true";;
-        autosquash|s)   autosquash="true";;
         revert|r)       revert="true";;
         help|h)         help="true";;
         *)
@@ -80,7 +78,6 @@ function commit_script {
         echo -e "ticket|t\tSame as previous, but add tracker's ticket info to the end of commit header"
         echo -e "amend|a\t\Select files and make --amend commit to the last one (git commit --amend --no-edit)"
         echo -e "fixup|x\t\Select files and commit to --fixup (git commit --fixup <commit>)"
-        echo -e "autosquash|s\Select a commit from which to squash fixup commits and run git rebase -i --autosquash <commit>"
         echo -e "revert|r\Select a commit to revert (git revert -no-edit <commit>)"
         echo -e "help|h\t\tShow this help"
         exit
@@ -104,8 +101,6 @@ function commit_script {
         header_msg="$header_msg AMEND"
     elif [ -n "${fixup}" ]; then
         header_msg="$header_msg FIXUP"
-    elif [ -n "${autosquash}" ]; then
-        header_msg="$header_msg AUTOSQUASH"
     elif [ -n "${revert}" ]; then
         header_msg="$header_msg REVERT"
     fi
@@ -121,23 +116,8 @@ function commit_script {
             echo -e "${GREEN}Nothing to commit, working tree clean${ENDCOLOR}"
             exit
         fi
-    elif [ -n "${autosquash}" ]; then
-        echo -e "${RED}Cannot autosquash: there is uncommited changes!${ENDCOLOR}"
-        exit
     elif [ -n "${revert}" ]; then
-        echo -e "${RED}Cannot revert: there is uncommited changes!${ENDCOLOR}"
-        exit
-    fi
-
-
-    ### Run autosquash logic
-    if [ -n "${autosquash}" ]; then
-        echo -e "${YELLOW}Step 1.${ENDCOLOR} Select a commit from which to squash fixup commits (third one or older):"
-
-        choose_commit 20
-
-        git rebase -i --autosquash ${commit_hash}
-        check_code $? "" "autosquash"
+        echo -e "${RED}Cannot revert: there are uncommited changes!${ENDCOLOR}"
         exit
     fi
 

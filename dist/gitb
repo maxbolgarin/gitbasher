@@ -392,12 +392,11 @@ function list_branches {
         args="--sort=-committerdate -r"
     fi
     branches_str=$(git --no-pager branch $args --format="%(refname:short)")
-    branches_with_info_str=$(git --no-pager branch $args --format="%(refname:short) | %(committerdate:relative) | %(objectname:short) - %(contents:subject)" | column -ts'|' )
-    commits_hash_str=$(git --no-pager branch $args --format="%(objectname:short)")
+    branches_info_str=$(git --no-pager branch $args --format="${BLUE_ES}%(refname:short)${ENDCOLOR_ES} | %(contents:subject) | ${YELLOW_ES}%(objectname:short)${ENDCOLOR_ES}  | ${GREEN_ES}%(committerdate:relative)${ENDCOLOR_ES}" | column -ts'|' )
 
-    IFS=$'\n' read -rd '' -a branches <<< "$branches_str"
-    IFS=$'\n' read -rd '' -a branches_with_info <<< "$branches_with_info_str"
-    IFS=$'\n' read -rd '' -a commits_hash <<< "$commits_hash_str"
+    IFS=$'\n' 
+    read -rd '' -a branches <<< "$branches_str"
+    read -rd '' -a branches_info <<< "$branches_info_str"
 
     number_of_branches=${#branches[@]}
     if [[ "$1" == "remote" ]]; then
@@ -432,17 +431,14 @@ function list_branches {
 
     ### Main should be the first
     branches_first_main=(${main_branch})
-    branches_with_info_first_main=("dummy")
-    commits_hash_first_main=("dummy")
+    branches_info_first_main=("dummy")
     if [[ "$1" == "delete" ]]; then
         branches_first_main=()
-        branches_with_info_first_main=()
-        commits_hash_first_main=()
+        branches_info_first_main=()
     fi
     if [[ "$1" == "merge" ]] && [[ "$current_branch" == "$main_branch" ]]; then
         branches_first_main=()
-        branches_with_info_first_main=()
-        commits_hash_first_main=()
+        branches_info_first_main=()
     fi
     for index in "${!branches[@]}"
     do
@@ -462,27 +458,25 @@ function list_branches {
         fi
 
         if [[ "$branch_to_check" == "${main_branch}"* ]]; then
-            branches_with_info_first_main[0]="${branches_with_info[index]}"
-            commits_hash_first_main[0]="${commits_hash[index]}"
+            branches_info_first_main[0]="${branches_info[index]}"
         elif [[ "$branch_to_check" != "HEAD->"* ]] && [[ "$branch_to_check" != "$origin_name" ]]; then 
             branches_first_main+=(${branches[index]})
-            branches_with_info_first_main+=("${branches_with_info[index]}")
-            commits_hash_first_main+=("${commits_hash[index]}")
+            branches_info_first_main+=("${branches_info[index]}")
         fi
     done
 
-    for index in "${!branches_with_info_first_main[@]}"
+    for index in "${!branches_info_first_main[@]}"
     do
         branch=$(escape "${branches_first_main[index]}" "/")
         if [[ "$1" == "remote" ]] && [[ "$branch" != "origin"* ]]; then
             branch="$origin_name\/$branch"
         fi
-        branch_line=$(sed "1,/${branch}/ s/${branch}/${GREEN_ES}${branch}${ENDCOLOR_ES}/" <<< ${branches_with_info_first_main[index]})
-        branch_line=$(sed "1,/${commits_hash_first_main[index]}/ s/${commits_hash_first_main[index]}/${BLUE_ES}${commits_hash_first_main[index]}${ENDCOLOR_ES}/" <<< ${branch_line})
+        
+        branch_line="${branches_info_first_main[index]}"
         if [ "${branches_first_main[index]}" == "$current_branch" ]; then
-            echo "$(($index+1)). * $branch_line"
+            echo -e "$(($index+1)). * $branch_line"
         else
-            echo "$(($index+1)).   $branch_line"
+            echo -e "$(($index+1)).   $branch_line"
         fi
     done
 }
@@ -808,7 +802,7 @@ function merge_script {
 
 
     ### Fetch before merge
-    echo -e "Do you want to use ${YELLOW}${origin_name}/${merge_branch}${ENDCOLOR} instead of local (y/n)?"
+    echo -e "Do you want to fetch ${YELLOW}${origin_name}/${merge_branch}${ENDCOLOR} before merge (y/n)?"
     read -n 1 -s choice
     if [ "$choice" == "y" ]; then
         echo
@@ -1060,19 +1054,13 @@ ${staged_with_tab}
     # empty: select base branch to rebase current changes
     # main: rebase current branch onto default branch
     # interactive: select base commit in current branch and rebase in interactive mode
-    # autosquash: rebase in interactive mode with --autosquash
+    # autosquash: rebase on current branch in interactive mode with --autosquash
 function rebase_script {
     case "$1" in
-        main|master|m) main="true";;
-        interactive|i)          
-            interactive="true"
-            args="--interactive"
-        ;;
-        autosquash|s|ia|is)     
-            autosquash="true"
-            args="--interactive --autosquash"
-        ;;
-        help|h)                 help="true";;
+        main|master|m)         main="true";;
+        interactive|i)         interactive="true";;
+        autosquash|a|s|ia|is)  autosquash="true";;
+        help|h)                help="true";;
         *)
             wrong_mode "rebase" $1
     esac
@@ -1084,7 +1072,7 @@ function rebase_script {
         echo -e "<empty>\t\t\tSelect base branch to rebase current changes"
         echo -e "main|master|m\t\tRebase current branch onto default branch"
         echo -e "interactive|i\t\tSelect base commit in current branch and rebase in interactive mode"
-        echo -e "autosquash|s|ia|is\tRebase in interactive mode with --autosquash"
+        echo -e "autosquash|a|s|ia|is\tRebase on current branch in interactive mode with --autosquash"
         echo -e "help|h\t\t\tShow this help"
         exit
     fi
@@ -1094,11 +1082,10 @@ function rebase_script {
     if [ -n "${interactive}" ]; then
         header="$header INTERACTIVE"
     elif [ -n "${autosquash}" ]; then
-        header="$header INTERACTIVE AUTOSQUASH"
+        header="$header AUTOSQUASH"
     fi
     echo -e "${YELLOW}${header}${ENDCOLOR}"
     echo
-
 
     ### Select branch which will become a base
     if [ -n "$main" ]; then
@@ -1108,6 +1095,8 @@ function rebase_script {
         fi
         new_base_branch=${main_branch}
 
+    elif [ -n "$autosquash" ]; then
+        new_base_branch=${current_branch}
     else
         echo -e "${YELLOW}Select which branch will become a new base for '${current_branch}'${ENDCOLOR}"
         choose_branch "rebase"
@@ -1115,22 +1104,23 @@ function rebase_script {
         echo
     fi
 
+    if [ -z "$autosquash" ]; then
+        ### Fetch before rebase
+        echo -e "Do you want to fetch ${YELLOW}${origin_name}/${new_base_branch}${ENDCOLOR} before rebase (y/n)?"
+        read -n 1 -s choice
+        if [ "$choice" == "y" ]; then
+            echo
+            echo -e "${YELLOW}Fetching ${origin_name}/${new_base_branch}...${ENDCOLOR}"
 
-    ### Fetch before rebase
-    echo -e "Do you want to use ${YELLOW}${origin_name}/${new_base_branch}${ENDCOLOR} instead of local (y/n)?"
-    read -n 1 -s choice
-    if [ "$choice" == "y" ]; then
+            fetch $new_base_branch $origin_name
+            from_origin=true
+        fi
         echo
-        echo -e "${YELLOW}Fetching ${origin_name}/${new_base_branch}...${ENDCOLOR}"
-
-        fetch $new_base_branch $origin_name
-        from_origin=true
     fi
-    echo
 
     
     ### Run rebase and handle conflicts
-    rebase_branch $new_base_branch $origin_name $from_origin
+    rebase_branch $new_base_branch $origin_name $from_origin $interactive $autosquash
 
 
     ### Nothing to rebase
@@ -1153,15 +1143,32 @@ function rebase_script {
 # $1: new base branch name
 # $2: origin name
 # $3: is from origin?
+# $4: interactive
+# $5: autosquash
 # Returns:
 #      * rebase_output
 #      * rebase_code - 0 if everything is ok, not zero if there are conflicts
 function rebase_branch {
-    if [ "$3" == "true" ]; then
-        rebase_output=$(git rebase $2/$1 2>&1)
-    else
-        rebase_output=$(git rebase $1 2>&1)
+    ref=$1
+    if [ -n "$3" ]; then
+        ref=$2/$1
     fi
+
+    args=""
+    if [ -n "$4" ]; then
+        args="-i"
+    fi
+
+    if [ -n "$5" ]; then
+        args="-i --autosquash"
+
+        echo -e "Select a new ${BOLD}base${NORMAL} commit from which to squash fixup commits (third one or older):"
+
+        choose_commit 20 "number" $ref
+        $ref=${commit_hash}
+    fi
+
+    rebase_output=$(git rebase $args $ref 2>&1)
     rebase_code=$?
 
     if [ $rebase_code == 0 ] ; then
@@ -1171,7 +1178,7 @@ function rebase_branch {
     ### Cannot rebase because there are uncommitted files
     if [[ $rebase_output == *"Please commit or stash them"* ]]; then
         echo -e "${RED}Cannot rebase! There are uncommited changes, you should commit them first"
-        git status -s
+        git_status
         exit $rebase_code
     fi
 
@@ -1676,7 +1683,6 @@ function after_commit {
     # ticket: add ticket info to the end of message header
     # amend: amend without edit (add to last commit)
     # fixup: fixup commit
-    # autosquash: autosquash fixup commits
     # revert: revert commit
 function commit_script {
     case "$1" in
@@ -1686,7 +1692,6 @@ function commit_script {
         ticket|t)       ticket="true";;
         amend|a)        amend="true";;
         fixup|x)        fixup="true";;
-        autosquash|s)   autosquash="true";;
         revert|r)       revert="true";;
         help|h)         help="true";;
         *)
@@ -1704,7 +1709,6 @@ function commit_script {
         echo -e "ticket|t\tSame as previous, but add tracker's ticket info to the end of commit header"
         echo -e "amend|a\t\Select files and make --amend commit to the last one (git commit --amend --no-edit)"
         echo -e "fixup|x\t\Select files and commit to --fixup (git commit --fixup <commit>)"
-        echo -e "autosquash|s\Select a commit from which to squash fixup commits and run git rebase -i --autosquash <commit>"
         echo -e "revert|r\Select a commit to revert (git revert -no-edit <commit>)"
         echo -e "help|h\t\tShow this help"
         exit
@@ -1728,8 +1732,6 @@ function commit_script {
         header_msg="$header_msg AMEND"
     elif [ -n "${fixup}" ]; then
         header_msg="$header_msg FIXUP"
-    elif [ -n "${autosquash}" ]; then
-        header_msg="$header_msg AUTOSQUASH"
     elif [ -n "${revert}" ]; then
         header_msg="$header_msg REVERT"
     fi
@@ -1745,23 +1747,8 @@ function commit_script {
             echo -e "${GREEN}Nothing to commit, working tree clean${ENDCOLOR}"
             exit
         fi
-    elif [ -n "${autosquash}" ]; then
-        echo -e "${RED}Cannot autosquash: there is uncommited changes!${ENDCOLOR}"
-        exit
     elif [ -n "${revert}" ]; then
-        echo -e "${RED}Cannot revert: there is uncommited changes!${ENDCOLOR}"
-        exit
-    fi
-
-
-    ### Run autosquash logic
-    if [ -n "${autosquash}" ]; then
-        echo -e "${YELLOW}Step 1.${ENDCOLOR} Select a commit from which to squash fixup commits (third one or older):"
-
-        choose_commit 20
-
-        git rebase -i --autosquash ${commit_hash}
-        check_code $? "" "autosquash"
+        echo -e "${RED}Cannot revert: there are uncommited changes!${ENDCOLOR}"
         exit
     fi
 
@@ -2076,20 +2063,22 @@ ${staged_with_tab}
 # $1: mode
     # <empty>: switch to local branch
     # remote: switch to a remote branch
-    # main: switch to the main branch
-    # new: create a new branch
-    # newc: create a new branch from a current one instead of the main branch
+    # main: switch to the default branch
+    # new: create a new branch from the current one 
+    # newd: create a new branch from the default branch
     # delete: delete a local branch
 function branch_script {
     case "$1" in
-        remote|r|re)    remote="true";;
-        main|master|m)  main="true";;
-        new|n)          new="true";;
-        newc|nc)        
-            current="true"
+        remote|r|re)        remote="true";;
+        main|def|m)  main="true";;
+        new|n|c)          
+            new="true"
+            current="true"    
+        ;;
+        newd|nd|d)        
             new="true"
         ;;
-        delete|del|d)   delete="true";;
+        delete|del)   delete="true";;
         help|h)         help="true";;
         *)
             wrong_mode "branch" $1
@@ -2097,15 +2086,15 @@ function branch_script {
     
 
     if [ -n "$help" ]; then
-        echo -e "usage: ${YELLOW}gitb commit <mode>${ENDCOLOR}"
+        echo -e "usage: ${YELLOW}gitb branch <mode>${ENDCOLOR}"
         echo
         echo -e "${YELLOW}Available modes${ENDCOLOR}"
         echo -e "<empty>\t\tSelect a local branch to switch"
         echo -e "remote|re|r\tFetch $origin_name and select a remote branch to switch"
-        echo -e "main|master|m\tSwitch to $main_branch without additional confirmations"
-        echo -e "new|n\t\tBuild conventional name for a new branch, switch to $main_branch, pull it and create new branch from $main_branch"
-        echo -e "newc|nc\t\tBuild conventional name for a new branch and create it from a current branch"
-        echo -e "delete|del|d\tSelect branch to delete"
+        echo -e "main|def|m\tSwitch to $main_branch without additional confirmations"
+        echo -e "new|n|c\t\tBuild a conventional name and create a new branch from $main_branch"
+        echo -e "newd|nd|d\tBuild a conventional name, switch to $main_branch, pull it and create new branch"
+        echo -e "delete|del\tSelect a branch to delete"
         echo -e "help|h\t\tShow this help"
         exit
     fi
@@ -2115,11 +2104,11 @@ function branch_script {
     if [ -n "${remote}" ]; then
         header="$header REMOTE"
     elif [ -n "${main}" ]; then
-        header="$header MAIN"
+        header="$header DEFAULT"
     elif [ -n "${new}" ]; then
-        header="$header NEW"
+        header="$header NEW FROM DEFAULT"
     elif [ -n "${current}" ]; then
-        header="$header NEW FROM CURRENT"
+        header="$header NEW"
     elif [ -n "${delete}" ]; then
         header="$header DELETE"
     fi
@@ -2137,7 +2126,7 @@ function branch_script {
 
     ### Run switch to local logic
     if [[ -z "$new" ]] && [[ -z "$remote" ]] && [[ -z "$delete" ]]; then
-        echo -e "${YELLOW}Switch from '${current_branch}' to local branch${ENDCOLOR}"
+        echo -e "${YELLOW}Select a branch to switch from '${current_branch}'${ENDCOLOR}:"
 
         choose_branch
 
@@ -2153,17 +2142,12 @@ function branch_script {
         echo
 
         fetch_output=$(git fetch 2>&1)
-        fetch_code=$?
-        if [ $fetch_code -ne 0 ] ; then
-            echo -e "${RED}Cannot fetch remote!${ENDCOLOR}"
-            echo -e "${fetch_output}"
-            exit $fetch_code
-        fi
+        check_code $? "$fetch_output" "fetch remote"
 
         ## TODO: should I ask?
         prune_output=$(git remote prune $origin_name 2>&1)
 
-        echo -e "${YELLOW}Switch from '${current_branch}' to remote branch${ENDCOLOR}"
+        echo -e "${YELLOW}Switch from '${current_branch}' to the remote branch${ENDCOLOR}"
         
         choose_branch "remote"
 
@@ -2229,7 +2213,7 @@ function branch_script {
         fi
 
         # Delete in normal way
-        echo -e "${YELLOW}Delete local branch${ENDCOLOR}"
+        echo -e "${YELLOW}Delete a local branch${ENDCOLOR}"
 
         choose_branch "delete"
 
@@ -2254,7 +2238,7 @@ function branch_script {
                     delete_output=$(git branch -D $branch_name 2>&1)
                     delete_code=$?
                     if [ "$delete_code" != 0 ]; then
-                        echo -e "${RED}Cannot delete branch '$branch_name'!${ENDCOLOR}"
+                        echo -e "${RED}Cannot delete branch '$branch_name'! Error message:${ENDCOLOR}"
                         echo -e "${delete_output}"
                         exit
                     fi
@@ -2268,7 +2252,7 @@ function branch_script {
             done
 
         else
-            echo -e "${RED}Cannot delete branch '$branch_name'!${ENDCOLOR}"
+            echo -e "${RED}Cannot delete branch '$branch_name'! Error message:${ENDCOLOR}"
             echo -e "${delete_output}"
             exit
         fi
@@ -2276,7 +2260,7 @@ function branch_script {
         remote_check=$(git --no-pager log $origin_name/$branch_name..HEAD 2>&1)
         if [[ $remote_check != *"unknown revision or path not in the working tree"* ]]; then
             echo
-            echo -e "${YELLOW}Do you want to delete this branch in remote?${ENDCOLOR}"
+            echo -e "${YELLOW}Do you want to delete this branch in the remote?${ENDCOLOR}"
 
             printf "Answer (y/n): "
             
@@ -2291,11 +2275,11 @@ function branch_script {
 
                     echo
                     if [ "$push_code" != 0 ]; then
-                        echo -e "${RED}Cannot delete branch '$branch_name'!${ENDCOLOR}"
+                        echo -e "${RED}Cannot delete branch '$branch_name'! Error message:${ENDCOLOR}"
                         echo -e "${delete_output}"
                         exit
                     fi
-                    echo -e "${GREEN}Deleted branch '$branch_name' in remote!${ENDCOLOR}"
+                    echo -e "${GREEN}Branch '$branch_name' is deleted in the remote!${ENDCOLOR}"
                     break
 
                 elif [ "$choice" == "n" ]; then
@@ -2402,7 +2386,7 @@ function branch_script {
         if [ -n "$changes" ]; then
             echo
             echo -e "${YELLOW}Moved changes:${ENDCOLOR}"
-            git status -s
+            git_status
         fi
         exit
     fi
@@ -2412,10 +2396,9 @@ function branch_script {
         exit $create_code
     fi
 
-    echo -e "${RED}Cannot create! Error message:${ENDCOLOR}"
+    echo -e "${RED}Cannot create '${branch_name}'! Error message:${ENDCOLOR}"
     echo "${create_output}"
     exit $create_code
-
 }
 #!/usr/bin/env bash
 

@@ -10,20 +10,22 @@
 # $1: mode
     # <empty>: switch to local branch
     # remote: switch to a remote branch
-    # main: switch to the main branch
-    # new: create a new branch
-    # newc: create a new branch from a current one instead of the main branch
+    # main: switch to the default branch
+    # new: create a new branch from the current one 
+    # newd: create a new branch from the default branch
     # delete: delete a local branch
 function branch_script {
     case "$1" in
-        remote|r|re)    remote="true";;
-        main|master|m)  main="true";;
-        new|n)          new="true";;
-        newc|nc)        
-            current="true"
+        remote|r|re)        remote="true";;
+        main|def|m)  main="true";;
+        new|n|c)          
+            new="true"
+            current="true"    
+        ;;
+        newd|nd|d)        
             new="true"
         ;;
-        delete|del|d)   delete="true";;
+        delete|del)   delete="true";;
         help|h)         help="true";;
         *)
             wrong_mode "branch" $1
@@ -31,15 +33,15 @@ function branch_script {
     
 
     if [ -n "$help" ]; then
-        echo -e "usage: ${YELLOW}gitb commit <mode>${ENDCOLOR}"
+        echo -e "usage: ${YELLOW}gitb branch <mode>${ENDCOLOR}"
         echo
         echo -e "${YELLOW}Available modes${ENDCOLOR}"
         echo -e "<empty>\t\tSelect a local branch to switch"
         echo -e "remote|re|r\tFetch $origin_name and select a remote branch to switch"
-        echo -e "main|master|m\tSwitch to $main_branch without additional confirmations"
-        echo -e "new|n\t\tBuild conventional name for a new branch, switch to $main_branch, pull it and create new branch from $main_branch"
-        echo -e "newc|nc\t\tBuild conventional name for a new branch and create it from a current branch"
-        echo -e "delete|del|d\tSelect branch to delete"
+        echo -e "main|def|m\tSwitch to $main_branch without additional confirmations"
+        echo -e "new|n|c\t\tBuild a conventional name and create a new branch from $main_branch"
+        echo -e "newd|nd|d\tBuild a conventional name, switch to $main_branch, pull it and create new branch"
+        echo -e "delete|del\tSelect a branch to delete"
         echo -e "help|h\t\tShow this help"
         exit
     fi
@@ -49,11 +51,11 @@ function branch_script {
     if [ -n "${remote}" ]; then
         header="$header REMOTE"
     elif [ -n "${main}" ]; then
-        header="$header MAIN"
+        header="$header DEFAULT"
     elif [ -n "${new}" ]; then
-        header="$header NEW"
+        header="$header NEW FROM DEFAULT"
     elif [ -n "${current}" ]; then
-        header="$header NEW FROM CURRENT"
+        header="$header NEW"
     elif [ -n "${delete}" ]; then
         header="$header DELETE"
     fi
@@ -71,7 +73,7 @@ function branch_script {
 
     ### Run switch to local logic
     if [[ -z "$new" ]] && [[ -z "$remote" ]] && [[ -z "$delete" ]]; then
-        echo -e "${YELLOW}Switch from '${current_branch}' to local branch${ENDCOLOR}"
+        echo -e "${YELLOW}Select a branch to switch from '${current_branch}'${ENDCOLOR}:"
 
         choose_branch
 
@@ -87,17 +89,12 @@ function branch_script {
         echo
 
         fetch_output=$(git fetch 2>&1)
-        fetch_code=$?
-        if [ $fetch_code -ne 0 ] ; then
-            echo -e "${RED}Cannot fetch remote!${ENDCOLOR}"
-            echo -e "${fetch_output}"
-            exit $fetch_code
-        fi
+        check_code $? "$fetch_output" "fetch remote"
 
         ## TODO: should I ask?
         prune_output=$(git remote prune $origin_name 2>&1)
 
-        echo -e "${YELLOW}Switch from '${current_branch}' to remote branch${ENDCOLOR}"
+        echo -e "${YELLOW}Switch from '${current_branch}' to the remote branch${ENDCOLOR}"
         
         choose_branch "remote"
 
@@ -163,7 +160,7 @@ function branch_script {
         fi
 
         # Delete in normal way
-        echo -e "${YELLOW}Delete local branch${ENDCOLOR}"
+        echo -e "${YELLOW}Delete a local branch${ENDCOLOR}"
 
         choose_branch "delete"
 
@@ -188,7 +185,7 @@ function branch_script {
                     delete_output=$(git branch -D $branch_name 2>&1)
                     delete_code=$?
                     if [ "$delete_code" != 0 ]; then
-                        echo -e "${RED}Cannot delete branch '$branch_name'!${ENDCOLOR}"
+                        echo -e "${RED}Cannot delete branch '$branch_name'! Error message:${ENDCOLOR}"
                         echo -e "${delete_output}"
                         exit
                     fi
@@ -202,7 +199,7 @@ function branch_script {
             done
 
         else
-            echo -e "${RED}Cannot delete branch '$branch_name'!${ENDCOLOR}"
+            echo -e "${RED}Cannot delete branch '$branch_name'! Error message:${ENDCOLOR}"
             echo -e "${delete_output}"
             exit
         fi
@@ -210,7 +207,7 @@ function branch_script {
         remote_check=$(git --no-pager log $origin_name/$branch_name..HEAD 2>&1)
         if [[ $remote_check != *"unknown revision or path not in the working tree"* ]]; then
             echo
-            echo -e "${YELLOW}Do you want to delete this branch in remote?${ENDCOLOR}"
+            echo -e "${YELLOW}Do you want to delete this branch in the remote?${ENDCOLOR}"
 
             printf "Answer (y/n): "
             
@@ -225,11 +222,11 @@ function branch_script {
 
                     echo
                     if [ "$push_code" != 0 ]; then
-                        echo -e "${RED}Cannot delete branch '$branch_name'!${ENDCOLOR}"
+                        echo -e "${RED}Cannot delete branch '$branch_name'! Error message:${ENDCOLOR}"
                         echo -e "${delete_output}"
                         exit
                     fi
-                    echo -e "${GREEN}Deleted branch '$branch_name' in remote!${ENDCOLOR}"
+                    echo -e "${GREEN}Branch '$branch_name' is deleted in the remote!${ENDCOLOR}"
                     break
 
                 elif [ "$choice" == "n" ]; then
@@ -336,7 +333,7 @@ function branch_script {
         if [ -n "$changes" ]; then
             echo
             echo -e "${YELLOW}Moved changes:${ENDCOLOR}"
-            git status -s
+            git_status
         fi
         exit
     fi
@@ -346,8 +343,7 @@ function branch_script {
         exit $create_code
     fi
 
-    echo -e "${RED}Cannot create! Error message:${ENDCOLOR}"
+    echo -e "${RED}Cannot create '${branch_name}'! Error message:${ENDCOLOR}"
     echo "${create_output}"
     exit $create_code
-
 }

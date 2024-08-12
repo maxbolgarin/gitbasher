@@ -10,19 +10,13 @@
     # empty: select base branch to rebase current changes
     # main: rebase current branch onto default branch
     # interactive: select base commit in current branch and rebase in interactive mode
-    # autosquash: rebase in interactive mode with --autosquash
+    # autosquash: rebase on current branch in interactive mode with --autosquash
 function rebase_script {
     case "$1" in
-        main|master|m) main="true";;
-        interactive|i)          
-            interactive="true"
-            args="--interactive"
-        ;;
-        autosquash|s|ia|is)     
-            autosquash="true"
-            args="--interactive --autosquash"
-        ;;
-        help|h)                 help="true";;
+        main|master|m)         main="true";;
+        interactive|i)         interactive="true";;
+        autosquash|a|s|ia|is)  autosquash="true";;
+        help|h)                help="true";;
         *)
             wrong_mode "rebase" $1
     esac
@@ -34,7 +28,7 @@ function rebase_script {
         echo -e "<empty>\t\t\tSelect base branch to rebase current changes"
         echo -e "main|master|m\t\tRebase current branch onto default branch"
         echo -e "interactive|i\t\tSelect base commit in current branch and rebase in interactive mode"
-        echo -e "autosquash|s|ia|is\tRebase in interactive mode with --autosquash"
+        echo -e "autosquash|a|s|ia|is\tRebase on current branch in interactive mode with --autosquash"
         echo -e "help|h\t\t\tShow this help"
         exit
     fi
@@ -44,11 +38,10 @@ function rebase_script {
     if [ -n "${interactive}" ]; then
         header="$header INTERACTIVE"
     elif [ -n "${autosquash}" ]; then
-        header="$header INTERACTIVE AUTOSQUASH"
+        header="$header AUTOSQUASH"
     fi
     echo -e "${YELLOW}${header}${ENDCOLOR}"
     echo
-
 
     ### Select branch which will become a base
     if [ -n "$main" ]; then
@@ -58,6 +51,8 @@ function rebase_script {
         fi
         new_base_branch=${main_branch}
 
+    elif [ -n "$autosquash" ]; then
+        new_base_branch=${current_branch}
     else
         echo -e "${YELLOW}Select which branch will become a new base for '${current_branch}'${ENDCOLOR}"
         choose_branch "rebase"
@@ -65,22 +60,23 @@ function rebase_script {
         echo
     fi
 
+    if [ -z "$autosquash" ]; then
+        ### Fetch before rebase
+        echo -e "Do you want to fetch ${YELLOW}${origin_name}/${new_base_branch}${ENDCOLOR} before rebase (y/n)?"
+        read -n 1 -s choice
+        if [ "$choice" == "y" ]; then
+            echo
+            echo -e "${YELLOW}Fetching ${origin_name}/${new_base_branch}...${ENDCOLOR}"
 
-    ### Fetch before rebase
-    echo -e "Do you want to use ${YELLOW}${origin_name}/${new_base_branch}${ENDCOLOR} instead of local (y/n)?"
-    read -n 1 -s choice
-    if [ "$choice" == "y" ]; then
+            fetch $new_base_branch $origin_name
+            from_origin=true
+        fi
         echo
-        echo -e "${YELLOW}Fetching ${origin_name}/${new_base_branch}...${ENDCOLOR}"
-
-        fetch $new_base_branch $origin_name
-        from_origin=true
     fi
-    echo
 
     
     ### Run rebase and handle conflicts
-    rebase_branch $new_base_branch $origin_name $from_origin
+    rebase_branch $new_base_branch $origin_name $from_origin $interactive $autosquash
 
 
     ### Nothing to rebase
@@ -103,15 +99,32 @@ function rebase_script {
 # $1: new base branch name
 # $2: origin name
 # $3: is from origin?
+# $4: interactive
+# $5: autosquash
 # Returns:
 #      * rebase_output
 #      * rebase_code - 0 if everything is ok, not zero if there are conflicts
 function rebase_branch {
-    if [ "$3" == "true" ]; then
-        rebase_output=$(git rebase $2/$1 2>&1)
-    else
-        rebase_output=$(git rebase $1 2>&1)
+    ref=$1
+    if [ -n "$3" ]; then
+        ref=$2/$1
     fi
+
+    args=""
+    if [ -n "$4" ]; then
+        args="-i"
+    fi
+
+    if [ -n "$5" ]; then
+        args="-i --autosquash"
+
+        echo -e "Select a new ${BOLD}base${NORMAL} commit from which to squash fixup commits (third one or older):"
+
+        choose_commit 20 "number" $ref
+        $ref=${commit_hash}
+    fi
+
+    rebase_output=$(git rebase $args $ref 2>&1)
     rebase_code=$?
 
     if [ $rebase_code == 0 ] ; then
@@ -121,7 +134,7 @@ function rebase_branch {
     ### Cannot rebase because there are uncommitted files
     if [[ $rebase_output == *"Please commit or stash them"* ]]; then
         echo -e "${RED}Cannot rebase! There are uncommited changes, you should commit them first"
-        git status -s
+        git_status
         exit $rebase_code
     fi
 

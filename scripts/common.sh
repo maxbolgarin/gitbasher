@@ -379,12 +379,11 @@ function list_branches {
         args="--sort=-committerdate -r"
     fi
     branches_str=$(git --no-pager branch $args --format="%(refname:short)")
-    branches_with_info_str=$(git --no-pager branch $args --format="%(refname:short) | %(committerdate:relative) | %(objectname:short) - %(contents:subject)" | column -ts'|' )
-    commits_hash_str=$(git --no-pager branch $args --format="%(objectname:short)")
+    branches_info_str=$(git --no-pager branch $args --format="${BLUE_ES}%(refname:short)${ENDCOLOR_ES} | %(contents:subject) | ${YELLOW_ES}%(objectname:short)${ENDCOLOR_ES}  | ${GREEN_ES}%(committerdate:relative)${ENDCOLOR_ES}" | column -ts'|' )
 
-    IFS=$'\n' read -rd '' -a branches <<< "$branches_str"
-    IFS=$'\n' read -rd '' -a branches_with_info <<< "$branches_with_info_str"
-    IFS=$'\n' read -rd '' -a commits_hash <<< "$commits_hash_str"
+    IFS=$'\n' 
+    read -rd '' -a branches <<< "$branches_str"
+    read -rd '' -a branches_info <<< "$branches_info_str"
 
     number_of_branches=${#branches[@]}
     if [[ "$1" == "remote" ]]; then
@@ -419,17 +418,14 @@ function list_branches {
 
     ### Main should be the first
     branches_first_main=(${main_branch})
-    branches_with_info_first_main=("dummy")
-    commits_hash_first_main=("dummy")
+    branches_info_first_main=("dummy")
     if [[ "$1" == "delete" ]]; then
         branches_first_main=()
-        branches_with_info_first_main=()
-        commits_hash_first_main=()
+        branches_info_first_main=()
     fi
     if [[ "$1" == "merge" ]] && [[ "$current_branch" == "$main_branch" ]]; then
         branches_first_main=()
-        branches_with_info_first_main=()
-        commits_hash_first_main=()
+        branches_info_first_main=()
     fi
     for index in "${!branches[@]}"
     do
@@ -449,27 +445,25 @@ function list_branches {
         fi
 
         if [[ "$branch_to_check" == "${main_branch}"* ]]; then
-            branches_with_info_first_main[0]="${branches_with_info[index]}"
-            commits_hash_first_main[0]="${commits_hash[index]}"
+            branches_info_first_main[0]="${branches_info[index]}"
         elif [[ "$branch_to_check" != "HEAD->"* ]] && [[ "$branch_to_check" != "$origin_name" ]]; then 
             branches_first_main+=(${branches[index]})
-            branches_with_info_first_main+=("${branches_with_info[index]}")
-            commits_hash_first_main+=("${commits_hash[index]}")
+            branches_info_first_main+=("${branches_info[index]}")
         fi
     done
 
-    for index in "${!branches_with_info_first_main[@]}"
+    for index in "${!branches_info_first_main[@]}"
     do
         branch=$(escape "${branches_first_main[index]}" "/")
         if [[ "$1" == "remote" ]] && [[ "$branch" != "origin"* ]]; then
             branch="$origin_name\/$branch"
         fi
-        branch_line=$(sed "1,/${branch}/ s/${branch}/${GREEN_ES}${branch}${ENDCOLOR_ES}/" <<< ${branches_with_info_first_main[index]})
-        branch_line=$(sed "1,/${commits_hash_first_main[index]}/ s/${commits_hash_first_main[index]}/${BLUE_ES}${commits_hash_first_main[index]}${ENDCOLOR_ES}/" <<< ${branch_line})
+
+        branch_line="${branches_info_first_main[index]}"
         if [ "${branches_first_main[index]}" == "$current_branch" ]; then
-            echo "$(($index+1)). * $branch_line"
+            echo -e "$(($index+1)). * $branch_line"
         else
-            echo "$(($index+1)).   $branch_line"
+            echo -e "$(($index+1)).   $branch_line"
         fi
     done
 }
@@ -518,7 +512,7 @@ function switch {
             echo -e "${GREEN}Already on '$1'${ENDCOLOR}"
         else
             echo -e "${GREEN}Switched to branch '$1'${ENDCOLOR}"
-            changes=$(git status -s)
+            changes=$(git_status)
             if [ -n "$changes" ] && [ -z $2 ]; then
                 echo
                 echo -e "${YELLOW}Moved changes:${ENDCOLOR}"

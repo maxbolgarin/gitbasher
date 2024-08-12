@@ -471,7 +471,7 @@ function list_branches {
         if [[ "$1" == "remote" ]] && [[ "$branch" != "origin"* ]]; then
             branch="$origin_name\/$branch"
         fi
-        
+
         branch_line="${branches_info_first_main[index]}"
         if [ "${branches_first_main[index]}" == "$current_branch" ]; then
             echo -e "$(($index+1)). * $branch_line"
@@ -525,7 +525,7 @@ function switch {
             echo -e "${GREEN}Already on '$1'${ENDCOLOR}"
         else
             echo -e "${GREEN}Switched to branch '$1'${ENDCOLOR}"
-            changes=$(git status -s)
+            changes=$(git_status)
             if [ -n "$changes" ] && [ -z $2 ]; then
                 echo
                 echo -e "${YELLOW}Moved changes:${ENDCOLOR}"

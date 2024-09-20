@@ -36,13 +36,9 @@ fi
 ### Print settings if this is first run
 if [ $is_first == "true" ]; then 
     echo -e "${GREEN}Thanks for using gitbasher in project '$project_name'${ENDCOLOR}"
-    echo -e "Current settings:"
-    echo -e "\tmain:\t${YELLOW}$main_branch${ENDCOLOR}"
-    echo -e "\tsep:\t${YELLOW}$sep${ENDCOLOR}"
-    echo -e "\teditor:\t${YELLOW}$editor${ENDCOLOR}"
-
-    echo -e "You can change these settings using ${YELLOW}gitb config <name>${ENDCOLOR}"
+    print_configuration
     echo
+    echo -e "You can change these settings by using ${YELLOW}gitb cfg <name>${ENDCOLOR}"
 fi
 
 

@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 
 ### Script for working with branches: create, switch, delete
-# Use a separate branch for writing new code, then merge it to main
+# Use a separate branch for writing new code, then merge it to default branch
 # Read README.md to get more information how to use it
 # Use this script only with gitbasher
 
 
 ### Main function
 # $1: mode
-    # <empty>: switch to local branch
+    # <empty>: switch to a local branch
     # remote: switch to a remote branch
     # main: switch to the default branch
     # new: create a new branch from the current one 
@@ -16,17 +16,17 @@
     # delete: delete a local branch
 function branch_script {
     case "$1" in
-        remote|r|re)        remote="true";;
+        remote|r|re) remote="true";;
         main|def|m)  main="true";;
         new|n|c)          
             new="true"
             current="true"    
         ;;
-        newd|nd|d)        
+        newd|nd)        
             new="true"
         ;;
-        delete|del)   delete="true";;
-        help|h)         help="true";;
+        delete|del|d) delete="true";;
+        help|h)       help="true";;
         *)
             wrong_mode "branch" $1
     esac
@@ -40,8 +40,8 @@ function branch_script {
         echo -e "remote|re|r\tFetch $origin_name and select a remote branch to switch"
         echo -e "main|def|m\tSwitch to $main_branch without additional confirmations"
         echo -e "new|n|c\t\tBuild a conventional name and create a new branch from $main_branch"
-        echo -e "newd|nd|d\tBuild a conventional name, switch to $main_branch, pull it and create new branch"
-        echo -e "delete|del\tSelect a branch to delete"
+        echo -e "newd|nd\tBuild a conventional name, switch to $main_branch, pull it and create new branch"
+        echo -e "delete|del|d\tSelect a branch to delete"
         echo -e "help|h\t\tShow this help"
         exit
     fi
@@ -152,7 +152,7 @@ function branch_script {
                     echo
                     break
 
-                elif [ "$choice" == "n" ]; then
+                else
                     printf "n\n\n"
                     break
                 fi
@@ -215,7 +215,7 @@ function branch_script {
                 read -n 1 -s choice
                 if [ "$choice" == "y" ]; then
                     printf "y\n\n"
-                    echo -e "${YELLOW}Deleting...${ENDCOLOR}"
+                    echo -e "${YELLOW}Deleting...${YELLOW}"
 
                     push_output=$(git push $origin_name -d $branch_name 2>&1)
                     push_code=$?
@@ -243,57 +243,61 @@ function branch_script {
     ### Run create new branch logic
     ### Step 1. Select branch type
     echo -e "${YELLOW}Step 1.${ENDCOLOR} What type of branch do you want to create?"
-    echo "1. feat:      new feature or logic changes, 'feat' and 'perf' commits"
-    echo "2. fix:       small changes, eg. not critical bug fix"
-    echo "3. hotfix:    fix, that should be merged as fast as possible"
-    echo "4. chore:     non important and/or style changes"
-    echo "5. misc:      non-code changes, e.g. 'ci', 'docs', 'build' commits"
-    echo "6. wip:       'work in progress', for changes not ready for merging in the near future"
-    echo "7. test:      testing changes that won't be merged to the main branch"
-    echo "8.            don't use prefix for branch naming"
-    echo "0. Exit without changes"
+    echo -e "1. feat:\tnew feature or logic changes, 'feat' commits"
+    echo -e "2. fix:\t\tsmall changes, eg. not critical bug fix"
+    echo -e "3. hotfix:\tfix, that should be merged as fast as possible"
+    echo -e "4. wip:\t\t'work in progress', for changes not ready for merging in the near future"
+    echo -e "5. misc:\tnon-code changes, e.g. 'ci', 'docs', 'build' commits"
+    echo -e "6. test:\testing changes that probably won't be merged to the main branch"
+    echo -e "7. chore:\tnon important style or docs changes"
+    if [ "$ticket_name" != "" ]; then
+        printf "8. $ticket_name:"
+        if [ $ticket_name = "" ]; then
+            printf "\t"
+        else
+            printf "\t\t"
+        fi
+        printf "use ticket name as prefix\n"
+    fi
+    echo -e "9.  \t\tdon't use prefix for branch naming"
+    echo -e "0. Exit without changes"
 
     declare -A types=(
         [1]="feat"
         [2]="fix"
         [3]="hotfix"
-        [4]="chore"
+        [4]="wip"
         [5]="misc"
-        [6]="wip"
-        [7]="test"
+        [6]="test"
+        [7]="chore"
+        [8]=""
+        [9]="$ticket_name"
     )
 
     branch_type=""
     while [ true ]; do
         read -n 1 -s choice
 
-        if [ "$choice" == "0" ]; then
+        re='^[1-9]+$'
+        if ! [[ $choice =~ $re ]]; then
             exit
         fi
         
-        if [ "$choice" == "8" ]; then
-            break
-        fi
-
-        re='^[0-9]+$'
-        if ! [[ $choice =~ $re ]]; then
-            continue
-        fi
-
         branch_type="${types[$choice]}"
         if [ -n "$branch_type" ]; then
             branch_type_and_sep="${branch_type}${sep}"
-            break
         fi
+        break
     done
 
 
     ### Step 2. Enter branch name
     echo
-    echo -e "${YELLOW}Step 2.${ENDCOLOR} Enter the name of the branch, using '-' as a separator between words"
+    echo -e "${YELLOW}Step 2.${ENDCOLOR} Enter the name of the branch"
     echo "Leave it blank if you want to exit"
 
-    read -p "Branch: ${branch_type_and_sep}" -e branch_name
+    printf "${BOLD}git branch${ENDCOLOR}"
+    read -p " ${branch_type_and_sep}" -e branch_name
 
     if [ -z $branch_name ]; then
         exit

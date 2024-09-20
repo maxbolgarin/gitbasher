@@ -109,6 +109,19 @@ function get_repo_name {
 }
 
 
+### Function prints current config
+function print_configuration {
+    echo -e "${YELLOW}Current configuration:${ENDCOLOR}"
+    echo -e "\tdefault:\t${YELLOW}$main_branch${ENDCOLOR}"
+    echo -e "\tseparator:\t${YELLOW}$sep${ENDCOLOR}"
+    echo -e "\teditor:\t\t${YELLOW}$editor${ENDCOLOR}"
+    if [ "$ticket_name" != "" ]; then
+        echo -e "\tticket:\t\t${YELLOW}$ticket_name${ENDCOLOR}"
+    fi
+}
+
+
+
 ### Function to escape substring in string
 # $1: string
 # $2: substring to escape
@@ -184,18 +197,13 @@ function choose {
             if [ -n "$git_add" ]; then
                 git restore --staged $git_add
             fi
-            if [ $number_of_values -le 9 ]; then
-                printf $choice
-            fi
+            printf $choice
             exit
         fi
 
         re='^[0-9]+$'
         if ! [[ $choice =~ $re ]]; then
-            if [ $number_of_values -gt 9 ]; then
-                exit
-            fi
-            continue
+            exit
         fi
 
         index=$(($choice-1))
@@ -483,7 +491,6 @@ function list_branches {
 #     * branch_name
 function choose_branch {
     list_branches $1
-    printf "0. Exit...\n"
 
     echo
     printf "Enter branch number: "

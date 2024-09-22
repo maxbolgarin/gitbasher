@@ -180,6 +180,7 @@ function yes_no_choice {
 # $1: list of values
 # Returns: 
 #     * choice_result
+#     * pressed_alt
 # Using of global:
 #     * git_add
 function choose {
@@ -188,22 +189,32 @@ function choose {
 
     while [ true ]; do
         if [ $number_of_values -gt 9 ]; then
-            read -n 2 choice
+            read -p "$read_prefix" -e -n 2 choice
         else
-            read -n 1 -s choice
+            read -p "$read_prefix" -n 1 -s choice
         fi
 
         if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
             if [ -n "$git_add" ]; then
                 git restore --staged $git_add
             fi
-            printf $choice
+            if [ $number_of_values -le 9 ]; then
+                printf $choice
+            fi
             exit
         fi
 
-        re='^[0-9]+$'
+        re='^[0-9=]+$'
         if ! [[ $choice =~ $re ]]; then
-            exit
+            if [ -n "$git_add" ]; then
+                git restore --staged $git_add
+            fi
+            continue
+        fi
+
+        if [ "$choice" == "=" ]; then
+            pressed_alt="true"
+            break
         fi
 
         index=$(($choice-1))
@@ -215,6 +226,9 @@ function choose {
             break
         else
             if [ $number_of_values -gt 9 ]; then
+                if [ -n "$git_add" ]; then
+                    git restore --staged $git_add
+                fi
                 exit
             fi
         fi
@@ -251,7 +265,7 @@ function git_status {
 #     commits_hash
 function commit_list {
     IFS=$'\n' 
-    read -rd '' -a commits_info <<<"$(git --no-pager log -n $1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} | %s | ${GREEN_ES}%cr${ENDCOLOR_ES}" $3 | column -ts'|')"
+    read -rd '' -a commits_info <<<"$(git --no-pager log -n $1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} | %s | ${BLUE_ES}%an${ENDCOLOR_ES}| ${GREEN_ES}%cr${ENDCOLOR_ES}" $3 | column -ts'|')"
     read -rd '' -a commits_hash <<<"$(git --no-pager log -n $1 --pretty="%h"$3)"
 
     for index in "${!commits_info[@]}"
@@ -298,15 +312,21 @@ function ref_list {
 function choose_commit {
     commit_list $1 "number"
     echo "0. Exit..."
-    # TODO: add navigation
+    echo "Enter = to show more"
 
     echo
-    printf "Enter commit number: "
+    read_prefix="Enter commit number: "
 
     choose "${commits_hash[@]}"
     commit_hash=$choice_result
 
-    echo
+    if [ -n "$pressed_alt" ]; then
+        commit_list 99 "number"
+        echo "0. Exit..."
+        echo
+        choose "${commits_hash[@]}"
+        commit_hash=$choice_result
+    fi   
 }
 
 

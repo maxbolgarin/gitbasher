@@ -187,7 +187,7 @@ function commit_script {
         else
             printf "commit to the ${BOLD}${BLUE}${current_branch}${ENDCOLOR} branch\n"
         fi
-        echo "Leave it blank if you want to exit"
+        echo "Leave it blank to exit without changes"
 
         while [ true ]; do
             read -p "$(echo -n -e "${BOLD}git add${ENDCOLOR} ")" -e git_add
@@ -250,7 +250,7 @@ function commit_script {
     if [ -n "${fast}" ]; then
         step="1"
     fi
-    echo -e "${YELLOW}Step ${step}.${ENDCOLOR} What type of change do you want to commit?"
+    echo -e "${YELLOW}Step ${step}.${ENDCOLOR} What type of changes do you want to commit?"
     echo -e "1. feat:\tnew feature, logic change or performance improvement"
     echo -e "2. fix:\t\tsmall changes, eg. bug fix"
     echo -e "3. refactor:\tcode change that neither fixes a bug nor adds a feature, style changes"
@@ -303,12 +303,12 @@ function commit_script {
     fi
 
 
-    ### Commit Step 3: enter commit scope
+    ### Commit Step 3: enter a commit scope
     if [ -z "$is_empty" ] && [ -z "$fast" ]; then
         echo
-        echo -e "${YELLOW}Step 3.${ENDCOLOR} Enter a scope of your changes to provide additional context"
+        echo -e "${YELLOW}Step 3.${ENDCOLOR} Enter a scope of changes to provide an additional context"
         echo -e "Final meesage will be ${YELLOW}${commit_type}(<scope>): <summary>${ENDCOLOR}"
-        echo -e "Leave it blank if you don't want to enter a scope or 0 to exit"
+        echo -e "Leave it blank to continue without scope or 0 to exit without changes"
 
         read -p "$(echo -n -e "${TODO}<scope>:${ENDCOLOR} ")" -e commit_scope
 
@@ -333,13 +333,15 @@ function commit_script {
     ### Commit Step 4: enter commit message, use editor in msg mode
     if [ -n "${fast}" ]; then
         step="2"
+    elif [ -n "$is_empty" ]; then
+        step="3"
     else
         step="4"
     fi
     echo
     echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Write a <summary> about your changes"
     echo -e "Final meesage will be ${YELLOW}${commit}<summary>${ENDCOLOR}"
-
+    echo -e "Leave it blank to exit without changes"
     # Use an editor and commitmsg file
     if [ -n "$msg" ]; then
         commitmsg_file=".commitmsg__"
@@ -397,7 +399,6 @@ ${staged_with_tab}
 
     # Use read from console
     else
-        echo 
         read -p "$(echo -n -e "${commit}")" -e commit_message
         if [ -z "$commit_message" ]; then
             git restore --staged $git_add
@@ -408,17 +409,16 @@ ${staged_with_tab}
 
     ### Commit Step 5: enter tracker ticket
     if [ -n "${ticket}" ]; then
-        step="5"
-        if [ -n "$is_empty" ]; then
-            step="4"
-        fi
         echo
-        echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Enter the number of issue in your tracking system (e.g. JIRA or Youtrack)"
-        echo -e "It will be added to the end of summary"
-        echo -e "Leave it blank if you don't want to enter a ticket or 0 to exit"
+        echo -e "${YELLOW}Step 5.${ENDCOLOR} Enter the number of a resolved issue (e.g. in JIRA or Youtrack)"
+        echo -e "It will be added to the end of the summary header"
+        echo -e "Leave it blank to continue or 0 to exit without changes"
 
-        read -p "<ticket>: " -e commit_ticket
-
+        if [ -n "$ticket_name" ]; then
+            read -p "${ticket_name}${sep}" -e commit_ticket
+        else 
+            read -p "<ticket>: " -e commit_ticket
+        fi
         if [ "$commit_ticket" == "0" ]; then
             git restore --staged $git_add
             exit
@@ -433,6 +433,9 @@ ${staged_with_tab}
                 remaining_message=$(echo "$commit_message" | tail -n +2)
                 remaining_message="""
     $remaining_message"
+            fi
+            if [ -n "$ticket_name" ]; then
+                commit_ticket="${ticket_name}${sep}${commit_ticket}"
             fi
             commit_message="$summary ($commit_ticket)$remaining_message"
         fi

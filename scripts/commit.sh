@@ -11,7 +11,6 @@
 #     * current_branch
 #     * commit - message
 function after_commit {
-    echo
     if [ -n "$1" ]; then
         echo -e "${GREEN}Successful commit $1!${ENDCOLOR}"
     else
@@ -35,7 +34,7 @@ function after_commit {
     print_changes_stat "$(git --no-pager show $commit_hash --stat --format="")"
 
     # Some info to help users
-    if [ -z "${fast}" ]; then
+    if [ -z "${fast}" ] && [ -z "${push}" ]; then
         echo
         echo -e "Push your changes: ${YELLOW}gitb push${ENDCOLOR}"
         echo -e "Undo commit: ${YELLOW}gitb reset${ENDCOLOR}"
@@ -46,38 +45,33 @@ function after_commit {
 ### Main function
 # $1: mode
     # <empty> - regular commit mode
-    # fast: fast commit with git add .
-    # fastpush: fast commit with push
     # msg: use editor to write commit message
     # ticket: add ticket info to the end of message header
-    # amend: amend without edit (add to last commit)
-    # fixup: fixup commit
+    # fast: fast commit with git add .
+    # push: push changes after commit
+    # fastp: fast commit with push
+    # fixup: fixup commit   
+    # fastfix: fixup commit with git add .
+    # fastfixp: fast fixup commit with push
+    # amend: add to the last without edit (add to last commit)
+    # amendf: add all fiels to the last commit without edit
     # revert: revert commit
+    # help: print help
 function commit_script {
     case "$1" in
         msg|m)              msg="true";;
         ticket|jira|j|t)    ticket="true";;
-        amend|a)            amend="true";;
-        fixup|fix|x)        fixup="true";;
-        squash|sq|s)        squash="true";;
-        revert|r)           revert="true";;
-        edit|e)             edit="true";;
         fast|f)             fast="true";;
-        push|p)             push="true";;
-        fastp|fp)  
-            fast="true"
-            push="true"
-        ;;
-        fastfix|fx) 
-            fixup="true"
-            fast="true"
-        ;;
-        fastfixp|fxp) 
-            fixup="true"
-            fast="true"
-            push="true"
-        ;;
-        help|h) help="true";;
+        push|pu|p)          push="true";;
+        fastp|fp)           fast="true"; push="true";;
+        fixup|fix|x)        fixup="true";;
+        fixupp|fixp|xp)     fixup="true"; push="true";;
+        fastfix|fx|xf)      fixup="true"; fast="true";;
+        fastfixp|fxp|xfp)   fixup="true"; fast="true"; push="true";;
+        amend|am|a)         amend="true";;
+        amendf|amf|af)      amend="true"; fast="true";;
+        revert|rev)         revert="true";;
+        help|h)             help="true";;
         *)
             wrong_mode "commit" $1
     esac
@@ -86,38 +80,51 @@ function commit_script {
         echo -e "usage: ${YELLOW}gitb commit <mode>${ENDCOLOR}"
         echo
         echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\Select files to commit and create a conventional message in format: 'type(scope): message'"
+        echo -e "<empty>\t\tSelect files to commit and create a conventional message in format: 'type(scope): message'"
         echo -e "msg|m\t\tSame as <empty>, but create multiline commit message using text editor"
-        echo -e "ticket|t\tSame as <empty>, but add tracker's ticket info to the end of commit header"
-        echo -e "amend|a\t\Select files and make --amend commit to the last one (git commit --amend --no-edit)"
-        echo -e "fixup|x\t\Select files and commit to --fixup (git commit --fixup <commit>)"
+        echo -e "ticket|t\tSame as <empty>, but add tracker's ticket info to the end of the commit header"
         echo -e "fast|f\t\tAdd all files (git add .) and create a conventional commit message without scope"
-        echo -e "fastpush|fp\tAdd all files (git add .), create a conventional commit message without scope and push"
-        
-        
-        echo -e "revert|r\Select a commit to revert (git revert -no-edit <commit>)"
+        echo -e "push|pu|p\tCreate a conventional commit and push changes at the end"
+        echo -e "fastp|fp\tCreate a conventional commit in the fast mode and push changes"
+        echo -e "fixup|fix|x\tSelect files and commit to make a --fixup commit (git commit --fixup <hash>)"
+        echo -e "fixupp|fixp|xp\tSelect files and commit to make a --fixup commit and push changes"
+        echo -e "fastfix|fx\tAdd all files (git add .) and commit to make a --fixup commit"
+        echo -e "fastfixp|fxp\tAdd all files (git add .) and commit to make a --fixup commit and push"
+        echo -e "amend|am|a\tSelect files and add them to the last commit without message edit (git commit --amend --no-edit)"
+        echo -e "amendf|amf|af\tAdd all fiels to the last commit without message edit (git commit --amend --no-edit)"
+        echo -e "revert|rev\tSelect a commit to revert (git revert -no-edit <commit>)"
         echo -e "help|h\t\tShow this help"
         exit
     fi
 
-    if [ -n "${fast_push}" ]; then
-        fast="true"
-    fi
-
     ### Print header
     header_msg="GIT COMMIT"
-    if [ -n "${fast_push}" ]; then
-        header_msg="$header_msg FAST PUSH"
-    elif [ -n "${fast}" ]; then
-        header_msg="$header_msg FAST"
+    if [ -n "${fast}" ]; then
+        if [ -n "${push}" ]; then
+            if [ -n "${fixup}" ]; then
+                header_msg="$header_msg FAST FIXUP & PUSH"
+            else
+                header_msg="$header_msg FAST & PUSH"
+            fi
+        elif [ -n "${fixup}" ]; then
+            header_msg="$header_msg FAST FIXUP"
+        else
+            header_msg="$header_msg FAST"
+        fi
+    elif [ -n "${fixup}" ]; then
+        if [ -n "${push}" ]; then
+            header_msg="$header_msg FIXUP & PUSH"
+        else
+            header_msg="$header_msg FIXUP"
+        fi
+    elif [ -n "${push}" ]; then
+        header_msg="$header_msg & PUSH"
     elif [ -n "${msg}" ]; then
         header_msg="$header_msg MSG"
     elif [ -n "${ticket}" ]; then
         header_msg="$header_msg TICKET"
     elif [ -n "${amend}" ]; then
-        header_msg="$header_msg AMEND"
-    elif [ -n "${fixup}" ]; then
-        header_msg="$header_msg FIXUP"
+        header_msg="$header_msg AMEND LAST"
     elif [ -n "${revert}" ]; then
         header_msg="$header_msg REVERT"
     fi
@@ -129,19 +136,19 @@ function commit_script {
     ### Check if there are unstaged files
     is_clean=$(git status | tail -n 1)
     if [ "$is_clean" = "nothing to commit, working tree clean" ]; then
-        if [ -z "${autosquash}" ] && [ -z "${revert}" ]; then
+        if [ -z "${revert}" ]; then
             echo -e "${GREEN}Nothing to commit, working tree clean${ENDCOLOR}"
             exit
         fi
     elif [ -n "${revert}" ]; then
-        echo -e "${RED}Cannot revert: there are uncommited changes!${ENDCOLOR}"
+        echo -e "${RED}Cannot revert! There are uncommited changes:${ENDCOLOR}"
         exit
     fi
 
 
     ### Run revert logic
     if [ -n "${revert}" ]; then
-        echo -e "${YELLOW}Step 1.${ENDCOLOR} Select a commit to revert:"
+        echo -e "${YELLOW}Step 1.${ENDCOLOR} Select a commit to ${YELLOW}revert${ENDCOLOR} it:"
         
         choose_commit 20
 
@@ -152,13 +159,10 @@ function commit_script {
         exit
     fi
 
-    ### TODO: better
 
     ### Print status (don't need to print in fast mode because we add everything)
     if [ -z "${fast}" ]; then 
-        #echo -e "On branch ${YELLOW}${current_branch}${ENDCOLOR}"
-        #echo
-        echo -e "${YELLOW}Changed fiels${ENDCOLOR}"
+        echo -e "${YELLOW}Changed files${ENDCOLOR}"
         git_status
     fi
 
@@ -169,12 +173,23 @@ function commit_script {
         git_add="."
     else
         echo
-        echo -e "${YELLOW}Step 1.${ENDCOLOR} List the files that need to be commited on ${YELLOW}${current_branch}${ENDCOLOR}"
-        echo "You can specify entire folders or use a '.' if you want to add everything, tab also works here"
-        echo "Leave it blank if you want to exit"
+        printf "${YELLOW}Step 1.${ENDCOLOR} List files for "
+        if [ -n "${fixup}" ]; then
+            printf "${YELLOW}--fixup${ENDCOLOR} "
+        elif [ -n "${squash}" ]; then
+            printf "${YELLOW}--squash${ENDCOLOR} "
+        elif [ -n "${amend}" ]; then
+            printf "${YELLOW}--amend${ENDCOLOR} "
+        fi
+        if [ -n "${amend}" ]; then
+            printf "to the last commit in the ${BOLD}${BLUE}${current_branch}${ENDCOLOR} branch\n"
+        else
+            printf "commit to the ${BOLD}${BLUE}${current_branch}${ENDCOLOR} branch\n"
+        fi
+        echo "Leave it blank to exit without changes"
 
         while [ true ]; do
-            read -p "$(echo -n -e "${TODO}git add${ENDCOLOR} ")" -e git_add
+            read -p "$(echo -n -e "${BOLD}git add${ENDCOLOR} ")" -e git_add
 
             # Trim spaces
             git_add=$(echo "$git_add" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
@@ -187,22 +202,9 @@ function commit_script {
                 break
             fi
         done
-    fi
 
-
-    ### Run amend logic - add staged files to last commit
-    if [ -n "${amend}" ]; then
-        result=$(git commit --amend --no-edit 2>&1)
-        check_code $? "$result" "amend"
-
-        after_commit "amend"
-        exit
-    fi
-
-    if [ -z "${fast}" ]; then
         echo
     fi
-
 
     ### Print staged files that we add at step 1
     echo -e "${YELLOW}Staged files:${ENDCOLOR}"
@@ -213,14 +215,31 @@ function commit_script {
     ### Run fixup logic
     if [ -n "${fixup}" ]; then
         echo
-        echo -e "${YELLOW}Step 2.${ENDCOLOR} Select a commit to fixup:"
+        echo -e "${YELLOW}Step 2.${ENDCOLOR} Select a commit to ${YELLOW}--fixup${ENDCOLOR}:"
 
-        choose_commit 20
+        choose_commit 14
         
         result=$(git commit --fixup $commit_hash 2>&1)
         check_code $? "$result" "fixup"
 
         after_commit "fixup"
+
+        if [ -n "${push}" ]; then
+            echo
+            push_script y
+        fi
+
+        exit
+    fi
+
+
+    ### Run amend logic - add staged files to the last commit
+    if [ -n "${amend}" ]; then
+        result=$(git commit --amend --no-edit 2>&1)
+        check_code $? "$result" "amend"
+
+        echo
+        after_commit "amend"
         exit
     fi
 
@@ -231,17 +250,17 @@ function commit_script {
     if [ -n "${fast}" ]; then
         step="1"
     fi
-    echo -e "${YELLOW}Step ${step}.${ENDCOLOR} What type of change do you want to commit?"
-    echo "1. feat:      new feature, logic change or performance improvement"
-    echo "2. fix:       small changes, eg. bug fix"
-    echo "3. refactor:  code change that neither fixes a bug nor adds a feature, style changes"
-    echo "4. test:      adding missing tests or changing existing tests"
-    echo "5. build:     changes that affect the build system or external dependencies"
-    echo "6. ci:        changes to CI configuration files and scripts"
-    echo "7. chore:     maintanance and housekeeping"
-    echo "8. docs:      documentation changes"
-    echo "9.            write plain commit without type and scope"
-    echo "0. Exit without changes"
+    echo -e "${YELLOW}Step ${step}.${ENDCOLOR} What type of changes do you want to commit?"
+    echo -e "1. feat:\tnew feature, logic change or performance improvement"
+    echo -e "2. fix:\t\tsmall changes, eg. bug fix"
+    echo -e "3. refactor:\tcode change that neither fixes a bug nor adds a feature, style changes"
+    echo -e "4. test:\tadding missing tests or changing existing tests"
+    echo -e "5. build:\tchanges that affect the build system or external dependencies"
+    echo -e "6. ci:\t\tchanges to CI configuration files and scripts"
+    echo -e "7. chore:\tmaintanance and housekeeping"
+    echo -e "8. docs:\tdocumentation changes"
+    echo -e "9.  \t\twrite plain commit without type and scope"
+    echo -e "0. Exit without changes"
 
     declare -A types=(
         [1]="feat"
@@ -284,16 +303,12 @@ function commit_script {
     fi
 
 
-    ### Commit Step 3: enter commit scope
-    if [ -z "$is_empty" ]; then
+    ### Commit Step 3: enter a commit scope
+    if [ -z "$is_empty" ] && [ -z "$fast" ]; then
         echo
-        step="3"
-        if [ -n "${fast}" ]; then
-            step="2"
-        fi
-        echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Enter a scope of your changes to provide additional context"
+        echo -e "${YELLOW}Step 3.${ENDCOLOR} Enter a scope of changes to provide an additional context"
         echo -e "Final meesage will be ${YELLOW}${commit_type}(<scope>): <summary>${ENDCOLOR}"
-        echo -e "Leave it blank if you don't want to enter a scope or 0 to exit"
+        echo -e "Leave it blank to continue without scope or 0 to exit without changes"
 
         read -p "$(echo -n -e "${TODO}<scope>:${ENDCOLOR} ")" -e commit_scope
 
@@ -310,11 +325,15 @@ function commit_script {
         fi
     fi
 
+    if [ -z "$is_empty" ] && [ -n "$fast" ]; then
+        commit="$commit: "
+    fi
+
 
     ### Commit Step 4: enter commit message, use editor in msg mode
-    if [ -n "${fast}" ] && [ -n "$is_empty" ]; then
+    if [ -n "${fast}" ]; then
         step="2"
-    elif [ -n "${fast}" ] || [ -n "$is_empty" ]; then
+    elif [ -n "$is_empty" ]; then
         step="3"
     else
         step="4"
@@ -322,8 +341,8 @@ function commit_script {
     echo
     echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Write a <summary> about your changes"
     echo -e "Final meesage will be ${YELLOW}${commit}<summary>${ENDCOLOR}"
-
-    # Use editor and commitmsg file
+    echo -e "Leave it blank to exit without changes"
+    # Use an editor and commitmsg file
     if [ -n "$msg" ]; then
         commitmsg_file=".commitmsg__"
         touch $commitmsg_file
@@ -350,15 +369,12 @@ ${staged_with_tab}
 ###     no dot (.) at the end
 ###     don't capitalize the first letter
 ###
-### The body is optional. should explain why you are making the change. 
-### You can include a comparison of the previous behavior with the new behavior in order to illustrate the impact of the change.
+### The body is optional and should explain why you are making the change. 
 ###
 ### The footer is optional and should contain any information about 'Breaking Changes'.
-### Breaking Change section should start with the phrase 'BREAKING CHANGE: ' followed by a summary of the breaking change, 
-### a blank line, and a detailed description of the breaking change that also includes migration instructions.
+### Breaking Change section should start with the phrase 'BREAKING CHANGE: ' followed by a summary of the breaking change.
 ###
-### Similarly, a Deprecation section should start with 'DEPRECATED: ' followed by a short description of what is deprecated,
-### a blank line, and a detailed description of the deprecation that also mentions the recommended update path.
+### Similarly, a Deprecation section should start with 'DEPRECATED: ' followed by a short description of what is deprecated.
 """ >> $commitmsg_file
 
         while [ true ]; do
@@ -383,8 +399,7 @@ ${staged_with_tab}
 
     # Use read from console
     else
-        echo -e "Leave it blank if you want to exit"
-        read -p "$(echo -n -e "${TODO}${commit}${ENDCOLOR}")" -e commit_message
+        read -p "$(echo -n -e "${commit}")" -e commit_message
         if [ -z "$commit_message" ]; then
             git restore --staged $git_add
             exit
@@ -394,17 +409,16 @@ ${staged_with_tab}
 
     ### Commit Step 5: enter tracker ticket
     if [ -n "${ticket}" ]; then
-        step="5"
-        if [ -n "$is_empty" ]; then
-            step="4"
-        fi
         echo
-        echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Enter the number of issue in your tracking system (e.g. JIRA or Youtrack)"
-        echo -e "It will be added to the end of summary"
-        echo -e "Leave it blank if you don't want to enter a ticket or 0 to exit"
+        echo -e "${YELLOW}Step 5.${ENDCOLOR} Enter the number of a resolved issue (e.g. in JIRA or Youtrack)"
+        echo -e "It will be added to the end of the summary header"
+        echo -e "Leave it blank to continue or 0 to exit without changes"
 
-        read -p "<ticket>: " -e commit_ticket
-
+        if [ -n "$ticket_name" ]; then
+            read -p "${ticket_name}${sep}" -e commit_ticket
+        else 
+            read -p "<ticket>: " -e commit_ticket
+        fi
         if [ "$commit_ticket" == "0" ]; then
             git restore --staged $git_add
             exit
@@ -420,6 +434,9 @@ ${staged_with_tab}
                 remaining_message="""
     $remaining_message"
             fi
+            if [ -n "$ticket_name" ]; then
+                commit_ticket="${ticket_name}${sep}${commit_ticket}"
+            fi
             commit_message="$summary ($commit_ticket)$remaining_message"
         fi
     fi
@@ -428,12 +445,14 @@ ${staged_with_tab}
 
 
     ### Finally
+    echo
+
     result=$(git commit -m """$commit""" 2>&1)
     check_code $? "$result" "commit"
     after_commit
 
-    if [ -n "${fast_push}" ]; then
+    if [ -n "${push}" ]; then
         echo
-        push_script f
+        push_script y
     fi
 }

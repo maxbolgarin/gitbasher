@@ -26,10 +26,10 @@ ENDCOLOR_ES="\x1b[0m"
 
 ### Cannot use bash version less than 4 because of many features that was added to language in that version
 if ((BASH_VERSINFO[0] < 4)); then 
-    printf "Sorry, you need at least ${YELLOW}bash-4.0${ENDCOLOR} to run this script.\n
+    printf "Sorry, you need at least ${YELLOW}bash-4.0${ENDCOLOR} to run gitbasher.\n
 If your OS is debian-based, use:
     ${GREEN}apt install --only-upgrade bash${ENDCOLOR}\n
-If your OS is mac, use:
+If your OS is Mac, use:
     ${GREEN}brew install bash${ENDCOLOR}\n\n" 
     exit 1; 
 fi
@@ -180,6 +180,7 @@ function yes_no_choice {
 # $1: list of values
 # Returns: 
 #     * choice_result
+#     * pressed_alt
 # Using of global:
 #     * git_add
 function choose {
@@ -188,22 +189,32 @@ function choose {
 
     while [ true ]; do
         if [ $number_of_values -gt 9 ]; then
-            read -n 2 choice
+            read -p "$read_prefix" -e -n 2 choice
         else
-            read -n 1 -s choice
+            read -p "$read_prefix" -n 1 -s choice
         fi
 
         if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
             if [ -n "$git_add" ]; then
                 git restore --staged $git_add
             fi
-            printf $choice
+            if [ $number_of_values -le 9 ]; then
+                printf $choice
+            fi
             exit
         fi
 
-        re='^[0-9]+$'
+        re='^[0-9=]+$'
         if ! [[ $choice =~ $re ]]; then
-            exit
+            if [ -n "$git_add" ]; then
+                git restore --staged $git_add
+            fi
+            continue
+        fi
+
+        if [ "$choice" == "=" ] || [ "$choice" == "==" ]; then
+            pressed_alt="true"
+            break
         fi
 
         index=$(($choice-1))
@@ -215,6 +226,9 @@ function choose {
             break
         else
             if [ $number_of_values -gt 9 ]; then
+                if [ -n "$git_add" ]; then
+                    git restore --staged $git_add
+                fi
                 exit
             fi
         fi
@@ -251,7 +265,7 @@ function git_status {
 #     commits_hash
 function commit_list {
     IFS=$'\n' 
-    read -rd '' -a commits_info <<<"$(git --no-pager log -n $1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} | %s | ${GREEN_ES}%cr${ENDCOLOR_ES}" $3 | column -ts'|')"
+    read -rd '' -a commits_info <<<"$(git --no-pager log -n $1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} | %s | ${BLUE_ES}%an${ENDCOLOR_ES} | ${GREEN_ES}%cr${ENDCOLOR_ES}" $3 | column -ts'|')"
     read -rd '' -a commits_hash <<<"$(git --no-pager log -n $1 --pretty="%h"$3)"
 
     for index in "${!commits_info[@]}"
@@ -297,14 +311,27 @@ function ref_list {
 #     * git_add
 function choose_commit {
     commit_list $1 "number"
-    echo "0. Exit..."
-    # TODO: add navigation
+    if [ $1 -gt 9 ]; then
+        echo "00. Exit"
+    else
+        echo "0. Exit"
+    fi
 
+    echo "Enter = to show more"
     echo
-    printf "Enter commit number: "
+    
+    read_prefix="Enter commit number: "
 
     choose "${commits_hash[@]}"
     commit_hash=$choice_result
+
+    if [ -n "$pressed_alt" ]; then
+        commit_list 99 "number"
+        echo "00. Exit"
+        echo
+        choose "${commits_hash[@]}"
+        commit_hash=$choice_result
+    fi
 
     echo
 }
@@ -414,13 +441,13 @@ function list_branches {
 
     if [[ "$number_of_branches" == 1 ]] && [[ "${branch_to_check}" == "${current_branch}" ]]; then
         echo
-        echo -e "You have only one branch: ${YELLOW}${current_branch}${ENDCOLOR}"
+        echo -e "There is only one branch: ${YELLOW}${current_branch}${ENDCOLOR}"
         exit
     fi
 
     if [[ "$1" == "delete" ]] && [[ "$number_of_branches" == 2 ]] && [[ "${current_branch}" != "${main_branch}" ]]; then
         echo
-        echo -e "${YELLOW}There is no branches to delete${ENDCOLOR}"
+        echo -e "${YELLOW}There are no branches to delete${ENDCOLOR}"
         exit
     fi
 

@@ -39,10 +39,10 @@ ENDCOLOR_ES="\x1b[0m"
 
 ### Cannot use bash version less than 4 because of many features that was added to language in that version
 if ((BASH_VERSINFO[0] < 4)); then 
-    printf "Sorry, you need at least ${YELLOW}bash-4.0${ENDCOLOR} to run this script.\n
+    printf "Sorry, you need at least ${YELLOW}bash-4.0${ENDCOLOR} to run gitbasher.\n
 If your OS is debian-based, use:
     ${GREEN}apt install --only-upgrade bash${ENDCOLOR}\n
-If your OS is mac, use:
+If your OS is Mac, use:
     ${GREEN}brew install bash${ENDCOLOR}\n\n" 
     exit 1; 
 fi
@@ -122,6 +122,19 @@ function get_repo_name {
 }
 
 
+### Function prints current config
+function print_configuration {
+    echo -e "${YELLOW}Current configuration:${ENDCOLOR}"
+    echo -e "\tdefault:\t${YELLOW}$main_branch${ENDCOLOR}"
+    echo -e "\tseparator:\t${YELLOW}$sep${ENDCOLOR}"
+    echo -e "\teditor:\t\t${YELLOW}$editor${ENDCOLOR}"
+    if [ "$ticket_name" != "" ]; then
+        echo -e "\tticket:\t\t${YELLOW}$ticket_name${ENDCOLOR}"
+    fi
+}
+
+
+
 ### Function to escape substring in string
 # $1: string
 # $2: substring to escape
@@ -180,6 +193,7 @@ function yes_no_choice {
 # $1: list of values
 # Returns: 
 #     * choice_result
+#     * pressed_alt
 # Using of global:
 #     * git_add
 function choose {
@@ -188,9 +202,9 @@ function choose {
 
     while [ true ]; do
         if [ $number_of_values -gt 9 ]; then
-            read -n 2 choice
+            read -p "$read_prefix" -e -n 2 choice
         else
-            read -n 1 -s choice
+            read -p "$read_prefix" -n 1 -s choice
         fi
 
         if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
@@ -203,12 +217,17 @@ function choose {
             exit
         fi
 
-        re='^[0-9]+$'
+        re='^[0-9=]+$'
         if ! [[ $choice =~ $re ]]; then
-            if [ $number_of_values -gt 9 ]; then
-                exit
+            if [ -n "$git_add" ]; then
+                git restore --staged $git_add
             fi
             continue
+        fi
+
+        if [ "$choice" == "=" ] || [ "$choice" == "==" ]; then
+            pressed_alt="true"
+            break
         fi
 
         index=$(($choice-1))
@@ -220,6 +239,9 @@ function choose {
             break
         else
             if [ $number_of_values -gt 9 ]; then
+                if [ -n "$git_add" ]; then
+                    git restore --staged $git_add
+                fi
                 exit
             fi
         fi
@@ -256,7 +278,7 @@ function git_status {
 #     commits_hash
 function commit_list {
     IFS=$'\n' 
-    read -rd '' -a commits_info <<<"$(git --no-pager log -n $1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} | %s | ${GREEN_ES}%cr${ENDCOLOR_ES}" $3 | column -ts'|')"
+    read -rd '' -a commits_info <<<"$(git --no-pager log -n $1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} | %s | ${BLUE_ES}%an${ENDCOLOR_ES}| ${GREEN_ES}%cr${ENDCOLOR_ES}" $3 | column -ts'|')"
     read -rd '' -a commits_hash <<<"$(git --no-pager log -n $1 --pretty="%h"$3)"
 
     for index in "${!commits_info[@]}"
@@ -302,16 +324,27 @@ function ref_list {
 #     * git_add
 function choose_commit {
     commit_list $1 "number"
-    echo "0. Exit..."
-    # TODO: add navigation
+    if [ $1 -gt 9 ]; then
+        echo "00. Exit"
+    else
+        echo "0. Exit"
+    fi
 
+    echo "Enter = to show more"
     echo
-    printf "Enter commit number: "
+    
+    read_prefix="Enter commit number: "
 
     choose "${commits_hash[@]}"
     commit_hash=$choice_result
 
-    echo
+    if [ -n "$pressed_alt" ]; then
+        commit_list 99 "number"
+        echo "00. Exit"
+        echo
+        choose "${commits_hash[@]}"
+        commit_hash=$choice_result
+    fi   
 }
 
 
@@ -419,13 +452,13 @@ function list_branches {
 
     if [[ "$number_of_branches" == 1 ]] && [[ "${branch_to_check}" == "${current_branch}" ]]; then
         echo
-        echo -e "You have only one branch: ${YELLOW}${current_branch}${ENDCOLOR}"
+        echo -e "There is only one branch: ${YELLOW}${current_branch}${ENDCOLOR}"
         exit
     fi
 
     if [[ "$1" == "delete" ]] && [[ "$number_of_branches" == 2 ]] && [[ "${current_branch}" != "${main_branch}" ]]; then
         echo
-        echo -e "${YELLOW}There is no branches to delete${ENDCOLOR}"
+        echo -e "${YELLOW}There are no branches to delete${ENDCOLOR}"
         exit
     fi
 
@@ -496,7 +529,6 @@ function list_branches {
 #     * branch_name
 function choose_branch {
     list_branches $1
-    printf "0. Exit...\n"
 
     echo
     printf "Enter branch number: "
@@ -569,8 +601,9 @@ function switch {
 
 ### Get configuration from git config
 main_branch=$(get_config_value gitbasher.branch "$main_branch")
-sep=$(get_config_value gitbasher.sep "_")
-editor=$(get_config_value core.editor "vim")
+sep=$(get_config_value gitbasher.sep "-")
+editor=$(get_config_value core.editor "vi")
+ticket_name=$(get_config_value gitbasher.ticket "")
 
 ### Is this is a first run of gitbasher in this project?
 is_first=$(get_config_value gitbasher.isfirst "true")
@@ -581,7 +614,7 @@ repo_url="$(get_repo)"
 
 
 ### Function asks user to select default gitbasher branch
-function set_main_branch {
+function set_default_branch {
     echo -e "${YELLOW}Fetching remote branches...${ENDCOLOR}"
     echo
 
@@ -610,6 +643,7 @@ function set_main_branch {
 ### Function asks user to select branch name separator
 function set_sep {
     echo -e "${YELLOW}Select a branch name separator${ENDCOLOR}"
+    echo
     echo -e "Separator is a symbol between type and name, e.g. ${YELLOW}name${sep}name${ENDCOLOR}"
     echo -e "Current separator: ${YELLOW}$sep${ENDCOLOR}"
     echo -e "1. type${YELLOW}/${ENDCOLOR}name"
@@ -665,7 +699,8 @@ function set_sep {
 ### Function asks user to enter editor for commit messages
 function set_editor {
     echo -e "${YELLOW}Enter an editor for commit messages${ENDCOLOR}"
-    echo -e "Enter the bin name of editor to run for creating commit messages (e.g. 'vim' or 'nano')"
+    echo
+    echo -e "Enter the bin name of editor to run for creating commit messages (e.g. 'vi' or 'nano')"
     echo -e "It will override ${YELLOW}core.editor${ENDCOLOR} git config value, leave it blank to exit without changes"
     echo -e "Current editor: ${YELLOW}${editor}${ENDCOLOR}"
     read -p "Editor: " choice
@@ -691,21 +726,54 @@ function set_editor {
 }
 
 
+### Function asks user to enter ticket name
+function set_ticket {
+    if [ -z $ticket_name ]; then
+        echo -e "${YELLOW}Current gitbasher ticket name is not set${ENDCOLOR}"
+    else
+        echo -e "Current gitbasher ticket name: ${YELLOW}$ticket_name${ENDCOLOR}"
+    fi
+    echo
+    
+    echo -e "${YELLOW}Enter a new ticket name${ENDCOLOR}"
+    read -p "Ticket name: " -e ticket_name
+
+    if [ -z $ticket_name ]; then
+        exit
+    fi
+
+    ticket_name="${ticket_name##*( )}"
+
+    echo 
+
+    ticket_name=$(set_config_value gitbasher.ticket $ticket_name)
+    echo -e "${GREEN}Set '${ticket_name}' as a ticket name in '${project_name}' repo${ENDCOLOR}"
+
+    echo -e "Do you want to set it globally for all projects (y/n)?"
+    yes_no_choice "\nSet '${ticket_name}' globally" "true"
+    ticket_name=$(set_config_value gitbasher.ticket $ticket_name "true")
+}
+
+
 ### Main function
 # $1: mode
     # empty: NOT WOIRKIGN
     # main: set main branch
     # sep: set branch separator
     # editor: set commit message editor
+    # ticket: set prefix for tickets
 function config_script {
     case "$1" in
-        main|master)  set_main_cfg="true";;
-        separator|sep)          set_sep_cfg="true";;
-        editor)       set_editor_cfg="true";;
+        default|def|d|b|main) set_default_cfg="true";;
+        separator|sep|s)    set_sep_cfg="true";;
+        editor|ed|e)        set_editor_cfg="true";;
+        ticket|jira|ti|t)   set_ticket_cfg="true";;
+        help|h)             help="true";;
+        *)                  wrong_mode "config" $1
     esac
 
-    if [ "$set_main_cfg" == "true" ]; then
-        set_main_branch
+    if [ "$set_default_cfg" == "true" ]; then
+        set_default_branch
         exit
     fi
 
@@ -719,12 +787,24 @@ function config_script {
         exit
     fi
 
-    echo -e "usage: ${YELLOW}gitb config <name>${ENDCOLOR}"
-    echo
-    echo -e "${YELLOW}Available names for configuration${ENDCOLOR}"
-    echo -e "main\t\tUpdate gitbasher's default branch (not remote git repo!)"
-    echo -e "sep\t\tUpdate separator between type and name in branch"
-    echo -e "editor\t\tUpdate text editor for commit messages"
+    if [ "$set_ticket_cfg" == "true" ]; then
+        set_ticket
+        exit
+    fi
+
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb config <mode>${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes for configuration${ENDCOLOR}"
+        echo -e "<empty>\t\t\tPrint current gitbasher configuration"
+        echo -e "default|def|d|b|main\tUpdate gitbasher's default branch (not in remote git repo!)"
+        echo -e "separator|sep|s\t\tUpdate separator between type and name in branch"
+        echo -e "editor|ed|e\t\tUpdate text editor for the commit messages"
+        echo -e "ticket|ti|t|jira\tSet ticket prefix to help with commit/branch building"
+        exit
+    fi
+
+    print_configuration
 }
 
 ### Include all scripts
@@ -1664,7 +1744,7 @@ function after_commit {
     if [ -z "${fast}" ]; then
         echo
         echo -e "Push your changes: ${YELLOW}gitb push${ENDCOLOR}"
-        echo -e "Undo commit: ${YELLOW}gitb undo-commit${ENDCOLOR}"
+        echo -e "Undo commit: ${YELLOW}gitb reset${ENDCOLOR}"
     fi
 }
 
@@ -1672,23 +1752,33 @@ function after_commit {
 ### Main function
 # $1: mode
     # <empty> - regular commit mode
-    # fast: fast commit with git add .
-    # fastpush: fast commit with push
     # msg: use editor to write commit message
     # ticket: add ticket info to the end of message header
-    # amend: amend without edit (add to last commit)
-    # fixup: fixup commit
+    # fast: fast commit with git add .
+    # push: push changes after commit
+    # fastp: fast commit with push
+    # fixup: fixup commit   
+    # fastfix: fixup commit with git add .
+    # fastfixp: fast fixup commit with push
+    # amend: add to the last without edit (add to last commit)
+    # amendf: add all fiels to the last commit without edit
     # revert: revert commit
+    # help: print help
 function commit_script {
     case "$1" in
-        fast|f)         fast="true";;
-        fastpush|fp)    fast_push="true";;
-        msg|m)          msg="true";;
-        ticket|t)       ticket="true";;
-        amend|a)        amend="true";;
-        fixup|x)        fixup="true";;
-        revert|r)       revert="true";;
-        help|h)         help="true";;
+        msg|m)              msg="true";;
+        ticket|jira|j|t)    ticket="true";;
+        fast|f)             fast="true";;
+        push|pu|p)          push="true";;
+        fastp|fp)           fast="true"; push="true";;
+        fixup|fix|x)        fixup="true";;
+        fixupp|fixp|xp)     fixup="true"; push="true";;
+        fastfix|fx|xf)      fixup="true"; fast="true";;
+        fastfixp|fxp|xfp)   fixup="true"; fast="true"; push="true";;
+        amend|am|a)         amend="true";;
+        amendf|amf|af)      amend="true"; fast="true";;
+        revert|rev)         revert="true";;
+        help|h)             help="true";;
         *)
             wrong_mode "commit" $1
     esac
@@ -1697,36 +1787,51 @@ function commit_script {
         echo -e "usage: ${YELLOW}gitb commit <mode>${ENDCOLOR}"
         echo
         echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\Select files to commit and create conventional message in format: 'type(scope): message'"
-        echo -e "fast|f\t\tAdd all files (git add .) and create conventional commit message"
-        echo -e "fastpush|fp\tAdd all files (git add .), create conventional commit message and push"
-        echo -e "msg|m\t\tSame as in <empty>, but create multiline commit message using text editor"
-        echo -e "ticket|t\tSame as previous, but add tracker's ticket info to the end of commit header"
-        echo -e "amend|a\t\Select files and make --amend commit to the last one (git commit --amend --no-edit)"
-        echo -e "fixup|x\t\Select files and commit to --fixup (git commit --fixup <commit>)"
-        echo -e "revert|r\Select a commit to revert (git revert -no-edit <commit>)"
+        echo -e "<empty>\t\tSelect files to commit and create a conventional message in format: 'type(scope): message'"
+        echo -e "msg|m\t\tSame as <empty>, but create multiline commit message using text editor"
+        echo -e "ticket|t\tSame as <empty>, but add tracker's ticket info to the end of the commit header"
+        echo -e "fast|f\t\tAdd all files (git add .) and create a conventional commit message without scope"
+        echo -e "push|pu|p\tCreate a conventional commit and push changes at the end"
+        echo -e "fastp|fp\tCreate a conventional commit in the fast mode and push changes"
+        echo -e "fixup|fix|x\tSelect files and commit to make a --fixup commit (git commit --fixup <hash>)"
+        echo -e "fixupp|fixp|xp\tSelect files and commit to make a --fixup commit and push changes"
+        echo -e "fastfix|fx\tAdd all files (git add .) and commit to make a --fixup commit"
+        echo -e "fastfixp|fxp\tAdd all files (git add .) and commit to make a --fixup commit and push"
+        echo -e "amend|am|a\tSelect files and add them to the last commit without message edit (git commit --amend --no-edit)"
+        echo -e "amendf|amf|af\tAdd all fiels to the last commit without message edit (git commit --amend --no-edit)"
+        echo -e "revert|rev\tSelect a commit to revert (git revert -no-edit <commit>)"
         echo -e "help|h\t\tShow this help"
         exit
     fi
 
-    if [ -n "${fast_push}" ]; then
-        fast="true"
-    fi
-
     ### Print header
     header_msg="GIT COMMIT"
-    if [ -n "${fast_push}" ]; then
-        header_msg="$header_msg FAST PUSH"
-    elif [ -n "${fast}" ]; then
-        header_msg="$header_msg FAST"
+    if [ -n "${fast}" ]; then
+        if [ -n "${push}" ]; then
+            if [ -n "${fixup}" ]; then
+                header_msg="$header_msg FAST FIXUP & PUSH"
+            else
+                header_msg="$header_msg FAST & PUSH"
+            fi
+        elif [ -n "${fixup}" ]; then
+            header_msg="$header_msg FAST FIXUP"
+        else
+            header_msg="$header_msg FAST"
+        fi
+    elif [ -n "${fixup}" ]; then
+        if [ -n "${push}" ]; then
+            header_msg="$header_msg FIXUP & PUSH"
+        else
+            header_msg="$header_msg FIXUP"
+        fi
+    elif [ -n "${push}" ]; then
+        header_msg="$header_msg & PUSH"
     elif [ -n "${msg}" ]; then
         header_msg="$header_msg MSG"
     elif [ -n "${ticket}" ]; then
         header_msg="$header_msg TICKET"
     elif [ -n "${amend}" ]; then
-        header_msg="$header_msg AMEND"
-    elif [ -n "${fixup}" ]; then
-        header_msg="$header_msg FIXUP"
+        header_msg="$header_msg AMEND LAST"
     elif [ -n "${revert}" ]; then
         header_msg="$header_msg REVERT"
     fi
@@ -1738,7 +1843,7 @@ function commit_script {
     ### Check if there are unstaged files
     is_clean=$(git status | tail -n 1)
     if [ "$is_clean" = "nothing to commit, working tree clean" ]; then
-        if [ -z "${autosquash}" ] && [ -z "${revert}" ]; then
+        if [ -z "${revert}" ]; then
             echo -e "${GREEN}Nothing to commit, working tree clean${ENDCOLOR}"
             exit
         fi
@@ -1750,9 +1855,9 @@ function commit_script {
 
     ### Run revert logic
     if [ -n "${revert}" ]; then
-        echo -e "${YELLOW}Step 1.${ENDCOLOR} Select a commit to revert:"
+        echo -e "${YELLOW}Step 1.${ENDCOLOR} Select a commit to ${YELLOW}revert${ENDCOLOR} it:"
         
-        choose_commit 20
+        choose_commit 16
 
         result=$(git revert --no-edit ${commit_hash} 2>&1)
         check_code $? "$result" "revert"
@@ -1761,13 +1866,10 @@ function commit_script {
         exit
     fi
 
-    ### TODO: better
 
     ### Print status (don't need to print in fast mode because we add everything)
     if [ -z "${fast}" ]; then 
-        #echo -e "On branch ${YELLOW}${current_branch}${ENDCOLOR}"
-        #echo
-        echo -e "${YELLOW}Changed fiels${ENDCOLOR}"
+        echo -e "${YELLOW}Changed files${ENDCOLOR}"
         git_status
     fi
 
@@ -1778,12 +1880,23 @@ function commit_script {
         git_add="."
     else
         echo
-        echo -e "${YELLOW}Step 1.${ENDCOLOR} List the files that need to be commited on ${YELLOW}${current_branch}${ENDCOLOR}"
-        echo "You can specify entire folders or use a '.' if you want to add everything, tab also works here"
-        echo "Leave it blank if you want to exit"
+        printf "${YELLOW}Step 1.${ENDCOLOR} List files for "
+        if [ -n "${fixup}" ]; then
+            printf "${YELLOW}--fixup${ENDCOLOR} "
+        elif [ -n "${squash}" ]; then
+            printf "${YELLOW}--squash${ENDCOLOR} "
+        elif [ -n "${amend}" ]; then
+            printf "${YELLOW}--amend${ENDCOLOR} "
+        fi
+        if [ -n "${amend}" ]; then
+            printf "to the last commit in the ${BOLD}${BLUE}${current_branch}${ENDCOLOR} branch\n"
+        else
+            printf "commit to the ${BOLD}${BLUE}${current_branch}${ENDCOLOR} branch\n"
+        fi
+        echo "Leave it blank to exit without changes"
 
         while [ true ]; do
-            read -p "$(echo -n -e "${TODO}git add${ENDCOLOR} ")" -e git_add
+            read -p "$(echo -n -e "${BOLD}git add${ENDCOLOR} ")" -e git_add
 
             # Trim spaces
             git_add=$(echo "$git_add" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
@@ -1796,22 +1909,9 @@ function commit_script {
                 break
             fi
         done
-    fi
 
-
-    ### Run amend logic - add staged files to last commit
-    if [ -n "${amend}" ]; then
-        result=$(git commit --amend --no-edit 2>&1)
-        check_code $? "$result" "amend"
-
-        after_commit "amend"
-        exit
-    fi
-
-    if [ -z "${fast}" ]; then
         echo
     fi
-
 
     ### Print staged files that we add at step 1
     echo -e "${YELLOW}Staged files:${ENDCOLOR}"
@@ -1822,14 +1922,30 @@ function commit_script {
     ### Run fixup logic
     if [ -n "${fixup}" ]; then
         echo
-        echo -e "${YELLOW}Step 2.${ENDCOLOR} Select a commit to fixup:"
+        echo -e "${YELLOW}Step 2.${ENDCOLOR} Select a commit to ${YELLOW}--fixup${ENDCOLOR}:"
 
-        choose_commit 20
+        choose_commit 16
         
         result=$(git commit --fixup $commit_hash 2>&1)
         check_code $? "$result" "fixup"
 
         after_commit "fixup"
+
+        if [ -n "${push}" ]; then
+            echo
+            push_script y
+        fi
+
+        exit
+    fi
+
+
+    ### Run amend logic - add staged files to the last commit
+    if [ -n "${amend}" ]; then
+        result=$(git commit --amend --no-edit 2>&1)
+        check_code $? "$result" "amend"
+
+        after_commit "amend"
         exit
     fi
 
@@ -1840,17 +1956,17 @@ function commit_script {
     if [ -n "${fast}" ]; then
         step="1"
     fi
-    echo -e "${YELLOW}Step ${step}.${ENDCOLOR} What type of change do you want to commit?"
-    echo "1. feat:      new feature, logic change or performance improvement"
-    echo "2. fix:       small changes, eg. bug fix"
-    echo "3. refactor:  code change that neither fixes a bug nor adds a feature, style changes"
-    echo "4. test:      adding missing tests or changing existing tests"
-    echo "5. build:     changes that affect the build system or external dependencies"
-    echo "6. ci:        changes to CI configuration files and scripts"
-    echo "7. chore:     maintanance and housekeeping"
-    echo "8. docs:      documentation changes"
-    echo "9.            write plain commit without type and scope"
-    echo "0. Exit without changes"
+    echo -e "${YELLOW}Step ${step}.${ENDCOLOR} What type of changes do you want to commit?"
+    echo -e "1. feat:\tnew feature, logic change or performance improvement"
+    echo -e "2. fix:\t\tsmall changes, eg. bug fix"
+    echo -e "3. refactor:\tcode change that neither fixes a bug nor adds a feature, style changes"
+    echo -e "4. test:\tadding missing tests or changing existing tests"
+    echo -e "5. build:\tchanges that affect the build system or external dependencies"
+    echo -e "6. ci:\t\tchanges to CI configuration files and scripts"
+    echo -e "7. chore:\tmaintanance and housekeeping"
+    echo -e "8. docs:\tdocumentation changes"
+    echo -e "9.  \t\twrite plain commit without type and scope"
+    echo -e "0. Exit without changes"
 
     declare -A types=(
         [1]="feat"
@@ -1893,16 +2009,12 @@ function commit_script {
     fi
 
 
-    ### Commit Step 3: enter commit scope
-    if [ -z "$is_empty" ]; then
+    ### Commit Step 3: enter a commit scope
+    if [ -z "$is_empty" ] && [ -z "$fast" ]; then
         echo
-        step="3"
-        if [ -n "${fast}" ]; then
-            step="2"
-        fi
-        echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Enter a scope of your changes to provide additional context"
+        echo -e "${YELLOW}Step 3.${ENDCOLOR} Enter a scope of changes to provide an additional context"
         echo -e "Final meesage will be ${YELLOW}${commit_type}(<scope>): <summary>${ENDCOLOR}"
-        echo -e "Leave it blank if you don't want to enter a scope or 0 to exit"
+        echo -e "Leave it blank to continue without scope or 0 to exit without changes"
 
         read -p "$(echo -n -e "${TODO}<scope>:${ENDCOLOR} ")" -e commit_scope
 
@@ -1919,11 +2031,15 @@ function commit_script {
         fi
     fi
 
+    if [ -z "$is_empty" ] && [ -n "$fast" ]; then
+        commit="$commit: "
+    fi
+
 
     ### Commit Step 4: enter commit message, use editor in msg mode
-    if [ -n "${fast}" ] && [ -n "$is_empty" ]; then
+    if [ -n "${fast}" ]; then
         step="2"
-    elif [ -n "${fast}" ] || [ -n "$is_empty" ]; then
+    elif [ -n "$is_empty" ]; then
         step="3"
     else
         step="4"
@@ -1931,8 +2047,8 @@ function commit_script {
     echo
     echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Write a <summary> about your changes"
     echo -e "Final meesage will be ${YELLOW}${commit}<summary>${ENDCOLOR}"
-
-    # Use editor and commitmsg file
+    echo -e "Leave it blank to exit without changes"
+    # Use an editor and commitmsg file
     if [ -n "$msg" ]; then
         commitmsg_file=".commitmsg__"
         touch $commitmsg_file
@@ -1959,15 +2075,12 @@ ${staged_with_tab}
 ###     no dot (.) at the end
 ###     don't capitalize the first letter
 ###
-### The body is optional. should explain why you are making the change. 
-### You can include a comparison of the previous behavior with the new behavior in order to illustrate the impact of the change.
+### The body is optional and should explain why you are making the change. 
 ###
 ### The footer is optional and should contain any information about 'Breaking Changes'.
-### Breaking Change section should start with the phrase 'BREAKING CHANGE: ' followed by a summary of the breaking change, 
-### a blank line, and a detailed description of the breaking change that also includes migration instructions.
+### Breaking Change section should start with the phrase 'BREAKING CHANGE: ' followed by a summary of the breaking change.
 ###
-### Similarly, a Deprecation section should start with 'DEPRECATED: ' followed by a short description of what is deprecated,
-### a blank line, and a detailed description of the deprecation that also mentions the recommended update path.
+### Similarly, a Deprecation section should start with 'DEPRECATED: ' followed by a short description of what is deprecated.
 """ >> $commitmsg_file
 
         while [ true ]; do
@@ -1992,8 +2105,7 @@ ${staged_with_tab}
 
     # Use read from console
     else
-        echo -e "Leave it blank if you want to exit"
-        read -p "$(echo -n -e "${TODO}${commit}${ENDCOLOR}")" -e commit_message
+        read -p "$(echo -n -e "${commit}")" -e commit_message
         if [ -z "$commit_message" ]; then
             git restore --staged $git_add
             exit
@@ -2003,17 +2115,16 @@ ${staged_with_tab}
 
     ### Commit Step 5: enter tracker ticket
     if [ -n "${ticket}" ]; then
-        step="5"
-        if [ -n "$is_empty" ]; then
-            step="4"
-        fi
         echo
-        echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Enter the number of issue in your tracking system (e.g. JIRA or Youtrack)"
-        echo -e "It will be added to the end of summary"
-        echo -e "Leave it blank if you don't want to enter a ticket or 0 to exit"
+        echo -e "${YELLOW}Step 5.${ENDCOLOR} Enter the number of a resolved issue (e.g. in JIRA or Youtrack)"
+        echo -e "It will be added to the end of the summary header"
+        echo -e "Leave it blank to continue or 0 to exit without changes"
 
-        read -p "<ticket>: " -e commit_ticket
-
+        if [ -n "$ticket_name" ]; then
+            read -p "${ticket_name}${sep}" -e commit_ticket
+        else 
+            read -p "<ticket>: " -e commit_ticket
+        fi
         if [ "$commit_ticket" == "0" ]; then
             git restore --staged $git_add
             exit
@@ -2029,6 +2140,9 @@ ${staged_with_tab}
                 remaining_message="""
     $remaining_message"
             fi
+            if [ -n "$ticket_name" ]; then
+                commit_ticket="${ticket_name}${sep}${commit_ticket}"
+            fi
             commit_message="$summary ($commit_ticket)$remaining_message"
         fi
     fi
@@ -2041,22 +2155,22 @@ ${staged_with_tab}
     check_code $? "$result" "commit"
     after_commit
 
-    if [ -n "${fast_push}" ]; then
+    if [ -n "${push}" ]; then
         echo
-        push_script f
+        push_script y
     fi
 }
 #!/usr/bin/env bash
 
 ### Script for working with branches: create, switch, delete
-# Use a separate branch for writing new code, then merge it to main
+# Use a separate branch for writing new code, then merge it to default branch
 # Read README.md to get more information how to use it
 # Use this script only with gitbasher
 
 
 ### Main function
 # $1: mode
-    # <empty>: switch to local branch
+    # <empty>: switch to a local branch
     # remote: switch to a remote branch
     # main: switch to the default branch
     # new: create a new branch from the current one 
@@ -2064,17 +2178,17 @@ ${staged_with_tab}
     # delete: delete a local branch
 function branch_script {
     case "$1" in
-        remote|r|re)        remote="true";;
+        remote|r|re) remote="true";;
         main|def|m)  main="true";;
         new|n|c)          
             new="true"
             current="true"    
         ;;
-        newd|nd|d)        
+        newd|nd)        
             new="true"
         ;;
-        delete|del)   delete="true";;
-        help|h)         help="true";;
+        delete|del|d) delete="true";;
+        help|h)       help="true";;
         *)
             wrong_mode "branch" $1
     esac
@@ -2088,8 +2202,8 @@ function branch_script {
         echo -e "remote|re|r\tFetch $origin_name and select a remote branch to switch"
         echo -e "main|def|m\tSwitch to $main_branch without additional confirmations"
         echo -e "new|n|c\t\tBuild a conventional name and create a new branch from $main_branch"
-        echo -e "newd|nd|d\tBuild a conventional name, switch to $main_branch, pull it and create new branch"
-        echo -e "delete|del\tSelect a branch to delete"
+        echo -e "newd|nd\tBuild a conventional name, switch to $main_branch, pull it and create new branch"
+        echo -e "delete|del|d\tSelect a branch to delete"
         echo -e "help|h\t\tShow this help"
         exit
     fi
@@ -2200,7 +2314,7 @@ function branch_script {
                     echo
                     break
 
-                elif [ "$choice" == "n" ]; then
+                else
                     printf "n\n\n"
                     break
                 fi
@@ -2263,7 +2377,7 @@ function branch_script {
                 read -n 1 -s choice
                 if [ "$choice" == "y" ]; then
                     printf "y\n\n"
-                    echo -e "${YELLOW}Deleting...${ENDCOLOR}"
+                    echo -e "${YELLOW}Deleting...${YELLOW}"
 
                     push_output=$(git push $origin_name -d $branch_name 2>&1)
                     push_code=$?
@@ -2291,57 +2405,61 @@ function branch_script {
     ### Run create new branch logic
     ### Step 1. Select branch type
     echo -e "${YELLOW}Step 1.${ENDCOLOR} What type of branch do you want to create?"
-    echo "1. feat:      new feature or logic changes, 'feat' and 'perf' commits"
-    echo "2. fix:       small changes, eg. not critical bug fix"
-    echo "3. hotfix:    fix, that should be merged as fast as possible"
-    echo "4. chore:     non important and/or style changes"
-    echo "5. misc:      non-code changes, e.g. 'ci', 'docs', 'build' commits"
-    echo "6. wip:       'work in progress', for changes not ready for merging in the near future"
-    echo "7. test:      testing changes that won't be merged to the main branch"
-    echo "8.            don't use prefix for branch naming"
-    echo "0. Exit without changes"
+    echo -e "1. feat:\tnew feature or logic changes, 'feat' commits"
+    echo -e "2. fix:\t\tsmall changes, eg. not critical bug fix"
+    echo -e "3. hotfix:\tfix, that should be merged as fast as possible"
+    echo -e "4. wip:\t\t'work in progress', for changes not ready for merging in the near future"
+    echo -e "5. misc:\tnon-code changes, e.g. 'ci', 'docs', 'build' commits"
+    echo -e "6. test:\testing changes that probably won't be merged to the main branch"
+    echo -e "7. chore:\tnon important style or docs changes"
+    if [ "$ticket_name" != "" ]; then
+        printf "8. $ticket_name:"
+        if [ $ticket_name = "" ]; then
+            printf "\t"
+        else
+            printf "\t\t"
+        fi
+        printf "use ticket name as prefix\n"
+    fi
+    echo -e "9.  \t\tdon't use prefix for branch naming"
+    echo -e "0. Exit without changes"
 
     declare -A types=(
         [1]="feat"
         [2]="fix"
         [3]="hotfix"
-        [4]="chore"
+        [4]="wip"
         [5]="misc"
-        [6]="wip"
-        [7]="test"
+        [6]="test"
+        [7]="chore"
+        [8]=""
+        [9]="$ticket_name"
     )
 
     branch_type=""
     while [ true ]; do
         read -n 1 -s choice
 
-        if [ "$choice" == "0" ]; then
+        re='^[1-9]+$'
+        if ! [[ $choice =~ $re ]]; then
             exit
         fi
         
-        if [ "$choice" == "8" ]; then
-            break
-        fi
-
-        re='^[0-9]+$'
-        if ! [[ $choice =~ $re ]]; then
-            continue
-        fi
-
         branch_type="${types[$choice]}"
         if [ -n "$branch_type" ]; then
             branch_type_and_sep="${branch_type}${sep}"
-            break
         fi
+        break
     done
 
 
     ### Step 2. Enter branch name
     echo
-    echo -e "${YELLOW}Step 2.${ENDCOLOR} Enter the name of the branch, using '-' as a separator between words"
+    echo -e "${YELLOW}Step 2.${ENDCOLOR} Enter the name of the branch"
     echo "Leave it blank if you want to exit"
 
-    read -p "Branch: ${branch_type_and_sep}" -e branch_name
+    printf "${YELLOW}Branch${ENDCOLOR}:"
+    read -p " ${branch_type_and_sep}" -e branch_name
 
     if [ -z $branch_name ]; then
         exit
@@ -2689,13 +2807,7 @@ function tag_script {
         fi
 
         delete_result=$(git tag -d $tag_name 2>&1)
-        delete_code=$?
-
-        if [ $delete_code != 0 ]; then
-            echo -e "${RED}Cannot delete tag '${tag_name}'!${ENDCOLOR}"
-            echo -e "$delete_result"
-            exit
-        fi
+        check_code $? "$delete_result" "delete tag"
 
         echo -e "${GREEN}Successfully deleted tag '${tag_name}'${ENDCOLOR}"
         echo
@@ -2760,10 +2872,10 @@ function tag_script {
 
         echo """
 ###
-### Write some words about a new tag '${tag_name}'
+### Write some words about the new tag '${tag_name}'
 ### [$current_branch ${commit_hash::7}] ${commit_message}
 ### 
-### You can place changelog here, if this tag means a new release
+### You can place changelog here if this tag means a new release
 """ >> $tag_file
 
         while [ true ]; do
@@ -2776,7 +2888,7 @@ function tag_script {
             echo
             echo -e "${YELLOW}Tag message cannot be empty${ENDCOLOR}"
             echo
-            read -n 1 -p "Try for one more time? (y/n) " -s -e choice
+            read -n 1 -p "Do you want to try for one more time? (y/n) " -s -e choice
             if [ "$choice" != "y" ]; then
                 find . -name "$tag_file*" -delete
                 exit
@@ -2805,7 +2917,7 @@ function tag_script {
         if [[ $tag_output == *"already exists" ]]; then
             echo -e "${RED}Tag '${tag_name}' already exists!${ENDCOLOR}"
         else
-            echo -e "${RED}Cannot create tag '${tag_name}'!${ENDCOLOR}"
+            echo -e "${RED}Cannot create tag '${tag_name}'! Error message:${ENDCOLOR}"
             echo -e "$tag_output"
         fi
         exit
@@ -3027,13 +3139,9 @@ fi
 ### Print settings if this is first run
 if [ $is_first == "true" ]; then 
     echo -e "${GREEN}Thanks for using gitbasher in project '$project_name'${ENDCOLOR}"
-    echo -e "Current settings:"
-    echo -e "\tmain:\t${YELLOW}$main_branch${ENDCOLOR}"
-    echo -e "\tsep:\t${YELLOW}$sep${ENDCOLOR}"
-    echo -e "\teditor:\t${YELLOW}$editor${ENDCOLOR}"
-
-    echo -e "You can change these settings using ${YELLOW}gitb config <name>${ENDCOLOR}"
+    print_configuration
     echo
+    echo -e "You can change these settings by using ${YELLOW}gitb cfg <name>${ENDCOLOR}"
 fi
 
 

@@ -215,7 +215,7 @@ function branch_script {
                 read -n 1 -s choice
                 if [ "$choice" == "y" ]; then
                     printf "y\n\n"
-                    echo -e "${YELLOW}Deleting...${ENDCOLOR}"
+                    echo -e "${YELLOW}Deleting...${YELLOW}"
 
                     push_output=$(git push $origin_name -d $branch_name 2>&1)
                     push_code=$?
@@ -243,16 +243,15 @@ function branch_script {
     ### Run create new branch logic
     ### Step 1. Select branch type
     echo -e "${YELLOW}Step 1.${ENDCOLOR} What type of branch do you want to create?"
-    echo -e "1. ${YELLOW}feat${ENDCOLOR}:\tnew feature or logic changes, 'feat' commits"
-    echo -e "2. ${YELLOW}fix${ENDCOLOR}:\t\tsmall changes, eg. not critical bug fix"
-    echo -e "3. ${YELLOW}hotfix${ENDCOLOR}:\tfix, that should be merged as fast as possible"
-    echo -e "4. ${YELLOW}wip${ENDCOLOR}:\t\t'work in progress', for changes not ready for merging in the near future"
-    echo -e "5. ${YELLOW}misc${ENDCOLOR}:\tnon-code changes, e.g. 'ci', 'docs', 'build' commits"
-    echo -e "6. ${YELLOW}test${ENDCOLOR}:\testing changes that probably won't be merged to the main branch"
-    echo -e "7. ${YELLOW}chore${ENDCOLOR}:\tnon important style or docs changes"
-    echo -e "8.  \t\tdon't use prefix for branch naming"
+    echo -e "1. feat:\tnew feature or logic changes, 'feat' commits"
+    echo -e "2. fix:\t\tsmall changes, eg. not critical bug fix"
+    echo -e "3. hotfix:\tfix, that should be merged as fast as possible"
+    echo -e "4. wip:\t\t'work in progress', for changes not ready for merging in the near future"
+    echo -e "5. misc:\tnon-code changes, e.g. 'ci', 'docs', 'build' commits"
+    echo -e "6. test:\testing changes that probably won't be merged to the main branch"
+    echo -e "7. chore:\tnon important style or docs changes"
     if [ "$ticket_name" != "" ]; then
-        printf "9. ${YELLOW}$ticket_name${ENDCOLOR}:"
+        printf "8. $ticket_name:"
         if [ $ticket_name = "" ]; then
             printf "\t"
         else
@@ -260,7 +259,8 @@ function branch_script {
         fi
         printf "use ticket name as prefix\n"
     fi
-    #echo -e "0. Exit without changes"
+    echo -e "9.  \t\tdon't use prefix for branch naming"
+    echo -e "0. Exit without changes"
 
     declare -A types=(
         [1]="feat"

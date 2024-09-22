@@ -26,10 +26,10 @@ ENDCOLOR_ES="\x1b[0m"
 
 ### Cannot use bash version less than 4 because of many features that was added to language in that version
 if ((BASH_VERSINFO[0] < 4)); then 
-    printf "Sorry, you need at least ${YELLOW}bash-4.0${ENDCOLOR} to run this script.\n
+    printf "Sorry, you need at least ${YELLOW}bash-4.0${ENDCOLOR} to run gitbasher.\n
 If your OS is debian-based, use:
     ${GREEN}apt install --only-upgrade bash${ENDCOLOR}\n
-If your OS is mac, use:
+If your OS is Mac, use:
     ${GREEN}brew install bash${ENDCOLOR}\n\n" 
     exit 1; 
 fi
@@ -212,7 +212,7 @@ function choose {
             continue
         fi
 
-        if [ "$choice" == "=" ]; then
+        if [ "$choice" == "=" ] || [ "$choice" == "==" ]; then
             pressed_alt="true"
             break
         fi
@@ -311,10 +311,15 @@ function ref_list {
 #     * git_add
 function choose_commit {
     commit_list $1 "number"
-    echo "0. Exit..."
-    echo "Enter = to show more"
+    if [ $1 -gt 9 ]; then
+        echo "00. Exit"
+    else
+        echo "0. Exit"
+    fi
 
+    echo "Enter = to show more"
     echo
+    
     read_prefix="Enter commit number: "
 
     choose "${commits_hash[@]}"
@@ -322,7 +327,7 @@ function choose_commit {
 
     if [ -n "$pressed_alt" ]; then
         commit_list 99 "number"
-        echo "0. Exit..."
+        echo "00. Exit"
         echo
         choose "${commits_hash[@]}"
         commit_hash=$choice_result
@@ -434,13 +439,13 @@ function list_branches {
 
     if [[ "$number_of_branches" == 1 ]] && [[ "${branch_to_check}" == "${current_branch}" ]]; then
         echo
-        echo -e "You have only one branch: ${YELLOW}${current_branch}${ENDCOLOR}"
+        echo -e "There is only one branch: ${YELLOW}${current_branch}${ENDCOLOR}"
         exit
     fi
 
     if [[ "$1" == "delete" ]] && [[ "$number_of_branches" == 2 ]] && [[ "${current_branch}" != "${main_branch}" ]]; then
         echo
-        echo -e "${YELLOW}There is no branches to delete${ENDCOLOR}"
+        echo -e "${YELLOW}There are no branches to delete${ENDCOLOR}"
         exit
     fi
 

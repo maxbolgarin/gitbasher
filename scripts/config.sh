@@ -39,8 +39,9 @@ function set_default_branch {
 
     main_branch=$(set_config_value gitbasher.branch $branch_name)
     echo -e "${GREEN}Set '${branch_name}' as a default gitbasher branch in '${project_name}' repo${ENDCOLOR}"
+    echo
 
-    echo -e "Do you want to set it globally for all projects (y/n)?"
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet '${branch_name}' globally" "true"
     main_branch=$(set_config_value gitbasher.branch $branch_name "true")
 }
@@ -95,8 +96,9 @@ function set_sep {
 
     sep=$(set_config_value gitbasher.sep $new_sep)
     echo -e "${GREEN}Set '${sep}' as a branch name separator in '${project_name}' repo${ENDCOLOR}"
+    echo
 
-    echo -e "Do you want to set it globally for all projects (y/n)?"
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet '${sep}' globally" "true"
     sep=$(set_config_value gitbasher.sep $branch_name $new_sep)
 }
@@ -125,8 +127,9 @@ function set_editor {
 
     editor=$(set_config_value core.editor $choice)
     echo -e "${GREEN}Use editor '$editor' located at '$which_output'${ENDCOLOR}"
+    echo
 
-    echo -e "Do you want to set it globally for all projects (y/n)?"
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet '${editor}' globally" "true"
     sep=$(set_config_value core.editor $branch_name $new_sep)
 }
@@ -154,8 +157,9 @@ function set_ticket {
 
     ticket_name=$(set_config_value gitbasher.ticket $ticket_name)
     echo -e "${GREEN}Set '${ticket_name}' as a ticket name in '${project_name}' repo${ENDCOLOR}"
+    echo
 
-    echo -e "Do you want to set it globally for all projects (y/n)?"
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet '${ticket_name}' globally" "true"
     ticket_name=$(set_config_value gitbasher.ticket $ticket_name "true")
 }

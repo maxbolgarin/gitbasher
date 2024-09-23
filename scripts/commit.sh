@@ -34,7 +34,7 @@ function after_commit {
     print_changes_stat "$(git --no-pager show $commit_hash --stat --format="")"
 
     # Some info to help users
-    if [ -z "${fast}" ]; then
+    if [ -z "${fast}" ] && [ -z "${push}" ]; then
         echo
         echo -e "Push your changes: ${YELLOW}gitb push${ENDCOLOR}"
         echo -e "Undo commit: ${YELLOW}gitb reset${ENDCOLOR}"

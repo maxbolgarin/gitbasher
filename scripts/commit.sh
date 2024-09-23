@@ -11,7 +11,6 @@
 #     * current_branch
 #     * commit - message
 function after_commit {
-    echo
     if [ -n "$1" ]; then
         echo -e "${GREEN}Successful commit $1!${ENDCOLOR}"
     else
@@ -239,6 +238,7 @@ function commit_script {
         result=$(git commit --amend --no-edit 2>&1)
         check_code $? "$result" "amend"
 
+        echo
         after_commit "amend"
         exit
     fi
@@ -445,6 +445,8 @@ ${staged_with_tab}
 
 
     ### Finally
+    echo
+
     result=$(git commit -m """$commit""" 2>&1)
     check_code $? "$result" "commit"
     after_commit

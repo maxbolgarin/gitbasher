@@ -209,7 +209,7 @@ function choose {
             if [ -n "$git_add" ]; then
                 git restore --staged $git_add
             fi
-            continue
+            exit
         fi
 
         if [ "$choice" == "=" ] || [ "$choice" == "==" ]; then

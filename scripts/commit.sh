@@ -217,7 +217,11 @@ function commit_script {
         echo
         echo -e "${YELLOW}Step 2.${ENDCOLOR} Select a commit to ${YELLOW}--fixup${ENDCOLOR}:"
 
-        choose_commit 14
+        if [ -n "${fast}" ]; then
+            choose_commit 9
+        else
+            choose_commit 19
+        fi
         
         result=$(git commit --fixup $commit_hash 2>&1)
         check_code $? "$result" "fixup"

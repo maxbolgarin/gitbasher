@@ -222,7 +222,7 @@ function choose {
             if [ -n "$git_add" ]; then
                 git restore --staged $git_add
             fi
-            continue
+            exit
         fi
 
         if [ "$choice" == "=" ] || [ "$choice" == "==" ]; then
@@ -278,7 +278,7 @@ function git_status {
 #     commits_hash
 function commit_list {
     IFS=$'\n' 
-    read -rd '' -a commits_info <<<"$(git --no-pager log -n $1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} | %s | ${BLUE_ES}%an${ENDCOLOR_ES}| ${GREEN_ES}%cr${ENDCOLOR_ES}" $3 | column -ts'|')"
+    read -rd '' -a commits_info <<<"$(git --no-pager log -n $1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} | %s | ${BLUE_ES}%an${ENDCOLOR_ES} | ${GREEN_ES}%cr${ENDCOLOR_ES}" $3 | column -ts'|')"
     read -rd '' -a commits_hash <<<"$(git --no-pager log -n $1 --pretty="%h"$3)"
 
     for index in "${!commits_info[@]}"
@@ -344,7 +344,9 @@ function choose_commit {
         echo
         choose "${commits_hash[@]}"
         commit_hash=$choice_result
-    fi   
+    fi
+
+    echo
 }
 
 
@@ -592,255 +594,6 @@ function switch {
         exit $switch_code
     fi
 }
-<<<<<<< HEAD
-=======
-
-
-### Function fetchs provided branch and handles errors
-# $1: branch name
-# $2: origin name
-# $3: editor
-# Returns:
-#      * fetch_code - if it is not zero - there is no such branch in origin
-function fetch {
-    fetch_output=$(git fetch $2 $1 2>&1)
-    fetch_code=$?
-
-    if [ $fetch_code == 0 ] ; then
-        return
-    fi
-
-    if [[ ${fetch_output} != *"couldn't find remote ref"* ]]; then
-        echo -e "${RED}Cannot fetch '$1'! Here is the error${ENDCOLOR}"
-        echo -e "${fetch_output}"
-        exit $fetch_code
-    fi
-    echo -e "${YELLOW}There is no '$1' in $2${ENDCOLOR}"
-}
-
-
-### Function merges provided branch and handles errors
-# $1: branch name from
-# $2: origin name
-# $3: editor
-# $4: operation name (e.g. merge or pull)
-# $5: is merge from origin?
-# Returns:
-#      * merge_output
-#      * merge_code - 0 if everything is ok, not zero if there are conflicts
-function merge {
-    if [ "$5" == "true" ]; then
-        merge_output=$(git merge $2/$1 2>&1)
-    else
-        merge_output=$(git merge $1 2>&1)
-    fi
-    merge_code=$?
-
-    if [ $merge_code == 0 ] ; then
-        return
-    fi
-
-    operation="$4"
-    if [ "$operation" == "" ]; then
-        operation="merge"
-    fi
-
-    ### Cannot merge because there is uncommitted files that changed in origin
-    if [[ $merge_output == *"Please commit your changes or stash them before you merge"* ]]; then
-        echo -e "${RED}Cannot $operation! There is uncommited changes, that will be overwritten by $operation${ENDCOLOR}"
-        files_to_commit=$(echo "$merge_output" | tail -n +2 | tail -r | tail -n +4 | tail -r)
-        echo -e "${YELLOW}Files with changes${ENDCOLOR}"
-        echo "$files_to_commit"
-        echo
-        exit $merge_code
-    fi
-
-    ### Cannot merge because of some other error
-    if [[ $merge_output != *"fix conflicts and then commit the result"* ]]; then
-        echo -e "${RED}Cannot $operation! Here is the error${ENDCOLOR}"
-        echo "$merge_output"
-        exit $merge_code
-    fi
-
-    echo -e "${RED}Cannot $operation! There are conflicts in staged files${ENDCOLOR}"
-    resolve_conflicts $1 $2 $3
-}
-
-
-### Function pulls provided branch, handles errors and makes a merge
-# $1: branch name
-# $2: origin name
-# $3: editor
-function resolve_conflicts {
-
-    ### Print files with conflicts
-    echo -e "${YELLOW}Files with conflicts${ENDCOLOR}"
-    IFS=$'\n' read -rd '' -a files_with_conflicts <<<"$(git --no-pager diff --name-only --diff-filter=U --relative)"
-    echo -e "$(sed 's/^/\t/' <<< "$files_with_conflicts")"
-    echo
-
-
-    ### Ask user what he wants to do
-    default_message="Merge branch '$2/$1' into '$1'"
-    echo -e "${YELLOW}You should fix conflicts manually.${ENDCOLOR} There are some options:"
-    echo -e "1. Create merge commit with generated message"
-    printf "\tMessage: ${BLUE}${default_message}${ENDCOLOR}\n"
-    echo -e "2. Create merge commit with entered message"
-    echo -e "3. Abort merge (undo pulling)"
-    echo -e "Press any another key to exit from this script without merge abort"
-
-
-    ### Merge process
-    while [ true ]; do
-        read -n 1 -s choice
-
-        re='^[0-9]+$'
-        if ! [[ $choice =~ $re ]]; then
-            exit
-        fi
-
-        if [ "$choice" == "1" ] || [ "$choice" == "2" ]; then
-            echo
-            merge_commit $choice $files_with_conflicts "${default_message}" $1 $2 $3
-            if [ -z "$merge_commit_code" ] || [ $merge_commit_code == 0 ]; then
-                return
-            fi
-        fi
-
-        if [ "$choice" == "3" ]; then
-            echo
-            echo -e "${YELLOW}Cancel merge${ENDCOLOR}"
-            git merge --abort
-            exit $?
-        fi
-
-        if [ "$choice" == "0" ]; then
-            exit
-        fi
-    done
-}
-
-
-### Function creates merge commit
-# $1: 1 for merge with default message, 2 for merge with editor
-# $2: files with conflicts that should be added to commit
-# $3: default message for merge with $1 -eq 1
-# $4: branch name
-# $5: origin name
-# $6: editor
-# Returns: 
-#     merge_commit_code - 0 if everything is ok
-function merge_commit {
-
-    ### Check if there are files with conflicts
-    IFS=$'\n' read -rd '' -a files_with_conflicts_new <<<"$(grep --files-with-matches -r -E "[<=>]{7} HEAD" .)"
-    number_of_conflicts=${#files_with_conflicts_new[@]}
-    if [ $number_of_conflicts -gt 0 ]; then
-        echo -e "${YELLOW}There are still some files with conflicts${ENDCOLOR}"
-        for index in "${!files_with_conflicts_new[@]}"
-        do
-            echo -e $(sed '1 s/.\///' <<< "\t${files_with_conflicts_new[index]}")
-        done
-
-        echo
-        echo -e "Fix conflicts and press ${YELLOW}$1${ENDCOLOR} for one more time"
-        merge_commit_code=1
-        return
-    fi
-
-
-    ### Add files with resolved conflicts to commit
-    files_with_conflicts_one_line="$(tr '\n' ' ' <<< "$2")"
-    git add $files_with_conflicts_one_line
-
-    ### 1. Commit with default message
-    if [ "$1" == "1" ]; then
-        result=$(git commit -m "$3" 2>&1)
-        check_code $? "$result" "merge commit"
-        commit_message="$3"
-
-    ### 2. Commit with entered message
-    else
-        staged_with_tab="$(sed 's/^/###\t/' <<< "$2")"
-        commitmsg_file=".commitmsg__"
-        touch $commitmsg_file
-        echo """
-###
-### Write a message about merge from '$5/$4' into '$4'. Lines starting with '#' will be ignored. 
-### 
-### On branch $4
-### Changes to be commited:
-${staged_with_tab}
-""" >> $commitmsg_file
-        while [ true ]; do
-            $6 $commitmsg_file
-            commit_message=$(cat $commitmsg_file | sed '/^#/d')
-
-            if [ -n "$commit_message" ]; then
-                break
-            fi
-            echo -e "${YELLOW}Merge commit message cannot be empty${ENDCOLOR}"
-            echo
-            read -n 1 -p "Try for one more time? (y/n) " -s -e choice
-            if [ "$choice" != "y" ]; then
-                git restore --staged $files_with_conflicts_one_line
-                find . -name "$commitmsg_file*" -delete
-                merge_commit_code=2
-                exit
-            fi    
-        done
-
-        find . -name "$commitmsg_file*" -delete
-        
-        result=$(git commit -m """$commit_message""" 2>&1)
-        check_code $? "$result" "merge commit"
-    fi
-
-    commit_hash="$(git --no-pager log --pretty="%h" -1)"
-    echo -e "${GREEN}Successful merge!${ENDCOLOR}"
-    current_branch=$(git branch --show-current)
-    echo -e "${BLUE}[$4 $commit_hash${ENDCOLOR} -> ${BLUE}${current_branch}]${ENDCOLOR} $commit_message"
-    echo
-    merge_commit_code=0
-}
-
-
-### Function pulls provided branch and handles errors
-# $1: branch name
-# $2: origin name
-# $3: editor
-function pull {
-    ### Fetch, it will exit if critical error and return if branch doesn't exists in origin
-    fetch $1 $2
-
-    if [ $fetch_code != 0 ] ; then
-        return
-    fi
-
-    ### Merge and resulve conflicts
-    merge $1 $2 $3 "pull" "true"
-
-    ### Nothing to pull
-    if [[ $merge_output == *"Already up to date"* ]]; then
-        echo -e "${GREEN}Already up to date${ENDCOLOR}"
-        return
-    fi
-
-    ### It will exit if critical error or resolve conflicts, so here we can get only in case of success
-    echo -e "${GREEN}Successful pull!${ENDCOLOR}"
-    echo
-
-    ### Merge without conflicts
-    if [ $merge_code == 0 ] ; then
-        print_changes_stat "$(echo "$merge_output" | tail -n +3)" 
-
-    ### Merge with conflicts, but they were resolved
-    else
-        commit_hash="$(git --no-pager log --pretty="%h" -1)"
-        print_changes_stat "$(git --no-pager show $commit_hash --stat --format="")" 
-    fi
-}
->>>>>>> e8dbc57 (chore(misc): build new executable)
 #!/usr/bin/env bash
 
 ### Script for configurate gitbasher
@@ -882,8 +635,9 @@ function set_default_branch {
 
     main_branch=$(set_config_value gitbasher.branch $branch_name)
     echo -e "${GREEN}Set '${branch_name}' as a default gitbasher branch in '${project_name}' repo${ENDCOLOR}"
+    echo
 
-    echo -e "Do you want to set it globally for all projects (y/n)?"
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet '${branch_name}' globally" "true"
     main_branch=$(set_config_value gitbasher.branch $branch_name "true")
 }
@@ -938,8 +692,9 @@ function set_sep {
 
     sep=$(set_config_value gitbasher.sep $new_sep)
     echo -e "${GREEN}Set '${sep}' as a branch name separator in '${project_name}' repo${ENDCOLOR}"
+    echo
 
-    echo -e "Do you want to set it globally for all projects (y/n)?"
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet '${sep}' globally" "true"
     sep=$(set_config_value gitbasher.sep $branch_name $new_sep)
 }
@@ -968,8 +723,9 @@ function set_editor {
 
     editor=$(set_config_value core.editor $choice)
     echo -e "${GREEN}Use editor '$editor' located at '$which_output'${ENDCOLOR}"
+    echo
 
-    echo -e "Do you want to set it globally for all projects (y/n)?"
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet '${editor}' globally" "true"
     sep=$(set_config_value core.editor $branch_name $new_sep)
 }
@@ -997,8 +753,9 @@ function set_ticket {
 
     ticket_name=$(set_config_value gitbasher.ticket $ticket_name)
     echo -e "${GREEN}Set '${ticket_name}' as a ticket name in '${project_name}' repo${ENDCOLOR}"
+    echo
 
-    echo -e "Do you want to set it globally for all projects (y/n)?"
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet '${ticket_name}' globally" "true"
     ticket_name=$(set_config_value gitbasher.ticket $ticket_name "true")
 }
@@ -1377,14 +1134,14 @@ ${staged_with_tab}
 # $1: mode
     # empty: select base branch to rebase current changes
     # main: rebase current branch onto default branch
-    # interactive: select base commit in current branch and rebase in interactive mode
-    # autosquash: rebase on current branch in interactive mode with --autosquash
+    # interactive: select base commit in current branch and rebase in an interactive mode
+    # autosquash: rebase on current branch in an interactive mode with --autosquash
 function rebase_script {
     case "$1" in
-        main|master|m)         main="true";;
-        interactive|i)         interactive="true";;
-        autosquash|a|s|ia|is)  autosquash="true";;
-        help|h)                help="true";;
+        main|master|m)           main="true";;
+        interactive|i)           interactive="true";;
+        autosquash|a|s|f|ia|if)  autosquash="true";;
+        help|h)                  help="true";;
         *)
             wrong_mode "rebase" $1
     esac
@@ -1395,8 +1152,8 @@ function rebase_script {
         echo -e "${YELLOW}Available modes${ENDCOLOR}"
         echo -e "<empty>\t\t\tSelect base branch to rebase current changes"
         echo -e "main|master|m\t\tRebase current branch onto default branch"
-        echo -e "interactive|i\t\tSelect base commit in current branch and rebase in interactive mode"
-        echo -e "autosquash|a|s|ia|is\tRebase on current branch in interactive mode with --autosquash"
+        echo -e "interactive|i\t\tSelect base commit in current branch and rebase in an interactive mode"
+        echo -e "autosquash|a|s|f|ia|if\tRebase on the current local branch in an interactive mode with --autosquash"
         echo -e "help|h\t\t\tShow this help"
         exit
     fi
@@ -1407,9 +1164,19 @@ function rebase_script {
         header="$header INTERACTIVE"
     elif [ -n "${autosquash}" ]; then
         header="$header AUTOSQUASH"
+    elif [ -n "${main}" ]; then
+        header="$header MAIN"
     fi
     echo -e "${YELLOW}${header}${ENDCOLOR}"
     echo
+
+    is_clean=$(git status | tail -n 1)
+    if [ "$is_clean" != "nothing to commit, working tree clean" ]; then
+        echo -e "${RED}Cannot rebase! There are uncommited changes:"
+        git_status
+        exit 1
+    fi
+
 
     ### Select branch which will become a base
     if [ -n "$main" ]; then
@@ -1430,8 +1197,11 @@ function rebase_script {
 
     if [ -z "$autosquash" ]; then
         ### Fetch before rebase
-        echo -e "Do you want to fetch ${YELLOW}${origin_name}/${new_base_branch}${ENDCOLOR} before rebase (y/n)?"
+        echo -e "Fetch ${YELLOW}${origin_name}/${new_base_branch}${ENDCOLOR} before rebase (y/n/0)?"
         read -n 1 -s choice
+        if [ "$choice" == "0" ]; then
+            exit
+        fi
         if [ "$choice" == "y" ]; then
             echo
             echo -e "${YELLOW}Fetching ${origin_name}/${new_base_branch}...${ENDCOLOR}"
@@ -1442,9 +1212,10 @@ function rebase_script {
         echo
     fi
 
-    
+
     ### Run rebase and handle conflicts
-    rebase_branch $new_base_branch $origin_name $from_origin $interactive $autosquash
+
+    rebase_branch "$new_base_branch" "$origin_name" "$from_origin" "$interactive" "$autosquash"
 
 
     ### Nothing to rebase
@@ -1480,19 +1251,19 @@ function rebase_branch {
 
     args=""
     if [ -n "$4" ]; then
-        args="-i"
-    fi
-
-    if [ -n "$5" ]; then
-        args="-i --autosquash"
-
+       rebase_output=$(git rebase -i $ref 3>&2 2>&1 1>&3)
+    
+    elif [ -n "$5" ]; then
         echo -e "Select a new ${BOLD}base${NORMAL} commit from which to squash fixup commits (third one or older):"
 
-        choose_commit 20 "number" $ref
-        $ref=${commit_hash}
-    fi
+        choose_commit 30 "number" $ref
+        ref="$commit_hash"
 
-    rebase_output=$(git rebase $args $ref 2>&1)
+        rebase_output=$(git rebase -i --autosquash $ref 3>&2 2>&1 1>&3)
+    else
+
+        rebase_output=$(git rebase $ref 3>&2 2>&1 1>&3)
+    fi
     rebase_code=$?
 
     if [ $rebase_code == 0 ] ; then
@@ -1501,42 +1272,109 @@ function rebase_branch {
 
     ### Cannot rebase because there are uncommitted files
     if [[ $rebase_output == *"Please commit or stash them"* ]]; then
-        echo -e "${RED}Cannot rebase! There are uncommited changes, you should commit them first"
+        echo -e "${RED}Cannot rebase! There are uncommited changes:"
         git_status
         exit $rebase_code
     fi
 
-    ### Cannot merge because of some other error
-    if [[ $rebase_output != *"CONFLICT"* ]]; then
+    ### Cannot rebase because there are uncommitted files
+    if [[ $rebase_output == *"error: invalid"* ]]; then
+        rebase_todo_errors "$rebase_output"
+        echo
+    fi
+
+    ### Cannot rebase because of conflicts
+    if [[ $rebase_output == *"Resolve all conflicts manually"* ]]; then
+        echo -e "${RED}Cannot rebase! There are conflicts${ENDCOLOR}"
+        rebase_conflicts $rebase_output 
+    fi
+
+    ### Cannot rebase because of some error
+    if [[ $rebase_output != *"Successfully rebased"* ]]; then
         echo -e "${RED}Cannot rebase! Error message:${ENDCOLOR}"
         echo "$rebase_output"
         exit $rebase_code
     fi
+}
 
-    echo -e "${RED}Cannot rebase! There are conflicts${ENDCOLOR}"
-    rebase_conflicts $rebase_output
+### Function helps to fix errors in todo plan
+# $1: rebase_output
+# $2: conflicts fix mode
+function rebase_todo_errors {
+    rebase_output=$1
+    output_to_print=$1
+    while [ true ]; do
+        echo -e "${RED}Cannot rebase! Your rebase plan has errors:${ENDCOLOR}"
+        echo "$(sed '$d' <<< $output_to_print)"
+        echo
+        echo -e "${YELLOW}You should fix errors${ENDCOLOR}"
+        echo -e "1. Open editor to change rebase plan: ${BLUE}git rebase --edit-todo${ENDCOLOR}"
+        echo -e "2. Abort rebase and return to the original state: ${YELLOW}git rebase --abort${ENDCOLOR}"
+        echo -e "0. Exit from this script ${BOLD}without${NORMAL} rebase abort"
 
-    # TODO: success
+        while [ true ]; do
+            read -n 1 -s choice
+            re='^[012]+$'
+            if [[ $choice =~ $re ]]; then
+                break
+            fi
+        done
+
+        if [ "$choice" == "1" ]; then
+            todo_output=$(git rebase --edit-todo 3>&2 2>&1 1>&3)
+            rebase_output=$(git rebase --continue 2>&1)
+            rebase_code=$?
+
+        elif [ "$choice" == "2" ]; then
+            echo
+            echo -e "${YELLOW}Aborting rebase...${ENDCOLOR}"
+            git rebase --abort
+            exit
+
+        elif [ "$choice" == "0" ]; then
+            exit $rebase_code
+        fi
+
+        if [ "$2" != "" ] ; then
+            output_to_print=$todo_output
+            if [[ $todo_output != *"can fix this with"* ]]; then
+                break
+            fi
+        else
+            output_to_print=$rebase_output
+            if [[ $rebase_output != *"error: invalid"* ]]; then
+                break
+            fi
+        fi
+        
+        echo
+    done
 }
 
 ### Function pulls provided branch, handles errors and makes a merge
 # $1: rebase_output
 function rebase_conflicts {
     ### Ask user what he wants to do
-    echo
-    echo -e "${YELLOW}You should resolve conflicts manually${ENDCOLOR}"
-    echo -e "After resolving, select an option to continue"
-    echo -e "1. Add changes and continue: ${YELLOW}git rebase --continue${ENDCOLOR}"
-    echo -e "2. Open editor to change rebase plan: ${BLUE}git rebase --edit-todo${ENDCOLOR}"
-    echo -e "3. Throw away the commit from the history: ${RED}git rebase --skip${ENDCOLOR}"
-    echo -e "4. Abort rebase and return to the original state: ${YELLOW}git rebase --abort${ENDCOLOR}"
-    echo -e "0. Exit from this script ${BOLD}without${NORMAL} rebase abort"
-
+    
+    print_menu="true"
     new_step="true"
     rebase_output=$1
 
     ### Rebase process
     while [ true ]; do
+        if [ "$print_menu" == "true" ]; then
+            echo
+            echo -e "${YELLOW}You should resolve conflicts manually${ENDCOLOR}"
+            echo -e "After resolving, select an option to continue"
+            echo -e "1. Add changes and continue: ${YELLOW}git rebase --continue${ENDCOLOR}"
+            echo -e "2. Open editor to change rebase plan: ${BLUE}git rebase --edit-todo${ENDCOLOR}"
+            echo -e "3. Throw away the commit from the history: ${RED}git rebase --skip${ENDCOLOR}"
+            echo -e "4. Abort rebase and return to the original state: ${YELLOW}git rebase --abort${ENDCOLOR}"
+            echo -e "0. Exit from this script ${BOLD}without${NORMAL} rebase abort"
+
+            print_menu="false"
+        fi
+
         if [ "$new_step" == "true" ]; then
             status=$(git status)
             current_step=$(echo "$status" | sed -n 's/.*Last commands done (\([0-9]*\) commands done):/\1/p')
@@ -1558,19 +1396,22 @@ function rebase_conflicts {
             new_step="false"
         fi
 
-        read -n 1 -s choice
+        while [ true ]; do
+            read -n 1 -s choice
+            re='^[01234]+$'
+            if [[ $choice =~ $re ]]; then
+                break
+            fi
+        done
 
         if [ "$choice" == "1" ]; then
-            files_with_conflicts_one_line="$(tr '\n' ' ' <<< "$files_with_conflicts")"
-            IFS=$'\n' read -rd '' -a files_with_conflicts_new <<<"$(grep --files-with-matches -r -E "[<=>]{7} HEAD" $files_with_conflicts_one_line)"
-            number_of_conflicts=${#files_with_conflicts_new[@]}
-            if [ $number_of_conflicts -gt 0 ]; then
+            files_with_conflicts_one_line="$(tr '\n' ' ' <<< "$(git --no-pager diff --name-only --diff-filter=U --relative)")"
+            files_with_conflicts_new="$(git grep -l --name-only -E "[<=>]{7} HEAD" $files_with_conflicts_one_lined)"
+            
+            if [ "$files_with_conflicts_new" != "" ]; then
                 echo
                 echo -e "${YELLOW}There are files with conflicts${ENDCOLOR}"
-                for index in "${!files_with_conflicts_new[@]}"
-                do
-                    echo -e $(sed '1 s/.\///' <<< "\t${files_with_conflicts_new[index]}")
-                done
+                echo -e "$(echo -e "${files_with_conflicts_new}" | tr ' ' '\n' | sed 's/^/\t/')"
                 continue
             fi
            
@@ -1593,12 +1434,25 @@ function rebase_conflicts {
         fi
 
         if [ "$choice" == "2" ]; then
-            git rebase --edit-todo
+            todo_output=$(git rebase --edit-todo 3>&2 2>&1 1>&3)
+            rebase_output=$(git rebase --continue 2>&1)
+
+            if [[ $todo_output == *"error: invalid"* ]]; then
+                echo
+                rebase_todo_errors "$todo_output" "true"
+                print_menu="true"
+                new_step="true"
+            fi
+
+            echo
+            echo -e "${YELLOW}Successfull plan edit, continuing...${ENDCOLOR}"
+            
             continue
         fi
 
         if [ "$choice" == "3" ]; then
-            echo -e "Are you sure you want to skip commit and throw it away (y/n)?"
+            echo
+            echo -e "Are you sure you want to ${RED}skip${ENDCOLOR} commit and ${RED}throw it away${ENDCOLOR} (y/n)?"
             read -n 1 -s choice_yes
             if [ "$choice_yes" != "y" ]; then
                 echo -e "${YELLOW}Continuing...${ENDCOLOR}"
@@ -1609,6 +1463,7 @@ function rebase_conflicts {
             rebase_code=$?
 
             if [[ $rebase_output == *"Successfully rebased"* ]]; then
+                echo
                 return
             fi
 
@@ -1618,14 +1473,15 @@ function rebase_conflicts {
                 exit $rebase_code
             fi
 
-            echo -e "${YELLOW}Skipped commit${ENDCOLOR}"
+            echo -e "${YELLOW}Skipping commit${ENDCOLOR}"
             new_step="true"
             continue
         fi
 
 
         if [ "$choice" == "4" ]; then
-            echo -e "Are you sure you want to abort rebase (y/n)?"
+            echo
+            echo -e "Are you sure you want to ${YELLOW}abort rebase${ENDCOLOR} (y/n)?"
             read -n 1 -s choice_yes
             if [ "$choice_yes" == "y" ]; then
                 echo
@@ -1966,7 +1822,6 @@ function push_script {
 #     * current_branch
 #     * commit - message
 function after_commit {
-    echo
     if [ -n "$1" ]; then
         echo -e "${GREEN}Successful commit $1!${ENDCOLOR}"
     else
@@ -1990,7 +1845,7 @@ function after_commit {
     print_changes_stat "$(git --no-pager show $commit_hash --stat --format="")"
 
     # Some info to help users
-    if [ -z "${fast}" ]; then
+    if [ -z "${fast}" ] && [ -z "${push}" ]; then
         echo
         echo -e "Push your changes: ${YELLOW}gitb push${ENDCOLOR}"
         echo -e "Undo commit: ${YELLOW}gitb reset${ENDCOLOR}"
@@ -2097,7 +1952,7 @@ function commit_script {
             exit
         fi
     elif [ -n "${revert}" ]; then
-        echo -e "${RED}Cannot revert: there are uncommited changes!${ENDCOLOR}"
+        echo -e "${RED}Cannot revert! There are uncommited changes:${ENDCOLOR}"
         exit
     fi
 
@@ -2173,7 +2028,11 @@ function commit_script {
         echo
         echo -e "${YELLOW}Step 2.${ENDCOLOR} Select a commit to ${YELLOW}--fixup${ENDCOLOR}:"
 
-        choose_commit 14
+        if [ -n "${fast}" ]; then
+            choose_commit 9
+        else
+            choose_commit 19
+        fi
         
         result=$(git commit --fixup $commit_hash 2>&1)
         check_code $? "$result" "fixup"
@@ -2194,6 +2053,7 @@ function commit_script {
         result=$(git commit --amend --no-edit 2>&1)
         check_code $? "$result" "amend"
 
+        echo
         after_commit "amend"
         exit
     fi
@@ -2400,6 +2260,8 @@ ${staged_with_tab}
 
 
     ### Finally
+    echo
+
     result=$(git commit -m """$commit""" 2>&1)
     check_code $? "$result" "commit"
     after_commit
@@ -2411,300 +2273,6 @@ ${staged_with_tab}
 }
 #!/usr/bin/env bash
 
-<<<<<<< HEAD
-=======
-### Script for pushing commits to a remote git repository
-# It will pull current branch if there are unpulled changes
-# Read README.md to get more information how to use it
-# Use this script only with gitbasher
-
-
-### Use this function to push changes to origin
-### It will exit if everyrhing is ok or there is a critical error, return if there is unpulled changes
-# Using of global:
-#     * current_branch
-#     * main_branch
-#     * origin_name
-# Returns:
-#     * push_output
-#     * push_code
-function push {
-    push_output=$(git push ${origin_name} ${current_branch} 2>&1)
-    push_code=$?
-
-    if [ $push_code -eq 0 ] ; then 
-        echo -e "${GREEN}Successful push!${ENDCOLOR}"
-
-        repo=$(get_repo)
-        echo -e "${YELLOW}Repo:${ENDCOLOR}\t${repo}"
-        if [[ ${current_branch} != ${main_branch} ]]; then
-            ### TODO: if PR have created?
-            if [[ $repo == *"github"* ]]; then
-                echo -e "${YELLOW}PR:${ENDCOLOR}\t${repo}/pull/new/${current_branch}"
-            elif [[ $repo == *"gitlab"* ]]; then
-                echo -e "${YELLOW}MR:${ENDCOLOR}\t${repo}/-/merge_requests/new?merge_request%5Bsource_branch%5D=${current_branch}"
-            fi
-        fi
-        exit
-    fi
-
-    if [[ $push_output != *"[rejected]"* ]]; then
-        echo -e "${RED}Cannot push! Here is the error${ENDCOLOR}"
-        echo "$push_output"
-        exit $push_code
-    fi
-}
-
-
-### Main function
-# $1: mode
-    # <empty> - regular commit mode
-    # yes: fast push (answer 'yes')
-    # list: print list of commits to push and exit
-function push_script {
-    case "$1" in
-        fast|f|y)   fast="true";;
-        list|log|l) list="true";;
-        help|h)     help="true";;
-        *)
-            wrong_mode "push" $1
-    esac
-
-    if [ -n "$help" ]; then
-        echo -e "usage: ${YELLOW}gitb push <mode>${ENDCOLOR}"
-        echo
-        echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\tPrint list of commits, push them to current branch or pull changes first"
-        echo -e "fast|f|y\tSame as previous but without pressing 'y'"
-        echo -e "list|log|l\tPrint a list of unpushed local commits without actual pushing it"
-        echo -e "help|h\t\tShow this help"
-        exit
-    fi
-
-
-    ### Print header
-    header_msg="GIT PUSH"
-    if [ -n "${fast}" ]; then
-        header_msg="$header_msg FAST"
-    elif [ -n "${list}" ]; then
-        header_msg="$header_msg LIST"
-    fi
-
-    echo -e "${YELLOW}${header_msg}${ENDCOLOR}"
-    echo
-
-    ### Check if there are commits to push
-    get_push_list ${current_branch} ${main_branch} ${origin_name}
-
-    if [ -z "$push_list" ]; then
-        echo -e "${GREEN}Nothing to push${ENDCOLOR}"
-        exit
-    fi
-
-    if [ "${history_from}" != "${origin_name}/${current_branch}" ]; then
-        echo -e "Branch ${YELLOW}${current_branch}${ENDCOLOR} doesn't exist in ${origin_name}, so get commit diff from base commit"
-    fi
-
-    ### Print list of unpushed commits
-    echo -e "${YELLOW}Commit history from '${history_from}'${ENDCOLOR}"
-    echo -e "$push_list"
-
-
-    ### List mode - print only unpushed commits
-    if [ -n "$list" ]; then
-        exit
-    fi
-
-    echo
-
-    ### If not in fast mode - ask if user wants to push
-    if [ -z "${fast}" ]; then
-        echo -e "Do you want to push it to ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} (y/n)?"
-        if [ "${current_branch}" == "${main_branch}" ]; then
-            echo -e "${RED}Warning!${ENDCOLOR} You are going to push right in default ${YELLOW}${main_branch}${ENDCOLOR} branch"
-        fi
-        yes_no_choice "Pushing..."
-    else
-        echo -e "${YELLOW}Pushing...${ENDCOLOR}"
-        echo
-    fi
-
-
-    ### Pushing
-    push
-
-
-    ### Get push error - there is unpulled changes
-    echo -e "${RED}Cannot push! There is unpulled changes in '${origin_name}/${current_branch}'${ENDCOLOR}"
-    echo
-    echo -e "Do you want to pull ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} with --no-rebase (y/n)?"
-    yes_no_choice "Pulling..."
-
-    pull $current_branch $origin_name $editor
-
-
-    ### Push after pull
-    echo
-    echo -e "${YELLOW}Pushing...${ENDCOLOR}"
-    echo
-    push
-
-}
-#!/usr/bin/env bash
-
-### Script for pulling commits from remote git repository
-# Read README.md to get more information how to use it
-# Use this script only with gitbasher
-
-
-### Main function - pull current branch and exit (empty flags mode)
-function pull_script {
-    case "$1" in
-        help|h) help="true";;
-        *)
-            wrong_mode "pull" $1
-    esac
-
-    if [ -n "$help" ]; then
-        echo -e "usage: ${YELLOW}gitb pull${ENDCOLOR}"
-        echo
-        echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\tFetch current branch and then merge changes with conflicts fixing"
-        echo -e "help|h\t\tShow this help"
-        exit
-    fi
-
-
-    ### Print header
-    header_msg="GIT PULL"
-    echo -e "${YELLOW}${header_msg}${ENDCOLOR}"
-    echo
-    
-    echo -e "${YELLOW}Pulling '$origin_name/$current_branch'...${ENDCOLOR}"
-    echo
-    pull $current_branch $origin_name $editor
-    exit
-}
-#!/usr/bin/env bash
-
-### Script for merging changes between branches
-# Read README.md to get more information how to use it
-# Use this script only with gitbasher
-
-
-### Main function - pull current branch and exit (empty flags mode)
-# $1: mode
-    # empty: merge selected branch to current one (ask to fetch before merge)
-    # main: merge main to current one (ask to fetch before merge)
-    # to-main: merge current branch to main
-function merge_script {
-    case "$1" in
-        main|master|m)          main="true";;
-        to-main|to-master|tm)   to_main="true";;
-        help|h)                 help="true";;
-        *)
-            wrong_mode "merge" $1
-    esac
-
-    if [ -n "$help" ]; then
-        echo -e "usage: ${YELLOW}gitb merge <mode>${ENDCOLOR}"
-        echo
-        echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\t\tSelect branch to merge info current one and fix conflicts"
-        echo -e "main|master|m\t\tMerge $main_branch to current branch and fix conflicts"
-        echo -e "to-main|to-master|tm\tSwitch to $main_branch and merge current branch into $main_branch"
-        echo -e "help|h\t\t\tShow this help"
-        exit
-    fi
-
-
-    ### Merge mode - print header
-    header="GIT MERGE"
-    if [ -n "${to_main}" ]; then
-        header="$header MAIN"
-    elif [ -n "${to_main}" ]; then
-        header="$header TO MAIN"
-    fi
-
-    echo -e "${YELLOW}${header}${ENDCOLOR}"
-    echo
-
-
-    ### Select branch which will be merged
-    if [ -n "$main" ]; then
-        if [ "$current_branch" == "${main_branch}" ]; then
-            echo -e "${YELLOW}Already on ${main_branch}${ENDCOLOR}"
-            exit
-        fi
-        merge_branch=${main_branch}
-
-    elif [ -n "$to_main" ]; then
-        if [ "$current_branch" == "${main_branch}" ]; then
-            echo -e "${YELLOW}Already on ${main_branch}${ENDCOLOR}"
-            exit
-        fi
-        merge_branch=${current_branch}
-
-    else
-        echo -e "${YELLOW}Which branch merge into '${current_branch}'?${ENDCOLOR}"
-        choose_branch "merge"
-        merge_branch=${branch_name}
-        echo
-    fi
-
-
-    ### Fetch before merge
-    echo -e "Do you want to merge ${YELLOW}${origin_name}/${merge_branch}${ENDCOLOR} instead of local ${YELLOW}${merge_branch}${ENDCOLOR} (y/n)?"
-    read -n 1 -s choice
-    if [ "$choice" == "y" ]; then
-        echo
-        echo -e "${YELLOW}Fetching...${ENDCOLOR}"
-
-        fetch $merge_branch $origin_name
-        merge_from_origin=true
-    fi
-    echo
-
-
-    ### Run merge-to-main logic - switch to main and merge
-    if [ -n "$to_main" ]; then
-        switch $main_branch "true"
-        echo
-        current_branch=$main_branch
-    fi
-
-
-    ### Run merge and handle conflicts
-    merge $merge_branch $origin_name $editor $merge_from_origin
-
-
-    ### Nothing to merge
-    if [[ $merge_output == *"Already up to date"* ]]; then
-        echo -e "${GREEN}Nothing to merge - already up to date${ENDCOLOR}"
-        exit
-    fi
-
-
-    ### If we get here - it is success
-    #echo -e "${GREEN}Successful merge!${ENDCOLOR}"
-    #echo -e "${BLUE}[${merge_branch}${ENDCOLOR} -> ${BLUE}${current_branch}]${ENDCOLOR}"
-    #echo
-
-
-    ### Merged without conflicts
-    if [ $merge_code == 0 ] ; then
-        print_changes_stat "$(echo "$merge_output" | tail -n +3)" 
-
-    ### Merged with conflicts, but they were resolved
-    else
-        commit_hash="$(git --no-pager log --pretty="%h" -1)"
-        print_changes_stat "$(git --no-pager show $commit_hash --stat --format="")" 
-    fi
-
-}
-#!/usr/bin/env bash
-
->>>>>>> e8dbc57 (chore(misc): build new executable)
 ### Script for working with branches: create, switch, delete
 # Use a separate branch for writing new code, then merge it to default branch
 # Read README.md to get more information how to use it
@@ -2948,7 +2516,6 @@ function branch_script {
     ### Run create new branch logic
     ### Step 1. Select branch type
     echo -e "${YELLOW}Step 1.${ENDCOLOR} What type of branch do you want to create?"
-<<<<<<< HEAD
     echo -e "1. feat:\tnew feature or logic changes, 'feat' commits"
     echo -e "2. fix:\t\tsmall changes, eg. not critical bug fix"
     echo -e "3. hotfix:\tfix, that should be merged as fast as possible"
@@ -2967,17 +2534,6 @@ function branch_script {
     fi
     echo -e "9.  \t\tdon't use prefix for branch naming"
     echo -e "0. Exit without changes"
-=======
-    echo "1. feat:      new feature or logic changes, 'feat' and 'perf' commits"
-    echo "2. fix:       small changes, eg. not critical bug fix"
-    echo "3. hotfix:    fix, that should be merged as fast as possible"
-    echo "4. chore:     non important and/or style changes"
-    echo "5. misc:      non-code changes, e.g. 'ci', 'docs', 'build' commits"
-    echo "6. wip:       'work in progress', for changes not ready for merging in the near future"
-    echo "7. test:      testing changes that won't be merged to the main branch"
-    echo "8.            don't use prefix for branch naming"
-    echo "0. Exit without changes"
->>>>>>> e8dbc57 (chore(misc): build new executable)
 
     declare -A types=(
         [1]="feat"
@@ -2985,15 +2541,10 @@ function branch_script {
         [3]="hotfix"
         [4]="wip"
         [5]="misc"
-<<<<<<< HEAD
         [6]="test"
         [7]="chore"
         [8]=""
         [9]="$ticket_name"
-=======
-        [6]="wip"
-        [7]="test"
->>>>>>> e8dbc57 (chore(misc): build new executable)
     )
 
     branch_type=""
@@ -3005,18 +2556,6 @@ function branch_script {
             exit
         fi
         
-<<<<<<< HEAD
-=======
-        if [ "$choice" == "8" ]; then
-            break
-        fi
-
-        re='^[0-9]+$'
-        if ! [[ $choice =~ $re ]]; then
-            continue
-        fi
-
->>>>>>> e8dbc57 (chore(misc): build new executable)
         branch_type="${types[$choice]}"
         if [ -n "$branch_type" ]; then
             branch_type_and_sep="${branch_type}${sep}"
@@ -3030,7 +2569,7 @@ function branch_script {
     echo -e "${YELLOW}Step 2.${ENDCOLOR} Enter the name of the branch"
     echo "Leave it blank if you want to exit"
 
-    printf "${YELLOW}Branch${ENDCOLOR}:"
+    printf "${BOLD}git branch${ENDCOLOR}"
     read -p " ${branch_type_and_sep}" -e branch_name
 
     if [ -z $branch_name ]; then
@@ -3081,11 +2620,7 @@ function branch_script {
         exit $create_code
     fi
 
-<<<<<<< HEAD
     echo -e "${RED}Cannot create '${branch_name}'! Error message:${ENDCOLOR}"
-=======
-    echo -e "${RED}Cannot create! Error message:${ENDCOLOR}"
->>>>>>> 3b9764a (chore(misc): build new executable)
     echo "${create_output}"
     exit $create_code
 }
@@ -3097,9 +2632,9 @@ function branch_script {
 # Use this script only with gitbasher
 
 
-### Function pushes tag and prints url to repo or error
+### Function pushes tag and prints url to the repo or an error
 # $1: tag to push, empty for pushing all tags
-# $2: delete flag, pass it if you want to delete provided tag
+# $2: delete flag, pass it if you want to delete a tag
 # Using of global:
 #     * origin_name
 function push_tag {
@@ -3116,10 +2651,10 @@ function push_tag {
     # Handle delete case
     if [ -n "$delete" ]; then
         if [[ "$push_output" == *"remote ref does not exist"* ]]; then
-            echo -e "${RED}Tag '$1' doesn't exist in '${origin_name}'${ENDCOLOR}"
+            echo -e "${RED}Tag '$1' doesn't exist in the ${origin_name}${ENDCOLOR}"
             exit
         fi
-        echo -e "${GREEN}Successful deleted tag '$1' in '${origin_name}'!${ENDCOLOR}"
+        echo -e "${GREEN}Tag '$1' is deleted from the ${origin_name}!${ENDCOLOR}"
         exit
     fi
     
@@ -3133,7 +2668,7 @@ function push_tag {
 
         number_of_tags=${#lines_with_success[@]}
         if [ $number_of_tags != 0 ]; then
-            echo -e "${GREEN}Pushed successfully${ENDCOLOR}"
+            echo -e "${GREEN}Pushed successfully!${ENDCOLOR}"
             
             for index in "${!lines_with_success[@]}"
             do
@@ -3188,46 +2723,27 @@ function push_tag {
 ### Main function
 # $1: mode
     # <empty>: create a new tag from a current branch and commit it
-    # commit: select a commit instead of using current one
     # annotated: create an annotated tag with a message
-    # full: select commit instead of using current one and create an annotated tag 
-    # list: print a list of local tags
-    # remote: fetch tags from the remote and print it
+    # commit: select a commit for the tag instead of using the last one
+    # all: select commit instead of using the last one and create an annotated tag 
     # push: select a tag to push
     # push-all: push all tags
     # delete: select a tag to delete
     # delete-all: delete all tags
+    # list: print a list of local tags
+    # remote: fetch tags from the remote and print it
 function tag_script {
     case "$1" in
-        commit|c|co|cm) 
-            select="true"
-            commit="true"
-        ;;
-        annotated|a|an) annotated="true";;
-        full|f) 
-            select="true"
-            annotated="true"
-            full="true"
-        ;;
-        list|log|l) list="true";;
-        remote|r|re)
-            list="true"
-            remote="true"
-        ;;
-        push|ps|ph|p)
-            push="true"
-            select="true"
-            push_single="true"
-        ;;
-        push-all|pa) push="true";;
-        delete|del|d) 
-            delete="true"
-            select="true"
-            delete_single="true"
-        ;;
-        delete-all|da) delete="true";;
-        help|h) help="true";;
-
+        annotated|a|an)     annotated="true";;
+        commit|c|co|cm)     select="true"; commit="true";;
+        all|al)             select="true"; annotated="true";;
+        push|ps|ph|p)       push="true"; select="true";;
+        push-all|pa)        push="true";;
+        delete|del|d)       delete="true"; select="true";;
+        delete-all|da)      delete="true";;
+        list|log|l)         list="true";;
+        remote|re|r|fetch)  list="true"; remote="true";;
+        help|h)             help="true";;
         *)
             wrong_mode "tag" $1
     esac
@@ -3236,16 +2752,16 @@ function tag_script {
         echo -e "usage: ${YELLOW}gitb tag <mode>${ENDCOLOR}"
         echo
         echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\tCreate a new tag from a current commit and push it to a remote"
-        echo -e "commit|c|co|cm\tCreate a new tag from a selected commit and push it to a remote"
-        echo -e "annotated|a|an\tCreate a new annotated tag from a current commit and push it to a remote"
-        echo -e "full|f\t\tCreate a new annotated tag from a selected commit and push it to a remote"
-        echo -e "list|log|l\tPrint a list of local tags"
-        echo -e "remote|r|re\tFetch tags from a remote and print it"
-        echo -e "push|ps|ph|p\tSelect a local tag for pushing to a remote"
-        echo -e "push-all|pa\tPush all tags to a remote"
-        echo -e "delete|del|d\tSelect a tag to delete in local and remote"
+        echo -e "<empty>\t\tCreate a new tag from the last commit"
+        echo -e "annotated|a|an\tCreate a new annotated tag from the last commit"
+        echo -e "commit|c|co|cm\tCreate a new tag from a selected commit"
+        echo -e "all|al\t\tCreate a new annotated tag from a selected commit"
+        echo -e "push|ps|ph|p\tSelect a local tag and push it to the remote repository"
+        echo -e "push-all|pa\tPush all tags to the remote repository"
+        echo -e "delete|del|d\tSelect a tag to delete"
         echo -e "delete-all|da\tDelete all local tags"
+        echo -e "list|log|l\tPrint a list of local tags"
+        echo -e "remote|fetch|r\tFetch tags from the remote repository and print it"
         echo -e "help|h\t\tShow this help"
         exit
     fi
@@ -3253,24 +2769,24 @@ function tag_script {
 
     ### Print header
     header="GIT TAG"
-    if [ -n "${commit}" ]; then
-        header="$header COMMIT"
-    elif [ -n "${full}" ]; then
-        header="$header FULL"
+    if [ -n "${annotated}" ] && [ -n "${commit}" ]; then
+        header="$header ALL"
     elif [ -n "${annotated}" ]; then
         header="$header ANNOTATED"
+    elif [ -n "${commit}" ]; then
+        header="$header COMMIT"
+    elif [ -n "${push}" ] && [ -n "${select}" ]; then
+        header="$header PUSH"
+    elif [ -n "${push}" ]; then
+        header="$header PUSH ALL"
+    elif [ -n "${delete}" ] && [ -n "${select}" ]; then
+        header="$header DELETE"
+    elif [ -n "${delete}" ]; then
+        header="$header DELETE ALL"    
     elif [ -n "${list}" ]; then
         header="$header LIST"
     elif [ -n "${remote}" ]; then
         header="$header REMOTE"
-    elif [ -n "${push_single}" ]; then
-        header="$header PUSH"
-    elif [ -n "${push}" ]; then
-        header="$header PUSH ALL"
-    elif [ -n "${delete_single}" ]; then
-        header="$header DELETE"
-    elif [ -n "${delete}" ]; then
-        header="$header DELETE ALL"    
     fi
 
     echo -e "${YELLOW}${header}${ENDCOLOR}"
@@ -3279,23 +2795,14 @@ function tag_script {
 
     ### Fetch tags from the remote
     if [ -n "${remote}" ]; then
-        echo -e "${YELLOW}Fetching all tags from remote...${ENDCOLOR}"
+        echo -e "${YELLOW}Fetching tags from the remote...${ENDCOLOR}"
         fetch_output=$(git fetch $origin_name --tags 2>&1)
         check_code $? "$fetch_output" "fetch tags"
 
         echo
-<<<<<<< HEAD
-=======
-        
-        if [ $fetch_code != 0 ]; then
-            echo -e "${RED}Cannot fetch tags! Error message:${ENDCOLOR}"
-            echo -e "${fetch_output}"
-            exit $fetch_code
-        fi
->>>>>>> 3b9764a (chore(misc): build new executable)
 
         if [ "$fetch_output" != "" ]; then
-            echo -e "${YELLOW}New tags${ENDCOLOR}"
+            echo -e "${YELLOW}New tags:${ENDCOLOR}"
             IFS=$'\n' read -rd '' -a lines_with_tags <<< "$(sed -n '/\[new tag\]/p' <<< "$fetch_output")"
             for index in "${!lines_with_tags[@]}"
             do
@@ -3307,19 +2814,19 @@ function tag_script {
 
 
     ### Print tag list
-    count=14
-    if [ -n "${delete}" ] || [ -n "${list}" ]; then
+    count=9
+    if [ -n "${delete}" ] || [ -n "${push}" ] || [ -n "${list}" ]; then
         count=999  # Show all tags
     fi
 
-    tags_info_str=$(git for-each-ref --count=$count  --sort=-creatordate refs/tags --format="${BLUE_ES}%(refname:short)${ENDCOLOR_ES} | %(contents:subject) | ${YELLOW_ES}%(objectname:short)${ENDCOLOR_ES} | ${CYAN_ES}%(creatordate)${ENDCOLOR_ES} | ${GREEN_ES}%(creatordate:relative)${ENDCOLOR_ES}" | column -ts'|' )
+    tags_info_str=$(git for-each-ref --count=$count  --sort=-creatordate refs/tags --format="${BLUE_ES}%(refname:short)${ENDCOLOR_ES} | %(contents:subject) | ${YELLOW_ES}%(objectname:short)${ENDCOLOR_ES} | ${CYAN_ES}%(creatordate:human)${ENDCOLOR_ES}" | column -ts'|' )
     IFS=$'\n' read -rd '' -a tags_info <<<"$tags_info_str"
    
     number_of_tags=${#tags_info[@]}
 
     if [ $number_of_tags == 0 ]; then
         echo -e "${YELLOW}There is no local tags${ENDCOLOR}"
-        if [ -n "${delete}" ]; then
+        if [ -n "${delete}" ] || [ -n "${push}" ]; then
             exit
         fi
     else
@@ -3359,7 +2866,6 @@ function tag_script {
     if [ -n "${delete}" ] && [ -z "$select" ]; then
         echo
         echo -e "${YELLOW}Do you really want to delete all local tags (y/n)?${ENDCOLOR}"
-        yes_no_choice "Deleting..."
         git tag | xargs git tag -d 
         exit
     fi
@@ -3367,20 +2873,23 @@ function tag_script {
 
     ### Select tag for delete / push
     if [ -n "${delete}" ] || [ -n "$push" ]; then
-        echo "0. Exit..."
+        if [ $number_of_tags -gt 9 ]; then
+            echo "00. Exit"
+        else
+            echo "0. Exit"
+        fi
         echo
         if [ -n "${delete}" ]; then
-            printf "Enter tag number to delete: "
+            read_prefix="Enter tag number to delete: "
         else
-            printf "Enter tag number to push: "
+            read_prefix="Enter tag number to push: "
         fi
+
+        IFS=$'\n' read -rd '' -a tags <<<"$(git for-each-ref --count=$count  --sort=-creatordate refs/tags --format="%(refname:short)")"
 
         choose "${tags[@]}"
         tag_name=$choice_result
 
-        if [ $number_of_tags -gt 9 ] && [ $choice -gt 9 ]; then
-            echo  # User press enter if choice < 10
-        fi
         echo
 
         # Push case
@@ -3394,10 +2903,10 @@ function tag_script {
         delete_result=$(git tag -d $tag_name 2>&1)
         check_code $? "$delete_result" "delete tag"
 
-        echo -e "${GREEN}Successfully deleted tag '${tag_name}'${ENDCOLOR}"
+        echo -e "${GREEN}Successfully deleted tag '${tag_name}'!${ENDCOLOR}"
         echo
-        echo -e "Do you want to delete this tag in ${YELLOW}${origin_name}${ENDCOLOR} (y/n)?"
-        yes_no_choice "Deleting..."
+        echo -e "Do you want to delete this tag in the ${YELLOW}${origin_name}${ENDCOLOR} (y/n)?"
+        yes_no_choice "\nDeleting..."
         push_tag $tag_name "true"
 
         exit
@@ -3410,30 +2919,30 @@ function tag_script {
         echo -e "${YELLOW}Select a commit for a new tag on branch '$current_branch'${ENDCOLOR}"
         choose_commit 9
 
-        echo 
+        echo
         echo -e "${YELLOW}Selected commit${ENDCOLOR}"
 
 
-    ### Use current commit for new tag
+    ### Use last commit for new tag
     else
         commit_hash=$(git rev-parse HEAD)
-        echo -e "${YELLOW}Current commit${ENDCOLOR}"
+        echo -e "${YELLOW}Last branch commit${ENDCOLOR}"
     fi
 
     commit_message=$(git log -1 --pretty=%B $commit_hash | cat)
     echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR} ${commit_message}"
 
 
-    ### Enter name for a new tag
+    ### Enter the name for a new tag
     echo
-    echo -e "${YELLOW}Enter the name of a new tag${ENDCOLOR}"
-    echo -e "If this tag will be using for release, use version number in semver format like '1.0.0-alpha'"
+    echo -e "${YELLOW}Enter the name for a new tag${ENDCOLOR}"
+    echo -e "If this is a release tag, use version number in semver format like '1.0.0-alpha'"
     echo -e "Leave it blank to exit"
 
     if [ -n "${annotated}" ]; then
-        prompt="$(echo -n -e "${TODO}git tag -a${ENDCOLOR} ")"
+        prompt="$(echo -n -e "${BOLD}git tag -a${ENDCOLOR} ")"
     else
-        prompt="$(echo -n -e "${TODO}git tag${ENDCOLOR} ")"
+        prompt="$(echo -n -e "${BOLD}git tag${ENDCOLOR} ")"
     fi
 
     read -p "$prompt" -e tag_name
@@ -3447,8 +2956,6 @@ function tag_script {
         echo -e "${RED}This name is forbidden!${ENDCOLOR}"
         exit
     fi
-    echo
-
 
     ### If annotated - enter tag message
     if [ -n "$annotated" ]; then
@@ -3460,7 +2967,7 @@ function tag_script {
 ### Write some words about the new tag '${tag_name}'
 ### [$current_branch ${commit_hash::7}] ${commit_message}
 ### 
-### You can place changelog here if this tag means a new release
+### You can place changelog here if this tag for a new release
 """ >> $tag_file
 
         while [ true ]; do
@@ -3488,6 +2995,7 @@ function tag_script {
         commit_hash=""
     fi
 
+    echo
 
     ### Finally create tag
     if [ -n "$annotated" ]; then
@@ -3525,8 +3033,8 @@ function tag_script {
 
 
     ### Push tag
-    echo -e "Do you want to push this tag to ${YELLOW}${origin_name}${ENDCOLOR} (y/n)?"
-    yes_no_choice "Pushing..."
+    echo -e "Do you want to push it to the ${YELLOW}${origin_name}${ENDCOLOR} (y/n)?"
+    yes_no_choice "\nPushing..."
 
     push_tag $tag_name
 }

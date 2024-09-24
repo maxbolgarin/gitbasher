@@ -9,14 +9,14 @@
 # $1: mode
     # empty: select base branch to rebase current changes
     # main: rebase current branch onto default branch
-    # interactive: select base commit in current branch and rebase in interactive mode
-    # autosquash: rebase on current branch in interactive mode with --autosquash
+    # interactive: select base commit in current branch and rebase in an interactive mode
+    # autosquash: rebase on current branch in an interactive mode with --autosquash
 function rebase_script {
     case "$1" in
-        main|master|m)         main="true";;
-        interactive|i)         interactive="true";;
-        autosquash|a|s|ia|is)  autosquash="true";;
-        help|h)                help="true";;
+        main|master|m)           main="true";;
+        interactive|i)           interactive="true";;
+        autosquash|a|s|f|ia|if)  autosquash="true";;
+        help|h)                  help="true";;
         *)
             wrong_mode "rebase" $1
     esac
@@ -27,8 +27,8 @@ function rebase_script {
         echo -e "${YELLOW}Available modes${ENDCOLOR}"
         echo -e "<empty>\t\t\tSelect base branch to rebase current changes"
         echo -e "main|master|m\t\tRebase current branch onto default branch"
-        echo -e "interactive|i\t\tSelect base commit in current branch and rebase in interactive mode"
-        echo -e "autosquash|a|s|ia|is\tRebase on current branch in interactive mode with --autosquash"
+        echo -e "interactive|i\t\tSelect base commit in current branch and rebase in an interactive mode"
+        echo -e "autosquash|a|s|f|ia|if\tRebase on the current local branch in an interactive mode with --autosquash"
         echo -e "help|h\t\t\tShow this help"
         exit
     fi
@@ -39,9 +39,19 @@ function rebase_script {
         header="$header INTERACTIVE"
     elif [ -n "${autosquash}" ]; then
         header="$header AUTOSQUASH"
+    elif [ -n "${main}" ]; then
+        header="$header MAIN"
     fi
     echo -e "${YELLOW}${header}${ENDCOLOR}"
     echo
+
+    is_clean=$(git status | tail -n 1)
+    if [ "$is_clean" != "nothing to commit, working tree clean" ]; then
+        echo -e "${RED}Cannot rebase! There are uncommited changes:"
+        git_status
+        exit 1
+    fi
+
 
     ### Select branch which will become a base
     if [ -n "$main" ]; then
@@ -62,8 +72,11 @@ function rebase_script {
 
     if [ -z "$autosquash" ]; then
         ### Fetch before rebase
-        echo -e "Do you want to fetch ${YELLOW}${origin_name}/${new_base_branch}${ENDCOLOR} before rebase (y/n)?"
+        echo -e "Fetch ${YELLOW}${origin_name}/${new_base_branch}${ENDCOLOR} before rebase (y/n/0)?"
         read -n 1 -s choice
+        if [ "$choice" == "0" ]; then
+            exit
+        fi
         if [ "$choice" == "y" ]; then
             echo
             echo -e "${YELLOW}Fetching ${origin_name}/${new_base_branch}...${ENDCOLOR}"
@@ -74,9 +87,10 @@ function rebase_script {
         echo
     fi
 
-    
+
     ### Run rebase and handle conflicts
-    rebase_branch $new_base_branch $origin_name $from_origin $interactive $autosquash
+
+    rebase_branch "$new_base_branch" "$origin_name" "$from_origin" "$interactive" "$autosquash"
 
 
     ### Nothing to rebase
@@ -84,6 +98,8 @@ function rebase_script {
         echo -e "${GREEN}Nothing to rebase - already up to date${ENDCOLOR}"
         exit
     fi
+
+    echo
 
     if [ $rebase_code == 0 ] ; then
         echo -e "${GREEN}Successful rebase!${ENDCOLOR}"
@@ -112,19 +128,19 @@ function rebase_branch {
 
     args=""
     if [ -n "$4" ]; then
-        args="-i"
-    fi
-
-    if [ -n "$5" ]; then
-        args="-i --autosquash"
-
+       rebase_output=$(git rebase -i $ref 3>&2 2>&1 1>&3)
+    
+    elif [ -n "$5" ]; then
         echo -e "Select a new ${BOLD}base${NORMAL} commit from which to squash fixup commits (third one or older):"
 
-        choose_commit 20 "number" $ref
-        $ref=${commit_hash}
-    fi
+        choose_commit 30 "number" $ref
+        ref="$commit_hash"
 
-    rebase_output=$(git rebase $args $ref 2>&1)
+        rebase_output=$(git rebase -i --autosquash $ref 3>&2 2>&1 1>&3)
+    else
+
+        rebase_output=$(git rebase $ref 3>&2 2>&1 1>&3)
+    fi
     rebase_code=$?
 
     if [ $rebase_code == 0 ] ; then
@@ -133,42 +149,109 @@ function rebase_branch {
 
     ### Cannot rebase because there are uncommitted files
     if [[ $rebase_output == *"Please commit or stash them"* ]]; then
-        echo -e "${RED}Cannot rebase! There are uncommited changes, you should commit them first"
+        echo -e "${RED}Cannot rebase! There are uncommited changes:"
         git_status
         exit $rebase_code
     fi
 
-    ### Cannot merge because of some other error
-    if [[ $rebase_output != *"CONFLICT"* ]]; then
+    ### Cannot rebase because there are uncommitted files
+    if [[ $rebase_output == *"error: invalid"* ]]; then
+        rebase_todo_errors "$rebase_output"
+        echo
+    fi
+
+    ### Cannot rebase because of conflicts
+    if [[ $rebase_output == *"Resolve all conflicts manually"* ]]; then
+        echo -e "${RED}Cannot rebase! There are conflicts${ENDCOLOR}"
+        rebase_conflicts $rebase_output 
+    fi
+
+    ### Cannot rebase because of some error
+    if [[ $rebase_output != *"Successfully rebased"* ]]; then
         echo -e "${RED}Cannot rebase! Error message:${ENDCOLOR}"
         echo "$rebase_output"
         exit $rebase_code
     fi
+}
 
-    echo -e "${RED}Cannot rebase! There are conflicts${ENDCOLOR}"
-    rebase_conflicts $rebase_output
+### Function helps to fix errors in todo plan
+# $1: rebase_output
+# $2: conflicts fix mode
+function rebase_todo_errors {
+    rebase_output=$1
+    output_to_print=$1
+    while [ true ]; do
+        echo -e "${RED}Cannot rebase! Your rebase plan has errors:${ENDCOLOR}"
+        echo "$(sed '$d' <<< $output_to_print)"
+        echo
+        echo -e "${YELLOW}You should fix errors${ENDCOLOR}"
+        echo -e "1. Open editor to change rebase plan: ${BLUE}git rebase --edit-todo${ENDCOLOR}"
+        echo -e "2. Abort rebase and return to the original state: ${YELLOW}git rebase --abort${ENDCOLOR}"
+        echo -e "0. Exit from this script ${BOLD}without${NORMAL} rebase abort"
 
-    # TODO: success
+        while [ true ]; do
+            read -n 1 -s choice
+            re='^[012]+$'
+            if [[ $choice =~ $re ]]; then
+                break
+            fi
+        done
+
+        if [ "$choice" == "1" ]; then
+            todo_output=$(git rebase --edit-todo 3>&2 2>&1 1>&3)
+            rebase_output=$(git rebase --continue 2>&1)
+            rebase_code=$?
+
+        elif [ "$choice" == "2" ]; then
+            echo
+            echo -e "${YELLOW}Aborting rebase...${ENDCOLOR}"
+            git rebase --abort
+            exit
+
+        elif [ "$choice" == "0" ]; then
+            exit $rebase_code
+        fi
+
+        if [ "$2" != "" ] ; then
+            output_to_print=$todo_output
+            if [[ $todo_output != *"can fix this with"* ]]; then
+                break
+            fi
+        else
+            output_to_print=$rebase_output
+            if [[ $rebase_output != *"error: invalid"* ]]; then
+                break
+            fi
+        fi
+        
+        echo
+    done
 }
 
 ### Function pulls provided branch, handles errors and makes a merge
 # $1: rebase_output
 function rebase_conflicts {
     ### Ask user what he wants to do
-    echo
-    echo -e "${YELLOW}You should resolve conflicts manually${ENDCOLOR}"
-    echo -e "After resolving, select an option to continue"
-    echo -e "1. Add changes and continue: ${YELLOW}git rebase --continue${ENDCOLOR}"
-    echo -e "2. Open editor to change rebase plan: ${BLUE}git rebase --edit-todo${ENDCOLOR}"
-    echo -e "3. Throw away the commit from the history: ${RED}git rebase --skip${ENDCOLOR}"
-    echo -e "4. Abort rebase and return to the original state: ${YELLOW}git rebase --abort${ENDCOLOR}"
-    echo -e "0. Exit from this script ${BOLD}without${NORMAL} rebase abort"
-
+    
+    print_menu="true"
     new_step="true"
     rebase_output=$1
 
     ### Rebase process
     while [ true ]; do
+        if [ "$print_menu" == "true" ]; then
+            echo
+            echo -e "${YELLOW}You should resolve conflicts manually${ENDCOLOR}"
+            echo -e "After resolving, select an option to continue"
+            echo -e "1. Add changes and continue: ${YELLOW}git rebase --continue${ENDCOLOR}"
+            echo -e "2. Open editor to change rebase plan: ${BLUE}git rebase --edit-todo${ENDCOLOR}"
+            echo -e "3. Throw away the commit from the history: ${RED}git rebase --skip${ENDCOLOR}"
+            echo -e "4. Abort rebase and return to the original state: ${YELLOW}git rebase --abort${ENDCOLOR}"
+            echo -e "0. Exit from this script ${BOLD}without${NORMAL} rebase abort"
+
+            print_menu="false"
+        fi
+
         if [ "$new_step" == "true" ]; then
             status=$(git status)
             current_step=$(echo "$status" | sed -n 's/.*Last commands done (\([0-9]*\) commands done):/\1/p')
@@ -190,19 +273,22 @@ function rebase_conflicts {
             new_step="false"
         fi
 
-        read -n 1 -s choice
+        while [ true ]; do
+            read -n 1 -s choice
+            re='^[01234]+$'
+            if [[ $choice =~ $re ]]; then
+                break
+            fi
+        done
 
         if [ "$choice" == "1" ]; then
-            files_with_conflicts_one_line="$(tr '\n' ' ' <<< "$files_with_conflicts")"
-            IFS=$'\n' read -rd '' -a files_with_conflicts_new <<<"$(grep --files-with-matches -r -E "[<=>]{7} HEAD" $files_with_conflicts_one_line)"
-            number_of_conflicts=${#files_with_conflicts_new[@]}
-            if [ $number_of_conflicts -gt 0 ]; then
+            files_with_conflicts_one_line="$(tr '\n' ' ' <<< "$(git --no-pager diff --name-only --diff-filter=U --relative)")"
+            files_with_conflicts_new="$(git grep -l --name-only -E "[<=>]{7} HEAD" $files_with_conflicts_one_lined)"
+            
+            if [ "$files_with_conflicts_new" != "" ]; then
                 echo
                 echo -e "${YELLOW}There are files with conflicts${ENDCOLOR}"
-                for index in "${!files_with_conflicts_new[@]}"
-                do
-                    echo -e $(sed '1 s/.\///' <<< "\t${files_with_conflicts_new[index]}")
-                done
+                echo -e "$(echo -e "${files_with_conflicts_new}" | tr ' ' '\n' | sed 's/^/\t/')"
                 continue
             fi
            
@@ -225,12 +311,25 @@ function rebase_conflicts {
         fi
 
         if [ "$choice" == "2" ]; then
-            git rebase --edit-todo
+            todo_output=$(git rebase --edit-todo 3>&2 2>&1 1>&3)
+            rebase_output=$(git rebase --continue 2>&1)
+
+            if [[ $todo_output == *"error: invalid"* ]]; then
+                echo
+                rebase_todo_errors "$todo_output" "true"
+                print_menu="true"
+                new_step="true"
+            fi
+
+            echo
+            echo -e "${YELLOW}Successfull plan edit, continuing...${ENDCOLOR}"
+            
             continue
         fi
 
         if [ "$choice" == "3" ]; then
-            echo -e "Are you sure you want to skip commit and throw it away (y/n)?"
+            echo
+            echo -e "Are you sure you want to ${RED}skip${ENDCOLOR} commit and ${RED}throw it away${ENDCOLOR} (y/n)?"
             read -n 1 -s choice_yes
             if [ "$choice_yes" != "y" ]; then
                 echo -e "${YELLOW}Continuing...${ENDCOLOR}"
@@ -241,6 +340,7 @@ function rebase_conflicts {
             rebase_code=$?
 
             if [[ $rebase_output == *"Successfully rebased"* ]]; then
+                echo
                 return
             fi
 
@@ -250,14 +350,15 @@ function rebase_conflicts {
                 exit $rebase_code
             fi
 
-            echo -e "${YELLOW}Skipped commit${ENDCOLOR}"
+            echo -e "${YELLOW}Skipping commit${ENDCOLOR}"
             new_step="true"
             continue
         fi
 
 
         if [ "$choice" == "4" ]; then
-            echo -e "Are you sure you want to abort rebase (y/n)?"
+            echo
+            echo -e "Are you sure you want to ${YELLOW}abort rebase${ENDCOLOR} (y/n)?"
             read -n 1 -s choice_yes
             if [ "$choice_yes" == "y" ]; then
                 echo

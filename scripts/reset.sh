@@ -92,11 +92,11 @@ function reset_script {
     new_action=$(git reflog -n 1 --pretty="%gs | ${YELLOW}%h${ENDCOLOR} | ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})")
 
     msg="${GREEN}New last commit:${ENDCOLOR}|${new_commit}"
-    if [ -n "$ref" ]; then
+    if [ -n "$ref" ] || [ -n "$undo" ]; then
         msg="${msg}\n${GREEN}New last action:${ENDCOLOR}|${new_action}"
     fi
     msg="${msg}\n${RED}Cancelled commit:${ENDCOLOR}|${cancelled_commit}"
-    if [ -n "$ref" ]; then
+    if [ -n "$ref" ] || [ -n "$undo" ]; then
         msg="${msg}\n${RED}Cancelled action:${ENDCOLOR}|${cancelled_action}"
     fi
     msg=$(echo -e "$msg" | column -ts'|')

@@ -95,6 +95,7 @@ function get_repo {
     repo="${repo/"io:"/"io/"}"
     repo="${repo/"org:"/"org/"}"
     repo="${repo/"net:"/"net/"}"
+    repo="${repo/"dev:"/"dev/"}"
     repo="${repo/"ru:"/"ru/"}"
     repo="${repo/"git@"/"https://"}"
     repo="${repo/".git"/""}" 

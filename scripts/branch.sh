@@ -270,8 +270,8 @@ function branch_script {
         [5]="misc"
         [6]="test"
         [7]="chore"
-        [8]=""
-        [9]="$ticket_name"
+        [8]="$ticket_name"
+        [9]=""
     )
 
     branch_type=""

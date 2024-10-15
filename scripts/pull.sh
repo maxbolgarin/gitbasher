@@ -8,21 +8,21 @@
 ### Main function
 # $1: mode
     # <empty> - pull current branch using default merge strategy
+    # fetch: just fetch current branch
+    # all: fetch all
+    # ffonly: fast forward only
+    # merge: pull current branch using default merge strategy
     # rebase: pull current branch using rebase or fast forward if it is possible
     # interactive: pull current branch using interactive rebase
 function pull_script {
     case "$1" in
-        fetch|f) fetch="true";;
-        all|fa)
-            fetch="true"
-            all="true"
-        ;;
-        rebase|r) rebase="true";;
-        interactive|i|ri)
-            rebase="true"
-            args="--interactive"
-        ;;
-        help|h) help="true";;
+        fetch|fe)           fetch="true";;
+        all|fa)             fetch="true"; all="true";;
+        ffonly|ff)          ffonly="true";;
+        merge|m)            ;; # default mode
+        rebase|r)           rebase="true";;
+        interactive|i|ri)   rebase="true"; interactive="true";;
+        help|h)             help="true";;
         *)
             wrong_mode "pull" $1
     esac
@@ -32,8 +32,10 @@ function pull_script {
         echo
         echo -e "${YELLOW}Available modes${ENDCOLOR}"
         echo -e "<empty>\t\t\tFetch current branch and then merge changes with conflicts fixing"
-        echo -e "fetch|f\t\t\tFetch current branch"    
-        echo -e "all|fa\t\t\tFetch all"
+        echo -e "fetch|fe\t\tFetch current branch without merge"    
+        echo -e "all|fa\t\t\tFetch all without merge"
+        echo -e "ffonly|ff\t\tFetch and then merge in fast forward only mode"
+        echo -e "merge|m\t\t\tFetch current branch and then merge it (default mode)"
         echo -e "rebase|r\t\tFetch current branch and then rebase"
         echo -e "interactive|ri|i\tFetch current branch and then rebase in interactive mode"
         echo -e "help|h\t\t\tShow this help"
@@ -48,14 +50,21 @@ function pull_script {
     ### Print header
     header_msg="GIT PULL"
     if [ -n "${fetch}" ]; then
-        header_msg="$header_msg FETCH"
-    elif [ -n "${fetch_all}" ]; then
-        header_msg="$header_msg FETCH ALL"
+        if [ -n "${all}" ]; then
+            header_msg="$header_msg FETCH ALL"
+        else
+            header_msg="$header_msg FETCH"
+        fi
     elif [ -n "${rebase}" ]; then
-        header_msg="$header_msg REBASE"
-    elif [ -n "${interactive}" ]; then
-        header_msg="$header_msg INTERACTIVE REBASE"
+        if [ -n "${interactive}" ]; then
+            header_msg="$header_msg INTERACTIVE REBASE"
+        else
+            header_msg="$header_msg REBASE"
+        fi
+    elif [ -n "${ffonly}" ]; then
+        header_msg="$header_msg FAST FORWARD ONLY"
     fi
+
     echo -e "${YELLOW}${header_msg}${ENDCOLOR}"
     echo
 
@@ -72,7 +81,7 @@ function pull_script {
     
     echo -e "${YELLOW}Pulling '$origin_name/$current_branch'...${ENDCOLOR}"
     echo
-    pull $current_branch $origin_name $editor $mode $args
+    pull $current_branch $origin_name $editor $mode $ffonly 
     exit
 }
 
@@ -101,6 +110,7 @@ function fetch {
         echo -e "${fetch_output}"
         exit $fetch_code
     fi
+
     echo -e "${YELLOW}There is no '$1' in $2${ENDCOLOR}"
 }
 
@@ -110,7 +120,7 @@ function fetch {
 # $2: origin name
 # $3: editor
 # $4: mode - merge or rebase
-# $5: arguments
+# $5: ffonly
 function pull {
     ### Fetch, it will exit if critical error and return if branch doesn't exists in origin
     fetch $1 $2
@@ -120,18 +130,13 @@ function pull {
     fi
 
     if [ "$4" == "rebase" ]; then
-        # merge $1 $2 $3 "pull" "true" "--ff"
-
-        # TODO: rebase
-
-        exit
-    fi
-
-    ### Merge and resolve conflicts
-    merge $1 $2 $3 "pull" "true"
+        rebase_branch $1 $2 "true" $interactive
+    else 
+        merge $1 $2 $3 "pull" "true" $5
+    fi 
 
     ### Nothing to pull
-    if [[ $merge_output == *"Already up to date"* ]]; then
+    if [[ $rebase_output == *"is up to date"* ]] || [[ $merge_output == *"Already up to date"* ]]; then
         echo -e "${GREEN}Already up to date${ENDCOLOR}"
         return
     fi

@@ -9,6 +9,7 @@
 ### Main function
 # $1: mode
     # <empty>: switch to a local branch
+    # list: print a list of local branches
     # remote: switch to a remote branch
     # main: switch to the default branch
     # new: create a new branch from the current one 
@@ -16,6 +17,7 @@
     # delete: delete a local branch
 function branch_script {
     case "$1" in
+        list|l)      list="true";;
         remote|r|re) remote="true";;
         main|def|m)  main="true";;
         new|n|c)          
@@ -37,6 +39,7 @@ function branch_script {
         echo
         echo -e "${YELLOW}Available modes${ENDCOLOR}"
         echo -e "<empty>\t\tSelect a local branch to switch"
+        echo -e "list|l\t\tPrint a list of local branches"
         echo -e "remote|re|r\tFetch $origin_name and select a remote branch to switch"
         echo -e "main|def|m\tSwitch to $main_branch without additional confirmations"
         echo -e "new|n|c\t\tBuild a conventional name and create a new branch from $main_branch"
@@ -56,6 +59,8 @@ function branch_script {
         header="$header NEW"
     elif [ -n "${new}" ]; then
         header="$header NEW FROM DEFAULT"
+    elif [ -n "${list}" ]; then
+        header="$header LIST"
     elif [ -n "${delete}" ]; then
         header="$header DELETE"
     fi
@@ -72,7 +77,7 @@ function branch_script {
 
 
     ### Run switch to local logic
-    if [[ -z "$new" ]] && [[ -z "$remote" ]] && [[ -z "$delete" ]]; then
+    if [[ -z "$new" ]] && [[ -z "$remote" ]] && [[ -z "$delete" ]] && [[ -z "$list" ]]; then
         echo -e "${YELLOW}Select a branch to switch from '${current_branch}'${ENDCOLOR}:"
 
         choose_branch
@@ -238,6 +243,15 @@ function branch_script {
     
         exit
     fi
+
+    echo -e "${YELLOW}Current local branches:${ENDCOLOR}"
+    list_branches
+
+    if [ -n "$list" ]; then
+        exit
+    fi
+
+    echo
 
 
     ### Run create new branch logic

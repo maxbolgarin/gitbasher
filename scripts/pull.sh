@@ -84,7 +84,22 @@ function pull_script {
         fetch $current_branch $origin_name $all
 
         if [ $fetch_code == 0 ] ; then
-            echo -e "${GREEN}Successfully fetched '$origin_name/$current_branch'!${ENDCOLOR}"
+            if [ -n "$all" ]; then
+                echo -e "${GREEN}Successfully fetched all!${ENDCOLOR}"
+            else
+                echo -e "${GREEN}Successfully fetched '$origin_name/$current_branch'!${ENDCOLOR}"
+            fi
+            if [ "$fetch_output" != "" ]; then
+                echo
+                echo -e "$fetch_output"
+            fi
+            commits=$(commit_list 999 "tab" HEAD..$origin_name/$current_branch)
+            if [ "$commits" != "" ]; then
+                echo
+                count=$(echo $commits | wc -l | sed 's/^ *//;s/ *$//')
+                echo -e "Your branch is behind ${YELLOW}$origin_name/$current_branch${ENDCOLOR} by ${BOLD}$count${ENDCOLOR} commits:"
+                echo -e "$commits"
+            fi
         fi
 
         exit
@@ -98,6 +113,10 @@ function pull_script {
         
         if [ $update_code == 0 ] ; then
             echo -e "${GREEN}Successfully updated from remote!${ENDCOLOR}"
+            if [ "$update_output" != "" ]; then
+                echo
+                echo -e "$update_output"
+            fi
             exit
         fi
 
@@ -163,30 +182,47 @@ function pull {
     fi 
 
     ### Nothing to pull
-    if [[ $rebase_output == *"is up to date"* ]] || [[ $merge_output == *"Already up to date"* ]]; then
+    if ([[ "$4" == "rebase" ]] && [[ "$rebase_output" == "" ]]) || [[ $merge_output == *"Already up to date"* ]]; then
+        if [ "$4" == "rebase" ]; then
+            echo
+        fi       
         echo -e "${GREEN}Already up to date${ENDCOLOR}"
         return
     fi
 
     ### It will exit if critical error or resolve conflicts, so here we can get only in case of success
     echo -e "${GREEN}Successful pull!${ENDCOLOR}"
-    
+    echo
 
-    ### Merge without conflicts
-    if [ $merge_code == 0 ] ; then
-        changes=$(echo "$merge_output" | tail -n +3)
-        if [[ -n "$changes" ]]; then
-            echo
-            print_changes_stat "$changes"
-        fi
+    if [ "$fetch_output" != "" ]; then
+        echo -e "$fetch_output"
+        echo -e "Origin is ahead of local by this commits:"
+        echo -e $(commit_list 999 "tab" HEAD..$2/$1)
+        echo
+    fi
 
-    ### Merge with conflicts, but they were resolved
+    commit_hash=$(git rev-parse HEAD)
+    echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR}"
+    echo -e "${YELLOW}$(git log -1 --pretty=%B | cat)${ENDCOLOR}"
+    echo
+
+    if [ "$4" == "rebase" ] ; then 
+        echo "$rebase_output"
     else
-        commit_hash="$(git --no-pager log --pretty="%h" -1)"
-        changes=$(git --no-pager show $commit_hash --stat --format="")
-        if [[ -n "$changes" ]]; then
-            echo
-            print_changes_stat "$changes"
+        ### Merge without conflicts
+        if [ $merge_code == 0 ] ; then
+            changes=$(echo "$merge_output" | tail -n +2)
+            if [[ -n "$changes" ]]; then
+                print_changes_stat "$changes"
+            fi
+
+        ### Merge with conflicts, but they were resolved
+        else
+            commit_hash="$(git --no-pager log --pretty="%h" -1)"
+            changes=$(git --no-pager show $commit_hash --stat --format="")
+            if [[ -n "$changes" ]]; then
+                print_changes_stat "$changes"
+            fi
         fi
     fi
 }

@@ -84,21 +84,23 @@ function pull_script {
         fetch $current_branch $origin_name $all
 
         if [ $fetch_code == 0 ] ; then
-            if [ -n "$all" ]; then
-                echo -e "${GREEN}Successfully fetched all!${ENDCOLOR}"
-            else
-                echo -e "${GREEN}Successfully fetched '$origin_name/$current_branch'!${ENDCOLOR}"
-            fi
-            if [ "$fetch_output" != "" ]; then
-                echo
-                echo -e "$fetch_output"
-            fi
             commits=$(commit_list 999 "tab" HEAD..$origin_name/$current_branch)
             if [ "$commits" != "" ]; then
+                if [ -n "$all" ]; then
+                    echo -e "${GREEN}Successfully fetched all!${ENDCOLOR}"
+                else
+                    echo -e "${GREEN}Successfully fetched '$origin_name/$current_branch'!${ENDCOLOR}"
+                fi
+                if [ "$fetch_output" != "" ]; then
+                    echo
+                    echo -e "$fetch_output"
+                fi
                 echo
                 count=$(echo $commits | wc -l | sed 's/^ *//;s/ *$//')
-                echo -e "Your branch is behind ${YELLOW}$origin_name/$current_branch${ENDCOLOR} by ${BOLD}$count${ENDCOLOR} commits:"
+                echo -e "Your branch is behind ${YELLOW}$origin_name/$current_branch${ENDCOLOR} by ${BOLD}$count${ENDCOLOR} commits"
                 echo -e "$commits"
+            else
+                echo -e "${GREEN}Already up to date${ENDCOLOR}"
             fi
         fi
 
@@ -112,10 +114,19 @@ function pull_script {
         update_code=$?
         
         if [ $update_code == 0 ] ; then
-            echo -e "${GREEN}Successfully updated from remote!${ENDCOLOR}"
-            if [ "$update_output" != "" ]; then
+            commits=$(commit_list 999 "tab" HEAD..$origin_name/$current_branch)
+            if [ "$commits" != "" ]; then
+                echo -e "${GREEN}Successfully updated from remote!${ENDCOLOR}"
+                if [ "$update_output" != "" ]; then
+                    echo
+                    echo -e "$update_output"
+                fi
                 echo
-                echo -e "$update_output"
+                count=$(echo $commits | wc -l | sed 's/^ *//;s/ *$//')
+                echo -e "Your branch is behind ${YELLOW}$origin_name/$current_branch${ENDCOLOR} by ${BOLD}$count${ENDCOLOR} commits:"
+                echo -e "$commits"
+            else
+                echo -e "${GREEN}Already up to date${ENDCOLOR}"
             fi
             exit
         fi

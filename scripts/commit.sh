@@ -88,7 +88,7 @@ function commit_script {
         echo -e "msg|m\t\tSame as <empty>, but create multiline commit message using text editor"
         echo -e "ticket|t\tSame as <empty>, but add tracker's ticket info to the end of the commit header"
         echo -e "fast|f\t\tAdd all files (git add .) and create a conventional commit message without scope"
-        echo -e "fasts|fs\t\tAdd all files (git add .) and create a conventional commit message with scope"
+        echo -e "fasts|fs\tAdd all files (git add .) and create a conventional commit message with scope"
         echo -e "push|pu|p\tCreate a conventional commit and push changes at the end"
         echo -e "fastp|fp\tCreate a conventional commit in the fast mode and push changes"
         echo -e "fastsp|fsp|fps\tCreate a conventional commit in the fast mode with scope and push changes"

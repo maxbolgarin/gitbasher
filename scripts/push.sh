@@ -26,11 +26,24 @@ function push {
         repo=$(get_repo)
         echo -e "${YELLOW}Repo:${ENDCOLOR}\t${repo}"
         if [[ ${current_branch} != ${main_branch} ]]; then
-            ### TODO: check if PR have been created
+            link=$(echo "$push_output" | grep "https://" | sed 's|^remote:[[:space:]]*||')
             if [[ $repo == *"github"* ]]; then
-                echo -e "${YELLOW}PR:${ENDCOLOR}\t${repo}/pull/new/${current_branch}"
+                if [ "$link" != "" ]; then
+                    echo -e "${YELLOW}New PR:${ENDCOLOR}\t${link}"
+                else
+                    echo -e "${YELLOW}PRs:${ENDCOLOR}\t${repo}/pulls"
+                fi
             elif [[ $repo == *"gitlab"* ]]; then
-                echo -e "${YELLOW}MR:${ENDCOLOR}\t${repo}/merge_requests/new?merge_request%5Bsource_branch%5D=${current_branch}"
+                is_new=$(echo "$push_output" | grep "create a merge request")
+                if [ "$is_new" != "" ]; then
+                    echo -e "${YELLOW}New MR:${ENDCOLOR}\t${link}"
+                else
+                    if [ "$mr_link" != "" ]; then
+                        echo -e "${YELLOW}MR:${ENDCOLOR}\t${link}"
+                    else
+                        echo -e "${YELLOW}MRs:${ENDCOLOR}\t${repo}/merge_requests"
+                    fi
+                fi
             fi
         fi
         exit

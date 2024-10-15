@@ -127,15 +127,19 @@ function merge_script {
 # $3: editor
 # $4: operation name (e.g. merge or pull)
 # $5: is merge from origin?
-# $6: arguments
+# $6: ff
 # Returns:
 #      * merge_output
 #      * merge_code - 0 if everything is ok, not zero if there are conflicts
 function merge {
+    args=""
+    if [ "$6" == "true" ]; then
+        args="--ff-only"
+    fi
     if [ "$5" == "true" ]; then
-        merge_output=$(git merge $6 $2/$1 2>&1)
+        merge_output=$(git merge $args $2/$1 2>&1)
     else
-        merge_output=$(git merge $6 $1 2>&1)
+        merge_output=$(git merge $args $1 2>&1)
     fi
     merge_code=$?
 
@@ -154,6 +158,12 @@ function merge {
         files_to_commit=$(echo "$merge_output" | tail -n +2 | tail -r | tail -n +4 | tail -r)
         echo -e "${YELLOW}Files with changes${ENDCOLOR}"
         echo "$files_to_commit"
+        exit $merge_code
+    fi
+
+    if [[ $merge_output == *"possible to fast-forward"* ]]; then
+        echo -e "${RED}Branches cannot be fast forwarded!${ENDCOLOR}"
+        echo -e "You should use merge or rebase"
         exit $merge_code
     fi
 

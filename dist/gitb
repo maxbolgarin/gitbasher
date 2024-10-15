@@ -1690,21 +1690,20 @@ function push {
         repo=$(get_repo)
         echo -e "${YELLOW}Repo:${ENDCOLOR}\t${repo}"
         if [[ ${current_branch} != ${main_branch} ]]; then
+            link=$(echo "$push_output" | grep "https://" | sed 's|^remote:[[:space:]]*||')
             if [[ $repo == *"github"* ]]; then
-                pr_link=$(echo "$push_output" | grep "by visiting:" | awk '{print $NF}')
-                if [ "$pr_link" != "" ]; then
-                    echo -e "${YELLOW}New PR:${ENDCOLOR}\t${pr_link}"
+                if [ "$link" != "" ]; then
+                    echo -e "${YELLOW}New PR:${ENDCOLOR}\t${link}"
                 else
                     echo -e "${YELLOW}PRs:${ENDCOLOR}\t${repo}/pulls"
                 fi
             elif [[ $repo == *"gitlab"* ]]; then
-                mr_link=$(echo "$push_output" | grep "visit:" | awk '{print $NF}')
-                if [ "$mr_link" != "" ]; then
-                    echo -e "${YELLOW}New MR:${ENDCOLOR}\t${mr_link}"
+                is_new=$(echo "$push_output" | grep "create a merge request")
+                if [ "$is_new" != "" ]; then
+                    echo -e "${YELLOW}New MR:${ENDCOLOR}\t${link}"
                 else
-                    mr_link=$(echo "$push_output" | grep "View merge request" | awk '{print $NF}')
                     if [ "$mr_link" != "" ]; then
-                        echo -e "${YELLOW}MR:${ENDCOLOR}\t${mr_link}"
+                        echo -e "${YELLOW}MR:${ENDCOLOR}\t${link}"
                     else
                         echo -e "${YELLOW}MRs:${ENDCOLOR}\t${repo}/merge_requests"
                     fi
@@ -2323,6 +2322,7 @@ ${staged_with_tab}
 ### Main function
 # $1: mode
     # <empty>: switch to a local branch
+    # list: print a list of local branches
     # remote: switch to a remote branch
     # main: switch to the default branch
     # new: create a new branch from the current one 
@@ -2330,6 +2330,7 @@ ${staged_with_tab}
     # delete: delete a local branch
 function branch_script {
     case "$1" in
+        list|l)      list="true";;
         remote|r|re) remote="true";;
         main|def|m)  main="true";;
         new|n|c)          
@@ -2351,6 +2352,7 @@ function branch_script {
         echo
         echo -e "${YELLOW}Available modes${ENDCOLOR}"
         echo -e "<empty>\t\tSelect a local branch to switch"
+        echo -e "list|l\t\tPrint a list of local branches"
         echo -e "remote|re|r\tFetch $origin_name and select a remote branch to switch"
         echo -e "main|def|m\tSwitch to $main_branch without additional confirmations"
         echo -e "new|n|c\t\tBuild a conventional name and create a new branch from $main_branch"
@@ -2370,6 +2372,8 @@ function branch_script {
         header="$header NEW"
     elif [ -n "${new}" ]; then
         header="$header NEW FROM DEFAULT"
+    elif [ -n "${list}" ]; then
+        header="$header LIST"
     elif [ -n "${delete}" ]; then
         header="$header DELETE"
     fi
@@ -2386,7 +2390,7 @@ function branch_script {
 
 
     ### Run switch to local logic
-    if [[ -z "$new" ]] && [[ -z "$remote" ]] && [[ -z "$delete" ]]; then
+    if [[ -z "$new" ]] && [[ -z "$remote" ]] && [[ -z "$delete" ]] && [[ -z "$list" ]]; then
         echo -e "${YELLOW}Select a branch to switch from '${current_branch}'${ENDCOLOR}:"
 
         choose_branch
@@ -2552,6 +2556,15 @@ function branch_script {
     
         exit
     fi
+
+    echo -e "${YELLOW}Current local branches${ENDCOLOR}:"
+    list_branches
+
+    if [ -n "$list" ]; then
+        exit
+    fi
+
+    echo
 
 
     ### Run create new branch logic

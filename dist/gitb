@@ -1524,6 +1524,7 @@ function rebase_conflicts {
     # <empty> - pull current branch using default merge strategy
     # fetch: just fetch current branch
     # all: fetch all
+    # upd: run git remote update to fetch all branches
     # ffonly: fast forward only
     # merge: pull current branch using default merge strategy
     # rebase: pull current branch using rebase or fast forward if it is possible
@@ -1532,6 +1533,7 @@ function pull_script {
     case "$1" in
         fetch|fe)           fetch="true";;
         all|fa)             fetch="true"; all="true";;
+        upd|u)              update="true";;
         ffonly|ff)          ffonly="true";;
         merge|m)            ;; # default mode
         rebase|r)           rebase="true";;
@@ -1548,6 +1550,7 @@ function pull_script {
         echo -e "<empty>\t\t\tFetch current branch and then merge changes with conflicts fixing"
         echo -e "fetch|fe\t\tFetch current branch without merge"    
         echo -e "all|fa\t\t\tFetch all without merge"
+        echo -e "upd|u\t\t\tRun git remote update to fetch all branches"
         echo -e "ffonly|ff\t\tFetch and then merge in fast forward only mode"
         echo -e "merge|m\t\t\tFetch current branch and then merge it (default mode)"
         echo -e "rebase|r\t\tFetch current branch and then rebase"
@@ -1577,6 +1580,8 @@ function pull_script {
         fi
     elif [ -n "${ffonly}" ]; then
         header_msg="$header_msg FAST FORWARD ONLY"
+    elif [ -n "${update}" ]; then
+        header_msg="$header_msg REMOTE UPDATE"
     fi
 
     echo -e "${YELLOW}${header_msg}${ENDCOLOR}"
@@ -1589,8 +1594,30 @@ function pull_script {
             echo -e "${YELLOW}Fetching '$origin_name/$current_branch'...${ENDCOLOR}"
         fi
         echo
+
         fetch $current_branch $origin_name $all
+
+        if [ $fetch_code == 0 ] ; then
+            echo -e "${GREEN}Successfully fetched '$origin_name/$current_branch'!${ENDCOLOR}"
+        fi
+
         exit
+    fi
+
+    if [ -n "$update" ]; then
+        echo -e "${YELLOW}Updating from remote...${ENDCOLOR}"
+        echo
+        update_output=$(git remote update 2>&1)
+        update_code=$?
+        
+        if [ $update_code == 0 ] ; then
+            echo -e "${GREEN}Successfully updated from remote!${ENDCOLOR}"
+            exit
+        fi
+
+        echo -e "${RED}Cannot update! Error message:${ENDCOLOR}"
+        echo -e "${update_output}"
+        exit $update_code
     fi
     
     echo -e "${YELLOW}Pulling '$origin_name/$current_branch'...${ENDCOLOR}"

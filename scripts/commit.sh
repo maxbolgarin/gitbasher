@@ -57,6 +57,7 @@ function after_commit {
     # fastfixp: fast fixup commit with push
     # amend: add to the last without edit (add to last commit)
     # amendf: add all fiels to the last commit without edit
+    # last: change commit message to the last one
     # revert: revert commit
     # help: print help
 function commit_script {
@@ -74,6 +75,7 @@ function commit_script {
         fastfixp|fxp|xfp)   fixup="true"; fast="true"; push="true";;
         amend|am|a)         amend="true";;
         amendf|amf|af)      amend="true"; fast="true";;
+        last|l)             last="true";;
         revert|rev)         revert="true";;
         help|h)             help="true";;
         *)
@@ -98,6 +100,7 @@ function commit_script {
         echo -e "fastfixp|fxp\tAdd all files (git add .) and commit to make a --fixup commit and push"
         echo -e "amend|am|a\tSelect files and add them to the last commit without message edit (git commit --amend --no-edit)"
         echo -e "amendf|amf|af\tAdd all fiels to the last commit without message edit (git commit --amend --no-edit)"
+        echo -e "last|l\t\tChange commit message to the last one"
         echo -e "revert|rev\tSelect a commit to revert (git revert -no-edit <commit>)"
         echo -e "help|h\t\tShow this help"
         exit
@@ -131,12 +134,19 @@ function commit_script {
         header_msg="$header_msg TICKET"
     elif [ -n "${amend}" ]; then
         header_msg="$header_msg AMEND LAST"
+    elif [ -n "${last}" ]; then
+        header_msg="$header_msg LAST"
     elif [ -n "${revert}" ]; then
         header_msg="$header_msg REVERT"
     fi
 
     echo -e "${YELLOW}${header_msg}${ENDCOLOR}"
     echo
+
+    if [ -n "$last" ]; then
+        git commit --amend
+        exit
+    fi
 
 
     ### Check if there are unstaged files

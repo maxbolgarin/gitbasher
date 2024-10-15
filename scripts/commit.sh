@@ -48,8 +48,10 @@ function after_commit {
     # msg: use editor to write commit message
     # ticket: add ticket info to the end of message header
     # fast: fast commit with git add .
+    # fasts: fast commit with scope
     # push: push changes after commit
     # fastp: fast commit with push
+    # fastsp: fast commit with scope and push
     # fixup: fixup commit   
     # fastfix: fixup commit with git add .
     # fastfixp: fast fixup commit with push
@@ -62,8 +64,10 @@ function commit_script {
         msg|m)              msg="true";;
         ticket|jira|j|t)    ticket="true";;
         fast|f)             fast="true";;
+        fasts|fs)           fast="true"; scope="true";;
         push|pu|p)          push="true";;
         fastp|fp)           fast="true"; push="true";;
+        fastsp|fsp|fps)     fast="true"; push="true"; scope="true";;
         fixup|fix|x)        fixup="true";;
         fixupp|fixp|xp)     fixup="true"; push="true";;
         fastfix|fx|xf)      fixup="true"; fast="true";;
@@ -84,8 +88,10 @@ function commit_script {
         echo -e "msg|m\t\tSame as <empty>, but create multiline commit message using text editor"
         echo -e "ticket|t\tSame as <empty>, but add tracker's ticket info to the end of the commit header"
         echo -e "fast|f\t\tAdd all files (git add .) and create a conventional commit message without scope"
+        echo -e "fasts|fs\t\tAdd all files (git add .) and create a conventional commit message with scope"
         echo -e "push|pu|p\tCreate a conventional commit and push changes at the end"
         echo -e "fastp|fp\tCreate a conventional commit in the fast mode and push changes"
+        echo -e "fastsp|fsp|fps\tCreate a conventional commit in the fast mode with scope and push changes"
         echo -e "fixup|fix|x\tSelect files and commit to make a --fixup commit (git commit --fixup <hash>)"
         echo -e "fixupp|fixp|xp\tSelect files and commit to make a --fixup commit and push changes"
         echo -e "fastfix|fx\tAdd all files (git add .) and commit to make a --fixup commit"
@@ -308,11 +314,15 @@ function commit_script {
 
 
     ### Commit Step 3: enter a commit scope
-    if [ -z "$is_empty" ] && [ -z "$fast" ]; then
+    if ([ -z "$is_empty" ] && [ -z "$fast" ]) || [ -n "$scope" ]; then
+        step="3"
+        if [ -n "${fast}" ]; then
+            step="2"
+        fi
         echo
-        echo -e "${YELLOW}Step 3.${ENDCOLOR} Enter a scope of changes to provide an additional context"
+        echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Enter a scope of changes to provide an additional context"
         echo -e "Final meesage will be ${YELLOW}${commit_type}(<scope>): <summary>${ENDCOLOR}"
-        echo -e "Leave it blank to continue without scope or 0 to exit without changes"
+        echo -e "Leave it blank to continue without scope or enter 0 to exit without changes"
 
         read -p "$(echo -n -e "${TODO}<scope>:${ENDCOLOR} ")" -e commit_scope
 
@@ -329,14 +339,18 @@ function commit_script {
         fi
     fi
 
-    if [ -z "$is_empty" ] && [ -n "$fast" ]; then
+    if [ -z "$is_empty" ] && [ -n "$fast" ] && [ -z "$scope" ]; then
         commit="$commit: "
     fi
 
 
     ### Commit Step 4: enter commit message, use editor in msg mode
     if [ -n "${fast}" ]; then
-        step="2"
+        if [ -n "$scope" ]; then
+            step="3"
+        else
+            step="2"
+        fi
     elif [ -n "$is_empty" ]; then
         step="3"
     else

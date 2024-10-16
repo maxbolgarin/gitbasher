@@ -130,7 +130,7 @@ function rebase_branch {
     if [ "$5" == "true" ]; then
         if [ "$6" == "true" ]; then
             echo -e "Select a new ${BOLD}base${NORMAL} commit from which to squash fixup commits (third one or older):"
-            choose_commit 30 "number" $ref
+            choose_commit 20 "number" $ref
             ref="$commit_hash"
         fi
         

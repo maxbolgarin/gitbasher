@@ -6,6 +6,7 @@
 **gitbasher** allows you to interact with Git repository from the command line in a simple and intuitive way, speeding up the development process, making it more consistent and reducing the number of mistakes. This is a wrapper around the most used Git commands, making their use clearer and providing outputs in a more readable form. It uses `bash`, `git`, `sed`, `grep` and some built-in utilities.
 
 
+
 ### Table of Contents
 - [Why you should try this?](#why-you-should-try-this)
 - [Examples](#examples)

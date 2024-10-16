@@ -90,7 +90,7 @@ function rebase_script {
 
     ### Run rebase and handle conflicts
 
-    rebase_branch "$new_base_branch" "$origin_name" "$from_origin" "$interactive" "$autosquash"
+    rebase_branch "$new_base_branch" "$origin_name" "$from_origin" "$interactive" "$autosquash" "$autosquash"
 
 
     ### Nothing to rebase
@@ -117,30 +117,31 @@ function rebase_script {
 # $3: is from origin?
 # $4: interactive
 # $5: autosquash
+# $6: base commit for autosquash
 # Returns:
 #      * rebase_output
 #      * rebase_code - 0 if everything is ok, not zero if there are conflicts
 function rebase_branch {
     ref=$1
-    if [ -n "$3" ]; then
+    if [ "$3" == "true" ]; then
         ref=$2/$1
     fi
 
-    args=""
-    if [ -n "$4" ]; then
-       rebase_output=$(git rebase -i $ref 3>&2 2>&1 1>&3)
-    
-    elif [ -n "$5" ]; then
-        echo -e "Select a new ${BOLD}base${NORMAL} commit from which to squash fixup commits (third one or older):"
-
-        choose_commit 30 "number" $ref
-        ref="$commit_hash"
-
+    if [ "$5" == "true" ]; then
+        if [ "$6" == "true" ]; then
+            echo -e "Select a new ${BOLD}base${NORMAL} commit from which to squash fixup commits (third one or older):"
+            choose_commit 30 "number" $ref
+            ref="$commit_hash"
+        fi
+        
         rebase_output=$(git rebase -i --autosquash $ref 3>&2 2>&1 1>&3)
-    else
 
+    elif [ "$4" == "true" ]; then
+        rebase_output=$(git rebase -i $ref 3>&2 2>&1 1>&3)
+    else
         rebase_output=$(git rebase $ref 3>&2 2>&1 1>&3)
     fi
+
     rebase_code=$?
 
     if [ $rebase_code == 0 ] ; then
@@ -161,7 +162,7 @@ function rebase_branch {
     fi
 
     ### Cannot rebase because of conflicts
-    if [[ $rebase_output == *"Resolve all conflicts manually"* ]]; then
+    if [[ $rebase_output == *"Resolve all conflicts manually"* ]] || [[ $rebase_output == *"previous cherry-pick is now empty"* ]]; then
         echo -e "${RED}Cannot rebase! There are conflicts${ENDCOLOR}"
         rebase_conflicts $rebase_output 
     fi
@@ -344,11 +345,11 @@ function rebase_conflicts {
                 return
             fi
 
-            if [[ $rebase_output != *"CONFLICT"* ]]; then
-                echo -e "${RED}Cannot rebase! Error message:${ENDCOLOR}"
-                echo "$rebase_output"
-                exit $rebase_code
-            fi
+            # if [[ $rebase_output != *"CONFLICT"* ]]; then
+            #     echo -e "${RED}Cannot rebase! Error message:${ENDCOLOR}"
+            #     echo "$rebase_output"
+            #     exit $rebase_code
+            # fi
 
             echo -e "${YELLOW}Skipping commit${ENDCOLOR}"
             new_step="true"

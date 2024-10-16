@@ -1863,11 +1863,12 @@ function push_script {
     fi
 
     if [ "${history_from}" != "${origin_name}/${current_branch}" ]; then
-        echo -e "Branch ${YELLOW}${current_branch}${ENDCOLOR} doesn't exist in ${origin_name}, get commits diff from the base commit"
+        echo -e "Branch ${YELLOW}${current_branch}${ENDCOLOR} doesn't exist in the ${YELLOW}${origin_name}${ENDCOLOR}, get commits diff from the base commit"
     fi
 
     ### Print list of unpushed commits
-    echo -e "${YELLOW}Commit history from '${history_from}'${ENDCOLOR}"
+    count=$(echo $push_list | wc -l | sed 's/^ *//;s/ *$//')
+    echo -e "Your branch is ahead ${YELLOW}${history_from}${ENDCOLOR} by ${BOLD}$count${ENDCOLOR} commits"
     echo -e "$push_list"
 
 

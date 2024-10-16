@@ -1406,7 +1406,14 @@ function rebase_conflicts {
 
             echo
             echo -e "${GREEN}Step $current_step/$total_steps:${ENDCOLOR} $commit_name"
-            echo -e "$files"
+            if [ "$files" != "" ]; then
+                echo -e "$files"
+            else
+                echo
+                echo -e "${YELLOW}The previous commit is now empty due to conflict resolution${ENDCOLOR}"
+                echo -e "${GREEN}You can skip this commit by pressing ${BOLD}3${ENDCOLOR}"
+                force_skip="true"
+            fi
 
             new_step="false"
         fi
@@ -1466,14 +1473,18 @@ function rebase_conflicts {
         fi
 
         if [ "$choice" == "3" ]; then
-            echo
-            echo -e "Are you sure you want to ${RED}skip${ENDCOLOR} commit and ${RED}throw it away${ENDCOLOR} (y/n)?"
-            read -n 1 -s choice_yes
-            if [ "$choice_yes" != "y" ]; then
-                echo -e "${YELLOW}Continuing...${ENDCOLOR}"
-                continue
+            if [ "$force_skip" != "true" ]; then
+                echo
+                echo -e "Are you sure you want to ${RED}skip${ENDCOLOR} commit and ${RED}throw it away${ENDCOLOR} (y/n)?"
+                read -n 1 -s choice_yes
+                if [ "$choice_yes" != "y" ]; then
+                    echo -e "${YELLOW}Continuing...${ENDCOLOR}"
+                    continue
+                fi
             fi
             
+            force_skip="false"
+
             rebase_output=$(git rebase --skip 2>&1)
             rebase_code=$?
 
@@ -1481,12 +1492,6 @@ function rebase_conflicts {
                 echo
                 return
             fi
-
-            # if [[ $rebase_output != *"CONFLICT"* ]]; then
-            #     echo -e "${RED}Cannot rebase! Error message:${ENDCOLOR}"
-            #     echo "$rebase_output"
-            #     exit $rebase_code
-            # fi
 
             echo -e "${YELLOW}Skipping commit${ENDCOLOR}"
             new_step="true"

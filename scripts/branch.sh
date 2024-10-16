@@ -43,8 +43,8 @@ function branch_script {
         echo -e "remote|re|r\tFetch $origin_name and select a remote branch to switch"
         echo -e "main|def|m\tSwitch to $main_branch without additional confirmations"
         echo -e "new|n|c\t\tBuild a conventional name and create a new branch from $main_branch"
-        echo -e "newd|nd\tBuild a conventional name, switch to $main_branch, pull it and create new branch"
-        echo -e "delete|del|d\tSelect a branch to delete"
+        echo -e "newd|nd\t\tBuild a conventional name, switch to $main_branch, pull it and create new branch"
+        echo -e "delete|del|d\tSelect a local branch to delete"
         echo -e "help|h\t\tShow this help"
         exit
     fi

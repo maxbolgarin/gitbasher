@@ -327,7 +327,7 @@ function choose_commit {
     commit_hash=$choice_result
 
     if [ -n "$pressed_alt" ]; then
-        commit_list 99 "number"
+        commit_list 50 "number"
         echo "00. Exit"
         echo
         choose "${commits_hash[@]}"

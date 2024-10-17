@@ -375,34 +375,34 @@ function commit_script {
         commitmsg_file=".commitmsg__"
         touch $commitmsg_file
 
-        staged_with_tab="$(sed 's/^/###\t/' <<< "${staged}")"
+        staged_with_tab="$(sed 's/^/####\t/' <<< "${staged}")"
 
         echo """
-###
-### Step ${step}. Write a <summary> about your changes. Lines starting with '#' will be ignored. 
-### 
-### On branch ${current_branch}
-### Changes to be commited:
+####
+#### Step ${step}. Write a <summary> about your changes. Lines starting with '#' will be ignored. 
+#### 
+#### On branch ${current_branch}
+#### Changes to be commited:
 ${staged_with_tab}
-###
-### Here is expected format:
-### ${commit}<summary>
-### <BLANK LINE>
-### <optional body>
-### <BLANK LINE>
-### <optional footer>
-###
-### Summary should provide a succinct description of the change:
-###     use the imperative, present tense: 'change' not 'changed' nor 'changes'
-###     no dot (.) at the end
-###     don't capitalize the first letter
-###
-### The body is optional and should explain why you are making the change. 
-###
-### The footer is optional and should contain any information about 'Breaking Changes'.
-### Breaking Change section should start with the phrase 'BREAKING CHANGE: ' followed by a summary of the breaking change.
-###
-### Similarly, a Deprecation section should start with 'DEPRECATED: ' followed by a short description of what is deprecated.
+####
+#### Here is expected format:
+#### ${commit}<summary>
+#### <BLANK LINE>
+#### <optional body>
+#### <BLANK LINE>
+#### <optional footer>
+####
+#### Summary should provide a succinct description of the change:
+####     use the imperative, present tense: 'change' not 'changed' nor 'changes'
+####     no dot (.) at the end
+####     don't capitalize the first letter
+####
+#### The body is optional and should explain why you are making the change. 
+####
+#### The footer is optional and should contain any information about 'Breaking Changes'.
+#### Breaking Change section should start with the phrase 'BREAKING CHANGE: ' followed by a summary of the breaking change.
+####
+#### Similarly, a Deprecation section should start with 'DEPRECATED: ' followed by a short description of what is deprecated.
 """ >> $commitmsg_file
 
         while [ true ]; do

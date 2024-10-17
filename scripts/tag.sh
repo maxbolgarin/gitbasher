@@ -337,11 +337,11 @@ function tag_script {
         touch $tag_file
 
         echo """
-###
-### Write some words about the new tag '${tag_name}'
-### [$current_branch ${commit_hash::7}] ${commit_message}
-### 
-### You can place changelog here if this tag for a new release
+####
+#### Write some words about the new tag '${tag_name}'
+#### [$current_branch ${commit_hash::7}] ${commit_message}
+#### 
+#### You can place changelog here if this tag for a new release
 """ >> $tag_file
 
         while [ true ]; do

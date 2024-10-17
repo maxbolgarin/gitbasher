@@ -277,15 +277,15 @@ function merge_commit {
 
     ### 2. Commit with entered message
     else
-        staged_with_tab="$(sed 's/^/###\t/' <<< "$2")"
+        staged_with_tab="$(sed 's/^/####\t/' <<< "$2")"
         commitmsg_file=".commitmsg__"
         touch $commitmsg_file
         echo """
-###
-### Write a message about merge from '$5/$4' into '$4'. Lines starting with '#' will be ignored. 
-### 
-### On branch $4
-### Changes to be commited:
+####
+#### Write a message about merge from '$5/$4' into '$4'. Lines starting with '#' will be ignored. 
+#### 
+#### On branch $4
+#### Changes to be commited:
 ${staged_with_tab}
 """ >> $commitmsg_file
 

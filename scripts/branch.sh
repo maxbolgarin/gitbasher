@@ -96,7 +96,6 @@ function branch_script {
         fetch_output=$(git fetch 2>&1)
         check_code $? "$fetch_output" "fetch remote"
 
-        ## TODO: should I ask?
         prune_output=$(git remote prune $origin_name 2>&1)
 
         echo -e "${YELLOW}Switch from '${current_branch}' to the remote branch${ENDCOLOR}"

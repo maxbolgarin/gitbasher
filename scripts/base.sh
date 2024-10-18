@@ -39,6 +39,7 @@ if [ $is_first == "true" ]; then
     print_configuration
     echo
     echo -e "You can change these settings by using ${YELLOW}gitb cfg <name>${ENDCOLOR}"
+    git config --local gitbasher.scopes "logic model config logs"
 fi
 
 

@@ -10,6 +10,7 @@ main_branch=$(get_config_value gitbasher.branch "$main_branch")
 sep=$(get_config_value gitbasher.sep "-")
 editor=$(get_config_value core.editor "vi")
 ticket_name=$(get_config_value gitbasher.ticket "")
+scopes=$(get_config_value gitbasher.scopes "")
 
 ### Is this is a first run of gitbasher in this project?
 is_first=$(get_config_value gitbasher.isfirst "true")
@@ -137,15 +138,16 @@ function set_editor {
 
 ### Function asks user to enter ticket name
 function set_ticket {
-    if [ -z $ticket_name ]; then
-        echo -e "${YELLOW}Current gitbasher ticket name is not set${ENDCOLOR}"
-    else
-        echo -e "Current gitbasher ticket name: ${YELLOW}$ticket_name${ENDCOLOR}"
-    fi
+    echo -e "${YELLOW}Enter a ticket prefix${ENDCOLOR}"
     echo
-    
-    echo -e "${YELLOW}Enter a new ticket name${ENDCOLOR}"
-    read -p "Ticket name: " -e ticket_name
+
+    if [ -z $ticket_name ]; then
+        echo -e "${YELLOW}Ticket prefix is not set in gitbasher${ENDCOLOR}"
+    else
+        echo -e "Current ticket prefix: ${YELLOW}$ticket_name${ENDCOLOR}"
+    fi
+   
+    read -p "Ticket prefix: " -e ticket_name
 
     if [ -z $ticket_name ]; then
         exit
@@ -165,22 +167,163 @@ function set_ticket {
 }
 
 
+### Function asks user to set scope
+function set_scopes {
+    echo -e "${YELLOW}Enter a list of predefined scopes${ENDCOLOR}"
+    echo
+    if [ "$scopes" == "" ]; then
+        echo -e "${YELLOW}Scopes list is not set${ENDCOLOR}"
+    else
+        echo -e "Current list of scopes: ${YELLOW}$scopes${ENDCOLOR}"
+    fi
+    echo -e "Use only english letters and space as separator, maximum is 9 scopes"
+    echo -e "Enter 0 if you want to remove scopes"
+
+    read -p "Scopes: " -e scopes_raw
+
+    if [ "$scopes_raw" == "" ]; then
+        exit
+    fi
+
+    if [ "$scopes_raw" == "0" ]; then
+        git config --local --unset-all gitbasher.scopes
+
+        echo
+        echo -e "${GREEN}Scopes list removed from '${project_name}' repo${ENDCOLOR}"
+        exit
+    fi
+
+    echo
+
+    re='^([a-zA-Z]+ ){0,8}([a-zA-Z]+)+$'
+    if ! [[ $scopes_raw =~ $re ]]; then
+        echo -e "${RED}Invalid scopes list!${ENDCOLOR}"
+        exit
+    fi
+
+    git config --local --replace-all gitbasher.scopes "$scopes_raw"
+
+    scopes="$scopes_raw"
+
+    echo -e "${GREEN}Set '${scopes}' as a scopes list in '${project_name}' repo${ENDCOLOR}"
+    echo
+
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+    yes_no_choice "\nSet '${scopes}' globally" "true"
+
+    git config --global --replace-all gitbasher.scopes "$scopes_raw"
+}
+
+
+### Function asks user to unset global
+function delete_global {
+    echo -e "${YELLOW}Unset global config${ENDCOLOR}"
+    echo
+    echo -e "Select a cfg to unset from global settings"
+
+    global_default=$(git config --global --get gitbasher.branch)
+    if [ "$global_default" != "" ]; then
+        echo -e "1. Default branch: ${YELLOW}${global_default}${ENDCOLOR}"
+    fi
+
+    global_sep=$(git config --global --get gitbasher.sep)
+    if [ "$global_sep" != "" ]; then
+        echo -e "2. Branch separator: ${YELLOW}${global_sep}${ENDCOLOR}"
+    fi
+
+    global_editor=$(git config --global --get core.editor)
+    if [ "$global_editor" != "" ]; then
+        echo -e "3. Commit message editor: ${YELLOW}${global_editor}${ENDCOLOR}"
+    fi
+
+    global_ticket=$(git config --global --get gitbasher.ticket)
+    if [ "$global_ticket" != "" ]; then
+        echo -e "4. Ticket prefix: ${YELLOW}${global_ticket}${ENDCOLOR}"
+    fi
+
+    global_scopes=$(git config --global --get gitbasher.scopes)
+    if [ "$global_scopes" != "" ]; then
+        echo -e "5. Scopes list: ${YELLOW}${global_scopes}${ENDCOLOR}"
+    fi
+
+    echo -e "0. Exit"
+
+    read -n 1 -s choice
+    re='^[012345]+$'
+    if ! [[ $choice =~ $re ]]; then
+        break
+    fi
+
+    if [ "$choice" == "0" ]; then
+        exit
+    fi
+
+    echo
+
+    case "$choice" in
+        1)  
+            echo -e "${GREEN}Unset default branch from global settings${ENDCOLOR}"
+            git config --global --unset gitbasher.branch
+            ;;
+        2)
+            echo -e "${GREEN}Unset branch separator from global settings${ENDCOLOR}"
+            git config --global --unset gitbasher.sep
+            ;;
+        3)
+            echo -e "${GREEN}Unset commit message editor from global settings${ENDCOLOR}"
+            git config --global --unset core.editor
+            ;;
+        4)
+            echo -e "${GREEN}Unset ticket prefix from global settings${ENDCOLOR}"
+            git config --global --unset gitbasher.ticket
+            ;;
+        5)
+            echo -e "${GREEN}Unset scopes list from global settings${ENDCOLOR}"
+            git config --global --unset gitbasher.scopes
+            ;;
+    esac
+}
+
+
 ### Main function
 # $1: mode
-    # empty: NOT WOIRKIGN
-    # main: set main branch
+    # empty: show current config
+    # default: set main branch
     # sep: set branch separator
     # editor: set commit message editor
     # ticket: set prefix for tickets
+    # scope: add list of scopes
+    # delete: delete global config
 function config_script {
     case "$1" in
         default|def|d|b|main) set_default_cfg="true";;
-        separator|sep|s)    set_sep_cfg="true";;
-        editor|ed|e)        set_editor_cfg="true";;
-        ticket|jira|ti|t)   set_ticket_cfg="true";;
-        help|h)             help="true";;
-        *)                  wrong_mode "config" $1
+        separator|sep)        set_sep_cfg="true";;
+        editor|ed|e)          set_editor_cfg="true";;
+        ticket|jira|ti|t)     set_ticket_cfg="true";;
+        scopes|scope|sc|s)    set_scopes_cfg="true";;
+        delete|unset|del)     delete_cfg="true";;
+        help|h)               help="true";;
+        *)                    wrong_mode "config" $1
     esac
+
+    ### Merge mode - print header
+    header="GIT CONFIG"
+    if [ -n "${set_default_cfg}" ]; then
+        header="$header DEFAULT BRANCH"
+    elif [ -n "${set_sep_cfg}" ]; then
+        header="$header BRANCH SEPARATOR"
+    elif [ -n "${set_editor_cfg}" ]; then
+        header="$header COMMIT MESSAGE EDITOR"
+    elif [ -n "${set_ticket_cfg}" ]; then
+        header="$header TICKET PREFIX"
+    elif [ -n "${set_scopes_cfg}" ]; then
+        header="$header SCOPES LIST"
+    elif [ -n "${delete}" ]; then
+        header="$header UNSET GLOBAL CONFIG"
+    fi
+
+    echo -e "${YELLOW}${header}${ENDCOLOR}"
+    echo
 
     if [ "$set_default_cfg" == "true" ]; then
         set_default_branch
@@ -202,6 +345,16 @@ function config_script {
         exit
     fi
 
+    if [ "$set_scopes_cfg" == "true" ]; then
+        set_scopes
+        exit
+    fi
+
+    if [ "$delete_cfg" == "true" ]; then
+        delete_global
+        exit
+    fi
+
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb config <mode>${ENDCOLOR}"
         echo
@@ -211,6 +364,8 @@ function config_script {
         echo -e "separator|sep|s\t\tUpdate separator between type and name in branch"
         echo -e "editor|ed|e\t\tUpdate text editor for the commit messages"
         echo -e "ticket|ti|t|jira\tSet ticket prefix to help with commit/branch building"
+        echo -e "scopes|sc|s\t\tSet a list of scopes to help with commit building"
+        echo -e "delete|unset|del\tUnset global configuration"
         exit
     fi
 

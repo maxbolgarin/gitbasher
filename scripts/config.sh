@@ -285,6 +285,35 @@ function delete_global {
 }
 
 
+### Function asks user to set name and email
+function set_user {
+    echo -e "${YELLOW}Set user name and email${ENDCOLOR}"
+    echo
+    echo -e "Current name: ${YELLOW}$(get_config_value user.name)${ENDCOLOR}"
+    echo -e "Enter new name or leave it empty if you don't want to change it"
+    read -p "Name: " -e user_name
+
+    echo
+    echo -e "Current email: ${YELLOW}$(get_config_value user.email)${ENDCOLOR}"
+    echo -e "Enter new email or leave it empty if you don't want to change it"
+    read -p "Email: " -e user_email
+
+    if [ "$user_name" == "" ] && [ "$user_email" == "" ]; then
+        exit
+    fi
+
+    echo
+
+    if [ "$user_name" != "" ]; then
+        echo -e "${GREEN}Set user name to '${user_name}'${ENDCOLOR}"
+        git config --local --replace-all user.name "$user_name"
+    fi
+    if [ "$user_email" != "" ]; then
+        echo -e "${GREEN}Set user email to '${user_email}'${ENDCOLOR}"
+        git config --local --replace-all user.email "$user_email"
+    fi
+}
+
 ### Main function
 # $1: mode
     # empty: show current config
@@ -294,6 +323,7 @@ function delete_global {
     # ticket: set prefix for tickets
     # scope: add list of scopes
     # delete: delete global config
+    # user: set user name and email
 function config_script {
     case "$1" in
         default|def|d|b|main) set_default_cfg="true";;
@@ -302,6 +332,7 @@ function config_script {
         ticket|jira|ti|t)     set_ticket_cfg="true";;
         scopes|scope|sc|s)    set_scopes_cfg="true";;
         delete|unset|del)     delete_cfg="true";;
+        user|name|email|u)    set_user_cfg="true";;
         help|h)               help="true";;
         *)                    wrong_mode "config" $1
     esac
@@ -320,10 +351,17 @@ function config_script {
         header="$header SCOPES LIST"
     elif [ -n "${delete}" ]; then
         header="$header UNSET GLOBAL CONFIG"
+    elif [ -n "${set_user_cfg}" ]; then
+        header="$header USER NAME & EMAIL"
     fi
 
     echo -e "${YELLOW}${header}${ENDCOLOR}"
     echo
+
+    if [ "$set_user_cfg" == "true" ]; then
+        set_user
+        exit
+    fi
 
     if [ "$set_default_cfg" == "true" ]; then
         set_default_branch
@@ -360,6 +398,7 @@ function config_script {
         echo
         echo -e "${YELLOW}Available modes for configuration${ENDCOLOR}"
         echo -e "<empty>\t\t\tPrint current gitbasher configuration"
+        echo -e "user|name|email|u\tSet user name and email"
         echo -e "default|def|d|b|main\tUpdate gitbasher's default branch (not in remote git repo!)"
         echo -e "separator|sep|s\t\tUpdate separator between type and name in branch"
         echo -e "editor|ed|e\t\tUpdate text editor for the commit messages"

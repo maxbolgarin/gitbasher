@@ -561,7 +561,7 @@ function switch {
             get_push_list $1 ${main_branch} ${origin_name}
             if [ -n "$push_list" ]; then
                 echo
-                count=$(echo $push_list | wc -l | sed 's/^ *//;s/ *$//')
+                count=$(echo -e "$push_list" | wc -l | sed 's/^ *//;s/ *$//')
                 echo -e "Your branch ${YELLOW}$1${ENDCOLOR} is ahead ${YELLOW}${history_from}${ENDCOLOR} by ${BOLD}$count${ENDCOLOR} commits"
                 echo -e "$push_list"
             fi

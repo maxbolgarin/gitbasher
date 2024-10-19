@@ -82,29 +82,6 @@ function commit_script {
             wrong_mode "commit" $1
     esac
 
-    if [ -n "$help" ]; then
-        echo -e "usage: ${YELLOW}gitb commit <mode>${ENDCOLOR}"
-        echo
-        echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\tSelect files to commit and create a conventional message in format: 'type(scope): message'"
-        echo -e "msg|m\t\tSame as <empty>, but create multiline commit message using text editor"
-        echo -e "ticket|t\tSame as <empty>, but add tracker's ticket info to the end of the commit header"
-        echo -e "fast|f\t\tAdd all files (git add .) and create a conventional commit message without scope"
-        echo -e "fasts|fs\tAdd all files (git add .) and create a conventional commit message with scope"
-        echo -e "push|pu|p\tCreate a conventional commit and push changes at the end"
-        echo -e "fastp|fp\tCreate a conventional commit in the fast mode and push changes"
-        echo -e "fastsp|fsp|fps\tCreate a conventional commit in the fast mode with scope and push changes"
-        echo -e "fixup|fix|x\tSelect files and commit to make a --fixup commit (git commit --fixup <hash>)"
-        echo -e "fixupp|fixp|xp\tSelect files and commit to make a --fixup commit and push changes"
-        echo -e "fastfix|fx\tAdd all files (git add .) and commit to make a --fixup commit"
-        echo -e "fastfixp|fxp\tAdd all files (git add .) and commit to make a --fixup commit and push"
-        echo -e "amend|am|a\tSelect files and add them to the last commit without message edit (git commit --amend --no-edit)"
-        echo -e "amendf|amf|af\tAdd all fiels to the last commit without message edit (git commit --amend --no-edit)"
-        echo -e "last|l\t\tChange commit message to the last one"
-        echo -e "revert|rev\tSelect a commit to revert (git revert -no-edit <commit>)"
-        echo -e "help|h\t\tShow this help"
-        exit
-    fi
 
     ### Print header
     header_msg="GIT COMMIT"
@@ -142,6 +119,31 @@ function commit_script {
 
     echo -e "${YELLOW}${header_msg}${ENDCOLOR}"
     echo
+
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb commit <mode>${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\tSelect files to commit and create a conventional message in format: 'type(scope): message'"
+        echo -e "msg|m\t\tSame as <empty>, but create multiline commit message using text editor"
+        echo -e "ticket|t\tSame as <empty>, but add tracker's ticket info to the end of the commit header"
+        echo -e "fast|f\t\tAdd all files (git add .) and create a conventional commit message without scope"
+        echo -e "fasts|fs\tAdd all files (git add .) and create a conventional commit message with scope"
+        echo -e "push|pu|p\tCreate a conventional commit and push changes at the end"
+        echo -e "fastp|fp\tCreate a conventional commit in the fast mode and push changes"
+        echo -e "fastsp|fsp|fps\tCreate a conventional commit in the fast mode with scope and push changes"
+        echo -e "fixup|fix|x\tSelect files and commit to make a --fixup commit (git commit --fixup <hash>)"
+        echo -e "fixupp|fixp|xp\tSelect files and commit to make a --fixup commit and push changes"
+        echo -e "fastfix|fx\tAdd all files (git add .) and commit to make a --fixup commit"
+        echo -e "fastfixp|fxp\tAdd all files (git add .) and commit to make a --fixup commit and push"
+        echo -e "amend|am|a\tSelect files and add them to the last commit without message edit (git commit --amend --no-edit)"
+        echo -e "amendf|amf|af\tAdd all fiels to the last commit without message edit (git commit --amend --no-edit)"
+        echo -e "last|l\t\tChange commit message to the last one"
+        echo -e "revert|rev\tSelect a commit to revert (git revert -no-edit <commit>)"
+        echo -e "help|h\t\tShow this help"
+        exit
+    fi
+
 
     if [ -n "$last" ]; then
         git commit --amend

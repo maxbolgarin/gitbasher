@@ -684,6 +684,14 @@ function merge_script {
         *)
             wrong_mode "merge" $1
     esac
+    header="GIT MERGE"
+    if [ -n "${to_main}" ]; then
+        header="$header MAIN"
+    elif [ -n "${to_main}" ]; then
+        header="$header TO MAIN"
+    fi
+    echo -e "${YELLOW}${header}${ENDCOLOR}"
+    echo
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb merge <mode>${ENDCOLOR}"
         echo
@@ -694,14 +702,6 @@ function merge_script {
         echo -e "help|h\t\t\tShow this help"
         exit
     fi
-    header="GIT MERGE"
-    if [ -n "${to_main}" ]; then
-        header="$header MAIN"
-    elif [ -n "${to_main}" ]; then
-        header="$header TO MAIN"
-    fi
-    echo -e "${YELLOW}${header}${ENDCOLOR}"
-    echo
     if [ -n "$main" ]; then
         if [ "$current_branch" == "${main_branch}" ]; then
             echo -e "${YELLOW}Already on ${main_branch}${ENDCOLOR}"
@@ -900,6 +900,16 @@ function rebase_script {
         *)
             wrong_mode "rebase" $1
     esac
+    header="GIT REBASE"
+    if [ -n "${interactive}" ]; then
+        header="$header INTERACTIVE"
+    elif [ -n "${autosquash}" ]; then
+        header="$header AUTOSQUASH"
+    elif [ -n "${main}" ]; then
+        header="$header MAIN"
+    fi
+    echo -e "${YELLOW}${header}${ENDCOLOR}"
+    echo
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb rebase <mode>${ENDCOLOR}"
         echo
@@ -911,16 +921,6 @@ function rebase_script {
         echo -e "help|h\t\t\tShow this help"
         exit
     fi
-    header="GIT REBASE"
-    if [ -n "${interactive}" ]; then
-        header="$header INTERACTIVE"
-    elif [ -n "${autosquash}" ]; then
-        header="$header AUTOSQUASH"
-    elif [ -n "${main}" ]; then
-        header="$header MAIN"
-    fi
-    echo -e "${YELLOW}${header}${ENDCOLOR}"
-    echo
     is_clean=$(git status | tail -n 1)
     if [ "$is_clean" != "nothing to commit, working tree clean" ]; then
         echo -e "${RED}Cannot rebase! There are uncommited changes:"
@@ -1190,26 +1190,6 @@ function pull_script {
         *)
             wrong_mode "pull" $1
     esac
-    if [ -n "$help" ]; then
-        echo -e "usage: ${YELLOW}gitb pull${ENDCOLOR}"
-        echo
-        echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\t\tFetch current branch, try to fast-forward or ask about strategy"
-        echo -e "fetch|fe\t\tFetch current branch without merge"    
-        echo -e "all|fa\t\t\tFetch all without merge"
-        echo -e "upd|u\t\t\tRun git remote update to fetch all branches"
-        echo -e "ffonly|ff\t\tFetch and then merge in fast forward only mode"
-        echo -e "merge|m\t\t\tFetch current branch and then merge it"
-        echo -e "rebase|r\t\tFetch current branch and then rebase"
-        echo -e "interactive|ri|rs\tFetch current branch and then rebase in interactive mode with --autosquash"
-        echo -e "help|h\t\t\tShow this help"
-        exit
-    fi
-    if [ -n "$rebase" ]; then
-        mode="rebase"
-    elif [ -n "$merge" ]; then
-        mode="merge"
-    fi
     header_msg="GIT PULL"
     if [ -n "${fetch}" ]; then
         if [ -n "${all}" ]; then
@@ -1232,6 +1212,26 @@ function pull_script {
     fi
     echo -e "${YELLOW}${header_msg}${ENDCOLOR}"
     echo
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb pull${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\t\tFetch current branch, try to fast-forward or ask about strategy"
+        echo -e "fetch|fe\t\tFetch current branch without merge"    
+        echo -e "all|fa\t\t\tFetch all without merge"
+        echo -e "upd|u\t\t\tRun git remote update to fetch all branches"
+        echo -e "ffonly|ff\t\tFetch and then merge in fast forward only mode"
+        echo -e "merge|m\t\t\tFetch current branch and then merge it"
+        echo -e "rebase|r\t\tFetch current branch and then rebase"
+        echo -e "interactive|ri|rs\tFetch current branch and then rebase in interactive mode with --autosquash"
+        echo -e "help|h\t\t\tShow this help"
+        exit
+    fi
+    if [ -n "$rebase" ]; then
+        mode="rebase"
+    elif [ -n "$merge" ]; then
+        mode="merge"
+    fi
     if [ -n "$fetch" ]; then
         if [ -n "$all" ]; then
             echo -e "${YELLOW}Fetching all...${ENDCOLOR}"
@@ -1432,17 +1432,6 @@ function push_script {
         *)
             wrong_mode "push" $1
     esac
-    if [ -n "$help" ]; then
-        echo -e "usage: ${YELLOW}gitb push <mode>${ENDCOLOR}"
-        echo
-        echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\tPrint list of commits, push them to current branch or pull changes first"
-        echo -e "yes|y\tSame as previous but without pressing 'y'"
-        echo -e "force|f\tSame as previous but with --force"
-        echo -e "list|log|l\tPrint a list of unpushed local commits without actual pushing it"
-        echo -e "help|h\t\tShow this help"
-        exit
-    fi
     header_msg="GIT PUSH"
     if [ -n "${fast}" ]; then
         header_msg="${YELLOW}$header_msg FAST${ENDCOLOR}"
@@ -1455,6 +1444,17 @@ function push_script {
     fi
     echo -e "${header_msg}"
     echo
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb push <mode>${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\tPrint list of commits, push them to current branch or pull changes first"
+        echo -e "yes|y\t\tSame as <empty> but without pressing 'y'"
+        echo -e "force|f\t\tSame as <empty> but with --force"
+        echo -e "list|log|l\tPrint a list of unpushed local commits without actual pushing it"
+        echo -e "help|h\t\tShow this help"
+        exit
+    fi
     get_push_list ${current_branch} ${main_branch} ${origin_name}
     if [ -z "$push_list" ]; then
         echo -e "${GREEN}Nothing to push${ENDCOLOR}"
@@ -1537,29 +1537,6 @@ function commit_script {
         *)
             wrong_mode "commit" $1
     esac
-    if [ -n "$help" ]; then
-        echo -e "usage: ${YELLOW}gitb commit <mode>${ENDCOLOR}"
-        echo
-        echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\tSelect files to commit and create a conventional message in format: 'type(scope): message'"
-        echo -e "msg|m\t\tSame as <empty>, but create multiline commit message using text editor"
-        echo -e "ticket|t\tSame as <empty>, but add tracker's ticket info to the end of the commit header"
-        echo -e "fast|f\t\tAdd all files (git add .) and create a conventional commit message without scope"
-        echo -e "fasts|fs\tAdd all files (git add .) and create a conventional commit message with scope"
-        echo -e "push|pu|p\tCreate a conventional commit and push changes at the end"
-        echo -e "fastp|fp\tCreate a conventional commit in the fast mode and push changes"
-        echo -e "fastsp|fsp|fps\tCreate a conventional commit in the fast mode with scope and push changes"
-        echo -e "fixup|fix|x\tSelect files and commit to make a --fixup commit (git commit --fixup <hash>)"
-        echo -e "fixupp|fixp|xp\tSelect files and commit to make a --fixup commit and push changes"
-        echo -e "fastfix|fx\tAdd all files (git add .) and commit to make a --fixup commit"
-        echo -e "fastfixp|fxp\tAdd all files (git add .) and commit to make a --fixup commit and push"
-        echo -e "amend|am|a\tSelect files and add them to the last commit without message edit (git commit --amend --no-edit)"
-        echo -e "amendf|amf|af\tAdd all fiels to the last commit without message edit (git commit --amend --no-edit)"
-        echo -e "last|l\t\tChange commit message to the last one"
-        echo -e "revert|rev\tSelect a commit to revert (git revert -no-edit <commit>)"
-        echo -e "help|h\t\tShow this help"
-        exit
-    fi
     header_msg="GIT COMMIT"
     if [ -n "${fast}" ]; then
         if [ -n "${push}" ]; then
@@ -1594,6 +1571,29 @@ function commit_script {
     fi
     echo -e "${YELLOW}${header_msg}${ENDCOLOR}"
     echo
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb commit <mode>${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\tSelect files to commit and create a conventional message in format: 'type(scope): message'"
+        echo -e "msg|m\t\tSame as <empty>, but create multiline commit message using text editor"
+        echo -e "ticket|t\tSame as <empty>, but add tracker's ticket info to the end of the commit header"
+        echo -e "fast|f\t\tAdd all files (git add .) and create a conventional commit message without scope"
+        echo -e "fasts|fs\tAdd all files (git add .) and create a conventional commit message with scope"
+        echo -e "push|pu|p\tCreate a conventional commit and push changes at the end"
+        echo -e "fastp|fp\tCreate a conventional commit in the fast mode and push changes"
+        echo -e "fastsp|fsp|fps\tCreate a conventional commit in the fast mode with scope and push changes"
+        echo -e "fixup|fix|x\tSelect files and commit to make a --fixup commit (git commit --fixup <hash>)"
+        echo -e "fixupp|fixp|xp\tSelect files and commit to make a --fixup commit and push changes"
+        echo -e "fastfix|fx\tAdd all files (git add .) and commit to make a --fixup commit"
+        echo -e "fastfixp|fxp\tAdd all files (git add .) and commit to make a --fixup commit and push"
+        echo -e "amend|am|a\tSelect files and add them to the last commit without message edit (git commit --amend --no-edit)"
+        echo -e "amendf|amf|af\tAdd all fiels to the last commit without message edit (git commit --amend --no-edit)"
+        echo -e "last|l\t\tChange commit message to the last one"
+        echo -e "revert|rev\tSelect a commit to revert (git revert -no-edit <commit>)"
+        echo -e "help|h\t\tShow this help"
+        exit
+    fi
     if [ -n "$last" ]; then
         git commit --amend
         exit
@@ -1918,20 +1918,6 @@ function branch_script {
         *)
             wrong_mode "branch" $1
     esac
-    if [ -n "$help" ]; then
-        echo -e "usage: ${YELLOW}gitb branch <mode>${ENDCOLOR}"
-        echo
-        echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\tSelect a local branch to switch"
-        echo -e "list|l\t\tPrint a list of local branches"
-        echo -e "remote|re|r\tFetch $origin_name and select a remote branch to switch"
-        echo -e "main|def|m\tSwitch to $main_branch without additional confirmations"
-        echo -e "new|n|c\t\tBuild a conventional name and create a new branch from $main_branch"
-        echo -e "newd|nd\t\tBuild a conventional name, switch to $main_branch, pull it and create new branch"
-        echo -e "delete|del|d\tSelect a local branch to delete"
-        echo -e "help|h\t\tShow this help"
-        exit
-    fi
     header="GIT BRANCH"
     if [ -n "${remote}" ]; then
         header="$header REMOTE"
@@ -1948,6 +1934,20 @@ function branch_script {
     fi
     echo -e "${YELLOW}${header}${ENDCOLOR}"
     echo
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb branch <mode>${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\tSelect a local branch to switch"
+        echo -e "list|l\t\tPrint a list of local branches"
+        echo -e "remote|re|r\tFetch $origin_name and select a remote branch to switch"
+        echo -e "main|def|m\tSwitch to $main_branch without additional confirmations"
+        echo -e "new|n|c\t\tBuild a conventional name and create a new branch from $main_branch"
+        echo -e "newd|nd\t\tBuild a conventional name, switch to $main_branch, pull it and create new branch"
+        echo -e "delete|del|d\tSelect a local branch to delete"
+        echo -e "help|h\t\tShow this help"
+        exit
+    fi
     if [[ -n "${main}" ]]; then
         switch ${main_branch}
         exit
@@ -2249,23 +2249,6 @@ function tag_script {
         *)
             wrong_mode "tag" $1
     esac
-    if [ -n "$help" ]; then
-        echo -e "usage: ${YELLOW}gitb tag <mode>${ENDCOLOR}"
-        echo
-        echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\tCreate a new tag from the last commit"
-        echo -e "annotated|a|an\tCreate a new annotated tag from the last commit"
-        echo -e "commit|c|co|cm\tCreate a new tag from a selected commit"
-        echo -e "all|al\t\tCreate a new annotated tag from a selected commit"
-        echo -e "push|ps|ph|p\tSelect a local tag and push it to the remote repository"
-        echo -e "push-all|pa\tPush all tags to the remote repository"
-        echo -e "delete|del|d\tSelect a tag to delete"
-        echo -e "delete-all|da\tDelete all local tags"
-        echo -e "list|log|l\tPrint a list of local tags"
-        echo -e "remote|fetch|r\tFetch tags from the remote repository and print it"
-        echo -e "help|h\t\tShow this help"
-        exit
-    fi
     header="GIT TAG"
     if [ -n "${annotated}" ] && [ -n "${commit}" ]; then
         header="$header ALL"
@@ -2288,6 +2271,23 @@ function tag_script {
     fi
     echo -e "${YELLOW}${header}${ENDCOLOR}"
     echo
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb tag <mode>${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\tCreate a new tag from the last commit"
+        echo -e "annotated|a|an\tCreate a new annotated tag from the last commit"
+        echo -e "commit|c|co|cm\tCreate a new tag from a selected commit"
+        echo -e "all|al\t\tCreate a new annotated tag from a selected commit"
+        echo -e "push|ps|ph|p\tSelect a local tag and push it to the remote repository"
+        echo -e "push-all|pa\tPush all tags to the remote repository"
+        echo -e "delete|del|d\tSelect a tag to delete"
+        echo -e "delete-all|da\tDelete all local tags"
+        echo -e "list|log|l\tPrint a list of local tags"
+        echo -e "remote|fetch|r\tFetch tags from the remote repository and print it"
+        echo -e "help|h\t\tShow this help"
+        exit
+    fi
     if [ -n "${remote}" ]; then
         echo -e "${YELLOW}Fetching tags from the remote...${ENDCOLOR}"
         fetch_output=$(git fetch $origin_name --tags 2>&1)
@@ -2481,6 +2481,20 @@ function reset_script {
         *)
             wrong_mode "reset" $1
     esac
+    header="GIT RESET"
+    if [ -n "${ref}" ]; then
+        header="$header REFERENCE"
+    elif [ -n "${undo}" ]; then
+        header="$header UNDO"
+    elif [ -n "${soft}" ]; then
+        header="$header --soft"
+    elif [ -n "${help}" ]; then
+        header="$header"
+    else
+        header="$header --mixed"
+    fi
+    echo -e "${YELLOW}${header}${ENDCOLOR}"
+    echo
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb reset <mode>${ENDCOLOR}"
         echo
@@ -2494,18 +2508,6 @@ function reset_script {
         exit
     fi
     echo $soft
-    header="GIT RESET"
-    if [ -n "${ref}" ]; then
-        header="$header REFERENCE"
-    elif [ -n "${undo}" ]; then
-        header="$header UNDO"
-    elif [ -n "${soft}" ]; then
-        header="$header --soft"
-    else
-        header="$header --mixed"
-    fi
-    echo -e "${YELLOW}${header}${ENDCOLOR}"
-    echo
     cancelled_commit=$(git log -n 1 --pretty="%s | ${YELLOW}%h${ENDCOLOR} | ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})")
     cancelled_action=$(git reflog -n 1 --pretty="%gs | ${YELLOW}%h${ENDCOLOR} |  ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})")
     if [ -n "$interactive" ]; then

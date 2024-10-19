@@ -116,7 +116,7 @@ function push_script {
     fi
 
     ### Print list of unpushed commits
-    count=$(echo -e $push_list | wc -l | sed 's/^ *//;s/ *$//')
+    count=$(echo -e "$push_list" | wc -l | sed 's/^ *//;s/ *$//')
     echo -e "Your branch is ahead ${YELLOW}${history_from}${ENDCOLOR} by ${BOLD}$count${ENDCOLOR} commits"
     echo -e "$push_list"
 

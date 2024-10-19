@@ -270,15 +270,16 @@ function commit_script {
     if [ -n "${fast}" ]; then
         step="1"
     fi
-    echo -e "${YELLOW}Step ${step}.${ENDCOLOR} What type of changes do you want to commit?"
-    echo -e "1. feat:\tnew feature, logic change or performance improvement"
-    echo -e "2. fix:\t\tsmall changes, eg. bug fix"
-    echo -e "3. refactor:\tcode change that neither fixes a bug nor adds a feature, style changes"
-    echo -e "4. test:\tadding missing tests or changing existing tests"
-    echo -e "5. build:\tchanges that affect the build system or external dependencies"
-    echo -e "6. ci:\t\tchanges to CI configuration files and scripts"
-    echo -e "7. chore:\tmaintanance and housekeeping"
-    echo -e "8. docs:\tdocumentation changes"
+    echo -e "${YELLOW}Step ${step}.${ENDCOLOR} What ${YELLOW}type${ENDCOLOR} of changes do you want to commit?"
+    echo -e "Final meesage will be ${YELLOW}<type>${ENDCOLOR}(${BLUE}<scope>${ENDCOLOR}): ${BLUE}<summary>${ENDCOLOR}"
+    echo -e "1. ${BOLD}feat${ENDCOLOR}:\tnew feature, logic change or performance improvement"
+    echo -e "2. ${BOLD}fix${ENDCOLOR}:\t\tsmall changes, eg. bug fix"
+    echo -e "3. ${BOLD}refactor${ENDCOLOR}:\tcode change that neither fixes a bug nor adds a feature, style changes"
+    echo -e "4. ${BOLD}test${ENDCOLOR}:\tadding missing tests or changing existing tests"
+    echo -e "5. ${BOLD}build${ENDCOLOR}:\tchanges that affect the build system or external dependencies"
+    echo -e "6. ${BOLD}ci${ENDCOLOR}:\t\tchanges to CI configuration files and scripts"
+    echo -e "7. ${BOLD}chore${ENDCOLOR}:\tmaintanance and housekeeping"
+    echo -e "8. ${BOLD}docs${ENDCOLOR}:\tdocumentation changes"
     echo -e "9.  \t\twrite plain commit without type and scope"
     echo -e "0. Exit without changes"
 
@@ -324,29 +325,67 @@ function commit_script {
 
 
     ### Commit Step 3: enter a commit scope
-    if ([ -z "$is_empty" ] && [ -z "$fast" ]) || [ -n "$scope" ]; then
+    if [ -z "$is_empty" ] && ([ -z "$fast" ] || [ -n "$scope" ]); then
         step="3"
         if [ -n "${fast}" ]; then
             step="2"
         fi
         echo
-        echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Enter a scope of changes to provide an additional context"
-        echo -e "Final meesage will be ${YELLOW}${commit_type}(<scope>): <summary>${ENDCOLOR}"
+        echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Enter a ${YELLOW}scope${ENDCOLOR} of changes to provide some additional context"
+        echo -e "Final meesage will be ${BLUE}${commit_type}${ENDCOLOR}(${YELLOW}<scope>${ENDCOLOR}): ${BLUE}<summary>${ENDCOLOR}"
         echo -e "Leave it blank to continue without scope or enter 0 to exit without changes"
+        
+        if [ -n "$scopes" ]; then
+           IFS=' ' read -r -a scopes_array <<< "$scopes"
 
-        read -p "$(echo -n -e "${TODO}<scope>:${ENDCOLOR} ")" -e commit_scope
+           res=""
+           for i in "${!scopes_array[@]}"; do
+                res="$res$((i+1)). ${BOLD}${scopes_array[$i]}${ENDCOLOR}|"
+           done
+           echo -e "Select or enter: $(echo $res | column -ts'|')"            
+        fi
+
+        read -p "<scope>: " -n 1 -s commit_scope
 
         if [ "$commit_scope" == "0" ]; then
             git restore --staged $git_add
             exit
         fi
 
-        commit_scope=$(echo "$commit_scope" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-        if [ "$commit_scope" != "" ]; then
-            commit="$commit($commit_scope): "
+        re='^[1-9a-zA-Z\-_\?\.<>]+$'
+        if [[ $commit_scope =~ $re ]]; then
+            re_number='^[1-9]+$'
+            if [[ $commit_scope =~ $re_number ]]; then
+                for i in "${!scopes_array[@]}"; do
+                    if [ "$((i+1))" == "$commit_scope" ]; then
+                        commit_scope="${scopes_array[$i]}"
+                        found="true"
+                        echo
+                        break
+                    fi
+                done
+            fi
+
+            if [ "$found" == "" ]; then
+                read -p "$commit_scope" -e commit_scope2
+                commit_scope="$commit_scope$commit_scope2"
+            fi
+
+            if [ "$commit_scope" != "" ]; then
+                if ! [[ $commit_scope =~ $re ]]; then
+                    echo
+                    echo -e "${RED}Invalid scope!${ENDCOLOR}"
+                    exit 1
+                fi
+                commit="$commit($commit_scope): "
+            else
+                commit="$commit: "
+            fi
         else
+            echo
             commit="$commit: "
         fi
+
     fi
 
     if [ -z "$is_empty" ] && [ -n "$fast" ] && [ -z "$scope" ]; then
@@ -367,8 +406,14 @@ function commit_script {
         step="4"
     fi
     echo
-    echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Write a <summary> about your changes"
-    echo -e "Final meesage will be ${YELLOW}${commit}<summary>${ENDCOLOR}"
+    echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Write a ${YELLOW}summary${ENDCOLOR} about your changes"
+    if [ -n "$is_empty" ]; then
+        echo -e "Final meesage will be ${YELLOW}<summary>${ENDCOLOR}"
+    elif [ "$commit_scope" == "" ]; then
+        echo -e "Final meesage will be ${BLUE}${commit_type}${ENDCOLOR}: ${YELLOW}<summary>${ENDCOLOR}"
+    else
+        echo -e "Final meesage will be ${BLUE}${commit_type}${ENDCOLOR}(${BLUE}${commit_scope}${ENDCOLOR}): ${YELLOW}<summary>${ENDCOLOR}"
+    fi
     echo -e "Leave it blank to exit without changes"
     # Use an editor and commitmsg file
     if [ -n "$msg" ]; then

@@ -122,24 +122,6 @@ function tag_script {
             wrong_mode "tag" $1
     esac
 
-    if [ -n "$help" ]; then
-        echo -e "usage: ${YELLOW}gitb tag <mode>${ENDCOLOR}"
-        echo
-        echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\tCreate a new tag from the last commit"
-        echo -e "annotated|a|an\tCreate a new annotated tag from the last commit"
-        echo -e "commit|c|co|cm\tCreate a new tag from a selected commit"
-        echo -e "all|al\t\tCreate a new annotated tag from a selected commit"
-        echo -e "push|ps|ph|p\tSelect a local tag and push it to the remote repository"
-        echo -e "push-all|pa\tPush all tags to the remote repository"
-        echo -e "delete|del|d\tSelect a tag to delete"
-        echo -e "delete-all|da\tDelete all local tags"
-        echo -e "list|log|l\tPrint a list of local tags"
-        echo -e "remote|fetch|r\tFetch tags from the remote repository and print it"
-        echo -e "help|h\t\tShow this help"
-        exit
-    fi
-
 
     ### Print header
     header="GIT TAG"
@@ -165,6 +147,25 @@ function tag_script {
 
     echo -e "${YELLOW}${header}${ENDCOLOR}"
     echo
+
+
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb tag <mode>${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\tCreate a new tag from the last commit"
+        echo -e "annotated|a|an\tCreate a new annotated tag from the last commit"
+        echo -e "commit|c|co|cm\tCreate a new tag from a selected commit"
+        echo -e "all|al\t\tCreate a new annotated tag from a selected commit"
+        echo -e "push|ps|ph|p\tSelect a local tag and push it to the remote repository"
+        echo -e "push-all|pa\tPush all tags to the remote repository"
+        echo -e "delete|del|d\tSelect a tag to delete"
+        echo -e "delete-all|da\tDelete all local tags"
+        echo -e "list|log|l\tPrint a list of local tags"
+        echo -e "remote|fetch|r\tFetch tags from the remote repository and print it"
+        echo -e "help|h\t\tShow this help"
+        exit
+    fi
 
 
     ### Fetch tags from the remote

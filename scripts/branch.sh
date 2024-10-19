@@ -32,23 +32,8 @@ function branch_script {
         *)
             wrong_mode "branch" $1
     esac
-    
 
-    if [ -n "$help" ]; then
-        echo -e "usage: ${YELLOW}gitb branch <mode>${ENDCOLOR}"
-        echo
-        echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\tSelect a local branch to switch"
-        echo -e "list|l\t\tPrint a list of local branches"
-        echo -e "remote|re|r\tFetch $origin_name and select a remote branch to switch"
-        echo -e "main|def|m\tSwitch to $main_branch without additional confirmations"
-        echo -e "new|n|c\t\tBuild a conventional name and create a new branch from $main_branch"
-        echo -e "newd|nd\t\tBuild a conventional name, switch to $main_branch, pull it and create new branch"
-        echo -e "delete|del|d\tSelect a local branch to delete"
-        echo -e "help|h\t\tShow this help"
-        exit
-    fi
-        
+
     ### Print header
     header="GIT BRANCH"
     if [ -n "${remote}" ]; then
@@ -67,7 +52,24 @@ function branch_script {
 
     echo -e "${YELLOW}${header}${ENDCOLOR}"
     echo
+    
 
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb branch <mode>${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\tSelect a local branch to switch"
+        echo -e "list|l\t\tPrint a list of local branches"
+        echo -e "remote|re|r\tFetch $origin_name and select a remote branch to switch"
+        echo -e "main|def|m\tSwitch to $main_branch without additional confirmations"
+        echo -e "new|n|c\t\tBuild a conventional name and create a new branch from $main_branch"
+        echo -e "newd|nd\t\tBuild a conventional name, switch to $main_branch, pull it and create new branch"
+        echo -e "delete|del|d\tSelect a local branch to delete"
+        echo -e "help|h\t\tShow this help"
+        exit
+    fi
+        
+   
 
     ### Run switch to main logic
     if [[ -n "${main}" ]]; then

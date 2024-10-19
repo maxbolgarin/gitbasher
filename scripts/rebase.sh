@@ -21,6 +21,19 @@ function rebase_script {
             wrong_mode "rebase" $1
     esac
 
+    ### Merge mode - print header
+    header="GIT REBASE"
+    if [ -n "${interactive}" ]; then
+        header="$header INTERACTIVE"
+    elif [ -n "${autosquash}" ]; then
+        header="$header AUTOSQUASH"
+    elif [ -n "${main}" ]; then
+        header="$header MAIN"
+    fi
+    echo -e "${YELLOW}${header}${ENDCOLOR}"
+    echo
+
+
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb rebase <mode>${ENDCOLOR}"
         echo
@@ -33,17 +46,7 @@ function rebase_script {
         exit
     fi
 
-    ### Merge mode - print header
-    header="GIT REBASE"
-    if [ -n "${interactive}" ]; then
-        header="$header INTERACTIVE"
-    elif [ -n "${autosquash}" ]; then
-        header="$header AUTOSQUASH"
-    elif [ -n "${main}" ]; then
-        header="$header MAIN"
-    fi
-    echo -e "${YELLOW}${header}${ENDCOLOR}"
-    echo
+
 
     is_clean=$(git status | tail -n 1)
     if [ "$is_clean" != "nothing to commit, working tree clean" ]; then

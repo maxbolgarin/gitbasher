@@ -29,27 +29,6 @@ function pull_script {
             wrong_mode "pull" $1
     esac
 
-    if [ -n "$help" ]; then
-        echo -e "usage: ${YELLOW}gitb pull${ENDCOLOR}"
-        echo
-        echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\t\tFetch current branch, try to fast-forward or ask about strategy"
-        echo -e "fetch|fe\t\tFetch current branch without merge"    
-        echo -e "all|fa\t\t\tFetch all without merge"
-        echo -e "upd|u\t\t\tRun git remote update to fetch all branches"
-        echo -e "ffonly|ff\t\tFetch and then merge in fast forward only mode"
-        echo -e "merge|m\t\t\tFetch current branch and then merge it"
-        echo -e "rebase|r\t\tFetch current branch and then rebase"
-        echo -e "interactive|ri|rs\tFetch current branch and then rebase in interactive mode with --autosquash"
-        echo -e "help|h\t\t\tShow this help"
-        exit
-    fi
-
-    if [ -n "$rebase" ]; then
-        mode="rebase"
-    elif [ -n "$merge" ]; then
-        mode="merge"
-    fi
 
     ### Print header
     header_msg="GIT PULL"
@@ -75,6 +54,30 @@ function pull_script {
 
     echo -e "${YELLOW}${header_msg}${ENDCOLOR}"
     echo
+
+
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb pull${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\t\tFetch current branch, try to fast-forward or ask about strategy"
+        echo -e "fetch|fe\t\tFetch current branch without merge"    
+        echo -e "all|fa\t\t\tFetch all without merge"
+        echo -e "upd|u\t\t\tRun git remote update to fetch all branches"
+        echo -e "ffonly|ff\t\tFetch and then merge in fast forward only mode"
+        echo -e "merge|m\t\t\tFetch current branch and then merge it"
+        echo -e "rebase|r\t\tFetch current branch and then rebase"
+        echo -e "interactive|ri|rs\tFetch current branch and then rebase in interactive mode with --autosquash"
+        echo -e "help|h\t\t\tShow this help"
+        exit
+    fi
+    
+
+    if [ -n "$rebase" ]; then
+        mode="rebase"
+    elif [ -n "$merge" ]; then
+        mode="merge"
+    fi
 
     if [ -n "$fetch" ]; then
         if [ -n "$all" ]; then

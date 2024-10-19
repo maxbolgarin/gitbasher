@@ -19,17 +19,6 @@ function merge_script {
             wrong_mode "merge" $1
     esac
 
-    if [ -n "$help" ]; then
-        echo -e "usage: ${YELLOW}gitb merge <mode>${ENDCOLOR}"
-        echo
-        echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\t\tSelect a branch to merge into the current one and fix conflicts"
-        echo -e "main|master|m\t\tMerge $main_branch to the current branch and fix conflicts"
-        echo -e "to-main|to-master|tm\tSwitch to $main_branch and merge the current branch into $main_branch"
-        echo -e "help|h\t\t\tShow this help"
-        exit
-    fi
-
 
     ### Merge mode - print header
     header="GIT MERGE"
@@ -41,6 +30,18 @@ function merge_script {
 
     echo -e "${YELLOW}${header}${ENDCOLOR}"
     echo
+
+
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb merge <mode>${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\t\tSelect a branch to merge into the current one and fix conflicts"
+        echo -e "main|master|m\t\tMerge $main_branch to the current branch and fix conflicts"
+        echo -e "to-main|to-master|tm\tSwitch to $main_branch and merge the current branch into $main_branch"
+        echo -e "help|h\t\t\tShow this help"
+        exit
+    fi
 
 
     ### Select branch which will be merged

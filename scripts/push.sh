@@ -73,18 +73,6 @@ function push_script {
             wrong_mode "push" $1
     esac
 
-    if [ -n "$help" ]; then
-        echo -e "usage: ${YELLOW}gitb push <mode>${ENDCOLOR}"
-        echo
-        echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\tPrint list of commits, push them to current branch or pull changes first"
-        echo -e "yes|y\tSame as previous but without pressing 'y'"
-        echo -e "force|f\tSame as previous but with --force"
-        echo -e "list|log|l\tPrint a list of unpushed local commits without actual pushing it"
-        echo -e "help|h\t\tShow this help"
-        exit
-    fi
-
 
     ### Print header
     header_msg="GIT PUSH"
@@ -100,6 +88,20 @@ function push_script {
 
     echo -e "${header_msg}"
     echo
+
+
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb push <mode>${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\tPrint list of commits, push them to current branch or pull changes first"
+        echo -e "yes|y\t\tSame as <empty> but without pressing 'y'"
+        echo -e "force|f\t\tSame as <empty> but with --force"
+        echo -e "list|log|l\tPrint a list of unpushed local commits without actual pushing it"
+        echo -e "help|h\t\tShow this help"
+        exit
+    fi
+
 
     ### Check if there are commits to push
     get_push_list ${current_branch} ${main_branch} ${origin_name}

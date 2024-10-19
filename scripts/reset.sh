@@ -26,6 +26,23 @@ function reset_script {
             wrong_mode "reset" $1
     esac
 
+
+    header="GIT RESET"
+    if [ -n "${ref}" ]; then
+        header="$header REFERENCE"
+    elif [ -n "${undo}" ]; then
+        header="$header UNDO"
+    elif [ -n "${soft}" ]; then
+        header="$header --soft"
+    elif [ -n "${help}" ]; then
+        header="$header"
+    else
+        header="$header --mixed"
+    fi
+    echo -e "${YELLOW}${header}${ENDCOLOR}"
+    echo
+
+
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb reset <mode>${ENDCOLOR}"
         echo
@@ -41,18 +58,6 @@ function reset_script {
 
     echo $soft
 
-    header="GIT RESET"
-    if [ -n "${ref}" ]; then
-        header="$header REFERENCE"
-    elif [ -n "${undo}" ]; then
-        header="$header UNDO"
-    elif [ -n "${soft}" ]; then
-        header="$header --soft"
-    else
-        header="$header --mixed"
-    fi
-    echo -e "${YELLOW}${header}${ENDCOLOR}"
-    echo
 
     cancelled_commit=$(git log -n 1 --pretty="%s | ${YELLOW}%h${ENDCOLOR} | ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})")
     cancelled_action=$(git reflog -n 1 --pretty="%gs | ${YELLOW}%h${ENDCOLOR} |  ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})")

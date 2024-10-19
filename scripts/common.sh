@@ -113,6 +113,8 @@ function get_repo_name {
 ### Function prints current config
 function print_configuration {
     echo -e "${YELLOW}Current configuration:${ENDCOLOR}"
+    echo -e "\tuser.name:\t${YELLOW}$(get_config_value user.name)${ENDCOLOR}"
+    echo -e "\tuser.email:\t${YELLOW}$(get_config_value user.email)${ENDCOLOR}"
     echo -e "\tdefault:\t${YELLOW}$main_branch${ENDCOLOR}"
     echo -e "\tseparator:\t${YELLOW}$sep${ENDCOLOR}"
     echo -e "\teditor:\t\t${YELLOW}$editor${ENDCOLOR}"

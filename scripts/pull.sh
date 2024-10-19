@@ -71,7 +71,7 @@ function pull_script {
         echo -e "help|h\t\t\tShow this help"
         exit
     fi
-    
+
 
     if [ -n "$rebase" ]; then
         mode="rebase"
@@ -102,7 +102,7 @@ function pull_script {
                     echo -e "$fetch_output"
                 fi
                 echo
-                count=$(echo $commits | wc -l | sed 's/^ *//;s/ *$//')
+                count=$(echo -e "$commits" | wc -l | sed 's/^ *//;s/ *$//')
                 echo -e "Your branch is behind ${YELLOW}$origin_name/$current_branch${ENDCOLOR} by ${BOLD}$count${ENDCOLOR} commits"
                 echo -e "$commits"
             else
@@ -128,7 +128,7 @@ function pull_script {
                     echo -e "$update_output"
                 fi
                 echo
-                count=$(echo $commits | wc -l | sed 's/^ *//;s/ *$//')
+                count=$(echo -e "$commits" | wc -l | sed 's/^ *//;s/ *$//')
                 echo -e "Your branch is behind ${YELLOW}$origin_name/$current_branch${ENDCOLOR} by ${BOLD}$count${ENDCOLOR} commits"
                 echo -e "$commits"
             else

@@ -383,7 +383,7 @@ function switch {
             get_push_list $1 ${main_branch} ${origin_name}
             if [ -n "$push_list" ]; then
                 echo
-                count=$(echo $push_list | wc -l | sed 's/^ *//;s/ *$//')
+                count=$(echo -e "$push_list" | wc -l | sed 's/^ *//;s/ *$//')
                 echo -e "Your branch ${YELLOW}$1${ENDCOLOR} is ahead ${YELLOW}${history_from}${ENDCOLOR} by ${BOLD}$count${ENDCOLOR} commits"
                 echo -e "$push_list"
             fi
@@ -1286,7 +1286,7 @@ function pull_script {
                     echo -e "$fetch_output"
                 fi
                 echo
-                count=$(echo $commits | wc -l | sed 's/^ *//;s/ *$//')
+                count=$(echo -e "$commits" | wc -l | sed 's/^ *//;s/ *$//')
                 echo -e "Your branch is behind ${YELLOW}$origin_name/$current_branch${ENDCOLOR} by ${BOLD}$count${ENDCOLOR} commits"
                 echo -e "$commits"
             else
@@ -1309,7 +1309,7 @@ function pull_script {
                     echo -e "$update_output"
                 fi
                 echo
-                count=$(echo $commits | wc -l | sed 's/^ *//;s/ *$//')
+                count=$(echo -e "$commits" | wc -l | sed 's/^ *//;s/ *$//')
                 echo -e "Your branch is behind ${YELLOW}$origin_name/$current_branch${ENDCOLOR} by ${BOLD}$count${ENDCOLOR} commits"
                 echo -e "$commits"
             else
@@ -1496,7 +1496,7 @@ function push_script {
     if [ "${history_from}" != "${origin_name}/${current_branch}" ]; then
         echo -e "Branch ${YELLOW}${current_branch}${ENDCOLOR} doesn't exist in the ${YELLOW}${origin_name}${ENDCOLOR}, get commits diff from the base commit"
     fi
-    count=$(echo -e $push_list | wc -l | sed 's/^ *//;s/ *$//')
+    count=$(echo -e "$push_list" | wc -l | sed 's/^ *//;s/ *$//')
     echo -e "Your branch is ahead ${YELLOW}${history_from}${ENDCOLOR} by ${BOLD}$count${ENDCOLOR} commits"
     echo -e "$push_list"
     if [ -n "$list" ]; then

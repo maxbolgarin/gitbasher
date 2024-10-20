@@ -13,12 +13,12 @@ function print_help {
     msg="$msg\nrebase_r|re|base_Rebase current branch"
     msg="$msg\nbranch_b|br|bran_Managing branches"
     msg="$msg\ntag_t|tg_Managing tags"
-    msg="$msg\nreset_res_Utils for git reset"
+    msg="$msg\nreset_res_Easy to use git reset"
     msg="$msg\nconfig_cf|cfg|conf_Configurate gitbasher"
 
     msg="$msg\n_ _ _"
     msg="$msg\n${YELLOW}Command${ENDCOLOR}_\t${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description of ${BOLD}informational${NORMAL}${BLUE} commands${ENDCOLOR}"
-    msg="$msg\nstatus_s|st_Show info about repo and changed files"
+    msg="$msg\nstatus_s|st_Info about repo and changed files"
     msg="$msg\nlog_l|lg_Open git log in a pretty format"
     msg="$msg\nreflog_rl|rlg_Open git reflog in a pretty format"
     msg="$msg\nlast-commit_lc|lastc_Show info about the last commit"
@@ -28,18 +28,22 @@ function print_help {
     exit
 }
 
-if [ -z $1 ] || [ "$1" == "--help" ] || [ "$1" == "help" ] || [ "$1" == "man" ]; then
-    print_help
-fi
+project_name="$(get_repo_name)"
+repo_url="$(get_repo)"
 
-
-### Print settings if this is first run
+### Print settings f this is first run
 if [ $is_first == "true" ]; then 
+    git config --local gitbasher.scopes "logic model config logs"
+
     echo -e "${GREEN}Thanks for using gitbasher in project '$project_name'${ENDCOLOR}"
     print_configuration
     echo
     echo -e "You can change these settings by using ${YELLOW}gitb cfg <name>${ENDCOLOR}"
-    git config --local gitbasher.scopes "logic model config logs"
+    echo
+fi
+
+if [ -z $1 ] || [ "$1" == "--help" ] || [ "$1" == "help" ] || [ "$1" == "man" ]; then
+    print_help
 fi
 
 

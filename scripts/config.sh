@@ -5,21 +5,6 @@
 # Use this script only with gitbasher because it is using global variables
 
 
-### Get configuration from git config
-main_branch=$(get_config_value gitbasher.branch "$main_branch")
-sep=$(get_config_value gitbasher.sep "-")
-editor=$(get_config_value core.editor "vi")
-ticket_name=$(get_config_value gitbasher.ticket "")
-scopes=$(get_config_value gitbasher.scopes "")
-
-### Is this is a first run of gitbasher in this project?
-is_first=$(get_config_value gitbasher.isfirst "true")
-set_config_value gitbasher.isfirst false > /dev/null
-
-project_name="$(get_repo_name)"
-repo_url="$(get_repo)"
-
-
 ### Function asks user to select default gitbasher branch
 function set_default_branch {
     echo -e "${YELLOW}Fetching remote branches...${ENDCOLOR}"

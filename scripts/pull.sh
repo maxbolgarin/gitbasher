@@ -194,6 +194,7 @@ function pull {
 
     merge_output=$(git merge --ff-only $2/$1 2>&1)
     merge_code=$?
+    mode="fast-forward"
 
     if [[ $merge_output == *"Already up to date"* ]]; then  
         echo -e "${GREEN}Already up to date${ENDCOLOR}"

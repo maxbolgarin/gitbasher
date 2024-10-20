@@ -51,10 +51,6 @@ In Windows use `wsl` (enter `wsl` in terminal, [read more](https://learn.microso
 * Making the development process clearer by using conventional commits; **gitbasher** uses [Conventional style of commits](https://www.conventionalcommits.org/en) ([example](https://gist.github.com/brianclements/841ea7bffdb01346392c))
 
 
-<picture>
-    <img src=".github/push.gif" width="600" alt="push example">
-</picture>
-
 
 ## How to start
 

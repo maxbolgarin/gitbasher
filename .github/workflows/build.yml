@@ -1,0 +1,24 @@
+name: Build
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: ./dist/build.sh ./scripts/gitb.sh ./dist/gitb
+
+      - name: Test
+        run: ./dist/gitb; if [ $? -ne 0 ]; then exit 1; fi
+
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: build new script"
+          file_pattern: '*gitb*'

@@ -5,90 +5,91 @@
 function print_help {
     echo -e "usage: ${YELLOW}gitb <command> <mode>${ENDCOLOR}"
     echo
-    msg="${YELLOW}Command${ENDCOLOR}_\t${YELLOW}Description${ENDCOLOR}"
-    msg="$msg\ncommit_Everything about commit creation_commit|c|co|cm|com"
-    msg="$msg\npush_Pushing changes to a remote repository_push|ps|ph"
-    msg="$msg\npull_Pulling changes from a remote repository_pull|pl|pll"
-    msg="$msg\nmerge_Merge changes from different branches_merge"
-    msg="$msg\nbranch_Managing branches_branch|b|br|bh|bra"
-    msg="$msg\ntag_Managing tags_tag|t|tg"
-    msg="$msg\nconfig_Configurate gitbasher_config|cfg|conf"
-    echo -e "$(echo -e "$msg" | column -ts '_')"
+    msg="${YELLOW}Command${ENDCOLOR}_\t${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description of ${BOLD}workflow${NORMAL}${BLUE} commands${ENDCOLOR}"
+    msg="$msg\ncommit_c|co|com_Everything about commit creation"
+    msg="$msg\npush_p|ps|pus_Pushing changes to a remote repository"
+    msg="$msg\npull_pu|pl|pul_Pulling changes from a remote repository"
+    msg="$msg\nbranch_b|br|bran_Managing branches"
+    msg="$msg\ntag_t|tg_Managing tags"
+    msg="$msg\nmerge_m|me_Merge changes to the current branch"
+    msg="$msg\nrebase_r|re|base_Rebase current branch"
+    msg="$msg\nreset_res_Easy to use git reset"
+    msg="$msg\nconfig_cf|cfg|conf_Configurate gitbasher"
 
-    echo
-    echo -e "${YELLOW}Commands without modes${ENDCOLOR}"
-    echo -e "status\t\tShow general info about repo and changed files"
-    echo -e "log\t\tOpen git log in a pretty format"
-    echo -e "reflog\t\tOpen git reflog in a pretty format"
-    echo -e "last-commit\tShow info about last commit (last record from 'git log')"
-    echo -e "last-action\tShow info about last commit (last record from 'git reflog')"
-    echo -e "undo-commit\tUndo last commit (record from git log)"
-    echo -e "undo-action\tUndo last action (record from git reflog)"
+    msg="$msg\n_ _ _"
+    msg="$msg\n${YELLOW}Command${ENDCOLOR}_\t${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description of ${BOLD}informational${NORMAL}${BLUE} commands${ENDCOLOR}"
+    msg="$msg\nstatus_s|st_Info about repo and changed files"
+    msg="$msg\nlog_l|lg_Open git log in a pretty format"
+    msg="$msg\nreflog_rl|rlg_Open git reflog in a pretty format"
+    msg="$msg\nlast-commit_lc|lastc_Show info about the last commit"
+    msg="$msg\nlast-ref_lr|lastr_Show info about the last reference"
+    echo -e "$(echo -e "$msg" | column -ts '_')"
 
     exit
 }
+
+project_name="$(get_repo_name)"
+repo_url="$(get_repo)"
+
+### Print settings f this is first run
+if [ $is_first == "true" ]; then 
+    git config --local gitbasher.scopes "logic model config logs"
+
+    echo -e "${GREEN}Thanks for using gitbasher in project '$project_name'${ENDCOLOR}"
+    print_configuration
+    echo
+    echo -e "You can change these settings by using ${YELLOW}gitb cfg <name>${ENDCOLOR}"
+    echo
+fi
 
 if [ -z $1 ] || [ "$1" == "--help" ] || [ "$1" == "help" ] || [ "$1" == "man" ]; then
     print_help
 fi
 
 
-### Print settings if this is first run
-if [ $is_first == "true" ]; then 
-    echo -e "${GREEN}Thank for using gitbasher in project '$project_name'${ENDCOLOR}"
-    echo -e "Current settings:"
-    echo -e "\tmain:\t${YELLOW}$main_branch${ENDCOLOR}"
-    echo -e "\tsep:\t${YELLOW}$sep${ENDCOLOR}"
-    echo -e "\teditor:\t${YELLOW}$editor${ENDCOLOR}"
-
-    echo -e "You can change these settings by using ${YELLOW}gitb config <name>${ENDCOLOR}"
-    echo
-fi
-
-
 ### Run script
 case "$1" in
-    commit|c|co|cm|com)         
+    commit|c|co|com)         
         commit_script $2
     ;;
-    push|ps|ph)         
+    push|p|ps|pus)         
         push_script $2
     ;;
-    pull|pl|pll)         
+    pull|pu|pl|pul)         
         pull_script $2
     ;;
-    merge)         
+    merge|m|me)         
         merge_script $2
     ;;
-    branch|b|br|bh|bra)         
+    rebase|r|re|base)         
+        rebase_script $2
+    ;;
+    branch|b|br|bran)         
         branch_script $2
     ;;
     tag|t|tg)         
         tag_script $2
     ;;
-    config|cfg|conf)         
+    config|cf|cfg|conf)         
         config_script $2
     ;;
-    log|l)
+    reset|res)
+        reset_script $2
+    ;;
+    log|l|lg)
         gitlog
     ;;
-    reflog|rl)
+    reflog|rl|rlg)
         reflog
     ;;
-    undo-commit)
-        undo_commit
-    ;;
-    undo-action)
-        undo_action
-    ;;
-    last-commit|lc)
+    last-commit|lc|lastc)
         last_commit
     ;;
-    last-action|la)
-        last_action
+    last-ref|lr|lastr)
+        last_ref
     ;;
-    status|s)
-        status
+    status|s|st)
+        project_status
     ;;
 
     *)

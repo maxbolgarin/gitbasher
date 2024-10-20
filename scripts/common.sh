@@ -1,14 +1,5 @@
 #!/usr/bin/env bash
 
-### Consts for colors
-RED="\e[31m"
-GREEN="\e[32m"
-YELLOW="\e[33m"
-BLUE="\e[34m"
-PURPLE="\e[35m"
-CYAN="\e[36m"
-ENDCOLOR="\e[0m"
-
 
 ### Consts for colors to use inside 'sed'
 RED_ES="\x1b[31m"
@@ -17,43 +8,9 @@ YELLOW_ES="\x1b[33m"
 BLUE_ES="\x1b[34m"
 PURPLE_ES="\x1b[35m"
 CYAN_ES="\x1b[36m"
+GRAY_ES="\x1b[37m"
 ENDCOLOR_ES="\x1b[0m"
 
-
-### Cannot use bash version less than 4 because of many features that was added to language in that version
-if ((BASH_VERSINFO[0] < 4)); then 
-    printf "Sorry, you need at least ${YELLOW}bash-4.0${ENDCOLOR} to run this script.\n
-If your OS is debian-based, use:
-    ${GREEN}apt install --only-upgrade bash${ENDCOLOR}\n
-If your OS is mac, use:
-    ${GREEN}brew install bash${ENDCOLOR}\n\n" 
-    exit 1; 
-fi
-
-
-### Useful consts
-current_branch=$(git branch --show-current)
-origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')
-main_branch="main"
-if [ "$(git branch | grep -w master)" != "" ]; then
-    main_branch="master"
-fi
-
-
-### Function tries to get config from local, then from global, then returns default
-# $1: config name
-# $2: default value
-# Returns: config value
-function get_config_value {
-    value=$(git config --local --get $1)
-    if [ -z $value ]; then
-        value=$(git config --global --get $1)
-        if [ -z $value ]; then
-            value=$2
-        fi
-    fi
-    echo -e "$value"
-}
 
 
 ### Function sets git config value
@@ -91,6 +48,7 @@ function get_repo {
     repo="${repo/"io:"/"io/"}"
     repo="${repo/"org:"/"org/"}"
     repo="${repo/"net:"/"net/"}"
+    repo="${repo/"dev:"/"dev/"}"
     repo="${repo/"ru:"/"ru/"}"
     repo="${repo/"git@"/"https://"}"
     repo="${repo/".git"/""}" 
@@ -103,6 +61,24 @@ function get_repo_name {
     repo=$(get_repo)
     echo "${repo##*/}"
 }
+
+
+### Function prints current config
+function print_configuration {
+    echo -e "${YELLOW}Current configuration:${ENDCOLOR}"
+    echo -e "\tuser.name:\t${YELLOW}$(get_config_value user.name)${ENDCOLOR}"
+    echo -e "\tuser.email:\t${YELLOW}$(get_config_value user.email)${ENDCOLOR}"
+    echo -e "\tdefault:\t${YELLOW}$main_branch${ENDCOLOR}"
+    echo -e "\tseparator:\t${YELLOW}$sep${ENDCOLOR}"
+    echo -e "\teditor:\t\t${YELLOW}$editor${ENDCOLOR}"
+    if [ "$ticket_name" != "" ]; then
+        echo -e "\tticket:\t\t${YELLOW}$ticket_name${ENDCOLOR}"
+    fi
+    if [ "$scopes" != "" ]; then
+        echo -e "\tscopes:\t\t${YELLOW}$scopes${ENDCOLOR}"
+    fi
+}
+
 
 
 ### Function to escape substring in string
@@ -163,6 +139,7 @@ function yes_no_choice {
 # $1: list of values
 # Returns: 
 #     * choice_result
+#     * pressed_alt
 # Using of global:
 #     * git_add
 function choose {
@@ -171,9 +148,9 @@ function choose {
 
     while [ true ]; do
         if [ $number_of_values -gt 9 ]; then
-            read -n 2 choice
+            read -p "$read_prefix" -e -n 2 choice
         else
-            read -n 1 -s choice
+            read -p "$read_prefix" -n 1 -s choice
         fi
 
         if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
@@ -186,12 +163,17 @@ function choose {
             exit
         fi
 
-        re='^[0-9]+$'
+        re='^[0-9=]+$'
         if ! [[ $choice =~ $re ]]; then
-            if [ $number_of_values -gt 9 ]; then
-                exit
+            if [ -n "$git_add" ]; then
+                git restore --staged $git_add
             fi
-            continue
+            exit
+        fi
+
+        if [ "$choice" == "=" ] || [ "$choice" == "==" ]; then
+            pressed_alt="true"
+            break
         fi
 
         index=$(($choice-1))
@@ -203,10 +185,30 @@ function choose {
             break
         else
             if [ $number_of_values -gt 9 ]; then
+                if [ -n "$git_add" ]; then
+                    git restore --staged $git_add
+                fi
                 exit
             fi
         fi
     done
+}
+
+
+### Function prints fiels from git status in a pretty way
+function git_status {
+    status_output=$(git status --short)
+    status_output=$(echo "$status_output" | sed "s/^ D/${RED_ES}\tDeleted: ${ENDCOLOR_ES}/")
+    status_output=$(echo "$status_output" | sed "s/^D /${GREEN_ES}Staged\t${RED_ES}Deleted: ${ENDCOLOR_ES}/")
+
+    status_output=$(echo "$status_output" | sed "s/^ M/${YELLOW_ES}\tModified:${ENDCOLOR_ES}/")
+    status_output=$(echo "$status_output" | sed "s/^MM/${GRAY_ES}Old\t${YELLOW_ES}Modified:${ENDCOLOR_ES}/")
+    status_output=$(echo "$status_output" | sed "s/^AM/${GRAY_ES}Old\t${YELLOW_ES}Modified:${ENDCOLOR_ES}/")
+    status_output=$(echo "$status_output" | sed "s/^M /${GREEN_ES}Staged\t${YELLOW_ES}Modified:${ENDCOLOR_ES}/")
+
+    status_output=$(echo "$status_output" | sed "s/^A/${GREEN_ES}Staged\tAdded:   ${ENDCOLOR_ES}/")
+    status_output=$(echo "$status_output" | sed "s/^??/${GREEN_ES}\tAdded:   ${ENDCOLOR_ES}/")
+    echo -e "$status_output"
 }
 
 
@@ -218,32 +220,53 @@ function choose {
 #     * number
 # $3: from which place (commit, branch) show commits (empty for default)
 # Returns: 
-#     number_of_commits
+#     commits_info
+#     commits_hash
 function commit_list {
-    commits_info_str=$(git --no-pager log --pretty="%h | %s | %an | %cr" -n $1 $3 | column -ts'|')
-    commits_hash_str=$(git --no-pager log --pretty="%h" -n $1 $3)
-    commits_author_str=$(git --no-pager log --pretty="%an" -n $1 $3)
-    commits_date_str=$(git --no-pager log --pretty="%cr" -n $1 $3)
-    IFS=$'\n' read -rd '' -a commits_info <<<"$commits_info_str"
-    IFS=$'\n' read -rd '' -a commits_hash <<<"$commits_hash_str"
-    IFS=$'\n' read -rd '' -a commits_author <<<"$commits_author_str"
-    IFS=$'\n' read -rd '' -a commits_date <<<"$commits_date_str"
+    ref=$3
+    if [[ "$(git --no-pager log -n 1 2>&1)" == *"does not have any commits yet"* ]]; then
+        if [[ "$3" == *"HEAD"* ]]; then
+            ref="$(echo $3 | sed 's/HEAD..//')"
+        else
+            return 
+        fi
+    fi
 
-    number_of_commits=${#commits_info[@]}
+    IFS=$'\n' 
+    read -rd '' -a commits_info <<<"$(git --no-pager log -n $1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} | %s | ${BLUE_ES}%an${ENDCOLOR_ES} | ${GREEN_ES}%cr${ENDCOLOR_ES}" $ref | column -ts'|')"
+    read -rd '' -a commits_hash <<<"$(git --no-pager log -n $1 --pretty="%h"$ref)"
 
     for index in "${!commits_info[@]}"
     do
-        commit_line=$(sed "1,/${commits_hash[index]}/ s/${commits_hash[index]}/${YELLOW_ES}${commits_hash[index]}${ENDCOLOR_ES}/" <<< ${commits_info[index]})
-        commit_line=$(sed "s/\(.*\)${commits_author[index]}/\1${BLUE_ES}${commits_author[index]}${ENDCOLOR_ES}/" <<< "${commit_line}")
-        commit_line=$(sed "s/\(.*\)${commits_date[index]}/\1${GREEN_ES}${commits_date[index]}${ENDCOLOR_ES}/" <<< "${commit_line}")
-
+        line=${commits_info[index]}
         if [ $2 == "number" ]; then
-            commit_line="$(($index+1)). ${commit_line}"
+            line="$(($index+1)). ${line}"
         elif [ $2 == "tab" ]; then
-            commit_line="\t${commit_line}"
+            line="\t${line}"
         fi
+        echo -e "$line"
+    done
+}
 
-        echo -e "$commit_line"
+
+### Function prints the list of refs from reflog
+# $1: number of last refs to show
+# Returns: 
+#     refs_info
+#     refs_hash
+function ref_list {
+    IFS=$'\n' 
+    read -rd '' -a refs_info <<<"$(git --no-pager reflog -n $1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} | ${BLUE_ES}%gd${ENDCOLOR_ES} | %gs | ${GREEN_ES}%cr${ENDCOLOR_ES}" | column -ts'|')"
+    read -rd '' -a refs_hash <<<"$(git --no-pager reflog -n $1 --pretty="%gd")"
+
+    # Remove HEAD@{0}
+    refs_info=("${refs_info[@]:1}")
+    refs_hash=("${refs_hash[@]:1}")
+
+    for index in "${!refs_info[@]}"
+    do
+        line="$(($index+1)). ${refs_info[index]}"
+        echo -e "$line"
     done
 }
 
@@ -256,17 +279,29 @@ function commit_list {
 #     * git_add
 function choose_commit {
     commit_list $1 "number"
-    echo "0. Exit..."
-    # TODO: add navigation
+    if [ $1 -gt 9 ]; then
+        echo "00. Exit"
+    else
+        echo "0. Exit"
+    fi
 
+    echo "Enter = to show more"
     echo
-    printf "Enter commit number: "
+    
+    read_prefix="Enter commit number: "
 
     choose "${commits_hash[@]}"
     commit_hash=$choice_result
 
+    if [ -n "$pressed_alt" ]; then
+        commit_list 50 "number"
+        echo "00. Exit"
+        echo
+        choose "${commits_hash[@]}"
+        commit_hash=$choice_result
+    fi
+
     echo
-    return
 }
 
 
@@ -347,12 +382,11 @@ function list_branches {
         args="--sort=-committerdate -r"
     fi
     branches_str=$(git --no-pager branch $args --format="%(refname:short)")
-    branches_with_info_str=$(git --no-pager branch $args --format="%(refname:short) | %(committerdate:relative) | %(objectname:short) - %(contents:subject)" | column -ts'|' )
-    commits_hash_str=$(git --no-pager branch $args --format="%(objectname:short)")
+    branches_info_str=$(git --no-pager branch $args --format="${BLUE_ES}%(refname:short)${ENDCOLOR_ES} | %(contents:subject) | ${YELLOW_ES}%(objectname:short)${ENDCOLOR_ES}  | ${GREEN_ES}%(committerdate:relative)${ENDCOLOR_ES}" | column -ts'|' )
 
-    IFS=$'\n' read -rd '' -a branches <<< "$branches_str"
-    IFS=$'\n' read -rd '' -a branches_with_info <<< "$branches_with_info_str"
-    IFS=$'\n' read -rd '' -a commits_hash <<< "$commits_hash_str"
+    IFS=$'\n' 
+    read -rd '' -a branches <<< "$branches_str"
+    read -rd '' -a branches_info <<< "$branches_info_str"
 
     number_of_branches=${#branches[@]}
     if [[ "$1" == "remote" ]]; then
@@ -375,29 +409,26 @@ function list_branches {
 
     if [[ "$number_of_branches" == 1 ]] && [[ "${branch_to_check}" == "${current_branch}" ]]; then
         echo
-        echo -e "You have only one branch: ${YELLOW}${current_branch}${ENDCOLOR}"
+        echo -e "There is only one branch: ${YELLOW}${current_branch}${ENDCOLOR}"
         exit
     fi
 
     if [[ "$1" == "delete" ]] && [[ "$number_of_branches" == 2 ]] && [[ "${current_branch}" != "${main_branch}" ]]; then
         echo
-        echo -e "${YELLOW}There is no branches to delete${ENDCOLOR}"
+        echo -e "${YELLOW}There are no branches to delete${ENDCOLOR}"
         exit
     fi
 
     ### Main should be the first
     branches_first_main=(${main_branch})
-    branches_with_info_first_main=("dummy")
-    commits_hash_first_main=("dummy")
+    branches_info_first_main=("dummy")
     if [[ "$1" == "delete" ]]; then
         branches_first_main=()
-        branches_with_info_first_main=()
-        commits_hash_first_main=()
+        branches_info_first_main=()
     fi
     if [[ "$1" == "merge" ]] && [[ "$current_branch" == "$main_branch" ]]; then
         branches_first_main=()
-        branches_with_info_first_main=()
-        commits_hash_first_main=()
+        branches_info_first_main=()
     fi
     for index in "${!branches[@]}"
     do
@@ -417,27 +448,25 @@ function list_branches {
         fi
 
         if [[ "$branch_to_check" == "${main_branch}"* ]]; then
-            branches_with_info_first_main[0]="${branches_with_info[index]}"
-            commits_hash_first_main[0]="${commits_hash[index]}"
+            branches_info_first_main[0]="${branches_info[index]}"
         elif [[ "$branch_to_check" != "HEAD->"* ]] && [[ "$branch_to_check" != "$origin_name" ]]; then 
             branches_first_main+=(${branches[index]})
-            branches_with_info_first_main+=("${branches_with_info[index]}")
-            commits_hash_first_main+=("${commits_hash[index]}")
+            branches_info_first_main+=("${branches_info[index]}")
         fi
     done
 
-    for index in "${!branches_with_info_first_main[@]}"
+    for index in "${!branches_info_first_main[@]}"
     do
         branch=$(escape "${branches_first_main[index]}" "/")
         if [[ "$1" == "remote" ]] && [[ "$branch" != "origin"* ]]; then
             branch="$origin_name\/$branch"
         fi
-        branch_line=$(sed "1,/${branch}/ s/${branch}/${GREEN_ES}${branch}${ENDCOLOR_ES}/" <<< ${branches_with_info_first_main[index]})
-        branch_line=$(sed "1,/${commits_hash_first_main[index]}/ s/${commits_hash_first_main[index]}/${YELLOW_ES}${commits_hash_first_main[index]}${ENDCOLOR_ES}/" <<< ${branch_line})
+
+        branch_line="${branches_info_first_main[index]}"
         if [ "${branches_first_main[index]}" == "$current_branch" ]; then
-            echo "$(($index+1)). * $branch_line"
+            echo -e "$(($index+1)). * $branch_line"
         else
-            echo "$(($index+1)).   $branch_line"
+            echo -e "$(($index+1)).   $branch_line"
         fi
     done
 }
@@ -457,7 +486,6 @@ function list_branches {
 #     * branch_name
 function choose_branch {
     list_branches $1
-    printf "0. Exit...\n"
 
     echo
     printf "Enter branch number: "
@@ -486,11 +514,11 @@ function switch {
             echo -e "${GREEN}Already on '$1'${ENDCOLOR}"
         else
             echo -e "${GREEN}Switched to branch '$1'${ENDCOLOR}"
-            changes=$(git status -s)
+            changes=$(git_status)
             if [ -n "$changes" ] && [ -z $2 ]; then
                 echo
                 echo -e "${YELLOW}Moved changes:${ENDCOLOR}"
-                git status -s
+                echo -e "$changes"
             fi
         fi
 
@@ -498,7 +526,8 @@ function switch {
             get_push_list $1 ${main_branch} ${origin_name}
             if [ -n "$push_list" ]; then
                 echo
-                echo -e "Your branch ${YELLOW}$1${ENDCOLOR} is ahead of ${YELLOW}${history_from}${ENDCOLOR} by this commits:"
+                count=$(echo -e "$push_list" | wc -l | sed 's/^ *//;s/ *$//')
+                echo -e "Your branch ${YELLOW}$1${ENDCOLOR} is ahead ${YELLOW}${history_from}${ENDCOLOR} by ${BOLD}$count${ENDCOLOR} commits"
                 echo -e "$push_list"
             fi
         fi
@@ -516,254 +545,8 @@ function switch {
     fi
 
     if [ $switch_code -ne 0 ]; then
-        echo -e "${RED}Cannot switch to '$main_branch'! Here is the error${ENDCOLOR}"
+        echo -e "${RED}Cannot switch to '$main_branch'! Error message:${ENDCOLOR}"
         echo -e "$switch_output"
         exit $switch_code
-    fi
-}
-
-
-### Function fetchs provided branch and handles errors
-# $1: branch name
-# $2: origin name
-# $3: editor
-# Returns:
-#      * fetch_code - if it is not zero - there is no such branch in origin
-function fetch {
-    fetch_output=$(git fetch $2 $1 2>&1)
-    fetch_code=$?
-
-    if [ $fetch_code == 0 ] ; then
-        return
-    fi
-
-    if [[ ${fetch_output} != *"couldn't find remote ref"* ]]; then
-        echo -e "${RED}Cannot fetch '$1'! Here is the error${ENDCOLOR}"
-        echo -e "${fetch_output}"
-        exit $fetch_code
-    fi
-    echo -e "${YELLOW}There is no '$1' in $2${ENDCOLOR}"
-}
-
-
-### Function merges provided branch and handles errors
-# $1: branch name from
-# $2: origin name
-# $3: editor
-# $4: operation name (e.g. merge or pull)
-# $5: is merge from origin?
-# Returns:
-#      * merge_output
-#      * merge_code - 0 if everything is ok, not zero if there are conflicts
-function merge {
-    if [ "$5" == "true" ]; then
-        merge_output=$(git merge $2/$1 2>&1)
-    else
-        merge_output=$(git merge $1 2>&1)
-    fi
-    merge_code=$?
-
-    if [ $merge_code == 0 ] ; then
-        return
-    fi
-
-    operation="$4"
-    if [ "$operation" == "" ]; then
-        operation="merge"
-    fi
-
-    ### Cannot merge because there is uncommitted files that changed in origin
-    if [[ $merge_output == *"Please commit your changes or stash them before you merge"* ]]; then
-        echo -e "${RED}Cannot $operation! There is uncommited changes, that will be overwritten by $operation${ENDCOLOR}"
-        files_to_commit=$(echo "$merge_output" | tail -n +2 | tail -r | tail -n +4 | tail -r)
-        echo -e "${YELLOW}Files with changes${ENDCOLOR}"
-        echo "$files_to_commit"
-        echo
-        exit $merge_code
-    fi
-
-    ### Cannot merge because of some other error
-    if [[ $merge_output != *"fix conflicts and then commit the result"* ]]; then
-        echo -e "${RED}Cannot $operation! Here is the error${ENDCOLOR}"
-        echo "$merge_output"
-        exit $merge_code
-    fi
-
-    echo -e "${RED}Cannot $operation! There are conflicts in staged files${ENDCOLOR}"
-    resolve_conflicts $1 $2 $3
-}
-
-
-### Function pulls provided branch, handles errors and makes a merge
-# $1: branch name
-# $2: origin name
-# $3: editor
-function resolve_conflicts {
-
-    ### Print files with conflicts
-    echo -e "${YELLOW}Files with conflicts${ENDCOLOR}"
-    IFS=$'\n' read -rd '' -a files_with_conflicts <<<"$(git --no-pager diff --name-only --diff-filter=U --relative)"
-    echo -e "$(sed 's/^/\t/' <<< "$files_with_conflicts")"
-    echo
-
-
-    ### Ask user what he wants to do
-    default_message="Merge branch '$2/$1' into '$1'"
-    echo -e "${YELLOW}You should fix conflicts manually.${ENDCOLOR} There are some options:"
-    echo -e "1. Create merge commit with generated message"
-    printf "\tMessage: ${BLUE}${default_message}${ENDCOLOR}\n"
-    echo -e "2. Create merge commit with entered message"
-    echo -e "3. Abort merge (undo pulling)"
-    echo -e "Press any another key to exit from this script without merge abort"
-
-
-    ### Merge process
-    while [ true ]; do
-        read -n 1 -s choice
-
-        re='^[0-9]+$'
-        if ! [[ $choice =~ $re ]]; then
-            exit
-        fi
-
-        if [ "$choice" == "1" ] || [ "$choice" == "2" ]; then
-            echo
-            merge_commit $choice $files_with_conflicts "${default_message}" $1 $2 $3
-            if [ -z "$merge_commit_code" ] || [ $merge_commit_code == 0 ]; then
-                return
-            fi
-        fi
-
-        if [ "$choice" == "3" ]; then
-            echo
-            echo -e "${YELLOW}Cancel merge${ENDCOLOR}"
-            git merge --abort
-            exit $?
-        fi
-
-        if [ "$choice" == "0" ]; then
-            exit
-        fi
-    done
-}
-
-
-### Function creates merge commit
-# $1: 1 for merge with default message, 2 for merge with editor
-# $2: files with conflicts that should be added to commit
-# $3: default message for merge with $1 -eq 1
-# $4: branch name
-# $5: origin name
-# $6: editor
-# Returns: 
-#     merge_commit_code - 0 if everything is ok
-function merge_commit {
-
-    ### Check if there are files with conflicts
-    IFS=$'\n' read -rd '' -a files_with_conflicts_new <<<"$(grep --files-with-matches -r -E "[<=>]{7} HEAD" .)"
-    number_of_conflicts=${#files_with_conflicts_new[@]}
-    if [ $number_of_conflicts -gt 0 ]; then
-        echo -e "${YELLOW}There are still some files with conflicts${ENDCOLOR}"
-        for index in "${!files_with_conflicts_new[@]}"
-        do
-            echo -e $(sed '1 s/.\///' <<< "\t${files_with_conflicts_new[index]}")
-        done
-
-        echo
-        echo -e "Fix conflicts and press ${YELLOW}$1${ENDCOLOR} for one more time"
-        merge_commit_code=1
-        return
-    fi
-
-
-    ### Add files with resolved conflicts to commit
-    files_with_conflicts_one_line="$(tr '\n' ' ' <<< "$2")"
-    git add $files_with_conflicts_one_line
-
-    ### 1. Commit with default message
-    if [ "$1" == "1" ]; then
-        result=$(git commit -m "$3" 2>&1)
-        check_code $? "$result" "merge commit"
-        commit_message="$3"
-
-    ### 2. Commit with entered message
-    else
-        staged_with_tab="$(sed 's/^/###\t/' <<< "$2")"
-        commitmsg_file=".commitmsg__"
-        touch $commitmsg_file
-        echo """
-###
-### Write a message about merge from '$5/$4' into '$4'. Lines starting with '#' will be ignored. 
-### 
-### On branch $4
-### Changes to be commited:
-${staged_with_tab}
-""" >> $commitmsg_file
-        while [ true ]; do
-            $6 $commitmsg_file
-            commit_message=$(cat $commitmsg_file | sed '/^#/d')
-
-            if [ -n "$commit_message" ]; then
-                break
-            fi
-            echo -e "${YELLOW}Merge commit message cannot be empty${ENDCOLOR}"
-            echo
-            read -n 1 -p "Try for one more time? (y/n) " -s -e choice
-            if [ "$choice" != "y" ]; then
-                git restore --staged $files_with_conflicts_one_line
-                find . -name "$commitmsg_file*" -delete
-                merge_commit_code=2
-                exit
-            fi    
-        done
-
-        find . -name "$commitmsg_file*" -delete
-        
-        result=$(git commit -m """$commit_message""" 2>&1)
-        check_code $? "$result" "merge commit"
-    fi
-
-    commit_hash="$(git --no-pager log --pretty="%h" -1)"
-    echo -e "${GREEN}Successful merge!${ENDCOLOR}"
-    current_branch=$(git branch --show-current)
-    echo -e "${BLUE}[$4 $commit_hash${ENDCOLOR} -> ${BLUE}${current_branch}]${ENDCOLOR} $commit_message"
-    echo
-    merge_commit_code=0
-}
-
-
-### Function pulls provided branch and handles errors
-# $1: branch name
-# $2: origin name
-# $3: editor
-function pull {
-    ### Fetch, it will exit if critical error and return if branch doesn't exists in origin
-    fetch $1 $2
-
-    if [ $fetch_code != 0 ] ; then
-        return
-    fi
-
-    ### Merge and resulve conflicts
-    merge $1 $2 $3 "pull" "true"
-
-    ### Nothing to pull
-    if [[ $merge_output == *"Already up to date"* ]]; then
-        echo -e "${GREEN}Already up to date${ENDCOLOR}"
-        return
-    fi
-
-    ### It will exit if critical error or resolve conflicts, so here we can get only in case of success
-    echo -e "${GREEN}Successful pull!${ENDCOLOR}"
-    echo
-
-    ### Merge without conflicts
-    if [ $merge_code == 0 ] ; then
-        print_changes_stat "$(echo "$merge_output" | tail -n +3)" 
-
-    ### Merge with conflicts, but they were resolved
-    else
-        commit_hash="$(git --no-pager log --pretty="%h" -1)"
-        print_changes_stat "$(git --no-pager show $commit_hash --stat --format="")" 
     fi
 }

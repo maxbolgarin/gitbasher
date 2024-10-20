@@ -6,9 +6,9 @@
 # Use this script only with gitbasher
 
 
-### Function pushes tag and prints url to repo or error
+### Function pushes tag and prints url to the repo or an error
 # $1: tag to push, empty for pushing all tags
-# $2: delete flag, pass it if you want to delete provided tag
+# $2: delete flag, pass it if you want to delete a tag
 # Using of global:
 #     * origin_name
 function push_tag {
@@ -25,10 +25,10 @@ function push_tag {
     # Handle delete case
     if [ -n "$delete" ]; then
         if [[ "$push_output" == *"remote ref does not exist"* ]]; then
-            echo -e "${RED}Tag '$1' doesn't exist in '${origin_name}'${ENDCOLOR}"
+            echo -e "${RED}Tag '$1' doesn't exist in the ${origin_name}${ENDCOLOR}"
             exit
         fi
-        echo -e "${GREEN}Successful deleted tag '$1' in '${origin_name}'!${ENDCOLOR}"
+        echo -e "${GREEN}Tag '$1' is deleted from the ${origin_name}!${ENDCOLOR}"
         exit
     fi
     
@@ -42,7 +42,7 @@ function push_tag {
 
         number_of_tags=${#lines_with_success[@]}
         if [ $number_of_tags != 0 ]; then
-            echo -e "${GREEN}Pushed successfully${ENDCOLOR}"
+            echo -e "${GREEN}Pushed successfully!${ENDCOLOR}"
             
             for index in "${!lines_with_success[@]}"
             do
@@ -68,7 +68,7 @@ function push_tag {
             exit
         fi
         
-        echo -e "${RED}Cannot push! Here is the error${ENDCOLOR}"
+        echo -e "${RED}Cannot push! Error message:${ENDCOLOR}"
         echo "$push_output"
         exit $push_code
     fi
@@ -96,112 +96,88 @@ function push_tag {
 
 ### Main function
 # $1: mode
-    # <empty>: create a new tag from a current branch and commit
-    # commit: select commit instead of using current one (or select tag when pushing or deleting)
-    # annotated: create an annotated tag with message
-    # full: create an annotated tag with message and select commit instead of using current one
-    # list: print list of local tags and exit
-    # remote: fetch tags from the remote and print the list
-    # push: select tag to push
+    # <empty>: create a new tag from a current branch and commit it
+    # annotated: create an annotated tag with a message
+    # commit: select a commit for the tag instead of using the last one
+    # all: select commit instead of using the last one and create an annotated tag 
+    # push: select a tag to push
     # push-all: push all tags
-    # delete: select tag to delete
-    # delete: delete all tags
+    # delete: select a tag to delete
+    # delete-all: delete all tags
+    # list: print a list of local tags
+    # remote: fetch tags from the remote and print it
 function tag_script {
     case "$1" in
-        commit|c|co|cm) 
-            select="true"
-            commit="true"
-        ;;
-        annotated|a|an) annotated="true";;
-        full|f) 
-            select="true"
-            annotated="true"
-            full="true"
-        ;;
-        list|log|l) list="true";;
-        remote|r|re)
-            list="true"
-            remote="true"
-        ;;
-        push|ps|ph|p)
-            push="true"
-            select="true"
-            push_single="true"
-        ;;
-        push-all|pa) push="true";;
-        delete|del|d) 
-            delete="true"
-            select="true"
-            delete_single="true"
-        ;;
-        delete-all|da) delete="true";;
-        help|h) help="true";;
-
+        annotated|a|an)     annotated="true";;
+        commit|c|co|cm)     select="true"; commit="true";;
+        all|al)             select="true"; annotated="true";;
+        push|ps|ph|p)       push="true"; select="true";;
+        push-all|pa)        push="true";;
+        delete|del|d)       delete="true"; select="true";;
+        delete-all|da)      delete="true";;
+        list|log|l)         list="true";;
+        remote|re|r|fetch)  list="true"; remote="true";;
+        help|h)             help="true";;
         *)
             wrong_mode "tag" $1
     esac
 
-    if [ -n "$help" ]; then
-        echo -e "usage: ${YELLOW}gitb tag <mode>${ENDCOLOR}"
-        echo
-        echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\tCreate a new tag from a current commit and push it to a remote"
-        echo -e "commit|c|co|cm\tCreate a new tag from a selected commit and push it to a remote"
-        echo -e "annotated|a|an\tCreate a new annotated tag from a current commit and push it to a remote"
-        echo -e "full|f\tCreate a new annotated tag from a selected commit and push it to a remote"
-        echo -e "list|log|l\tPrint a list of local tags"
-        echo -e "remote|r|re\tFetch tags from a remote and print it"
-        echo -e "push|ps|ph|p\tSelect a local tag for pushing to a remote"
-        echo -e "push-all|pa\tPush all tags to a remote"
-        echo -e "delete|del|d\tSelect a tag to delete in local and remote"
-        echo -e "delete-all|da\tDelete all local tags"
-        echo -e "help|h\t\tShow this help"
-        exit
-    fi
-
 
     ### Print header
     header="GIT TAG"
-    if [ -n "${commit}" ]; then
-        header="$header COMMIT"
-    elif [ -n "${full}" ]; then
-        header="$header FULL"
+    if [ -n "${annotated}" ] && [ -n "${commit}" ]; then
+        header="$header ALL"
     elif [ -n "${annotated}" ]; then
         header="$header ANNOTATED"
+    elif [ -n "${commit}" ]; then
+        header="$header COMMIT"
+    elif [ -n "${push}" ] && [ -n "${select}" ]; then
+        header="$header PUSH"
+    elif [ -n "${push}" ]; then
+        header="$header PUSH ALL"
+    elif [ -n "${delete}" ] && [ -n "${select}" ]; then
+        header="$header DELETE"
+    elif [ -n "${delete}" ]; then
+        header="$header DELETE ALL"    
     elif [ -n "${list}" ]; then
         header="$header LIST"
     elif [ -n "${remote}" ]; then
         header="$header REMOTE"
-    elif [ -n "${push_single}" ]; then
-        header="$header PUSH"
-    elif [ -n "${push}" ]; then
-        header="$header PUSH ALL"
-    elif [ -n "${delete_single}" ]; then
-        header="$header DELETE"
-    elif [ -n "${delete}" ]; then
-        header="$header DELETE ALL"    
     fi
 
     echo -e "${YELLOW}${header}${ENDCOLOR}"
     echo
 
 
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb tag <mode>${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\tCreate a new tag from the last commit"
+        echo -e "annotated|a|an\tCreate a new annotated tag from the last commit"
+        echo -e "commit|c|co|cm\tCreate a new tag from a selected commit"
+        echo -e "all|al\t\tCreate a new annotated tag from a selected commit"
+        echo -e "push|ps|ph|p\tSelect a local tag and push it to the remote repository"
+        echo -e "push-all|pa\tPush all tags to the remote repository"
+        echo -e "delete|del|d\tSelect a tag to delete"
+        echo -e "delete-all|da\tDelete all local tags"
+        echo -e "list|log|l\tPrint a list of local tags"
+        echo -e "remote|fetch|r\tFetch tags from the remote repository and print it"
+        echo -e "help|h\t\tShow this help"
+        exit
+    fi
+
+
     ### Fetch tags from the remote
     if [ -n "${remote}" ]; then
-        echo -e "${YELLOW}Fetching all tags from remote...${ENDCOLOR}"
+        echo -e "${YELLOW}Fetching tags from the remote...${ENDCOLOR}"
         fetch_output=$(git fetch $origin_name --tags 2>&1)
-        fetch_code=$?
+        check_code $? "$fetch_output" "fetch tags"
 
         echo
-        
-        if [ $fetch_code != 0 ]; then
-            echo -e "${RED}Cannot fetch tags! Here is the error${ENDCOLOR}"
-            echo -e "${fetch_output}"
-            exit $fetch_code
-        fi
 
         if [ "$fetch_output" != "" ]; then
-            echo -e "${YELLOW}New tags${ENDCOLOR}"
+            echo -e "${YELLOW}New tags:${ENDCOLOR}"
             IFS=$'\n' read -rd '' -a lines_with_tags <<< "$(sed -n '/\[new tag\]/p' <<< "$fetch_output")"
             for index in "${!lines_with_tags[@]}"
             do
@@ -213,24 +189,19 @@ function tag_script {
 
 
     ### Print tag list
-    count=14
-    if [ -n "${delete}" ] || [ -n "${list}" ]; then
+    count=9
+    if [ -n "${delete}" ] || [ -n "${push}" ] || [ -n "${list}" ]; then
         count=999  # Show all tags
     fi
 
-    tags_info_str=$(git for-each-ref --count=$count --format="%(refname:short) | %(creatordate:relative) | %(objectname:short) - %(contents:subject)" --sort=-creatordate refs/tags | column -ts'|' )
-    tags_str=$(git for-each-ref --count=$count --format="%(refname:short)" --sort=-creatordate refs/tags)
-    commit_hashes_str=$(git for-each-ref --count=$count --format="%(objectname:short)" --sort=-creatordate refs/tags)
-
+    tags_info_str=$(git for-each-ref --count=$count  --sort=-creatordate refs/tags --format="${BLUE_ES}%(refname:short)${ENDCOLOR_ES} | %(contents:subject) | ${YELLOW_ES}%(objectname:short)${ENDCOLOR_ES} | ${CYAN_ES}%(creatordate:human)${ENDCOLOR_ES}" | column -ts'|' )
     IFS=$'\n' read -rd '' -a tags_info <<<"$tags_info_str"
-    IFS=$'\n' read -rd '' -a tags <<<"$tags_str"
-    IFS=$'\n' read -rd '' -a commit_hashes <<<"$commit_hashes_str"
-
-    number_of_tags=${#tags[@]}
+   
+    number_of_tags=${#tags_info[@]}
 
     if [ $number_of_tags == 0 ]; then
         echo -e "${YELLOW}There is no local tags${ENDCOLOR}"
-        if [ -n "${delete}" ]; then
+        if [ -n "${delete}" ] || [ -n "${push}" ]; then
             exit
         fi
     else
@@ -240,11 +211,9 @@ function tag_script {
         fi
         echo -e "${YELLOW}${tags_header}${ENDCOLOR}"
 
-        for index in "${!tags[@]}"
-        do
-            tag=$(escape "${tags[index]}" "/")
-            tag_line=$(sed "1,/${tag}/ s/${tag}/${GREEN_ES}${tag}${ENDCOLOR_ES}/" <<< ${tags_info[index]})
-            tag_line=$(sed "1,/${commit_hashes[index]}/ s/${commit_hashes[index]}/${YELLOW_ES}${commit_hashes[index]}${ENDCOLOR_ES}/" <<< "$tag_line")
+        for index in "${!tags_info[@]}"
+        do  
+            tag_line="${tags_info[index]}"
             if [ -n "${delete}" ] || [ -n "${push}" ]; then
                 echo -e "$(($index+1)). ${tag_line}"
             else
@@ -272,7 +241,6 @@ function tag_script {
     if [ -n "${delete}" ] && [ -z "$select" ]; then
         echo
         echo -e "${YELLOW}Do you really want to delete all local tags (y/n)?${ENDCOLOR}"
-        yes_no_choice "Deleting..."
         git tag | xargs git tag -d 
         exit
     fi
@@ -280,20 +248,23 @@ function tag_script {
 
     ### Select tag for delete / push
     if [ -n "${delete}" ] || [ -n "$push" ]; then
-        echo "0. Exit..."
+        if [ $number_of_tags -gt 9 ]; then
+            echo "00. Exit"
+        else
+            echo "0. Exit"
+        fi
         echo
         if [ -n "${delete}" ]; then
-            printf "Enter tag number to delete: "
+            read_prefix="Enter tag number to delete: "
         else
-            printf "Enter tag number to push: "
+            read_prefix="Enter tag number to push: "
         fi
+
+        IFS=$'\n' read -rd '' -a tags <<<"$(git for-each-ref --count=$count  --sort=-creatordate refs/tags --format="%(refname:short)")"
 
         choose "${tags[@]}"
         tag_name=$choice_result
 
-        if [ $number_of_tags -gt 9 ] && [ $choice -gt 9 ]; then
-            echo  # User press enter if choice < 10
-        fi
         echo
 
         # Push case
@@ -305,18 +276,12 @@ function tag_script {
         fi
 
         delete_result=$(git tag -d $tag_name 2>&1)
-        delete_code=$?
+        check_code $? "$delete_result" "delete tag"
 
-        if [ $delete_code != 0 ]; then
-            echo -e "${RED}Cannot delete tag '${tag_name}'!${ENDCOLOR}"
-            echo -e "$delete_result"
-            exit
-        fi
-
-        echo -e "${GREEN}Successfully deleted tag '${tag_name}'${ENDCOLOR}"
+        echo -e "${GREEN}Successfully deleted tag '${tag_name}'!${ENDCOLOR}"
         echo
-        echo -e "Do you want to delete this tag in ${YELLOW}${origin_name}${ENDCOLOR} (y/n)?"
-        yes_no_choice "Deleting..."
+        echo -e "Do you want to delete this tag in the ${YELLOW}${origin_name}${ENDCOLOR} (y/n)?"
+        yes_no_choice "\nDeleting..."
         push_tag $tag_name "true"
 
         exit
@@ -326,33 +291,33 @@ function tag_script {
 
     ### Select commit for new tag
     if [ -n "$select" ]; then
-        echo -e "${YELLOW}Select commit for a new tag on branch '$current_branch'${ENDCOLOR}"
+        echo -e "${YELLOW}Select a commit for a new tag on branch '$current_branch'${ENDCOLOR}"
         choose_commit 9
 
-        echo 
+        echo
         echo -e "${YELLOW}Selected commit${ENDCOLOR}"
 
 
-    ### Use current commit for new tag
+    ### Use last commit for new tag
     else
         commit_hash=$(git rev-parse HEAD)
-        echo -e "${YELLOW}Current commit${ENDCOLOR}"
+        echo -e "${YELLOW}Last branch commit${ENDCOLOR}"
     fi
 
     commit_message=$(git log -1 --pretty=%B $commit_hash | cat)
     echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR} ${commit_message}"
 
 
-    ### Enter name for a new tag
+    ### Enter the name for a new tag
     echo
-    echo -e "${YELLOW}Enter the name of a new tag${ENDCOLOR}"
-    echo -e "If this tag will be using for release, use version number in semver format like '1.0.0-alpha'"
+    echo -e "${YELLOW}Enter the name for a new tag${ENDCOLOR}"
+    echo -e "If this is a release tag, use version number in semver format like '1.0.0-alpha'"
     echo -e "Leave it blank to exit"
 
     if [ -n "${annotated}" ]; then
-        prompt="$(echo -n -e "${TODO}git tag -a${ENDCOLOR} ")"
+        prompt="$(echo -n -e "${BOLD}git tag -a${ENDCOLOR} ")"
     else
-        prompt="$(echo -n -e "${TODO}git tag${ENDCOLOR} ")"
+        prompt="$(echo -n -e "${BOLD}git tag${ENDCOLOR} ")"
     fi
 
     read -p "$prompt" -e tag_name
@@ -366,8 +331,6 @@ function tag_script {
         echo -e "${RED}This name is forbidden!${ENDCOLOR}"
         exit
     fi
-    echo
-
 
     ### If annotated - enter tag message
     if [ -n "$annotated" ]; then
@@ -375,11 +338,11 @@ function tag_script {
         touch $tag_file
 
         echo """
-###
-### Write some words about a new tag '${tag_name}'
-### [$current_branch ${commit_hash::7}] ${commit_message}
-### 
-### You can place changelog here, if this tag means a new release
+####
+#### Write some words about the new tag '${tag_name}'
+#### [$current_branch ${commit_hash::7}] ${commit_message}
+#### 
+#### You can place changelog here if this tag for a new release
 """ >> $tag_file
 
         while [ true ]; do
@@ -392,7 +355,7 @@ function tag_script {
             echo
             echo -e "${YELLOW}Tag message cannot be empty${ENDCOLOR}"
             echo
-            read -n 1 -p "Try for one more time? (y/n) " -s -e choice
+            read -n 1 -p "Do you want to try for one more time? (y/n) " -s -e choice
             if [ "$choice" != "y" ]; then
                 find . -name "$tag_file*" -delete
                 exit
@@ -407,6 +370,7 @@ function tag_script {
         commit_hash=""
     fi
 
+    echo
 
     ### Finally create tag
     if [ -n "$annotated" ]; then
@@ -421,7 +385,7 @@ function tag_script {
         if [[ $tag_output == *"already exists" ]]; then
             echo -e "${RED}Tag '${tag_name}' already exists!${ENDCOLOR}"
         else
-            echo -e "${RED}Cannot create tag '${tag_name}'!${ENDCOLOR}"
+            echo -e "${RED}Cannot create tag '${tag_name}'! Error message:${ENDCOLOR}"
             echo -e "$tag_output"
         fi
         exit
@@ -444,8 +408,8 @@ function tag_script {
 
 
     ### Push tag
-    echo -e "Do you want to push this tag to ${YELLOW}${origin_name}${ENDCOLOR} (y/n)?"
-    yes_no_choice "Pushing..."
+    echo -e "Do you want to push it to the ${YELLOW}${origin_name}${ENDCOLOR} (y/n)?"
+    yes_no_choice "\nPushing..."
 
     push_tag $tag_name
 }

@@ -258,13 +258,13 @@ function branch_script {
     ### Run create new branch logic
     ### Step 1. Select branch type
     echo -e "${YELLOW}Step 1.${ENDCOLOR} What type of branch do you want to create?"
-    echo -e "1. feat:\tnew feature or logic changes, 'feat' commits"
-    echo -e "2. fix:\t\tsmall changes, eg. not critical bug fix"
-    echo -e "3. hotfix:\tfix, that should be merged as fast as possible"
-    echo -e "4. wip:\t\t'work in progress', for changes not ready for merging in the near future"
-    echo -e "5. misc:\tnon-code changes, e.g. 'ci', 'docs', 'build' commits"
-    echo -e "6. test:\testing changes that probably won't be merged to the main branch"
-    echo -e "7. chore:\tnon important style or docs changes"
+    echo -e "1. ${BOLD}feat:${ENDCOLOR}\tnew feature or logic changes, '${BOLD}feat${ENDCOLOR}' commits"
+    echo -e "2. ${BOLD}fix:${ENDCOLOR}\t\tsmall changes, eg. not critical bug fix"
+    echo -e "3. ${BOLD}hotfix:${ENDCOLOR}\tfix, that should be merged as fast as possible"
+    echo -e "4. ${BOLD}wip:${ENDCOLOR}\t\t'work in progress', for changes not ready for merging in the near future"
+    echo -e "5. ${BOLD}misc:${ENDCOLOR}\tnon-code changes, e.g. '${BOLD}ci${ENDCOLOR}', '${BOLD}docs${ENDCOLOR}', '${BOLD}build${ENDCOLOR}' commits"
+    echo -e "6. ${BOLD}test:${ENDCOLOR}\ttesting changes that probably won't be merged to the main branch"
+    echo -e "7. ${BOLD}chore:${ENDCOLOR}\tnon important style or docs changes"
     if [ "$ticket_name" != "" ]; then
         printf "8. $ticket_name:"
         if [ $ticket_name = "" ]; then

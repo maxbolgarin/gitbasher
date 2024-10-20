@@ -196,7 +196,7 @@ function resolve_conflicts {
     echo -e "${YELLOW}You should resolve conflicts manually${ENDCOLOR}"
     echo -e "After resolving, select an option to continue"
     echo -e "1. Create a merge commit with a generated message:"
-    printf "\t${BLUE}${default_message}${ENDCOLOR}\n"
+    printf "\t${YELLOW}${default_message}${ENDCOLOR}\n"
     echo -e "2. Create a merge commit with an entered message"
     echo -e "3. Abort merge and return to the original state: ${YELLOW}git merge --abort${ENDCOLOR}"
     echo -e "0. Exit from this script ${BOLD}without${NORMAL} merge abort"

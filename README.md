@@ -3,11 +3,11 @@
 
 [![Latest Release](https://img.shields.io/github/v/release/maxbolgarin/gitbasher.svg?style=flat-square)](https://github.com/maxbolgarin/gitbasher/releases/latest)
 [![GitHub license](https://img.shields.io/github/license/maxbolgarin/gitbasher.svg)](https://github.com/maxbolgarin/gitbasher/blob/master/LICENSE)
-[![Build Status](https://github.com/maxbolgarin/gitbasher/workflows/main/badge.svg)](https://github.com/maxbolgarin/gitbasher/actions)
+[![Build Status](https://github.com/maxbolgarin/gitbasher/actions/workflows/build.yml/badge.svg)](https://github.com/maxbolgarin/gitbasher/actions)
 
 
 <picture>
-  <img src=".github/logo.jpg" width="400" alt="gitbasher logo">
+  <img src=".github/logo.jpg" width="600" alt="gitbasher logo">
 </picture>
 
 ---
@@ -150,7 +150,7 @@ Use `gitb c help` to get help about commit commands. You can get help with `help
 | **help**                        | `h`, `man`          | Show help                                |
 
 
-<br/>
+</br>
 
 
 ### `gitb commit <mode>`
@@ -176,7 +176,7 @@ Use `gitb c help` to get help about commit commands. You can get help with `help
 | `help`     | `h`          | Show this help                                                                                   |
 
 
-<br/>
+</br>
 
 
 ### `gitb push <mode>`
@@ -190,7 +190,7 @@ Use `gitb c help` to get help about commit commands. You can get help with `help
 | `help`| `h`   |            Show this help                                                                         |
 
 
-<br/>
+</br>
 
 
 ### `gitb pull <mode>`
@@ -208,7 +208,7 @@ Use `gitb c help` to get help about commit commands. You can get help with `help
 | `help`        | `h`        | Show this help                                                               |
 
 
-<br/>
+</br>
 
 
 ### `gitb branch <mode>`
@@ -225,7 +225,7 @@ Use `gitb c help` to get help about commit commands. You can get help with `help
 | `help`    | `h`        | Show this help                                                           |
 
 
-<br/>
+</br>
 
 
 ### `gitb tag <mode>`
@@ -245,7 +245,7 @@ Use `gitb c help` to get help about commit commands. You can get help with `help
 | `help`       | `h`             | Show this help                                          |
 
 
-<br/>
+</br>
 
 
 ### `gitb merge <mode>`
@@ -258,7 +258,7 @@ Use `gitb c help` to get help about commit commands. You can get help with `help
 | `help`    | `h`       | Show this help                                                  |
 
 
-<br/>
+</br>
 
 
 ### `gitb rebase <mode>`
@@ -272,7 +272,7 @@ Use `gitb c help` to get help about commit commands. You can get help with `help
 | `help`        | `h`                 | Show this help                                                                |
 
 
-<br/>
+</br>
 
 
 ### `gitb reset <mode>`
@@ -287,7 +287,7 @@ Use `gitb c help` to get help about commit commands. You can get help with `help
 | `help`        | `h`       | Show this help                                                          |
 
 
-<br/>
+</br>
 
 
 ### `gitb config <mode>`
@@ -304,7 +304,7 @@ Use `gitb c help` to get help about commit commands. You can get help with `help
 | `delete`    | `unset`, `del`          | Unset global configuration                                  |
 
 
-<br/>
+</br>
 
 
 ## Troubleshooting

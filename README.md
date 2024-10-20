@@ -50,10 +50,11 @@ In Windows use `wsl` (enter `wsl` in terminal, [read more](https://learn.microso
 * Following the [GitHub flow](https://docs.github.com/en/get-started/quickstart/github-flow) in the development process by simplifying the work with branches
 * Making the development process clearer by using conventional commits; **gitbasher** uses [Conventional style of commits](https://www.conventionalcommits.org/en) ([example](https://gist.github.com/brianclements/841ea7bffdb01346392c))
 
+<!--
 <picture>
     <img src=".github/push.gif" width="600" alt="push example">
 <picture>
-
+-->
 
 ## How to start
 

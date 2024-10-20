@@ -9,10 +9,10 @@ function print_help {
     msg="$msg\ncommit_c|co|com_Everything about commit creation"
     msg="$msg\npush_p|ps|pus_Pushing changes to a remote repository"
     msg="$msg\npull_pu|pl|pul_Pulling changes from a remote repository"
-    msg="$msg\nmerge_m|me_Merge changes to the current branch"
-    msg="$msg\nrebase_r|re|base_Rebase current branch"
     msg="$msg\nbranch_b|br|bran_Managing branches"
     msg="$msg\ntag_t|tg_Managing tags"
+    msg="$msg\nmerge_m|me_Merge changes to the current branch"
+    msg="$msg\nrebase_r|re|base_Rebase current branch"
     msg="$msg\nreset_res_Easy to use git reset"
     msg="$msg\nconfig_cf|cfg|conf_Configurate gitbasher"
 

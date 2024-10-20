@@ -1,17 +1,5 @@
 #!/usr/bin/env bash
 
-### Consts for colors
-RED="\e[31m"
-GREEN="\e[32m"
-YELLOW="\e[33m"
-BLUE="\e[34m"
-PURPLE="\e[35m"
-CYAN="\e[36m"
-GRAY="\e[37m"
-ENDCOLOR="\e[0m"
-BOLD="\033[1m"
-NORMAL="\033[0m"
-
 
 ### Consts for colors to use inside 'sed'
 RED_ES="\x1b[31m"
@@ -23,41 +11,6 @@ CYAN_ES="\x1b[36m"
 GRAY_ES="\x1b[37m"
 ENDCOLOR_ES="\x1b[0m"
 
-
-### Cannot use bash version less than 4 because of many features that was added to language in that version
-if ((BASH_VERSINFO[0] < 4)); then 
-    printf "Sorry, you need at least ${YELLOW}bash-4.0${ENDCOLOR} to run gitbasher.\n
-If your OS is debian-based, use:
-    ${GREEN}apt install --only-upgrade bash${ENDCOLOR}\n
-If your OS is Mac, use:
-    ${GREEN}brew install bash${ENDCOLOR}\n\n" 
-    exit 1; 
-fi
-
-
-### Useful consts
-current_branch=$(git branch --show-current)
-origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')
-main_branch="main"
-if [ "$(git branch | grep -w master)" != "" ]; then
-    main_branch="master"
-fi
-
-
-### Function tries to get config from local, then from global, then returns default
-# $1: config name
-# $2: default value
-# Returns: config value
-function get_config_value {
-    value=$(git config --local --get $1)
-    if [ "$value" == "" ]; then
-        value=$(git config --global --get $1)
-        if [ "$value" == "" ]; then
-            value=$2
-        fi
-    fi
-    echo -e "$value"
-}
 
 
 ### Function sets git config value
@@ -120,6 +73,9 @@ function print_configuration {
     echo -e "\teditor:\t\t${YELLOW}$editor${ENDCOLOR}"
     if [ "$ticket_name" != "" ]; then
         echo -e "\tticket:\t\t${YELLOW}$ticket_name${ENDCOLOR}"
+    fi
+    if [ "$scopes" != "" ]; then
+        echo -e "\tscopes:\t\t${YELLOW}$scopes${ENDCOLOR}"
     fi
 }
 
@@ -267,9 +223,18 @@ function git_status {
 #     commits_info
 #     commits_hash
 function commit_list {
+    ref=$3
+    if [[ "$(git --no-pager log -n 1 2>&1)" == *"does not have any commits yet"* ]]; then
+        if [[ "$3" == *"HEAD"* ]]; then
+            ref="$(echo $3 | sed 's/HEAD..//')"
+        else
+            return 
+        fi
+    fi
+
     IFS=$'\n' 
-    read -rd '' -a commits_info <<<"$(git --no-pager log -n $1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} | %s | ${BLUE_ES}%an${ENDCOLOR_ES} | ${GREEN_ES}%cr${ENDCOLOR_ES}" $3 | column -ts'|')"
-    read -rd '' -a commits_hash <<<"$(git --no-pager log -n $1 --pretty="%h"$3)"
+    read -rd '' -a commits_info <<<"$(git --no-pager log -n $1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} | %s | ${BLUE_ES}%an${ENDCOLOR_ES} | ${GREEN_ES}%cr${ENDCOLOR_ES}" $ref | column -ts'|')"
+    read -rd '' -a commits_hash <<<"$(git --no-pager log -n $1 --pretty="%h"$ref)"
 
     for index in "${!commits_info[@]}"
     do

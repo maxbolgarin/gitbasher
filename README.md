@@ -53,7 +53,7 @@ In Windows use `wsl` (enter `wsl` in terminal, [read more](https://learn.microso
 
 <picture>
     <img src=".github/push.gif" width="600" alt="push example">
-<picture>
+</picture>
 
 
 ## How to start

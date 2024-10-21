@@ -14,7 +14,7 @@
 
 > Simple **bash** utility that makes **git** easy to use
 
-With **gitbasher** usage of `git` becomes more simple and intuitive. It helps speeding up the development process, making it more consistent reducing mistakes. This is a wrapper around the most used git commands with a cleaner interface. It uses `bash`, `git`, `sed`, `grep` and some built-in utilities.
+With **gitbasher** usage of `git` becomes more simple and intuitive. It helps speeding up the development process, making it more consistent reducing mistakes. This is a wrapper around the most used git commands with a cleaner interface. It uses `bash` `git` `sed` `grep` and some built-in utilities.
 
 <picture>
     <img src=".github/commit.gif" width="600" alt="commit example">
@@ -58,7 +58,7 @@ In Windows use `wsl` (enter `wsl` in terminal, [read more](https://learn.microso
 
 ## How to start
 
-Just [install](Installation) gitbasher and use it in any git repository - just run `gitb` in the terminal. It requires bash version 4 or higher and set remote in the repository.
+Just [install](#installation) gitbasher and use it in any git repository - run `gitb` in the terminal. It requires bash version 4 or higher and set remote in the repository.
 
 Usage `gitb <command> <mode>`
 
@@ -75,7 +75,7 @@ Use `gitb c help` to get help about commit commands. You can get help with `help
 #### Commit: [`gitb c`](#gitb-commit-mode)
 
 * Select files to commit and create a message in the format: `type(scope): message`
-* There are a lot of modes for commit creation, e.g. `--amend`, `--fixup`, `revert`, `push` after commit
+* There are a lot of modes for commit creation, e.g. `--amend` `--fixup` `revert` `push` after commit
 * For example, a single `gitb c p` replaces 4 commands: 
 
 ```bash
@@ -136,19 +136,19 @@ Use `gitb c help` to get help about commit commands. You can get help with `help
 
 | Command                         | Short aliases       | Description                              |
 |---------------------------------|---------------------|------------------------------------------|
-| [**commit**](#gitb-commit-mode) | `c`, `co`, `com`    | Everything about commit creation         |
-| [**push**](#gitb-push-mode)     | `p`, `ps`, `ph`     | Pushing changes to a remote repository   |
-| [**pull**](#gitb-pull-mode)     | `pu`, `pl`, `pul`   | Pulling changes from a remote repository |
-| [**branch**](#gitb-branch-mode) | `b`, `br`, `bran`   | Managing branches                        |
-| [**tag**](#gitb-tag-mode)       | `t`, `tg`           | Managing tags                            |
-| [**merge**](#gitb-merge-mode)   | `m`, `me`           | Merge changes to the current branch      |
-| [**rebase**](#gitb-rebase-mode) | `r`, `re`, `base`   | Rebase current branch                    |
+| [**commit**](#gitb-commit-mode) | `c` `co` `com`    | Everything about commit creation         |
+| [**push**](#gitb-push-mode)     | `p` `ps` `ph`     | Pushing changes to a remote repository   |
+| [**pull**](#gitb-pull-mode)     | `pu` `pl` `pul`   | Pulling changes from a remote repository |
+| [**branch**](#gitb-branch-mode) | `b` `br` `bran`   | Managing branches                        |
+| [**tag**](#gitb-tag-mode)       | `t` `tg`           | Managing tags                            |
+| [**merge**](#gitb-merge-mode)   | `m` `me`           | Merge changes to the current branch      |
+| [**rebase**](#gitb-rebase-mode) | `r` `re` `base`   | Rebase current branch                    |
 | [**reset**](#gitb-reset-mode)   | `res`               | Easy to use git reset                    |
-| [**config**](#gitb-config-mode) | `cf`, `cfg`, `conf` | Configurate gitbasher                    |
-| **status**                      | `s`, `st`           | Info about repo and changed files        |
-| **log**                         | `l`, `lg`           | Open git log in a pretty format          |
-| **reflog**                      | `rl`, `rlg`         | Open git reflog in a pretty format       |
-| **help**                        | `h`, `man`          | Show help                                |
+| [**config**](#gitb-config-mode) | `cf` `cfg` `conf` | Configurate gitbasher                    |
+| **status**                      | `s` `st`           | Info about repo and changed files        |
+| **log**                         | `l` `lg`           | Open git log in a pretty format          |
+| **reflog**                      | `rl` `rlg`         | Open git reflog in a pretty format       |
+| **help**                        | `h` `man`          | Show help                                |
 
 
 </br>
@@ -163,15 +163,15 @@ Use `gitb c help` to get help about commit commands. You can get help with `help
 | `ticket`   | `t`          | Same as `<empty>`, but add tracker's ticket info to the end of the commit header                 |
 | `fast`     | `f`          | Add all files (`git add .`) and create a conventional commit message without scope               |
 | `fasts`    | `fs`         | Add all files (`git add .`) and create a conventional commit message with scope                  |
-| `push`     | `pu`, `p`    | Create a conventional commit and push changes at the end                                         |
+| `push`     | `pu` `p`    | Create a conventional commit and push changes at the end                                         |
 | `fastp`    | `fp`         | Create a conventional commit in the fast mode and push changes                                   |
-| `fastsp`   | `fsp`, `fps` | Create a conventional commit in the fast mode with scope and push changes                        |
-| `fixup`    | `fix`, `x`   | Select files and commit to make a `--fixup` commit (`git commit --fixup <hash>`)                     |
-| `fixupp`   | `fixp`, `xp` | Select files and commit to make a `--fixup` commit and push changes                                |
+| `fastsp`   | `fsp` `fps` | Create a conventional commit in the fast mode with scope and push changes                        |
+| `fixup`    | `fix` `x`   | Select files and commit to make a `--fixup` commit (`git commit --fixup <hash>`)                     |
+| `fixupp`   | `fixp` `xp` | Select files and commit to make a `--fixup` commit and push changes                                |
 | `fastfix`  | `fx`         | Add all files (`git add .`) and commit to make a `--fixup` commit                                  |
 | `fastfixp` | `fxp`        | Add all files (`git add .`) and commit to make a `--fixup` commit and push changes                 |
-| `amend`    | `am`, `a`    | Select files and add them to the last commit without message edit (`git commit --amend --no-edit`) |
-| `amendf`   | `amf`, `af`  | Add all fiels to the last commit without message edit (`git commit --amend --no-edit`)             |
+| `amend`    | `am` `a`    | Select files and add them to the last commit without message edit (`git commit --amend --no-edit`) |
+| `amendf`   | `amf` `af`  | Add all fiels to the last commit without message edit (`git commit --amend --no-edit`)             |
 | `last`     | `l`          | Change commit message to the last one                                                            |
 | `revert`   | `rev`        | Select a commit to revert (`git revert -no-edit <commit>`)                                         |
 | `help`     | `h`          | Show this help                                                                                   |
@@ -182,13 +182,13 @@ Use `gitb c help` to get help about commit commands. You can get help with `help
 
 ### `gitb push <mode>`
 
-| **Mode**      | **Short** | **Description**                                                                       |
-|---------------|-----------|---------------------------------------------------------------------------------------|
-| `<empty>`     |            Print list of commits, push them to current branch or pull changes first               |
-| `yes`| `y`    |            Same as `<empty>` but without pressing 'y'                                              |
-| `force`| `f`  |            Same as `<empty>` but with --force                                                    |
-| `list` | `log`, `l` |        Print a list of unpushed local commits without actual pushing it                        |
-| `help`| `h`   |            Show this help                                                                         |
+| **Mode**  | **Short** | **Description**                                                          |
+|-----------|-----------|--------------------------------------------------------------------------|
+| `<empty>` |           | Print list of commits, push them to current branch or pull changes first |
+| `yes`     | `y`       | Same as `<empty>` but without pressing 'y'                               |
+| `force`   | `f`       | Same as `<empty>` but with --force                                       |
+| `list`    | `log` `l` | Print a list of unpushed local commits without actual pushing it         |
+| `help`    | `h`       | Show this help                                                           |
 
 
 </br>
@@ -205,7 +205,7 @@ Use `gitb c help` to get help about commit commands. You can get help with `help
 | `ffonly`      | `ff`       | Fetch and then merge in fast forward only mode                               |
 | `merge`       | `m`        | Fetch current branch and then merge it                                       |
 | `rebase`      | `r`        | Fetch current branch and then rebase                                         |
-| `interactive` | `ri`, `rs` | Fetch current branch and then rebase in interactive mode with `--autosquash` |
+| `interactive` | `ri` `rs` | Fetch current branch and then rebase in interactive mode with `--autosquash` |
 | `help`        | `h`        | Show this help                                                               |
 
 
@@ -218,11 +218,11 @@ Use `gitb c help` to get help about commit commands. You can get help with `help
 |-----------|------------|--------------------------------------------------------------------------|
 | `<empty>` |            | Select a local branch to switch                                          |
 | `list`    | `l`        | Print a list of local branches                                           |
-| `remote`  | `re`, `r`  | Fetch origin and select a remote branch to switch                        |
-| `main`    | `def`, `m` | Switch to main without additional confirmations                          |
-| `new`     | `n`, `c`   | Build a conventional name and create a new branch from main              |
+| `remote`  | `re` `r`  | Fetch origin and select a remote branch to switch                        |
+| `main`    | `def` `m` | Switch to main without additional confirmations                          |
+| `new`     | `n` `c`   | Build a conventional name and create a new branch from main              |
 | `newd`    | `nd`       | Build a conventional name, switch to main, pull it and create new branch |
-| `delete`  | `del`, `d` | Select a local branch to delete                                          |
+| `delete`  | `del` `d` | Select a local branch to delete                                          |
 | `help`    | `h`        | Show this help                                                           |
 
 
@@ -234,15 +234,15 @@ Use `gitb c help` to get help about commit commands. You can get help with `help
 | **Mode**     | **Short**       | **Description**                                         |
 |--------------|-----------------|---------------------------------------------------------|
 | `<empty>`    |                 | Create a new tag from the last commit                   |
-| `annotated`  | `a`, `an`       | Create a new annotated tag from the last commit         |
-| `commit`     | `c`, `co`, `cm` | Create a new tag from a selected commit                 |
+| `annotated`  | `a` `an`       | Create a new annotated tag from the last commit         |
+| `commit`     | `c` `co` `cm` | Create a new tag from a selected commit                 |
 | `all`        | `al`            | Create a new annotated tag from a selected commit       |
-| `push`       | `ps`, `ph`, `p` | Select a local tag and push it to the remote repository |
+| `push`       | `ps` `ph` `p` | Select a local tag and push it to the remote repository |
 | `push-all`   | `pa`            | Push all tags to the remote repository                  |
-| `delete`     | `del`, `d`      | Select a tag to delete                                  |
+| `delete`     | `del` `d`      | Select a tag to delete                                  |
 | `delete-all` | `da`            | Delete all local tags                                   |
-| `list`       | `log`, `l`      | Print a list of local tags                              |
-| `remote`     | `fetch`, `r`    | Fetch tags from the remote repository and print it      |
+| `list`       | `log` `l`      | Print a list of local tags                              |
+| `remote`     | `fetch` `r`    | Fetch tags from the remote repository and print it      |
 | `help`       | `h`             | Show this help                                          |
 
 
@@ -269,7 +269,7 @@ Use `gitb c help` to get help about commit commands. You can get help with `help
 | `<empty>`     |                     | Select base branch to rebase current changes                                  |
 | `main`        | `m`                 | Rebase current branch onto default branch                                     |
 | `interactive` | `i`                 | Select base commit in current branch and rebase in an interactive mode        |
-| `autosquash`  | `a`, `s`, `f`, `ia` | Rebase on the current local branch in an interactive mode with `--autosquash` |
+| `autosquash`  | `a` `s` `f` `ia` | Rebase on the current local branch in an interactive mode with `--autosquash` |
 | `help`        | `h`                 | Show this help                                                                |
 
 
@@ -296,13 +296,13 @@ Use `gitb c help` to get help about commit commands. You can get help with `help
 | **Mode**    | **Short**               | **Description**                                             |
 |-------------|-------------------------|-------------------------------------------------------------|
 | `<empty>`   |                         | Print current gitbasher configuration                       |
-| `user`      | `u`, `name`, `email`    | Set user name and email                                     |
-| `default`   | `def`, `d`, `b`, `main` | Update gitbasher's default branch (not in remote git repo!) |
-| `separator` | `sep`, `s`              | Update separator between type and name in branch            |
-| `editor`    | `ed`, `e`               | Update text editor for the commit messages                  |
-| `ticket`    | `ti`, `t`, `jira`       | Set ticket prefix to help with commit/branch building       |
-| `scopes`    | `sc`, `s`               | Set a list of scopes to help with commit building           |
-| `delete`    | `unset`, `del`          | Unset global configuration                                  |
+| `user`      | `u` `name` `email`    | Set user name and email                                     |
+| `default`   | `def` `d` `b` `main` | Update gitbasher's default branch (not in remote git repo!) |
+| `separator` | `sep` `s`              | Update separator between type and name in branch            |
+| `editor`    | `ed` `e`               | Update text editor for the commit messages                  |
+| `ticket`    | `ti` `t` `jira`       | Set ticket prefix to help with commit/branch building       |
+| `scopes`    | `sc` `s`               | Set a list of scopes to help with commit building           |
+| `delete`    | `unset` `del`          | Unset global configuration                                  |
 
 
 </br>

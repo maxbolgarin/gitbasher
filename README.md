@@ -18,7 +18,7 @@ With **gitbasher** usage of `git` becomes more simple and intuitive. It helps sp
 
 <picture>
     <img src=".github/commit.gif" width="600" alt="commit example">
-<picture>
+</picture>
 
 ### Installation
 

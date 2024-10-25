@@ -254,7 +254,7 @@ function pull {
 
     echo -e "${GREEN}Successfully pulled with $mode!${ENDCOLOR}"
 
-    if [ "$mode" == "merge" ] ; then 
+    if [ "$mode" == "merge" ] || [ "$mode" == "fast-forward" ]; then 
         echo
         ### Merge without conflicts
         if [ $merge_code == 0 ] ; then

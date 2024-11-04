@@ -248,10 +248,6 @@ function branch_script {
     echo -e "${YELLOW}Current local branches:${ENDCOLOR}"
     list_branches
 
-    if [ -n "$list" ]; then
-        exit
-    fi
-
     echo
 
 

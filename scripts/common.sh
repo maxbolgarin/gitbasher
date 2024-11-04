@@ -376,6 +376,7 @@ function get_push_list {
 # Returns:
 #     * number_of_branches
 #     * branches_first_main
+#     * to_exit
 function list_branches {
     args="--sort=-committerdate"
     if [[ "$1" == "remote" ]]; then
@@ -397,7 +398,8 @@ function list_branches {
     if [[ "$number_of_branches" == 0 ]]; then
         echo
         echo -e "${YELLOW}There is no branches${ENDCOLOR}"
-        exit
+        to_exit="true"
+        return
     fi
 
     branch_to_check="${branches[0]}"
@@ -410,13 +412,15 @@ function list_branches {
     if [[ "$number_of_branches" == 1 ]] && [[ "${branch_to_check}" == "${current_branch}" ]]; then
         echo
         echo -e "There is only one branch: ${YELLOW}${current_branch}${ENDCOLOR}"
-        exit
+        to_exit="true"
+        return
     fi
 
     if [[ "$1" == "delete" ]] && [[ "$number_of_branches" == 2 ]] && [[ "${current_branch}" != "${main_branch}" ]]; then
         echo
         echo -e "${YELLOW}There are no branches to delete${ENDCOLOR}"
-        exit
+        to_exit="true"
+        return
     fi
 
     ### Main should be the first
@@ -486,6 +490,10 @@ function list_branches {
 #     * branch_name
 function choose_branch {
     list_branches $1
+
+    if [ -n "$to_exit" ]; then
+        exit
+    fi
 
     echo
     printf "Enter branch number: "

@@ -347,7 +347,7 @@ function commit_script {
            echo -e "Select or enter: $(echo $res | column -ts'|')"            
         fi
 
-        read -p "<scope>: " -n 1 -s commit_scope
+        read -p "<scope>: " commit_scope
 
         if [ "$commit_scope" == "0" ]; then
             git restore --staged $git_add
@@ -368,10 +368,10 @@ function commit_script {
                 done
             fi
 
-            if [ "$found" == "" ]; then
-                read -p "$commit_scope" -e commit_scope2
-                commit_scope="$commit_scope$commit_scope2"
-            fi
+            # if [ "$found" == "" ]; then
+            #     read -p "$commit_scope" -e commit_scope2
+            #     commit_scope="$commit_scope$commit_scope2"
+            # fi
 
             if [ "$commit_scope" != "" ]; then
                 if ! [[ $commit_scope =~ $re ]]; then

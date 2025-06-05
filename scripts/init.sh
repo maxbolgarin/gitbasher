@@ -36,7 +36,7 @@ function get_config_value {
 current_branch=$(git branch --show-current)
 
 main_branch=$(get_config_value gitbasher.branch "main")
-if [[ "$(git branch | grep -E "^\*? ?master$" )" != "" ]] && [[ "$(git branch | grep -E "^\*? ?main$" )" == "" ]]; then
+if [[ "$( git branch | grep "^[\s\*]*\s*main\s*$" )" == "" ]] && [[ "$( git branch | grep "^[\s\*]*\s*master\s*$" )" != "" ]]; then
     main_branch="master"
 elif [[ "$(git branch | cat)" == "" ]]; then
     main_branch=$current_branch

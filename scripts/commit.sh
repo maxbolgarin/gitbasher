@@ -344,49 +344,50 @@ function commit_script {
            for i in "${!scopes_array[@]}"; do
                 res="$res$((i+1)). ${BOLD}${scopes_array[$i]}${ENDCOLOR}|"
            done
-           echo -e "Select or enter: $(echo $res | column -ts'|')"            
+           echo -e "You can select one of default scopes: $(echo $res | column -ts'|')"            
         fi
 
-        read -p "<scope>: " -n 1 -s commit_scope
+        while [ true ]; do
+            read -p "<scope>: " -e commit_scope
 
-        if [ "$commit_scope" == "0" ]; then
-            git restore --staged $git_add
-            exit
-        fi
-
-        re='^[1-9a-zA-Z\-_\?\.<>]+$'
-        if [[ $commit_scope =~ $re ]]; then
-            re_number='^[1-9]+$'
-            if [[ $commit_scope =~ $re_number ]]; then
-                for i in "${!scopes_array[@]}"; do
-                    if [ "$((i+1))" == "$commit_scope" ]; then
-                        commit_scope="${scopes_array[$i]}"
-                        found="true"
-                        echo
-                        break
-                    fi
-                done
+            if [ "$commit_scope" == "0" ]; then
+                git restore --staged $git_add
+                exit
             fi
 
-            if [ "$found" == "" ]; then
-                read -p "$commit_scope" -e commit_scope2
-                commit_scope="$commit_scope$commit_scope2"
-            fi
-
-            if [ "$commit_scope" != "" ]; then
-                if ! [[ $commit_scope =~ $re ]]; then
-                    echo
-                    echo -e "${RED}Invalid scope!${ENDCOLOR}"
-                    exit 1
-                fi
-                commit="$commit($commit_scope): "
-            else
+            # Check if input is empty - continue without scope
+            if [ -z "$commit_scope" ]; then
                 commit="$commit: "
+                break
             fi
-        else
-            echo
-            commit="$commit: "
-        fi
+
+            # Check if input is a number (index selection from scopes_array)
+            re_number='^[1-9][0-9]*$'
+            if [[ $commit_scope =~ $re_number ]] && [ -n "$scopes" ]; then
+                # Try to find matching scope by index
+                IFS=' ' read -r -a scopes_array <<< "$scopes"
+                index=$((commit_scope - 1))
+                if [ $index -ge 0 ] && [ $index -lt ${#scopes_array[@]} ]; then
+                    commit_scope="${scopes_array[$index]}"
+                    commit="$commit($commit_scope): "
+                    break
+                else
+                    echo -e "${RED}Invalid scope index! Please choose from 1-${#scopes_array[@]} or enter custom scope.${ENDCOLOR}"
+                    continue
+                fi
+            else
+                # Validate custom scope format
+                re='^[a-zA-Z0-9/,_.-]+$'
+                if [[ $commit_scope =~ $re ]]; then
+                    commit="$commit($commit_scope): "
+                    break
+                else
+                    echo -e "${RED}Invalid scope format! Use only letters, numbers, hyphens, underscores, and dots.${ENDCOLOR}"
+                    echo -e "${RED}Debug: input was '$commit_scope'${ENDCOLOR}"
+                    continue
+                fi
+            fi
+        done
 
     fi
 

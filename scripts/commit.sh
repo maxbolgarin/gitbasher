@@ -337,14 +337,81 @@ function commit_script {
         echo -e "Final meesage will be ${BLUE}${commit_type}${ENDCOLOR}(${YELLOW}<scope>${ENDCOLOR}): ${BLUE}<summary>${ENDCOLOR}"
         echo -e "Leave it blank to continue without scope or enter 0 to exit without changes"
         
+        # Detect possible scopes from staged files
+        detected_scopes=""
+        staged_files=$(git diff --name-only --cached)
+        if [ -n "$staged_files" ]; then
+            # Extract unique directory names and filenames
+            declare -A scope_candidates
+            
+            while IFS= read -r file; do
+                if [ -n "$file" ]; then
+                    # Get directory path
+                    dir=$(dirname "$file")
+                    
+                    # Skip root directory
+                    if [ "$dir" != "." ]; then
+                        # Extract the last directory component for nested paths
+                        last_dir=$(basename "$dir")
+                        scope_candidates["$last_dir"]=1
+                        
+                        # For paths like internal/app, also consider 'app'
+                        if [[ "$dir" == */* ]]; then
+                            scope_candidates["$last_dir"]=1
+                        fi
+                        
+                        # For single-level directories like scripts/, consider the dirname
+                        if [[ "$dir" != */* ]]; then
+                            scope_candidates["$dir"]=1
+                        fi
+                    fi
+                    
+                    # Get filename without extension for single files
+                    filename=$(basename "$file")
+                    filename_no_ext="${filename%.*}"
+                    
+                    # Only suggest filename if it's a meaningful name (not too generic)
+                    if [[ ! "$filename_no_ext" =~ ^(index|main|app|test|spec|config|readme|license)$ ]]; then
+                        scope_candidates["$filename_no_ext"]=1
+                    fi
+                fi
+            done <<< "$staged_files"
+            
+            # Convert to array and sort
+            detected_scopes_array=()
+            for scope in "${!scope_candidates[@]}"; do
+                # Filter out common non-meaningful scopes
+                if [[ ! "$scope" =~ ^(src|lib|test|tests|spec|specs|build|dist|node_modules|vendor)$ ]]; then
+                    detected_scopes_array+=("$scope")
+                fi
+            done
+            
+            # Sort the array
+            IFS=$'\n' detected_scopes_sorted=($(sort <<<"${detected_scopes_array[*]}"))
+            unset IFS
+            
+            if [ ${#detected_scopes_sorted[@]} -gt 0 ]; then
+                detected_scopes="${detected_scopes_sorted[*]}"
+            fi
+        fi
+        
+        # Use predefined scopes or detected scopes
+        all_scopes=""
         if [ -n "$scopes" ]; then
-           IFS=' ' read -r -a scopes_array <<< "$scopes"
+            all_scopes="$scopes"
+        elif [ -n "$detected_scopes" ]; then
+            all_scopes="$detected_scopes"
+        fi
+        
+        if [ -n "$all_scopes" ]; then
+           IFS=' ' read -r -a scopes_array <<< "$all_scopes"
 
            res=""
            for i in "${!scopes_array[@]}"; do
-                res="$res$((i+1)). ${BOLD}${scopes_array[$i]}${ENDCOLOR}|"
+                scope_display="${scopes_array[$i]}"
+                res="$res$((i+1)). ${BOLD}${scope_display}${ENDCOLOR}|"
            done
-           echo -e "You can select one of default scopes: $(echo $res | column -ts'|')"            
+           echo -e "You can select one of the ${YELLOW}detected scopes${ENDCOLOR}: $(echo $res | column -ts'|')"            
         fi
 
         while [ true ]; do
@@ -363,12 +430,14 @@ function commit_script {
 
             # Check if input is a number (index selection from scopes_array)
             re_number='^[1-9][0-9]*$'
-            if [[ $commit_scope =~ $re_number ]] && [ -n "$scopes" ]; then
+            if [[ $commit_scope =~ $re_number ]] && [ -n "$all_scopes" ]; then
                 # Try to find matching scope by index
-                IFS=' ' read -r -a scopes_array <<< "$scopes"
+                IFS=' ' read -r -a scopes_array <<< "$all_scopes"
                 index=$((commit_scope - 1))
                 if [ $index -ge 0 ] && [ $index -lt ${#scopes_array[@]} ]; then
-                    commit_scope="${scopes_array[$index]}"
+                    selected_scope="${scopes_array[$index]}"
+                    # Remove the asterisk marker if present
+                    commit_scope="${selected_scope#*}"
                     commit="$commit($commit_scope): "
                     break
                 else

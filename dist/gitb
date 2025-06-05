@@ -1579,6 +1579,12 @@ function push_script {
     echo
     push $force_arg
 }
+function cleanup_on_exit {
+    if [ -n "$1" ]; then
+        git restore --staged $1
+    fi
+    git config --unset gitbasher.cached-git-add 2>/dev/null
+}
 function after_commit {
     if [ -n "$1" ]; then
         echo -e "${GREEN}Successful commit $1!${ENDCOLOR}"
@@ -1622,6 +1628,29 @@ function commit_script {
         *)
             wrong_mode "commit" $1
     esac
+    saved_git_add=""
+    if [ -z "${fast}" ]; then
+        saved_git_add=$(git config --get gitbasher.cached-git-add 2>/dev/null)
+        if [ -n "$saved_git_add" ]; then
+            echo -e "${YELLOW}Found previous git add arguments from failed commit:${ENDCOLOR} ${BOLD}$saved_git_add${ENDCOLOR}"
+            read -n 1 -p "Use them? (y/n) " -s choice
+            echo
+            if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
+                git add $saved_git_add
+                if [ $? -eq 0 ]; then
+                    git_add="$saved_git_add"
+                    use_saved_git_add="true"
+                    echo -e "${GREEN}Successfully restored previous git add arguments${ENDCOLOR}"
+                else
+                    echo -e "${RED}Failed to apply saved git add arguments, continuing normally${ENDCOLOR}"
+                    git config --unset gitbasher.cached-git-add 2>/dev/null
+                fi
+            else
+                git config --unset gitbasher.cached-git-add 2>/dev/null
+            fi
+            echo
+        fi
+    fi
     header_msg="GIT COMMIT"
     if [ -n "${fast}" ]; then
         if [ -n "${push}" ]; then
@@ -1677,15 +1706,18 @@ function commit_script {
         echo -e "last|l\t\tChange commit message to the last one"
         echo -e "revert|rev\tSelect a commit to revert (git revert -no-edit <commit>)"
         echo -e "help|h\t\tShow this help"
+        git config --unset gitbasher.cached-git-add 2>/dev/null
         exit
     fi
     if [ -n "$last" ]; then
+        git config --unset gitbasher.cached-git-add 2>/dev/null
         git commit --amend
         exit
     fi
     is_clean=$(git status | tail -n 1)
     if [ "$is_clean" = "nothing to commit, working tree clean" ]; then
         if [ -z "${revert}" ]; then
+            git config --unset gitbasher.cached-git-add 2>/dev/null
             echo -e "${GREEN}Nothing to commit, working tree clean${ENDCOLOR}"
             exit
         fi
@@ -1708,6 +1740,10 @@ function commit_script {
     if [ -n "${fast}" ]; then
         git add .
         git_add="."
+        git config --unset gitbasher.cached-git-add 2>/dev/null
+    elif [ -n "${use_saved_git_add}" ]; then
+        echo -e "${YELLOW}Step 1.${ENDCOLOR} Using saved git add arguments: ${BOLD}$git_add${ENDCOLOR}"
+        echo
     else
         echo
         printf "${YELLOW}Step 1.${ENDCOLOR} List files for "
@@ -1719,9 +1755,9 @@ function commit_script {
             printf "${YELLOW}--amend${ENDCOLOR} "
         fi
         if [ -n "${amend}" ]; then
-            printf "to the last commit in the ${BOLD}${BLUE}${current_branch}${ENDCOLOR} branch\n"
+            printf "to the last commit in the ${BOLD}${YELLOW}${current_branch}${ENDCOLOR} branch\n"
         else
-            printf "commit to the ${BOLD}${BLUE}${current_branch}${ENDCOLOR} branch\n"
+            printf "commit to the ${BOLD}${YELLOW}${current_branch}${ENDCOLOR} branch\n"
         fi
         echo "Leave it blank to exit without changes"
         while [ true ]; do
@@ -1732,6 +1768,7 @@ function commit_script {
             fi
             git add $git_add
             if [ $? -eq 0 ]; then
+                git config gitbasher.cached-git-add "$git_add"
                 break
             fi
         done
@@ -1750,6 +1787,7 @@ function commit_script {
         fi
         result=$(git commit --fixup $commit_hash 2>&1)
         check_code $? "$result" "fixup"
+        git config --unset gitbasher.cached-git-add 2>/dev/null
         after_commit "fixup"
         if [ -n "${push}" ]; then
             echo
@@ -1760,6 +1798,7 @@ function commit_script {
     if [ -n "${amend}" ]; then
         result=$(git commit --amend --no-edit 2>&1)
         check_code $? "$result" "amend"
+        git config --unset gitbasher.cached-git-add 2>/dev/null
         echo
         after_commit "amend"
         exit
@@ -1794,7 +1833,7 @@ function commit_script {
     while [ true ]; do
         read -n 1 -s choice
         if [ "$choice" == "0" ]; then
-            git restore --staged $git_add
+            cleanup_on_exit "$git_add"
             exit
         fi
         re='^[0-9]+$'
@@ -1877,7 +1916,7 @@ function commit_script {
         while [ true ]; do
             read -p "<scope>: " -e commit_scope
             if [ "$commit_scope" == "0" ]; then
-                git restore --staged $git_add
+                cleanup_on_exit "$git_add"
                 exit
             fi
             if [ -z "$commit_scope" ]; then
@@ -1976,7 +2015,7 @@ ${staged_with_tab}
             echo
             read -n 1 -p "Try for one more time? (y/n) " -s -e choice
             if [ "$choice" != "y" ]; then
-                git restore --staged $git_add
+                cleanup_on_exit "$git_add"
                 find . -name "$commitmsg_file*" -delete
                 exit
             fi    
@@ -1985,7 +2024,7 @@ ${staged_with_tab}
     else
         read -p "$(echo -n -e "${commit}")" -e commit_message
         if [ -z "$commit_message" ]; then
-            git restore --staged $git_add
+            cleanup_on_exit "$git_add"
             exit
         fi
     fi
@@ -2000,7 +2039,7 @@ ${staged_with_tab}
             read -p "<ticket>: " -e commit_ticket
         fi
         if [ "$commit_ticket" == "0" ]; then
-            git restore --staged $git_add
+            cleanup_on_exit "$git_add"
             exit
         fi
         if [ "$commit_ticket" != "" ]; then
@@ -2022,6 +2061,7 @@ ${staged_with_tab}
     echo
     result=$(git commit -m """$commit""" 2>&1)
     check_code $? "$result" "commit"
+    git config --unset gitbasher.cached-git-add 2>/dev/null
     after_commit
     if [ -n "${push}" ]; then
         echo

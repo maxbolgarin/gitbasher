@@ -75,16 +75,16 @@ function commit_script {
         msg|m)              msg="true";;
         ticket|jira|j|t)    ticket="true";;
         fast|f)             fast="true";;
-        fasts|fs)           fast="true"; scope="true";;
+        fasts|fs|sf)        fast="true"; scope="true";;
         push|pu|p)          push="true";;
-        fastp|fp)           fast="true"; push="true";;
+        fastp|fp|pf)        fast="true"; push="true";;
         fastsp|fsp|fps)     fast="true"; push="true"; scope="true";;
         fixup|fix|x)        fixup="true";;
-        fixupp|fixp|xp)     fixup="true"; push="true";;
+        fixupp|fixp|xp|px)  fixup="true"; push="true";;
         fastfix|fx|xf)      fixup="true"; fast="true";;
         fastfixp|fxp|xfp)   fixup="true"; fast="true"; push="true";;
         amend|am|a)         amend="true";;
-        amendf|amf|af)      amend="true"; fast="true";;
+        amendf|amf|af|fa)   amend="true"; fast="true";;
         last|l)             last="true";;
         revert|rev)         revert="true";;
         help|h)             help="true";;
@@ -138,13 +138,13 @@ function commit_script {
         echo -e "msg|m\t\tSame as <empty>, but create multiline commit message using text editor"
         echo -e "ticket|t\tSame as <empty>, but add tracker's ticket info to the end of the commit header"
         echo -e "fast|f\t\tAdd all files (git add .) and create a conventional commit message without scope"
-        echo -e "fasts|fs\tAdd all files (git add .) and create a conventional commit message with scope"
+        echo -e "fasts|fs|sf\tAdd all files (git add .) and create a conventional commit message with scope"
         echo -e "push|pu|p\tCreate a conventional commit and push changes at the end"
-        echo -e "fastp|fp\tCreate a conventional commit in the fast mode and push changes"
+        echo -e "fastp|fp|pf\tCreate a conventional commit in the fast mode and push changes"
         echo -e "fastsp|fsp|fps\tCreate a conventional commit in the fast mode with scope and push changes"
         echo -e "fixup|fix|x\tSelect files and commit to make a --fixup commit (git commit --fixup <hash>)"
         echo -e "fixupp|fixp|xp\tSelect files and commit to make a --fixup commit and push changes"
-        echo -e "fastfix|fx\tAdd all files (git add .) and commit to make a --fixup commit"
+        echo -e "fastfix|fx|xf\tAdd all files (git add .) and commit to make a --fixup commit"
         echo -e "fastfixp|fxp\tAdd all files (git add .) and commit to make a --fixup commit and push"
         echo -e "amend|am|a\tSelect files and add them to the last commit without message edit (git commit --amend --no-edit)"
         echo -e "amendf|amf|af\tAdd all fiels to the last commit without message edit (git commit --amend --no-edit)"

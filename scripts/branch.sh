@@ -248,73 +248,153 @@ function branch_script {
     echo -e "${YELLOW}Current local branches:${ENDCOLOR}"
     list_branches
 
+    if [ -n "$list" ]; then
+
     echo
 
 
     ### Run create new branch logic
-    ### Step 1. Select branch type
-    echo -e "${YELLOW}Step 1.${ENDCOLOR} What type of branch do you want to create?"
-    echo -e "1. ${BOLD}feat:${ENDCOLOR}\tnew feature or logic changes, '${BOLD}feat${ENDCOLOR}' commits"
-    echo -e "2. ${BOLD}fix:${ENDCOLOR}\t\tsmall changes, eg. not critical bug fix"
-    echo -e "3. ${BOLD}hotfix:${ENDCOLOR}\tfix, that should be merged as fast as possible"
-    echo -e "4. ${BOLD}wip:${ENDCOLOR}\t\t'work in progress', for changes not ready for merging in the near future"
-    echo -e "5. ${BOLD}misc:${ENDCOLOR}\tnon-code changes, e.g. '${BOLD}ci${ENDCOLOR}', '${BOLD}docs${ENDCOLOR}', '${BOLD}build${ENDCOLOR}' commits"
-    echo -e "6. ${BOLD}test:${ENDCOLOR}\ttesting changes that probably won't be merged to the main branch"
-    echo -e "7. ${BOLD}chore:${ENDCOLOR}\tnon important style or docs changes"
-    if [ "$ticket_name" != "" ]; then
-        printf "8. $ticket_name:"
-        if [ $ticket_name = "" ]; then
-            printf "\t"
-        else
-            printf "\t\t"
+    # Detect prefixes from existing branches
+    detected_prefixes=""
+    all_branches=$(git branch -a --format='%(refname:short)' 2>/dev/null | sed 's|origin/||g' | sort -u)
+    if [ -n "$all_branches" ]; then
+        declare -A prefix_candidates
+        
+        while IFS= read -r branch; do
+            if [ -n "$branch" ] && [[ "$branch" != "$main_branch" ]] && [[ "$branch" != "HEAD" ]]; then
+                # Extract prefix from branch name using common separators
+                if [[ "$branch" =~ ^([a-zA-Z0-9]+)[-_/](.+)$ ]]; then
+                    prefix="${BASH_REMATCH[1]}"
+                    # Filter out very short or common prefixes
+                    if [[ ${#prefix} -ge 2 ]] && [[ ! "$prefix" =~ ^(dev|tmp|old|new|test)$ ]]; then
+                        prefix_candidates["$prefix"]=1
+                    fi
+                fi
+            fi
+        done <<< "$all_branches"
+        
+        # Convert to sorted array
+        detected_prefixes_array=()
+        for prefix in "${!prefix_candidates[@]}"; do
+            detected_prefixes_array+=("$prefix")
+        done
+        
+        # Sort the array
+        if [ ${#detected_prefixes_array[@]} -gt 0 ]; then
+            IFS=$'\n' detected_prefixes_sorted=($(sort <<<"${detected_prefixes_array[*]}"))
+            unset IFS
+            detected_prefixes="${detected_prefixes_sorted[*]}"
         fi
-        printf "use ticket name as prefix\n"
     fi
-    echo -e "9.  \t\tdon't use prefix for branch naming"
-    echo -e "0. Exit without changes"
 
-    declare -A types=(
-        [1]="feat"
-        [2]="fix"
-        [3]="hotfix"
-        [4]="wip"
-        [5]="misc"
-        [6]="test"
-        [7]="chore"
-        [8]="$ticket_name"
-        [9]=""
-    )
+    # Build the prefixes array with ticket_name first if it exists
+    all_prefixes=""
+    if [ -n "$ticket_name" ]; then
+        if [ -n "$detected_prefixes" ]; then
+            all_prefixes="$ticket_name $detected_prefixes"
+        else
+            all_prefixes="$ticket_name"
+        fi
+    elif [ -n "$detected_prefixes" ]; then
+        all_prefixes="$detected_prefixes"
+    fi
 
     branch_type=""
-    while [ true ]; do
-        read -n 1 -s choice
+    branch_type_and_sep=""
 
-        re='^[1-9]+$'
-        if ! [[ $choice =~ $re ]]; then
+    # If no prefixes detected, skip to branch name entry
+    if [ -z "$all_prefixes" ]; then
+        echo -e "${YELLOW}Step 1.${ENDCOLOR} Enter the full name of the branch"
+        echo "Leave it blank if you want to exit"
+
+        printf "${BOLD}git branch${ENDCOLOR} "
+        read -e branch_name
+
+        if [ -z "$branch_name" ]; then
             exit
         fi
         
-        branch_type="${types[$choice]}"
-        if [ -n "$branch_type" ]; then
-            branch_type_and_sep="${branch_type}${sep}"
+        branch_name="${branch_name##*( )}"
+    else
+        ### Step 1. Select branch prefix
+        echo -e "${YELLOW}Step 1.${ENDCOLOR} Select a prefix for your branch name"
+        echo -e "Branches will be created with separator '${YELLOW}${sep}${ENDCOLOR}' (e.g., ${YELLOW}prefix${sep}name${ENDCOLOR})"
+        
+        # Build the display array
+        IFS=' ' read -r -a prefixes_array <<< "$all_prefixes"
+        declare -A prefixes_map
+        
+        res=""
+        for i in "${!prefixes_array[@]}"; do
+            option=$((i+1))
+            prefixes_map["$option"]="${prefixes_array[$i]}"
+            
+            res="$res$option. ${BOLD}${prefixes_array[$i]}${ENDCOLOR}|"
+        done
+        
+        # Add no prefix option
+        no_prefix_option=$((${#prefixes_array[@]}+1))
+        prefixes_map["$no_prefix_option"]=""
+        res="$res$no_prefix_option. ${BOLD}no prefix${ENDCOLOR}|"
+        
+        echo -e "$(echo $res | column -ts'|')"
+        echo -e "0. Exit without changes"
+        echo
+
+        while [ true ]; do
+            read -p "Select prefix number or enter custom prefix: " choice
+
+            if [ "$choice" == "0" ] || [ "$choice" == "" ]; then
+                exit
+            fi
+
+            # Check if it's a number (option selection)
+            re='^[1-9][0-9]*$'
+            if [[ $choice =~ $re ]] && [ -n "${prefixes_map[$choice]+isset}" ]; then
+                branch_type="${prefixes_map[$choice]}"
+                if [ -n "$branch_type" ]; then
+                    branch_type_and_sep="${branch_type}${sep}"
+                fi
+                break
+            else
+                # Manual prefix entry - validate format
+                choice=$(echo "$choice" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+                if [ -n "$choice" ]; then
+                    # Validate prefix format (letters, numbers, no special characters)
+                    re_prefix='^[a-zA-Z0-9]+$'
+                    if [[ $choice =~ $re_prefix ]]; then
+                        branch_type="$choice"
+                        branch_type_and_sep="${branch_type}${sep}"
+                        break
+                    else
+                        echo -e "${RED}Invalid prefix format! Use only letters and numbers.${ENDCOLOR}"
+                        echo
+                        continue
+                    fi
+                else
+                    echo -e "${RED}Please enter a valid option number or custom prefix.${ENDCOLOR}"
+                    echo
+                    continue
+                fi
+            fi
+        done
+
+        ### Step 2. Enter branch name
+        echo
+        echo -e "${YELLOW}Step 2.${ENDCOLOR} Enter the name of the branch"
+        echo "Leave it blank if you want to exit"
+
+        printf "${BOLD}git branch${ENDCOLOR}"
+        read -p " ${branch_type_and_sep}" -e branch_name
+
+        if [ -z "$branch_name" ]; then
+            exit
         fi
-        break
-    done
 
-
-    ### Step 2. Enter branch name
-    echo
-    echo -e "${YELLOW}Step 2.${ENDCOLOR} Enter the name of the branch"
-    echo "Leave it blank if you want to exit"
-
-    printf "${BOLD}git branch${ENDCOLOR}"
-    read -p " ${branch_type_and_sep}" -e branch_name
-
-    if [ -z $branch_name ]; then
-        exit
+        branch_name="${branch_type_and_sep}${branch_name##*( )}"
     fi
 
-    branch_name="${branch_type_and_sep}${branch_name##*( )}"
+
 
     if [[ "$branch_name" == "HEAD" ]] || [[ "$branch_name" == "$origin_name" ]]; then
         echo
@@ -322,7 +402,7 @@ function branch_script {
         exit
     fi
 
-    ### Step 3. Switch to main and pull it
+    ### Switch to main and pull it (if needed)
     from_branch=$current_branch
     if [ -z "${current}" ]; then
         echo
@@ -336,7 +416,7 @@ function branch_script {
     fi
 
 
-    ### Step 4. Create a new branch and switch to it
+    ### Create a new branch and switch to it
     create_output=$(git switch -c $branch_name 2>&1)
     create_code=$?
 

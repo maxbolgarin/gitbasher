@@ -5,6 +5,16 @@
 # Use this script only with gitbasher
 
 
+### Function to cleanup staged files and git add cache
+# $1: git_add arguments
+function cleanup_on_exit {
+    if [ -n "$1" ]; then
+        git restore --staged $1
+    fi
+    # Clean up the cached git add arguments
+    # git config --unset gitbasher.cached-git-add 2>/dev/null
+}
+
 ### Function prints information about the last commit, use it after `git commit`
 # $1: name of operation, e.g. `amend`
 # Using of global:
@@ -141,11 +151,15 @@ function commit_script {
         echo -e "last|l\t\tChange commit message to the last one"
         echo -e "revert|rev\tSelect a commit to revert (git revert -no-edit <commit>)"
         echo -e "help|h\t\tShow this help"
+        # Clean up cached git add on help exit
+        git config --unset gitbasher.cached-git-add 2>/dev/null
         exit
     fi
 
 
     if [ -n "$last" ]; then
+        # Clean up cached git add before amending last commit
+        git config --unset gitbasher.cached-git-add 2>/dev/null
         git commit --amend
         exit
     fi
@@ -155,6 +169,8 @@ function commit_script {
     is_clean=$(git status | tail -n 1)
     if [ "$is_clean" = "nothing to commit, working tree clean" ]; then
         if [ -z "${revert}" ]; then
+            # Clean up cached git add when working tree is clean
+            git config --unset gitbasher.cached-git-add 2>/dev/null
             echo -e "${GREEN}Nothing to commit, working tree clean${ENDCOLOR}"
             exit
         fi
@@ -185,10 +201,43 @@ function commit_script {
     fi
 
 
+    ### Check for previously saved git add arguments
+    saved_git_add=""
+    if [ -z "${fast}" ]; then
+        saved_git_add=$(git config --get gitbasher.cached-git-add 2>/dev/null)
+        if [ -n "$saved_git_add" ]; then
+            echo
+            echo -e "${YELLOW}Found previous git add arguments:${ENDCOLOR} ${BOLD}$saved_git_add${ENDCOLOR}"
+            read -n 1 -p "Use them? (y/n) " -s choice
+            echo
+            if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
+                git add $saved_git_add
+                if [ $? -eq 0 ]; then
+                    git_add="$saved_git_add"
+                    use_saved_git_add="true"
+                else
+                    echo
+                    echo -e "${RED}Failed to apply saved git add arguments, continuing normally${ENDCOLOR}"
+                    git config --unset gitbasher.cached-git-add 2>/dev/null
+                fi
+                echo
+            else
+                git config --unset gitbasher.cached-git-add 2>/dev/null
+            fi
+        fi
+    fi
+
+
     ### Commit Step 1: add files to commit
     if [ -n "${fast}" ]; then
         git add .
         git_add="."
+        # Clean up any existing cached git add since we're using fast mode
+        git config --unset gitbasher.cached-git-add 2>/dev/null
+    elif [ -n "${use_saved_git_add}" ]; then
+        # Files are already staged using saved git add arguments
+        echo -e "${YELLOW}Step 1.${ENDCOLOR} Using saved git add arguments: ${BOLD}$git_add${ENDCOLOR}"
+        echo
     else
         echo
         printf "${YELLOW}Step 1.${ENDCOLOR} List files for "
@@ -200,9 +249,9 @@ function commit_script {
             printf "${YELLOW}--amend${ENDCOLOR} "
         fi
         if [ -n "${amend}" ]; then
-            printf "to the last commit in the ${BOLD}${BLUE}${current_branch}${ENDCOLOR} branch\n"
+            printf "to the last commit in the ${YELLOW}${current_branch}${ENDCOLOR} branch\n"
         else
-            printf "commit to the ${BOLD}${BLUE}${current_branch}${ENDCOLOR} branch\n"
+            printf "commit to the ${YELLOW}${current_branch}${ENDCOLOR} branch\n"
         fi
         echo "Leave it blank to exit without changes"
 
@@ -217,6 +266,8 @@ function commit_script {
 
             git add $git_add
             if [ $? -eq 0 ]; then
+                # Save git add arguments for potential retry
+                git config gitbasher.cached-git-add "$git_add"
                 break
             fi
         done
@@ -243,6 +294,9 @@ function commit_script {
         
         result=$(git commit --fixup $commit_hash 2>&1)
         check_code $? "$result" "fixup"
+        
+        # Clean up cached git add on successful fixup
+        git config --unset gitbasher.cached-git-add 2>/dev/null
 
         after_commit "fixup"
 
@@ -259,6 +313,9 @@ function commit_script {
     if [ -n "${amend}" ]; then
         result=$(git commit --amend --no-edit 2>&1)
         check_code $? "$result" "amend"
+        
+        # Clean up cached git add on successful amend
+        git config --unset gitbasher.cached-git-add 2>/dev/null
 
         echo
         after_commit "amend"
@@ -300,7 +357,7 @@ function commit_script {
         read -n 1 -s choice
 
         if [ "$choice" == "0" ]; then
-            git restore --staged $git_add
+            cleanup_on_exit "$git_add"
             exit
         fi
 
@@ -418,7 +475,7 @@ function commit_script {
             read -p "<scope>: " -e commit_scope
 
             if [ "$commit_scope" == "0" ]; then
-                git restore --staged $git_add
+                cleanup_on_exit "$git_add"
                 exit
             fi
 
@@ -534,7 +591,7 @@ ${staged_with_tab}
             echo
             read -n 1 -p "Try for one more time? (y/n) " -s -e choice
             if [ "$choice" != "y" ]; then
-                git restore --staged $git_add
+                cleanup_on_exit "$git_add"
                 find . -name "$commitmsg_file*" -delete
                 exit
             fi    
@@ -546,7 +603,7 @@ ${staged_with_tab}
     else
         read -p "$(echo -n -e "${commit}")" -e commit_message
         if [ -z "$commit_message" ]; then
-            git restore --staged $git_add
+            cleanup_on_exit "$git_add"
             exit
         fi
     fi
@@ -565,7 +622,7 @@ ${staged_with_tab}
             read -p "<ticket>: " -e commit_ticket
         fi
         if [ "$commit_ticket" == "0" ]; then
-            git restore --staged $git_add
+            cleanup_on_exit "$git_add"
             exit
         fi
 
@@ -594,6 +651,10 @@ ${staged_with_tab}
 
     result=$(git commit -m """$commit""" 2>&1)
     check_code $? "$result" "commit"
+    
+    # Clean up cached git add on successful commit
+    git config --unset gitbasher.cached-git-add 2>/dev/null
+    
     after_commit
 
     if [ -n "${push}" ]; then

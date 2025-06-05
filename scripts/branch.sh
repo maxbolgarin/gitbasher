@@ -28,6 +28,7 @@ function branch_script {
             new="true"
         ;;
         delete|del|d) delete="true";;
+        tag|t)        tag="true";;
         help|h)       help="true";;
         *)
             wrong_mode "branch" $1
@@ -48,6 +49,8 @@ function branch_script {
         header="$header LIST"
     elif [ -n "${delete}" ]; then
         header="$header DELETE"
+    elif [ -n "${tag}" ]; then
+        header="$header TAG"
     fi
 
     echo -e "${YELLOW}${header}${ENDCOLOR}"
@@ -62,6 +65,7 @@ function branch_script {
         echo -e "list|l\t\tPrint a list of local branches"
         echo -e "remote|re|r\tFetch $origin_name and select a remote branch to switch"
         echo -e "main|def|m\tSwitch to $main_branch without additional confirmations"
+        echo -e "tag|t\t\tCheckout to a specific tag"
         echo -e "new|n|c\t\tBuild a conventional name and create a new branch from $main_branch"
         echo -e "newd|nd\t\tBuild a conventional name, switch to $main_branch, pull it and create new branch"
         echo -e "delete|del|d\tSelect a local branch to delete"
@@ -78,8 +82,86 @@ function branch_script {
     fi
 
 
+    ### Run tag checkout logic
+    if [[ -n "${tag}" ]]; then
+        echo -e "${YELLOW}Do you want to fetch remote tags first?${ENDCOLOR}"
+        read -n 1 -p "Fetch remote? (y/n) " choice
+        echo
+
+        if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
+            echo
+            echo -e "${YELLOW}Fetching remote tags...${ENDCOLOR}"
+            fetch_output=$(git fetch --tags 2>&1)
+            check_code $? "$fetch_output" "fetch remote tags"
+        fi
+        echo
+
+        echo -e "${YELLOW}Select a tag to checkout:${ENDCOLOR}"
+        
+        # Get all tags sorted by version
+        tags_info_str=$(git for-each-ref --count=999  --sort=-creatordate refs/tags --format="${BLUE_ES}%(refname:short)${ENDCOLOR_ES} | %(contents:subject) | ${YELLOW_ES}%(objectname:short)${ENDCOLOR_ES} | ${CYAN_ES}%(creatordate:human)${ENDCOLOR_ES}" | column -ts'|' )
+        IFS=$'\n' read -rd '' -a tags_info <<<"$tags_info_str"
+
+        if [ -z "$tags_info" ]; then
+            echo -e "${RED}No tags found in this repository${ENDCOLOR}"
+            exit
+        fi
+
+        # Convert to array and display
+        for index in "${!tags_info[@]}"; do
+            echo -e "$(($index+1)). ${tags_info[index]}"
+        done
+        echo "0. Exit without changes"
+        echo
+
+        while [ true ]; do
+            read -p "Select tag number: " choice
+
+            if [ "$choice" == "0" ] || [ "$choice" == "" ]; then
+                exit
+            fi
+
+            re='^[1-9][0-9]*$'
+            if [[ $choice =~ $re ]]; then
+                index=$((choice - 1))
+                if [ $index -ge 0 ] && [ $index -lt ${#tags_info[@]} ]; then
+                    selected_tag=$(git for-each-ref --count=999 --sort=-creatordate refs/tags --format='%(refname:short)' | sed -n "$((index+1))p")
+                    break
+                else
+                    echo -e "${RED}Invalid tag number! Please choose from 1-${#tags_info[@]}.${ENDCOLOR}"
+                    echo
+                    continue
+                fi
+            else
+                echo -e "${RED}Please enter a valid tag number.${ENDCOLOR}"
+                echo
+                continue
+            fi
+        done
+
+        echo
+        echo -e "${YELLOW}Checking out to tag ${selected_tag}...${ENDCOLOR}"
+        echo
+        
+        checkout_output=$(git checkout $selected_tag 2>&1)
+        checkout_code=$?
+
+        if [ $checkout_code -eq 0 ]; then
+            echo -e "${GREEN}Successfully checked out to tag '${selected_tag}'${ENDCOLOR}"
+            echo -e "${YELLOW}Note: You are now in 'detached HEAD' state${ENDCOLOR}"
+            echo -e "If you want to make changes, create a new branch: ${YELLOW}gitb branch new${ENDCOLOR}"
+        else
+            echo -e "${RED}Failed to checkout to tag ${selected_tag}! Error message:${ENDCOLOR}"
+            echo "${checkout_output}"
+            exit $checkout_code
+        fi
+
+        exit
+    fi
+
+
     ### Run switch to local logic
-    if [[ -z "$new" ]] && [[ -z "$remote" ]] && [[ -z "$delete" ]] && [[ -z "$list" ]]; then
+    if [[ -z "$new" ]] && [[ -z "$remote" ]] && [[ -z "$delete" ]] && [[ -z "$list" ]] && [[ -z "$tag" ]]; then
         echo -e "${YELLOW}Select a branch to switch from '${current_branch}'${ENDCOLOR}:"
 
         choose_branch
@@ -91,7 +173,7 @@ function branch_script {
 
 
     ### Run switch to remote logic
-    elif [[ -z "$new" ]] && [[ -n "$remote" ]] && [[ -z "$delete" ]]; then
+    elif [[ -z "$new" ]] && [[ -n "$remote" ]] && [[ -z "$delete" ]] && [[ -z "$tag" ]]; then
         echo -e "${YELLOW}Fetching remote...${ENDCOLOR}"
         echo
 
@@ -111,7 +193,7 @@ function branch_script {
 
 
     ### Run delete local logic
-    elif [[ -z "$new" ]] && [[ -n "$delete" ]]; then
+    elif [[ -z "$new" ]] && [[ -n "$delete" ]] && [[ -z "$tag" ]]; then
 
         # Try to delete all merged branches
         IFS=$'\n' read -rd '' -a merged_branches <<<"$(git branch -v --sort=-committerdate --merged | cat 2>&1)"
@@ -249,6 +331,9 @@ function branch_script {
     list_branches
 
     if [ -n "$list" ]; then
+        exit
+    fi
+
 
     echo
 

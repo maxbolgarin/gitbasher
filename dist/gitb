@@ -1823,13 +1823,56 @@ function commit_script {
         echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Enter a ${YELLOW}scope${ENDCOLOR} of changes to provide some additional context"
         echo -e "Final meesage will be ${BLUE}${commit_type}${ENDCOLOR}(${YELLOW}<scope>${ENDCOLOR}): ${BLUE}<summary>${ENDCOLOR}"
         echo -e "Leave it blank to continue without scope or enter 0 to exit without changes"
+        detected_scopes=""
+        staged_files=$(git diff --name-only --cached)
+        if [ -n "$staged_files" ]; then
+            declare -A scope_candidates
+            while IFS= read -r file; do
+                if [ -n "$file" ]; then
+                    dir=$(dirname "$file")
+                    if [ "$dir" != "." ]; then
+                        last_dir=$(basename "$dir")
+                        scope_candidates["$last_dir"]=1
+                        if [[ "$dir" == */* ]]; then
+                            scope_candidates["$last_dir"]=1
+                        fi
+                        if [[ "$dir" != */* ]]; then
+                            scope_candidates["$dir"]=1
+                        fi
+                    fi
+                    filename=$(basename "$file")
+                    filename_no_ext="${filename%.*}"
+                    if [[ ! "$filename_no_ext" =~ ^(index|main|app|test|spec|config|readme|license)$ ]]; then
+                        scope_candidates["$filename_no_ext"]=1
+                    fi
+                fi
+            done <<< "$staged_files"
+            detected_scopes_array=()
+            for scope in "${!scope_candidates[@]}"; do
+                if [[ ! "$scope" =~ ^(src|lib|test|tests|spec|specs|build|dist|node_modules|vendor)$ ]]; then
+                    detected_scopes_array+=("$scope")
+                fi
+            done
+            IFS=$'\n' detected_scopes_sorted=($(sort <<<"${detected_scopes_array[*]}"))
+            unset IFS
+            if [ ${#detected_scopes_sorted[@]} -gt 0 ]; then
+                detected_scopes="${detected_scopes_sorted[*]}"
+            fi
+        fi
+        all_scopes=""
         if [ -n "$scopes" ]; then
-           IFS=' ' read -r -a scopes_array <<< "$scopes"
+            all_scopes="$scopes"
+        elif [ -n "$detected_scopes" ]; then
+            all_scopes="$detected_scopes"
+        fi
+        if [ -n "$all_scopes" ]; then
+           IFS=' ' read -r -a scopes_array <<< "$all_scopes"
            res=""
            for i in "${!scopes_array[@]}"; do
-                res="$res$((i+1)). ${BOLD}${scopes_array[$i]}${ENDCOLOR}|"
+                scope_display="${scopes_array[$i]}"
+                res="$res$((i+1)). ${BOLD}${scope_display}${ENDCOLOR}|"
            done
-           echo -e "You can select one of default scopes: $(echo $res | column -ts'|')"            
+           echo -e "You can select one of the ${YELLOW}detected scopes${ENDCOLOR}: $(echo $res | column -ts'|')"            
         fi
         while [ true ]; do
             read -p "<scope>: " -e commit_scope
@@ -1842,11 +1885,12 @@ function commit_script {
                 break
             fi
             re_number='^[1-9][0-9]*$'
-            if [[ $commit_scope =~ $re_number ]] && [ -n "$scopes" ]; then
-                IFS=' ' read -r -a scopes_array <<< "$scopes"
+            if [[ $commit_scope =~ $re_number ]] && [ -n "$all_scopes" ]; then
+                IFS=' ' read -r -a scopes_array <<< "$all_scopes"
                 index=$((commit_scope - 1))
                 if [ $index -ge 0 ] && [ $index -lt ${#scopes_array[@]} ]; then
-                    commit_scope="${scopes_array[$index]}"
+                    selected_scope="${scopes_array[$index]}"
+                    commit_scope="${selected_scope#*}"
                     commit="$commit($commit_scope): "
                     break
                 else
@@ -2685,7 +2729,7 @@ function print_help {
 project_name="$(get_repo_name)"
 repo_url="$(get_repo)"
 if [ $is_first == "true" ]; then 
-    git config --local gitbasher.scopes "logic model config logs"
+    git config --local gitbasher.scopes ""
     echo -e "${GREEN}Thanks for using gitbasher in project '$project_name'${ENDCOLOR}"
     print_configuration
     echo

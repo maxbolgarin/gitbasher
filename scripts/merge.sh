@@ -14,6 +14,7 @@ function merge_script {
     case "$1" in
         main|master|m)          main="true";;
         to-main|to-master|tm)   to_main="true";;
+        remote|r)               remote="true";;
         help|h)                 help="true";;
         *)
             wrong_mode "merge" $1
@@ -22,10 +23,12 @@ function merge_script {
 
     ### Merge mode - print header
     header="GIT MERGE"
-    if [ -n "${to_main}" ]; then
+    if [ -n "${main}" ]; then
         header="$header MAIN"
     elif [ -n "${to_main}" ]; then
         header="$header TO MAIN"
+    elif [ -n "${remote}" ]; then
+        header="$header REMOTE"
     fi
 
     echo -e "${YELLOW}${header}${ENDCOLOR}"
@@ -39,6 +42,7 @@ function merge_script {
         echo -e "<empty>\t\t\tSelect a branch to merge into the current one and fix conflicts"
         echo -e "main|master|m\t\tMerge $main_branch to the current branch and fix conflicts"
         echo -e "to-main|to-master|tm\tSwitch to $main_branch and merge the current branch into $main_branch"
+        echo -e "remote|r\t\tFetch $origin_name and select a remote branch to merge into current"
         echo -e "help|h\t\t\tShow this help"
         exit
     fi
@@ -59,6 +63,23 @@ function merge_script {
         fi
         merge_branch=${current_branch}
 
+    elif [ -n "$remote" ]; then
+        echo -e "${YELLOW}Fetching remote...${ENDCOLOR}"
+        echo
+
+        fetch_output=$(git fetch 2>&1)
+        check_code $? "$fetch_output" "fetch remote"
+
+        prune_output=$(git remote prune $origin_name 2>&1)
+
+        echo -e "${YELLOW}Select which remote branch to merge into '${current_branch}'${ENDCOLOR}"
+        
+        choose_branch "remote"
+
+        merge_branch=${branch_name}
+        merge_from_origin=true
+        echo
+
     else
         echo -e "${YELLOW}Select which branch to merge into '${current_branch}'${ENDCOLOR}"
         choose_branch "merge"
@@ -67,17 +88,19 @@ function merge_script {
     fi
 
 
-    ### Fetch before merge
-    echo -e "Do you want to fetch ${YELLOW}${origin_name}/${merge_branch}${ENDCOLOR} before merge (y/n)?"
-    read -n 1 -s choice
-    if [ "$choice" == "y" ]; then
-        echo
-        echo -e "${YELLOW}Fetching ${origin_name}/${merge_branch}...${ENDCOLOR}"
+    ### Fetch before merge (skip if already fetched for remote mode)
+    if [ -z "$remote" ]; then
+        echo -e "Do you want to fetch ${YELLOW}${origin_name}/${merge_branch}${ENDCOLOR} before merge (y/n)?"
+        read -n 1 -s choice
+        if [ "$choice" == "y" ]; then
+            echo
+            echo -e "${YELLOW}Fetching ${origin_name}/${merge_branch}...${ENDCOLOR}"
 
-        fetch $merge_branch $origin_name
-        merge_from_origin=true
+            fetch $merge_branch $origin_name
+            merge_from_origin=true
+        fi
+        echo
     fi
-    echo
 
 
     ### Run merge-to-main logic - switch to main and merge
@@ -205,7 +228,9 @@ function resolve_conflicts {
     echo
     echo -e "${YELLOW}Files with conflicts${ENDCOLOR}"
     IFS=$'\n' read -rd '' -a files_with_conflicts <<<"$(git --no-pager diff --name-only --diff-filter=U --relative)"
-    echo -e "$(sed 's/^/\t/' <<< "$files_with_conflicts")"
+    for file in "${files_with_conflicts[@]}"; do
+        echo -e "\t$file"
+    done
 
     ### Merge process
     while [ true ]; do
@@ -245,16 +270,12 @@ function merge_commit {
     merge_error="false"
 
     ### Check if there are files with conflicts
-    files_with_conflicts_one_line="$(tr '\n' ' ' <<< "$2")"
-    IFS=$'\n' read -rd '' -a files_with_conflicts_new <<<"$(grep --files-with-matches -r -E "[<=>]{7} HEAD" $files_with_conflicts_one_line)"
-    number_of_conflicts=${#files_with_conflicts_new[@]}
-    if [ $number_of_conflicts -gt 0 ]; then
+    files_with_conflicts_one_line="$(echo "$2" | tr '\n' ' ' | sed 's/ $//')"
+    files_with_conflicts_new="$(git --no-pager grep -l --name-only -E "[<=>]{7} HEAD" $files_with_conflicts_one_line)"
+    if [ "$files_with_conflicts_new" != "" ]; then
         echo
-        echo -e "${YELLOW}There are still some files with conflicts${ENDCOLOR}"
-        for index in "${!files_with_conflicts_new[@]}"
-        do
-            echo -e $(sed '1 s/.\///' <<< "\t${files_with_conflicts_new[index]}")
-        done
+        echo -e "${YELLOW}There are files with conflicts${ENDCOLOR}"
+        echo -e "$(echo -e "${files_with_conflicts_new}" | tr ' ' '\n' | sed 's/^/\t/')"
 
         echo
         echo -e "Fix conflicts and press ${YELLOW}$1${ENDCOLOR} for one more time"
@@ -264,7 +285,6 @@ function merge_commit {
 
 
     ### Add files with resolved conflicts to commit
-    files_with_conflicts_one_line="$(tr '\n' ' ' <<< "$2")"
     git add $files_with_conflicts_one_line
 
     ### 1. Commit with default message

@@ -33,7 +33,7 @@ repo_url="$(get_repo)"
 
 ### Print settings f this is first run
 if [ $is_first == "true" ]; then 
-    git config --local gitbasher.scopes "logic model config logs"
+    git config --local gitbasher.scopes ""
 
     echo -e "${GREEN}Thanks for using gitbasher in project '$project_name'${ENDCOLOR}"
     print_configuration

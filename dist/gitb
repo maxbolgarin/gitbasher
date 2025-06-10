@@ -917,7 +917,7 @@ function resolve_conflicts {
     while [ true ]; do
         read -n 1 -s choice
         if [ "$choice" == "1" ] || [ "$choice" == "2" ]; then
-            merge_commit $choice $files_with_conflicts "${default_message}" $1 $2 $3
+            merge_commit $choice "${files_with_conflicts[@]}" "${default_message}" $1 $2 $3
             if [ "$merge_error" == "false" ]; then
                 return
             fi
@@ -946,7 +946,9 @@ function merge_commit {
         merge_error="true"
         return
     fi
-    git add $files_with_conflicts_one_line
+    echo
+    echo -e "${YELLOW}Adding resolved files to commit...${ENDCOLOR}"
+    git add -u
     if [ "$1" == "1" ]; then
         commit_message="$3"
         result=$(git commit -m "$commit_message" 2>&1)
@@ -1058,7 +1060,6 @@ function rebase_script {
         echo -e "${GREEN}Nothing to rebase - already up to date${ENDCOLOR}"
         exit
     fi
-    echo
     if [ $rebase_code == 0 ] ; then
         echo -e "${GREEN}Successful rebase!${ENDCOLOR}"
         echo -e "${BLUE}[${new_base_branch}${ENDCOLOR} -> ${BLUE}${current_branch}]${ENDCOLOR}"

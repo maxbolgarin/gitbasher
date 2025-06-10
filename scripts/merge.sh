@@ -237,7 +237,7 @@ function resolve_conflicts {
         read -n 1 -s choice
 
         if [ "$choice" == "1" ] || [ "$choice" == "2" ]; then
-            merge_commit $choice $files_with_conflicts "${default_message}" $1 $2 $3
+            merge_commit $choice "${files_with_conflicts[@]}" "${default_message}" $1 $2 $3
             if [ "$merge_error" == "false" ]; then
                 return
             fi
@@ -269,6 +269,7 @@ function resolve_conflicts {
 function merge_commit {
     merge_error="false"
 
+   
     ### Check if there are files with conflicts
     files_with_conflicts_one_line="$(echo "$2" | tr '\n' ' ' | sed 's/ $//')"
     files_with_conflicts_new="$(git --no-pager grep -l --name-only -E "[<=>]{7} HEAD" $files_with_conflicts_one_line)"
@@ -284,8 +285,12 @@ function merge_commit {
     fi
 
 
-    ### Add files with resolved conflicts to commit
-    git add $files_with_conflicts_one_line
+    ### Add all files that were in conflict to commit (they should be resolved now)
+    echo
+    echo -e "${YELLOW}Adding resolved files to commit...${ENDCOLOR}"
+    
+    # Add all modified files (this includes the resolved conflict files)
+    git add -u
 
     ### 1. Commit with default message
     if [ "$1" == "1" ]; then

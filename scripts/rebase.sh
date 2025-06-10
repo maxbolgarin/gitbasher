@@ -102,8 +102,6 @@ function rebase_script {
         exit
     fi
 
-    echo
-
     if [ $rebase_code == 0 ] ; then
         echo -e "${GREEN}Successful rebase!${ENDCOLOR}"
         echo -e "${BLUE}[${new_base_branch}${ENDCOLOR} -> ${BLUE}${current_branch}]${ENDCOLOR}"

@@ -37,7 +37,7 @@ function get_config_value {
 }
 current_branch=$(git branch --show-current)
 main_branch=$(get_config_value gitbasher.branch "main")
-if [[ "$(git branch | grep -E "^\*? ?master$" )" != "" ]] && [[ "$(git branch | grep -E "^\*? ?main$" )" == "" ]]; then
+if [[ "$( git branch | grep "^[\s\*]*\s*main\s*$" )" == "" ]] && [[ "$( git branch | grep "^[\s\*]*\s*master\s*$" )" != "" ]]; then
     main_branch="master"
 elif [[ "$(git branch | cat)" == "" ]]; then
     main_branch=$current_branch
@@ -1597,7 +1597,6 @@ function cleanup_on_exit {
     if [ -n "$1" ]; then
         git restore --staged $1
     fi
-    git config --unset gitbasher.cached-git-add 2>/dev/null
 }
 function after_commit {
     if [ -n "$1" ]; then
@@ -1626,45 +1625,22 @@ function commit_script {
         msg|m)              msg="true";;
         ticket|jira|j|t)    ticket="true";;
         fast|f)             fast="true";;
-        fasts|fs)           fast="true"; scope="true";;
+        fasts|fs|sf)        fast="true"; scope="true";;
         push|pu|p)          push="true";;
-        fastp|fp)           fast="true"; push="true";;
+        fastp|fp|pf)        fast="true"; push="true";;
         fastsp|fsp|fps)     fast="true"; push="true"; scope="true";;
         fixup|fix|x)        fixup="true";;
-        fixupp|fixp|xp)     fixup="true"; push="true";;
+        fixupp|fixp|xp|px)  fixup="true"; push="true";;
         fastfix|fx|xf)      fixup="true"; fast="true";;
         fastfixp|fxp|xfp)   fixup="true"; fast="true"; push="true";;
         amend|am|a)         amend="true";;
-        amendf|amf|af)      amend="true"; fast="true";;
+        amendf|amf|af|fa)   amend="true"; fast="true";;
         last|l)             last="true";;
         revert|rev)         revert="true";;
         help|h)             help="true";;
         *)
             wrong_mode "commit" $1
     esac
-    saved_git_add=""
-    if [ -z "${fast}" ]; then
-        saved_git_add=$(git config --get gitbasher.cached-git-add 2>/dev/null)
-        if [ -n "$saved_git_add" ]; then
-            echo -e "${YELLOW}Found previous git add arguments from failed commit:${ENDCOLOR} ${BOLD}$saved_git_add${ENDCOLOR}"
-            read -n 1 -p "Use them? (y/n) " -s choice
-            echo
-            if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
-                git add $saved_git_add
-                if [ $? -eq 0 ]; then
-                    git_add="$saved_git_add"
-                    use_saved_git_add="true"
-                    echo -e "${GREEN}Successfully restored previous git add arguments${ENDCOLOR}"
-                else
-                    echo -e "${RED}Failed to apply saved git add arguments, continuing normally${ENDCOLOR}"
-                    git config --unset gitbasher.cached-git-add 2>/dev/null
-                fi
-            else
-                git config --unset gitbasher.cached-git-add 2>/dev/null
-            fi
-            echo
-        fi
-    fi
     header_msg="GIT COMMIT"
     if [ -n "${fast}" ]; then
         if [ -n "${push}" ]; then
@@ -1707,13 +1683,13 @@ function commit_script {
         echo -e "msg|m\t\tSame as <empty>, but create multiline commit message using text editor"
         echo -e "ticket|t\tSame as <empty>, but add tracker's ticket info to the end of the commit header"
         echo -e "fast|f\t\tAdd all files (git add .) and create a conventional commit message without scope"
-        echo -e "fasts|fs\tAdd all files (git add .) and create a conventional commit message with scope"
+        echo -e "fasts|fs|sf\tAdd all files (git add .) and create a conventional commit message with scope"
         echo -e "push|pu|p\tCreate a conventional commit and push changes at the end"
-        echo -e "fastp|fp\tCreate a conventional commit in the fast mode and push changes"
+        echo -e "fastp|fp|pf\tCreate a conventional commit in the fast mode and push changes"
         echo -e "fastsp|fsp|fps\tCreate a conventional commit in the fast mode with scope and push changes"
         echo -e "fixup|fix|x\tSelect files and commit to make a --fixup commit (git commit --fixup <hash>)"
         echo -e "fixupp|fixp|xp\tSelect files and commit to make a --fixup commit and push changes"
-        echo -e "fastfix|fx\tAdd all files (git add .) and commit to make a --fixup commit"
+        echo -e "fastfix|fx|xf\tAdd all files (git add .) and commit to make a --fixup commit"
         echo -e "fastfixp|fxp\tAdd all files (git add .) and commit to make a --fixup commit and push"
         echo -e "amend|am|a\tSelect files and add them to the last commit without message edit (git commit --amend --no-edit)"
         echo -e "amendf|amf|af\tAdd all fiels to the last commit without message edit (git commit --amend --no-edit)"
@@ -1751,6 +1727,30 @@ function commit_script {
         echo -e "${YELLOW}Changed files${ENDCOLOR}"
         git_status
     fi
+    saved_git_add=""
+    if [ -z "${fast}" ]; then
+        saved_git_add=$(git config --get gitbasher.cached-git-add 2>/dev/null)
+        if [ -n "$saved_git_add" ]; then
+            echo
+            echo -e "${YELLOW}Found previous git add arguments:${ENDCOLOR} ${BOLD}$saved_git_add${ENDCOLOR}"
+            read -n 1 -p "Use them? (y/n) " -s choice
+            echo
+            if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
+                git add $saved_git_add
+                if [ $? -eq 0 ]; then
+                    git_add="$saved_git_add"
+                    use_saved_git_add="true"
+                else
+                    echo
+                    echo -e "${RED}Failed to apply saved git add arguments, continuing normally${ENDCOLOR}"
+                    git config --unset gitbasher.cached-git-add 2>/dev/null
+                fi
+                echo
+            else
+                git config --unset gitbasher.cached-git-add 2>/dev/null
+            fi
+        fi
+    fi
     if [ -n "${fast}" ]; then
         git add .
         git_add="."
@@ -1769,9 +1769,9 @@ function commit_script {
             printf "${YELLOW}--amend${ENDCOLOR} "
         fi
         if [ -n "${amend}" ]; then
-            printf "to the last commit in the ${BOLD}${YELLOW}${current_branch}${ENDCOLOR} branch\n"
+            printf "to the last commit in the ${YELLOW}${current_branch}${ENDCOLOR} branch\n"
         else
-            printf "commit to the ${BOLD}${YELLOW}${current_branch}${ENDCOLOR} branch\n"
+            printf "commit to the ${YELLOW}${current_branch}${ENDCOLOR} branch\n"
         fi
         echo "Leave it blank to exit without changes"
         while [ true ]; do
@@ -2095,6 +2095,7 @@ function branch_script {
             new="true"
         ;;
         delete|del|d) delete="true";;
+        tag|t)        tag="true";;
         help|h)       help="true";;
         *)
             wrong_mode "branch" $1
@@ -2112,6 +2113,8 @@ function branch_script {
         header="$header LIST"
     elif [ -n "${delete}" ]; then
         header="$header DELETE"
+    elif [ -n "${tag}" ]; then
+        header="$header TAG"
     fi
     echo -e "${YELLOW}${header}${ENDCOLOR}"
     echo
@@ -2123,6 +2126,7 @@ function branch_script {
         echo -e "list|l\t\tPrint a list of local branches"
         echo -e "remote|re|r\tFetch $origin_name and select a remote branch to switch"
         echo -e "main|def|m\tSwitch to $main_branch without additional confirmations"
+        echo -e "tag|t\t\tCheckout to a specific tag"
         echo -e "new|n|c\t\tBuild a conventional name and create a new branch from $main_branch"
         echo -e "newd|nd\t\tBuild a conventional name, switch to $main_branch, pull it and create new branch"
         echo -e "delete|del|d\tSelect a local branch to delete"
@@ -2133,13 +2137,74 @@ function branch_script {
         switch ${main_branch}
         exit
     fi
-    if [[ -z "$new" ]] && [[ -z "$remote" ]] && [[ -z "$delete" ]] && [[ -z "$list" ]]; then
+    if [[ -n "${tag}" ]]; then
+        echo -e "${YELLOW}Do you want to fetch remote tags first?${ENDCOLOR}"
+        read -n 1 -p "Fetch remote? (y/n) " choice
+        echo
+        if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
+            echo
+            echo -e "${YELLOW}Fetching remote tags...${ENDCOLOR}"
+            fetch_output=$(git fetch --tags 2>&1)
+            check_code $? "$fetch_output" "fetch remote tags"
+        fi
+        echo
+        echo -e "${YELLOW}Select a tag to checkout:${ENDCOLOR}"
+        tags_info_str=$(git for-each-ref --count=999  --sort=-creatordate refs/tags --format="${BLUE_ES}%(refname:short)${ENDCOLOR_ES} | %(contents:subject) | ${YELLOW_ES}%(objectname:short)${ENDCOLOR_ES} | ${CYAN_ES}%(creatordate:human)${ENDCOLOR_ES}" | column -ts'|' )
+        IFS=$'\n' read -rd '' -a tags_info <<<"$tags_info_str"
+        if [ -z "$tags_info" ]; then
+            echo -e "${RED}No tags found in this repository${ENDCOLOR}"
+            exit
+        fi
+        for index in "${!tags_info[@]}"; do
+            echo -e "$(($index+1)). ${tags_info[index]}"
+        done
+        echo "0. Exit without changes"
+        echo
+        while [ true ]; do
+            read -p "Select tag number: " choice
+            if [ "$choice" == "0" ] || [ "$choice" == "" ]; then
+                exit
+            fi
+            re='^[1-9][0-9]*$'
+            if [[ $choice =~ $re ]]; then
+                index=$((choice - 1))
+                if [ $index -ge 0 ] && [ $index -lt ${#tags_info[@]} ]; then
+                    selected_tag=$(git for-each-ref --count=999 --sort=-creatordate refs/tags --format='%(refname:short)' | sed -n "$((index+1))p")
+                    break
+                else
+                    echo -e "${RED}Invalid tag number! Please choose from 1-${#tags_info[@]}.${ENDCOLOR}"
+                    echo
+                    continue
+                fi
+            else
+                echo -e "${RED}Please enter a valid tag number.${ENDCOLOR}"
+                echo
+                continue
+            fi
+        done
+        echo
+        echo -e "${YELLOW}Checking out to tag ${selected_tag}...${ENDCOLOR}"
+        echo
+        checkout_output=$(git checkout $selected_tag 2>&1)
+        checkout_code=$?
+        if [ $checkout_code -eq 0 ]; then
+            echo -e "${GREEN}Successfully checked out to tag '${selected_tag}'${ENDCOLOR}"
+            echo -e "${YELLOW}Note: You are now in 'detached HEAD' state${ENDCOLOR}"
+            echo -e "If you want to make changes, create a new branch: ${YELLOW}gitb branch new${ENDCOLOR}"
+        else
+            echo -e "${RED}Failed to checkout to tag ${selected_tag}! Error message:${ENDCOLOR}"
+            echo "${checkout_output}"
+            exit $checkout_code
+        fi
+        exit
+    fi
+    if [[ -z "$new" ]] && [[ -z "$remote" ]] && [[ -z "$delete" ]] && [[ -z "$list" ]] && [[ -z "$tag" ]]; then
         echo -e "${YELLOW}Select a branch to switch from '${current_branch}'${ENDCOLOR}:"
         choose_branch
         echo
         switch ${branch_name}
         exit
-    elif [[ -z "$new" ]] && [[ -n "$remote" ]] && [[ -z "$delete" ]]; then
+    elif [[ -z "$new" ]] && [[ -n "$remote" ]] && [[ -z "$delete" ]] && [[ -z "$tag" ]]; then
         echo -e "${YELLOW}Fetching remote...${ENDCOLOR}"
         echo
         fetch_output=$(git fetch 2>&1)
@@ -2150,7 +2215,7 @@ function branch_script {
         echo
         switch ${branch_name}
         exit
-    elif [[ -z "$new" ]] && [[ -n "$delete" ]]; then
+    elif [[ -z "$new" ]] && [[ -n "$delete" ]] && [[ -z "$tag" ]]; then
         IFS=$'\n' read -rd '' -a merged_branches <<<"$(git branch -v --sort=-committerdate --merged | cat 2>&1)"
         merged_branches_without_main=()
         for index in "${!merged_branches[@]}"
@@ -2260,59 +2325,114 @@ function branch_script {
     fi
     echo -e "${YELLOW}Current local branches:${ENDCOLOR}"
     list_branches
-    echo
-    echo -e "${YELLOW}Step 1.${ENDCOLOR} What type of branch do you want to create?"
-    echo -e "1. ${BOLD}feat:${ENDCOLOR}\tnew feature or logic changes, '${BOLD}feat${ENDCOLOR}' commits"
-    echo -e "2. ${BOLD}fix:${ENDCOLOR}\t\tsmall changes, eg. not critical bug fix"
-    echo -e "3. ${BOLD}hotfix:${ENDCOLOR}\tfix, that should be merged as fast as possible"
-    echo -e "4. ${BOLD}wip:${ENDCOLOR}\t\t'work in progress', for changes not ready for merging in the near future"
-    echo -e "5. ${BOLD}misc:${ENDCOLOR}\tnon-code changes, e.g. '${BOLD}ci${ENDCOLOR}', '${BOLD}docs${ENDCOLOR}', '${BOLD}build${ENDCOLOR}' commits"
-    echo -e "6. ${BOLD}test:${ENDCOLOR}\ttesting changes that probably won't be merged to the main branch"
-    echo -e "7. ${BOLD}chore:${ENDCOLOR}\tnon important style or docs changes"
-    if [ "$ticket_name" != "" ]; then
-        printf "8. $ticket_name:"
-        if [ $ticket_name = "" ]; then
-            printf "\t"
-        else
-            printf "\t\t"
-        fi
-        printf "use ticket name as prefix\n"
-    fi
-    echo -e "9.  \t\tdon't use prefix for branch naming"
-    echo -e "0. Exit without changes"
-    declare -A types=(
-        [1]="feat"
-        [2]="fix"
-        [3]="hotfix"
-        [4]="wip"
-        [5]="misc"
-        [6]="test"
-        [7]="chore"
-        [8]="$ticket_name"
-        [9]=""
-    )
-    branch_type=""
-    while [ true ]; do
-        read -n 1 -s choice
-        re='^[1-9]+$'
-        if ! [[ $choice =~ $re ]]; then
-            exit
-        fi
-        branch_type="${types[$choice]}"
-        if [ -n "$branch_type" ]; then
-            branch_type_and_sep="${branch_type}${sep}"
-        fi
-        break
-    done
-    echo
-    echo -e "${YELLOW}Step 2.${ENDCOLOR} Enter the name of the branch"
-    echo "Leave it blank if you want to exit"
-    printf "${BOLD}git branch${ENDCOLOR}"
-    read -p " ${branch_type_and_sep}" -e branch_name
-    if [ -z $branch_name ]; then
+    if [ -n "$list" ]; then
         exit
     fi
-    branch_name="${branch_type_and_sep}${branch_name##*( )}"
+    echo
+    detected_prefixes=""
+    all_branches=$(git branch -a --format='%(refname:short)' 2>/dev/null | sed 's|origin/||g' | sort -u)
+    if [ -n "$all_branches" ]; then
+        declare -A prefix_candidates
+        while IFS= read -r branch; do
+            if [ -n "$branch" ] && [[ "$branch" != "$main_branch" ]] && [[ "$branch" != "HEAD" ]]; then
+                if [[ "$branch" =~ ^([a-zA-Z0-9]+)[-_/](.+)$ ]]; then
+                    prefix="${BASH_REMATCH[1]}"
+                    if [[ ${#prefix} -ge 2 ]] && [[ ! "$prefix" =~ ^(dev|tmp|old|new|test)$ ]]; then
+                        prefix_candidates["$prefix"]=1
+                    fi
+                fi
+            fi
+        done <<< "$all_branches"
+        detected_prefixes_array=()
+        for prefix in "${!prefix_candidates[@]}"; do
+            detected_prefixes_array+=("$prefix")
+        done
+        if [ ${#detected_prefixes_array[@]} -gt 0 ]; then
+            IFS=$'\n' detected_prefixes_sorted=($(sort <<<"${detected_prefixes_array[*]}"))
+            unset IFS
+            detected_prefixes="${detected_prefixes_sorted[*]}"
+        fi
+    fi
+    all_prefixes=""
+    if [ -n "$ticket_name" ]; then
+        if [ -n "$detected_prefixes" ]; then
+            all_prefixes="$ticket_name $detected_prefixes"
+        else
+            all_prefixes="$ticket_name"
+        fi
+    elif [ -n "$detected_prefixes" ]; then
+        all_prefixes="$detected_prefixes"
+    fi
+    branch_type=""
+    branch_type_and_sep=""
+    if [ -z "$all_prefixes" ]; then
+        echo -e "${YELLOW}Step 1.${ENDCOLOR} Enter the full name of the branch"
+        echo "Leave it blank if you want to exit"
+        printf "${BOLD}git branch${ENDCOLOR} "
+        read -e branch_name
+        if [ -z "$branch_name" ]; then
+            exit
+        fi
+        branch_name="${branch_name##*( )}"
+    else
+        echo -e "${YELLOW}Step 1.${ENDCOLOR} Select a prefix for your branch name"
+        echo -e "Branches will be created with separator '${YELLOW}${sep}${ENDCOLOR}' (e.g., ${YELLOW}prefix${sep}name${ENDCOLOR})"
+        IFS=' ' read -r -a prefixes_array <<< "$all_prefixes"
+        declare -A prefixes_map
+        res=""
+        for i in "${!prefixes_array[@]}"; do
+            option=$((i+1))
+            prefixes_map["$option"]="${prefixes_array[$i]}"
+            res="$res$option. ${BOLD}${prefixes_array[$i]}${ENDCOLOR}|"
+        done
+        no_prefix_option=$((${#prefixes_array[@]}+1))
+        prefixes_map["$no_prefix_option"]=""
+        res="$res$no_prefix_option. ${BOLD}no prefix${ENDCOLOR}|"
+        echo -e "$(echo $res | column -ts'|')"
+        echo -e "0. Exit without changes"
+        echo
+        while [ true ]; do
+            read -p "Select prefix number or enter custom prefix: " choice
+            if [ "$choice" == "0" ] || [ "$choice" == "" ]; then
+                exit
+            fi
+            re='^[1-9][0-9]*$'
+            if [[ $choice =~ $re ]] && [ -n "${prefixes_map[$choice]+isset}" ]; then
+                branch_type="${prefixes_map[$choice]}"
+                if [ -n "$branch_type" ]; then
+                    branch_type_and_sep="${branch_type}${sep}"
+                fi
+                break
+            else
+                choice=$(echo "$choice" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+                if [ -n "$choice" ]; then
+                    re_prefix='^[a-zA-Z0-9]+$'
+                    if [[ $choice =~ $re_prefix ]]; then
+                        branch_type="$choice"
+                        branch_type_and_sep="${branch_type}${sep}"
+                        break
+                    else
+                        echo -e "${RED}Invalid prefix format! Use only letters and numbers.${ENDCOLOR}"
+                        echo
+                        continue
+                    fi
+                else
+                    echo -e "${RED}Please enter a valid option number or custom prefix.${ENDCOLOR}"
+                    echo
+                    continue
+                fi
+            fi
+        done
+        echo
+        echo -e "${YELLOW}Step 2.${ENDCOLOR} Enter the name of the branch"
+        echo "Leave it blank if you want to exit"
+        printf "${BOLD}git branch${ENDCOLOR}"
+        read -p " ${branch_type_and_sep}" -e branch_name
+        if [ -z "$branch_name" ]; then
+            exit
+        fi
+        branch_name="${branch_type_and_sep}${branch_name##*( )}"
+    fi
     if [[ "$branch_name" == "HEAD" ]] || [[ "$branch_name" == "$origin_name" ]]; then
         echo
         echo -e "${RED}This name is forbidden${ENDCOLOR}"

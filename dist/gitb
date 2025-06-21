@@ -503,6 +503,12 @@ function set_ai_proxy {
 function clear_ai_proxy {
     git config --unset gitbasher.ai-proxy 2>/dev/null
 }
+function get_ai_diff_limit {
+    get_config_value gitbasher.ai-diff-limit "50"
+}
+function set_ai_diff_limit {
+    set_config_value gitbasher.ai-diff-limit "$1"
+}
 function mask_api_key {
     local api_key="$1"
     if [ -z "$api_key" ]; then
@@ -516,6 +522,17 @@ function mask_api_key {
     fi
     local visible_chars="${api_key:(-4)}"
     echo "********${visible_chars}"
+}
+function get_limited_diff_for_ai {
+    local diff_limit=$(get_ai_diff_limit)
+    local max_chars=3000  # Approximate token limit (~750 tokens)
+    local diff_content=$(git diff --cached | head -n "$diff_limit")
+    local char_count=${#diff_content}
+    if [ "$char_count" -gt "$max_chars" ]; then
+        diff_content=$(echo "$diff_content" | head -c "$max_chars")
+        diff_content="${diff_content}... [truncated for token limit]"
+    fi
+    echo "$diff_content"
 }
 function call_gemini_api {
     local prompt="$1"
@@ -671,7 +688,7 @@ function generate_ai_commit_message {
         return 1
     fi
     local diff_content=$(git diff --cached --stat)
-    local diff_details=$(git diff --cached | head -100)
+    local diff_details=$(get_limited_diff_for_ai)
     local prompt="Analyze the following git changes and generate a conventional commit message in the format 'type(scope): subject'.
 Available types:
 - feat: new feature, logic change or performance improvement
@@ -704,7 +721,7 @@ function generate_ai_commit_message_subject {
         return 1
     fi
     local diff_content=$(git diff --cached --stat)
-    local diff_details=$(git diff --cached | head -100)
+    local diff_details=$(get_limited_diff_for_ai)
     local prompt="Analyze the following git changes and generate a conventional commit message that will be after appended to $1'.
 Staged files:
 $staged_files
@@ -727,9 +744,9 @@ function generate_ai_commit_message_full {
         return 1
     fi
     local diff_content=$(git diff --cached --stat)
-    local diff_details=$(git diff --cached | head -100)
+    local diff_details=$(get_limited_diff_for_ai)
     local prompt="Analyze the following git changes and generate a conventional commit message in the format 'type(scope): subject'.
-Also write a body and footer for the commit message, where you can explain why you are making the change.
+Also write a body for the commit message, where you can explain why you are making the change.
 Available types:
 - feat: new feature, logic change or performance improvement
 - fix: small changes, bug fix
@@ -745,7 +762,7 @@ File changes summary:
 $diff_content
 Code changes (partial):
 $diff_details
-Generate ONLY the commit message in the format 'type(scope): subject' with body and footer. The subject should:
+Generate ONLY the commit message in the format 'type(scope): subject' with body. The subject should:
 - Use imperative mood (e.g., 'add', 'fix', 'update')
 - Be lowercase
 - Not end with a period
@@ -823,7 +840,7 @@ function set_editor {
     echo -e "${YELLOW}Enter an editor for commit messages${ENDCOLOR}"
     echo
     echo -e "Enter the bin name of editor to run for creating commit messages (e.g. 'vi' or 'nano')"
-    echo -e "It will override ${YELLOW}core.editor${ENDCOLOR} git config value, leave it blank to exit without changes"
+    echo -e "It will override ${YELLOW}core.editor${ENDCOLOR} git config value, press Enter if you want to exit"
     echo -e "Current editor: ${YELLOW}${editor}${ENDCOLOR}"
     read -p "Editor: " choice
     if [ "$choice" == "" ]; then
@@ -862,6 +879,91 @@ function set_ticket {
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet '${ticket_name}' globally" "true"
     ticket_name=$(set_config_value gitbasher.ticket $ticket_name "true")
+}
+function configure_ai_key {
+    echo -e "${YELLOW}Enter AI API key${ENDCOLOR}"
+    echo
+    ai_api_key=$(get_ai_api_key)
+    if [ -z "$ai_api_key" ]; then
+        echo -e "${YELLOW}AI API key is not set${ENDCOLOR}"
+    else
+        echo -e "AI API key is ${GREEN}configured${ENDCOLOR}: ${BLUE}$(mask_api_key "$ai_api_key")${ENDCOLOR}"
+    fi
+    echo -e "Enter your ${YELLOW}Gemini API key${ENDCOLOR} to enable AI commit message generation"
+    echo -e "Get your API key from: ${BLUE}https://aistudio.google.com/app/apikey${ENDCOLOR}"
+    echo -e "Press Enter to exit without changes or enter 0 to remove existing key"
+    echo
+    echo -e "${YELLOW}API key enters silently, so you can't see it, but it is entered${ENDCOLOR}"
+    read -p "API Key: " -s ai_key_input
+    echo
+    if [ "$ai_key_input" == "" ]; then
+        exit
+    fi
+    if [ "$ai_key_input" == "0" ]; then
+        git config --local --unset gitbasher.ai-api-key 2>/dev/null
+        echo
+        echo -e "${GREEN}AI API key removed from '${project_name}' repo${ENDCOLOR}"
+        exit
+    fi
+    echo
+    if [[ ! "$ai_key_input" =~ ^AIza[A-Za-z0-9_-]{35}$ ]]; then
+        echo -e "${RED}Warning: API key format doesn't match expected Gemini format${ENDCOLOR}"
+        read -n 1 -p "Continue anyway? (y/n) " -s choice
+        echo
+        if [ "$choice" != "y" ] && [ "$choice" != "Y" ]; then
+            exit
+        fi
+    fi
+    ai_api_key=$(set_config_value gitbasher.ai-api-key "$ai_key_input")
+    echo -e "${GREEN}AI API key configured for '${project_name}' repo${ENDCOLOR}: ${BLUE}$(mask_api_key "$ai_api_key")${ENDCOLOR}"
+    echo
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+    yes_no_choice "\nSet AI API key globally" "true"
+    ai_api_key=$(set_config_value gitbasher.ai-api-key "$ai_key_input" "true")
+}
+function configure_ai_proxy {    
+    echo -e "${YELLOW}Configure AI HTTP Proxy${ENDCOLOR}"
+    echo
+    ai_proxy=$(get_ai_proxy)
+    if [ -z "$ai_proxy" ]; then
+        echo -e "${YELLOW}AI proxy is not configured${ENDCOLOR}"
+    else
+        echo -e "Current AI proxy: ${GREEN}$ai_proxy${ENDCOLOR}"
+    fi
+    echo -e "Enter HTTP proxy URL to route AI requests through (useful for bypassing geo-restrictions)"
+    echo -e "Format: ${BLUE}http://proxy.example.com:8080${ENDCOLOR}"
+    echo -e "With auth: ${BLUE}http://username:password@proxy.example.com:8080${ENDCOLOR}"
+    echo -e "Press Enter to exit without changes or enter 0 to remove existing proxy"
+    read -p "Proxy URL: " ai_proxy_input
+    if [ "$ai_proxy_input" == "" ]; then
+        exit
+    fi
+    if [ "$ai_proxy_input" == "0" ]; then
+        clear_ai_proxy
+        echo
+        echo -e "${GREEN}AI proxy removed from '${project_name}' repo${ENDCOLOR}"
+        exit
+    fi
+    echo
+    if [[ ! "$ai_proxy_input" =~ ^https?://.*:[0-9]+$ ]]; then
+        echo -e "${YELLOW}Warning: Proxy URL format should be http://host:port or https://host:port${ENDCOLOR}"
+        read -n 1 -p "Continue anyway? (y/n) " -s choice
+        echo
+        if [ "$choice" != "y" ] && [ "$choice" != "Y" ]; then
+            exit
+        fi
+    fi
+    set_ai_proxy "$ai_proxy_input"
+    echo -e "${GREEN}AI proxy configured for '${project_name}' repo${ENDCOLOR}: ${BLUE}$ai_proxy_input${ENDCOLOR}"
+    echo
+    echo -e "${YELLOW}Example usage:${ENDCOLOR}"
+    echo -e "  ${BLUE}gitb commit ai${ENDCOLOR}    - Generate commit with AI through proxy"
+    echo -e "  ${BLUE}gitb commit aif${ENDCOLOR}   - Fast AI commit through proxy"
+    echo
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+    yes_no_choice "\nSet AI proxy globally" "true"
+    set_ai_proxy "$ai_proxy_input"
+    git config --global gitbasher.ai-proxy "$ai_proxy_input"
 }
 function set_scopes {
     echo -e "${YELLOW}Enter a list of predefined scopes${ENDCOLOR}"
@@ -921,9 +1023,17 @@ function delete_global {
     if [ "$global_scopes" != "" ]; then
         echo -e "5. Scopes list: ${YELLOW}${global_scopes}${ENDCOLOR}"
     fi
+    global_ai_key=$(git config --global --get gitbasher.ai-api-key)
+    if [ "$global_ai_key" != "" ]; then
+        echo -e "6. AI API key: ${GREEN}configured${ENDCOLOR}"
+    fi
+    global_ai_proxy=$(git config --global --get gitbasher.ai-proxy)
+    if [ "$global_ai_proxy" != "" ]; then
+        echo -e "7. AI proxy: ${GREEN}$global_ai_proxy${ENDCOLOR}"
+    fi
     echo -e "0. Exit"
     read -n 1 -s choice
-    re='^[012345]+$'
+    re='^[01234567]+$'
     if ! [[ $choice =~ $re ]]; then
         break
     fi
@@ -952,17 +1062,25 @@ function delete_global {
             echo -e "${GREEN}Unset scopes list from global settings${ENDCOLOR}"
             git config --global --unset gitbasher.scopes
             ;;
+        6)
+            echo -e "${GREEN}Unset AI API key from global settings${ENDCOLOR}"
+            git config --global --unset gitbasher.ai-api-key
+            ;;
+        7)
+            echo -e "${GREEN}Unset AI proxy from global settings${ENDCOLOR}"
+            git config --global --unset gitbasher.ai-proxy
+            ;;
     esac
 }
 function set_user {
     echo -e "${YELLOW}Set user name and email${ENDCOLOR}"
     echo
     echo -e "Current name: ${YELLOW}$(get_config_value user.name)${ENDCOLOR}"
-    echo -e "Enter new name or leave it empty if you don't want to change it"
+    echo -e "Enter new name or press Enter if you don't want to change it"
     read -p "Name: " -e user_name
     echo
     echo -e "Current email: ${YELLOW}$(get_config_value user.email)${ENDCOLOR}"
-    echo -e "Enter new email or leave it empty if you don't want to change it"
+    echo -e "Enter new email or press Enter if you don't want to change it"
     read -p "Email: " -e user_email
     if [ "$user_name" == "" ] && [ "$user_email" == "" ]; then
         exit
@@ -984,6 +1102,8 @@ function config_script {
         editor|ed|e)          set_editor_cfg="true";;
         ticket|jira|ti|t)     set_ticket_cfg="true";;
         scopes|scope|sc|s)    set_scopes_cfg="true";;
+        ai|llm|key)           set_ai_cfg="true";;
+        proxy|prx|p)          set_proxy_cfg="true";;
         delete|unset|del)     delete_cfg="true";;
         user|name|email|u)    set_user_cfg="true";;
         help|h)               help="true";;
@@ -1000,7 +1120,11 @@ function config_script {
         header="$header TICKET PREFIX"
     elif [ -n "${set_scopes_cfg}" ]; then
         header="$header SCOPES LIST"
-    elif [ -n "${delete}" ]; then
+    elif [ -n "${set_ai_cfg}" ]; then
+        header="$header AI API KEY"
+    elif [ -n "${set_proxy_cfg}" ]; then
+        header="$header AI PROXY"
+    elif [ -n "${delete_cfg}" ]; then
         header="$header UNSET GLOBAL CONFIG"
     elif [ -n "${set_user_cfg}" ]; then
         header="$header USER NAME & EMAIL"
@@ -1031,6 +1155,14 @@ function config_script {
         set_scopes
         exit
     fi
+    if [ "$set_ai_cfg" == "true" ]; then
+        configure_ai_key
+        exit
+    fi
+    if [ "$set_proxy_cfg" == "true" ]; then
+        configure_ai_proxy
+        exit
+    fi
     if [ "$delete_cfg" == "true" ]; then
         delete_global
         exit
@@ -1046,6 +1178,8 @@ function config_script {
         echo -e "editor|ed|e\t\tUpdate text editor for the commit messages"
         echo -e "ticket|ti|t|jira\tSet ticket prefix to help with commit/branch building"
         echo -e "scopes|sc|s\t\tSet a list of scopes to help with commit building"
+        echo -e "ai|llm|key\t\tSet AI API key for commit message generation"
+        echo -e "proxy|prx|p\t\tSet HTTP proxy for AI requests (bypass geo-restrictions)"
         echo -e "delete|unset|del\tUnset global configuration"
         exit
     fi
@@ -1248,8 +1382,7 @@ function merge_commit {
         fi  
     else
         staged_with_tab="$(sed 's/^/####\t/' <<< "$2")"
-        commitmsg_file=".commitmsg__"
-        touch $commitmsg_file
+        commitmsg_file=$(mktemp ".commitmsg.XXXXXX")
         echo """
 ####
 #### Write a message about merge from '$5/$4' into '$4'. Lines starting with '#' will be ignored. 
@@ -1392,6 +1525,7 @@ function rebase_branch {
     if [[ $rebase_output == *"Resolve all conflicts manually"* ]] || [[ $rebase_output == *"previous cherry-pick is now empty"* ]]; then
         echo -e "${RED}Cannot rebase! There are conflicts${ENDCOLOR}"
         rebase_conflicts $rebase_output 
+        echo
     fi
     if [[ $rebase_output != *"Successfully rebased"* ]]; then
         echo -e "${RED}Cannot rebase! Error message:${ENDCOLOR}"
@@ -1950,7 +2084,7 @@ function handle_ai_commit_generation {
     elif [ "$choice" = "e" ] || [ "$choice" = "E" ]; then
         if [ "$ai_mode" = "full" ] && [ -n "${msg}" ]; then
             echo -e "${YELLOW}Edit the AI generated message:${ENDCOLOR}"
-            commitmsg_file=".commitmsg__"
+            commitmsg_file=$(mktemp ".commitmsg.XXXXXX")
             echo "$ai_commit_message" > $commitmsg_file
             while [ true ]; do
                 $editor $commitmsg_file
@@ -2027,6 +2161,7 @@ function after_commit {
 }
 function commit_script {
     case "$1" in
+        scope|s)            ;; # general commit with scope
         msg|m)              msg="true";;
         ticket|jira|j|t)    ticket="true";;
         fast|f)             fast="true";;
@@ -2094,8 +2229,6 @@ function commit_script {
         echo
         echo -e "${YELLOW}Available modes${ENDCOLOR}"
         echo -e "<empty>\t\tSelect files to commit and create a conventional message in format: 'type(scope): message'"
-        echo -e "msg|m\t\tSame as <empty>, but create multiline commit message using text editor"
-        echo -e "ticket|t\tSame as <empty>, but add tracker's ticket info to the end of the commit header"
         echo -e "fast|f\t\tAdd all files (git add .) and create a conventional commit message without scope"
         echo -e "fasts|fs|sf\tAdd all files (git add .) and create a conventional commit message with scope"
         echo -e "push|pu|p\tCreate a conventional commit and push changes at the end"
@@ -2105,6 +2238,8 @@ function commit_script {
         echo -e "fixupp|fixp|xp\tSelect files and commit to make a --fixup commit and push changes"
         echo -e "fastfix|fx|xf\tAdd all files (git add .) and commit to make a --fixup commit"
         echo -e "fastfixp|fxp\tAdd all files (git add .) and commit to make a --fixup commit and push"
+        echo -e "msg|m\t\tSame as <empty>, but create multiline commit message using text editor"
+        echo -e "ticket|t\tSame as <empty>, but add tracker's ticket info to the end of the commit header"
         echo -e "amend|am|a\tSelect files and add them to the last commit without message edit (git commit --amend --no-edit)"
         echo -e "amendf|amf|af\tAdd all fiels to the last commit without message edit (git commit --amend --no-edit)"
         echo -e "last|l\t\tChange commit message to the last one"
@@ -2114,6 +2249,7 @@ function commit_script {
         echo -e "llmp|aip|ip\tUse AI to generate commit message and push changes"
         echo -e "llmfp|aifp|ifp\tUse AI to generate commit message in the fast mode and push changes"
         echo -e "llms|ais|is\tUse AI to generate commit summary with manual type and scope enter"
+        echo -e "llmm|aim|im\tUse AI to generate multiline commit message with body"
         echo -e "help|h\t\tShow this help"
         git config --unset gitbasher.cached-git-add 2>/dev/null
         exit
@@ -2192,7 +2328,7 @@ function commit_script {
         else
             printf "commit to the ${YELLOW}${current_branch}${ENDCOLOR} branch\n"
         fi
-        echo "Leave it blank to exit without changes"
+        echo "Press Enter if you want to exit"
         while [ true ]; do
             read -p "$(echo -n -e "${BOLD}git add${ENDCOLOR} ")" -e git_add
             git_add=$(echo "$git_add" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
@@ -2319,42 +2455,89 @@ function commit_script {
         echo
         echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Enter a ${YELLOW}scope${ENDCOLOR} of changes to provide some additional context"
         echo -e "Final meesage will be ${BLUE}${commit_type}${ENDCOLOR}(${YELLOW}<scope>${ENDCOLOR}): ${BLUE}<summary>${ENDCOLOR}"
-        echo -e "Leave it blank to continue without scope or enter 0 to exit without changes"
+        echo -e "Press Enter to continue without scope or enter 0 to exit without changes"
         detected_scopes=""
         staged_files=$(git diff --name-only --cached)
         if [ -n "$staged_files" ]; then
-            declare -A scope_candidates
+            declare -A scope_counts
+            declare -A scope_depths
             while IFS= read -r file; do
                 if [ -n "$file" ]; then
-                    dir=$(dirname "$file")
-                    if [ "$dir" != "." ]; then
-                        last_dir=$(basename "$dir")
-                        scope_candidates["$last_dir"]=1
-                        if [[ "$dir" == */* ]]; then
-                            scope_candidates["$last_dir"]=1
+                    IFS='/' read -r -a path_components <<< "$file"
+                    for i in "${!path_components[@]}"; do
+                        component="${path_components[$i]}"
+                        if [ -n "$component" ]; then
+                            if [ $i -eq $((${#path_components[@]} - 1)) ]; then
+                                component_no_ext="${component%.*}"
+                                if [[ ! "$component_no_ext" =~ ^(index|main|app|test|spec|config|readme|license|makefile|dockerfile)$ ]]; then
+                                    scope_counts["$component_no_ext"]=$((${scope_counts["$component_no_ext"]:-0} + 1))
+                                    current_depth=$((i + 1))
+                                    if [ -z "${scope_depths["$component_no_ext"]}" ] || [ $current_depth -lt ${scope_depths["$component_no_ext"]} ]; then
+                                        scope_depths["$component_no_ext"]=$current_depth
+                                    fi
+                                fi
+                            else
+                                if [[ ! "$component" =~ ^(src|lib|test|tests|spec|specs|build|dist|node_modules|vendor|tmp|temp|cache|logs|log)$ ]]; then
+                                    scope_counts["$component"]=$((${scope_counts["$component"]:-0} + 1))
+                                    current_depth=$((i + 1))
+                                    if [ -z "${scope_depths["$component"]}" ] || [ $current_depth -lt ${scope_depths["$component"]} ]; then
+                                        scope_depths["$component"]=$current_depth
+                                    fi
+                                fi
+                            fi
                         fi
-                        if [[ "$dir" != */* ]]; then
-                            scope_candidates["$dir"]=1
-                        fi
-                    fi
-                    filename=$(basename "$file")
-                    filename_no_ext="${filename%.*}"
-                    if [[ ! "$filename_no_ext" =~ ^(index|main|app|test|spec|config|readme|license)$ ]]; then
-                        scope_candidates["$filename_no_ext"]=1
-                    fi
+                    done
                 fi
             done <<< "$staged_files"
-            detected_scopes_array=()
-            for scope in "${!scope_candidates[@]}"; do
-                if [[ ! "$scope" =~ ^(src|lib|test|tests|spec|specs|build|dist|node_modules|vendor)$ ]]; then
-                    detected_scopes_array+=("$scope")
+            max_count=0
+            for token in "${!scope_counts[@]}"; do
+                if [ ${scope_counts["$token"]} -gt $max_count ]; then
+                    max_count=${scope_counts["$token"]}
                 fi
             done
-            IFS=$'\n' detected_scopes_sorted=($(sort <<<"${detected_scopes_array[*]}"))
-            unset IFS
-            if [ ${#detected_scopes_sorted[@]} -gt 0 ]; then
-                detected_scopes="${detected_scopes_sorted[*]}"
-            fi
+             detected_scopes_array=()
+             for token in "${!scope_counts[@]}"; do
+                 count=${scope_counts["$token"]}
+                 depth=${scope_depths["$token"]}
+                 if [ $max_count -gt 1 ]; then
+                     if [ $count -gt 1 ]; then
+                         detected_scopes_array+=("$count:$depth:$token")
+                     fi
+                 else
+                     detected_scopes_array+=("$count:$depth:$token")
+                 fi
+             done
+             if [ ${#detected_scopes_array[@]} -gt 0 ]; then
+                 filename_entries=()
+                 directory_entries=()
+                 for entry in "${detected_scopes_array[@]}"; do
+                     count="${entry%%:*}"  # Extract count (first field)
+                     rest="${entry#*:}"    # Remove count
+                     depth="${rest%%:*}"   # Extract depth (second field)
+                     token="${rest#*:}"    # Extract token (third field)
+                     if [ $depth -ge 4 ]; then  # Assume depth 4+ are likely filenames
+                         filename_entries+=("$entry")
+                     else
+                         directory_entries+=("$entry")
+                     fi
+                 done
+                 IFS=$'\n' filename_sorted=($(printf '%s\n' "${filename_entries[@]}" | sort -t':' -k1,1nr -k2,2n -k3,3))
+                 unset IFS
+                 IFS=$'\n' directory_sorted=($(printf '%s\n' "${directory_entries[@]}" | sort -t':' -k1,1nr -k2,2n -k3,3))
+                 unset IFS
+                 detected_scopes_sorted=("${filename_sorted[@]}" "${directory_sorted[@]}")
+                 final_scopes=()
+                 count=0
+                 for entry in "${detected_scopes_sorted[@]}"; do
+                     if [ $count -ge 9 ]; then
+                         break
+                     fi
+                     token="${entry##*:}"  # Extract token after last colon
+                     final_scopes+=("$token")
+                     count=$((count + 1))
+                 done
+                 detected_scopes="${final_scopes[*]}"
+             fi
         fi
         all_scopes=""
         if [ -n "$scopes" ]; then
@@ -2423,6 +2606,8 @@ function commit_script {
     fi
     if [ -n "${llm}" ] && [ -n "${scope}" ]; then
         handle_ai_commit_generation "$step" "subject" "$commit" "false"
+    else
+        echo
     fi
     echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Write a ${YELLOW}summary${ENDCOLOR} about your changes"
     if [ -n "$is_empty" ]; then
@@ -2432,10 +2617,9 @@ function commit_script {
     else
         echo -e "Final meesage will be ${BLUE}${commit_type}${ENDCOLOR}(${BLUE}${commit_scope}${ENDCOLOR}): ${YELLOW}<summary>${ENDCOLOR}"
     fi
-    echo -e "Leave it blank to exit without changes"
+    echo -e "Press Enter if you want to exit"
     if [ -n "$msg" ]; then
-        commitmsg_file=".commitmsg__"
-        touch $commitmsg_file
+        commitmsg_file=$(mktemp ".commitmsg.XXXXXX")
         staged_with_tab="$(sed 's/^/####\t/' <<< "${staged}")"
         echo """
 ####
@@ -2492,7 +2676,7 @@ ${staged_with_tab}
         echo
         echo -e "${YELLOW}Step 5.${ENDCOLOR} Enter the number of a resolved issue (e.g. in JIRA or Youtrack)"
         echo -e "It will be added to the end of the summary header"
-        echo -e "Leave it blank to continue or 0 to exit without changes"
+        echo -e "Press Enter to continue or 0 to exit without changes"
         if [ -n "$ticket_name" ]; then
             read -p "${ticket_name}${sep}" -e commit_ticket
         else 
@@ -2537,7 +2721,7 @@ function branch_script {
             new="true"
             current="true"    
         ;;
-        newd|nd)        
+        newd|nd|cd)        
             new="true"
         ;;
         delete|del|d) delete="true";;
@@ -2769,8 +2953,12 @@ function branch_script {
         fi
         exit
     fi
-    echo -e "${YELLOW}Current local branches:${ENDCOLOR}"
-    list_branches
+    if [ -n "$current" ]; then
+        echo -e "${YELLOW}Current local branches:${ENDCOLOR}"
+        list_branches
+    else
+         echo -e "It will switch to ${BOLD}${BLUE}${main_branch}${ENDCOLOR} and pull it first"
+    fi
     if [ -n "$list" ]; then
         exit
     fi
@@ -2813,7 +3001,7 @@ function branch_script {
     branch_type_and_sep=""
     if [ -z "$all_prefixes" ]; then
         echo -e "${YELLOW}Step 1.${ENDCOLOR} Enter the full name of the branch"
-        echo "Leave it blank if you want to exit"
+        echo "Press Enter if you want to exit"
         printf "${BOLD}git branch${ENDCOLOR} "
         read -e branch_name
         if [ -z "$branch_name" ]; then
@@ -2821,8 +3009,13 @@ function branch_script {
         fi
         branch_name="${branch_name##*( )}"
     else
-        echo -e "${YELLOW}Step 1.${ENDCOLOR} Select a prefix for your branch name"
-        echo -e "Branches will be created with separator '${YELLOW}${sep}${ENDCOLOR}' (e.g., ${YELLOW}prefix${sep}name${ENDCOLOR})"
+        branch_to_show=$current_branch
+        if [ -z "$current" ]; then
+            branch_to_show=$main_branch
+        fi
+        echo -e "${YELLOW}Step 1.${ENDCOLOR} Enter a ${YELLOW}prefix${ENDCOLOR} for your new branch from ${BOLD}${BLUE}${branch_to_show}${ENDCOLOR}"
+        echo -e "A branch will be created with '${YELLOW}${sep}${ENDCOLOR}' as a separator (e.g., ${YELLOW}prefix${sep}name${ENDCOLOR})"
+        echo -e "Press Enter to continue without prefix or enter 0 to exit without changes"
         IFS=' ' read -r -a prefixes_array <<< "$all_prefixes"
         declare -A prefixes_map
         res=""
@@ -2833,14 +3026,16 @@ function branch_script {
         done
         no_prefix_option=$((${#prefixes_array[@]}+1))
         prefixes_map["$no_prefix_option"]=""
-        res="$res$no_prefix_option. ${BOLD}no prefix${ENDCOLOR}|"
-        echo -e "$(echo $res | column -ts'|')"
-        echo -e "0. Exit without changes"
-        echo
+        echo -e "You can select one of the ${YELLOW}detected prefixes${ENDCOLOR}: $(echo $res | column -ts'|')"
         while [ true ]; do
-            read -p "Select prefix number or enter custom prefix: " choice
-            if [ "$choice" == "0" ] || [ "$choice" == "" ]; then
+            read -p "<prefix>: " choice
+            if [ "$choice" == "0" ]; then
                 exit
+            fi
+            if [ "$choice" == "" ]; then
+                branch_type=""
+                branch_type_and_sep=""
+                break
             fi
             re='^[1-9][0-9]*$'
             if [[ $choice =~ $re ]] && [ -n "${prefixes_map[$choice]+isset}" ]; then
@@ -2870,8 +3065,8 @@ function branch_script {
             fi
         done
         echo
-        echo -e "${YELLOW}Step 2.${ENDCOLOR} Enter the name of the branch"
-        echo "Leave it blank if you want to exit"
+        echo -e "${YELLOW}Step 2.${ENDCOLOR} Enter the ${YELLOW}name${ENDCOLOR} of the branch"
+        echo "Press Enter if you want to exit"
         printf "${BOLD}git branch${ENDCOLOR}"
         read -p " ${branch_type_and_sep}" -e branch_name
         if [ -z "$branch_name" ]; then
@@ -3136,7 +3331,7 @@ function tag_script {
     echo
     echo -e "${YELLOW}Enter the name for a new tag${ENDCOLOR}"
     echo -e "If this is a release tag, use version number in semver format like '1.0.0-alpha'"
-    echo -e "Leave it blank to exit"
+    echo -e "Press Enter if you want to exit"
     if [ -n "${annotated}" ]; then
         prompt="$(echo -n -e "${BOLD}git tag -a${ENDCOLOR} ")"
     else
@@ -3304,7 +3499,7 @@ function select_files_for_stash {
     git_status
     echo
     echo -e "Enter file patterns or paths to stash (like ${BOLD}git add${ENDCOLOR} command)"
-    echo "Leave it blank to exit without changes"
+    echo "Press Enter if you want to exit"
     while [ true ]; do
         read -p "$(echo -n -e "${BOLD}files to stash${ENDCOLOR} ")" -e git_add
         git_add=$(echo "$git_add" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e "s/^'//" -e "s/'$//")

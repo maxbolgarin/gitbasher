@@ -72,6 +72,7 @@ function after_commit {
     # help: print help
 function commit_script {
     case "$1" in
+        scope|s)            ;; # general commit with scope
         msg|m)              msg="true";;
         ticket|jira|j|t)    ticket="true";;
         fast|f)             fast="true";;
@@ -264,11 +265,30 @@ function commit_script {
                 exit
             fi
 
-            git add $git_add
+            result=$(git add $git_add 2>&1)
             if [ $? -eq 0 ]; then
                 # Save git add arguments for potential retry
                 git config gitbasher.cached-git-add "$git_add"
                 break
+            else
+                # Check if error is about "did not match any files" and try with * appended
+                if [[ "$result" == *"did not match any files"* ]] && [[ "$git_add" != *"*" ]]; then
+                    echo "$result"
+                    git_add_with_star="${git_add}*"
+                    echo -e "${YELLOW}Trying with wildcard:${ENDCOLOR} ${BOLD}git add $git_add_with_star${ENDCOLOR}"
+                    result_star=$(git add $git_add_with_star 2>&1)
+                    if [ $? -eq 0 ]; then
+                        # Save the successful git add arguments for potential retry
+                        git config gitbasher.cached-git-add "$git_add_with_star"
+                        git_add="$git_add_with_star"
+                        break
+                    else
+                        echo "$result_star"
+                        echo
+                    fi
+                else
+                    echo "$result"
+                fi
             fi
         done
 

@@ -95,7 +95,7 @@ function set_editor {
     echo -e "${YELLOW}Enter an editor for commit messages${ENDCOLOR}"
     echo
     echo -e "Enter the bin name of editor to run for creating commit messages (e.g. 'vi' or 'nano')"
-    echo -e "It will override ${YELLOW}core.editor${ENDCOLOR} git config value, leave it blank to exit without changes"
+    echo -e "It will override ${YELLOW}core.editor${ENDCOLOR} git config value, press Enter if you want to exit"
     echo -e "Current editor: ${YELLOW}${editor}${ENDCOLOR}"
     read -p "Editor: " choice
 
@@ -404,12 +404,12 @@ function set_user {
     echo -e "${YELLOW}Set user name and email${ENDCOLOR}"
     echo
     echo -e "Current name: ${YELLOW}$(get_config_value user.name)${ENDCOLOR}"
-    echo -e "Enter new name or leave it empty if you don't want to change it"
+    echo -e "Enter new name or press Enter if you don't want to change it"
     read -p "Name: " -e user_name
 
     echo
     echo -e "Current email: ${YELLOW}$(get_config_value user.email)${ENDCOLOR}"
-    echo -e "Enter new email or leave it empty if you don't want to change it"
+    echo -e "Enter new email or press Enter if you don't want to change it"
     read -p "Email: " -e user_email
 
     if [ "$user_name" == "" ] && [ "$user_email" == "" ]; then

@@ -392,7 +392,7 @@ function branch_script {
     # If no prefixes detected, skip to branch name entry
     if [ -z "$all_prefixes" ]; then
         echo -e "${YELLOW}Step 1.${ENDCOLOR} Enter the full name of the branch"
-        echo "Leave it blank if you want to exit"
+        echo "Press Enter if you want to exit"
 
         printf "${BOLD}git branch${ENDCOLOR} "
         read -e branch_name

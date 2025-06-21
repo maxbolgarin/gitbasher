@@ -1,4 +1,3 @@
-
 # gitbasher
 
 [![Latest Release](https://img.shields.io/github/v/release/maxbolgarin/gitbasher.svg?style=flat-square)](https://github.com/maxbolgarin/gitbasher/releases/latest)
@@ -35,6 +34,7 @@ In Windows use `wsl` (enter `wsl` in terminal, [read more](https://learn.microso
 - [Why you should try this](#why-you-should-try-this)
 - [How to start](#how-to-start)
 - [Examples](#examples)
+- [AI-powered commits](#ai-powered-commits)
 - [Documentation](#documentation)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
@@ -46,9 +46,9 @@ In Windows use `wsl` (enter `wsl` in terminal, [read more](https://learn.microso
 
 * Development process will be faster because you will spend almost no time on git
 * No need to remember/google the exact names of commands and their parameters
+* Making the development process clearer by using conventional commits (manual or **AI generated**); **gitbasher** uses [Conventional style of commits](https://www.conventionalcommits.org/en) ([example](https://gist.github.com/brianclements/841ea7bffdb01346392c))
 * Making "advanced" commands like `git rebase` more user-friendly, so you will be able to unleash the full potential of the git system without any particular difficulties
 * Following the [GitHub flow](https://docs.github.com/en/get-started/quickstart/github-flow) in the development process by simplifying the work with branches
-* Making the development process clearer by using conventional commits; **gitbasher** uses [Conventional style of commits](https://www.conventionalcommits.org/en) ([example](https://gist.github.com/brianclements/841ea7bffdb01346392c))
 
 
 <picture>
@@ -58,7 +58,7 @@ In Windows use `wsl` (enter `wsl` in terminal, [read more](https://learn.microso
 
 ## How to start
 
-Just [install](#installation) gitbasher and use it in any git repository - run `gitb` in the terminal. It requires bash version 4 or higher and set remote in the repository.
+Just [install](#installation) gitbasher and use it in any git repository - run `gitb` in the terminal. It requires bash version 4 or higher.
 
 Usage `gitb <command> <mode>`
 
@@ -66,6 +66,7 @@ Usage `gitb <command> <mode>`
 * `gitb b n` for branch creation
 * `gitb pu` for pulling from the remote
 * `gitb p` for pushing to the remote
+* `gitb h` to show all commands
 
 Use `gitb c help` to get help about commit commands. You can get help with `help` for all other commands. To get a global help enter `gitb`. You can find all commands description in the [documentation](#documentation).
 
@@ -75,13 +76,14 @@ Use `gitb c help` to get help about commit commands. You can get help with `help
 #### Commit: [`gitb c`](#gitb-commit-mode)
 
 * Select files to commit and create a message in the format: `type(scope): message`
+* **AI-powered commits**: Use `gitb c ai` to generate commit messages automatically based on your changes
 * There are a lot of modes for commit creation, e.g. `--amend` `--fixup` `revert` `push` after commit
 * For example, a single `gitb c p` replaces 4 commands: 
 
 ```bash
     git status
     git add ...
-    git commit -m "..."
+    git commit -m "type(scope): ..."
     git push
 ```
 
@@ -97,14 +99,15 @@ Use `gitb c help` to get help about commit commands. You can get help with `help
 
 * Fetch current branch and then ff/merge/rebase changes with conflicts fixing
 * You can choose `merge` or `rebase` mode if fast-forward is not possible
-* For example, you can avoid starting a merge due to an accidental call of `git pull origin master` while being in another branch
+* For example, you can avoid starting a merge due to an accidental call of `git pull origin main` while being in another branch
 
 
 
 #### Branch: [`gitb b`](#gitb-branch-mode)
 * With `gitb b` you can select a branch to switch from a list, it may be helpful if you don't remember the name of the branch
 * With `gitb b nd` you can create a new branch from the default one with latest changes. It replaces these commands:
-```
+
+```bash
     git switch main
     git pull origin main
     git switch -c ...
@@ -113,7 +116,7 @@ Use `gitb c help` to get help about commit commands. You can get help with `help
 
 #### Tags: [`gitb t`](#gitb-tag-mode)
 * With `gitb t` you can create a new tag from a current commit and push it to a remote
-* Full tag managment: creation, fetching, pushing, deleting
+* Full tag managment: creation, fetching, pushing, deleting, checkout
 
 
 #### Merge: [`gitb m`](#gitb-merge-mode)
@@ -130,6 +133,58 @@ Use `gitb c help` to get help about commit commands. You can get help with `help
 * Undo commits and actions in the fast way
 
 
+#### Stash: [`gitb stash`](#gitb-stash-mode)
+* Interactive stash management with multiple options: select files, stash all, list, pop, show, apply, and drop
+* Smart file selection with pattern matching and wildcard support
+* Easy navigation through existing stashes with formatted display
+
+
+## AI-powered commits
+
+**gitbasher** supports AI-powered commit message generation using Google's Gemini API. The AI analyzes your staged changes and generates conventional commit messages automatically.
+
+### Setup AI Features
+
+#### 1. Get Gemini API Key
+- Visit [Google AI Studio](https://aistudio.google.com/app/apikey)
+- Create a new API key
+- Copy the API key for configuration
+
+#### 2. Configure API Key
+```bash
+gitb cfg ai
+```
+Enter your Gemini API key when prompted. You can set it locally (for current repo) or globally (for all repos).
+
+#### 3. Configure Proxy (Optional)
+If you're in a region where Gemini API is restricted, configure an HTTP proxy:
+```bash
+gitb cfg proxy
+```
+Examples:
+- `http://proxy.example.com:8080`
+- `http://username:password@proxy.example.com:8080`
+
+### AI Commit Commands
+
+| **Command** | **Aliases** | **Description** |
+|-------------|-------------|-----------------|
+| `gitb c ai` | `i` `llm` | Generate AI commit message for staged files |
+| `gitb c aif` | `if` `llmf` | Fast AI commit (add all files + AI message) |
+| `gitb c aip` | `ip` `llmp` | AI commit with automatic push |
+| `gitb c aifp` | `ifp` `llmfp` | Fast AI commit with push |
+| `gitb c ais` | `is` `llms` | AI commit with manual type/scope selection |
+| `gitb c aim` | `im` `llmm` | AI commit with multiline message |
+
+### AI Features
+
+- **Smart analysis**: AI examines file changes, diff content, and commit patterns
+- **Conventional commits**: Generates proper `type(scope): subject` format
+- **Geographic bypass**: Proxy support for regions with API restrictions
+- **Multi-modal**: Short and long commit message generation
+- **Error handling**: Helpful error messages and solution suggestions
+
+
 ## Documentation
 
 ### Available commands
@@ -144,8 +199,9 @@ Use `gitb c help` to get help about commit commands. You can get help with `help
 | [**merge**](#gitb-merge-mode)   | `m` `me`           | Merge changes to the current branch      |
 | [**rebase**](#gitb-rebase-mode) | `r` `re` `base`   | Rebase current branch                    |
 | [**reset**](#gitb-reset-mode)   | `res`               | Easy to use git reset                    |
+| [**stash**](#gitb-stash-mode)   | `s` `sta`          | Manage git stashes                       |
 | [**config**](#gitb-config-mode) | `cf` `cfg` `conf` | Configurate gitbasher                    |
-| **status**                      | `s` `st`           | Info about repo and changed files        |
+| **status**                      | `st`                | Info about repo and changed files        |
 | **log**                         | `l` `lg`           | Open git log in a pretty format          |
 | **reflog**                      | `rl` `rlg`         | Open git reflog in a pretty format       |
 | **help**                        | `h` `man`          | Show help                                |
@@ -166,6 +222,12 @@ Use `gitb c help` to get help about commit commands. You can get help with `help
 | `push`     | `pu` `p`    | Create a conventional commit and push changes at the end                                         |
 | `fastp`    | `fp`         | Create a conventional commit in the fast mode and push changes                                   |
 | `fastsp`   | `fsp` `fps` | Create a conventional commit in the fast mode with scope and push changes                        |
+| `ai`       | `llm` `i`   | Generate AI commit message based on staged changes                                               |
+| `aif`      | `llmf` `if` | Fast AI commit (add all files + AI message) without confirmation                                 |
+| `aip`      | `llmp` `ip` | Generate AI commit message and push changes                                                      |
+| `aifp`     | `llmfp` `ifp` | Fast AI commit with push (add all + AI message + push)                                        |
+| `ais`      | `llms` `is` | Generate AI commit summary with manual type and scope selection                                  |
+| `aim`      | `llmm` `im` | Generate AI commit message with multiline format                                                |
 | `fixup`    | `fix` `x`   | Select files and commit to make a `--fixup` commit (`git commit --fixup <hash>`)                     |
 | `fixupp`   | `fixp` `xp` | Select files and commit to make a `--fixup` commit and push changes                                |
 | `fastfix`  | `fx`         | Add all files (`git add .`) and commit to make a `--fixup` commit                                  |
@@ -291,6 +353,24 @@ Use `gitb c help` to get help about commit commands. You can get help with `help
 </br>
 
 
+### `gitb stash <mode>`
+
+| **Mode**     | **Short** | **Description**                                                     |
+|--------------|-----------|---------------------------------------------------------------------|
+| `<empty>`    |           | Show interactive menu with all stash operations                     |
+| `select`     | `sel`     | Select specific files to stash                                      |
+| `all`        |           | Stash all changes including untracked files                         |
+| `list`       | `l`       | List all existing stashes                                           |
+| `pop`        | `p`       | Pop (apply and remove) from selected stash                          |
+| `show`       | `s`       | Show contents of selected stash                                     |
+| `apply`      | `a`       | Apply selected stash without removing it                            |
+| `drop`       | `d`       | Drop (delete) selected stash                                        |
+| `help`       | `h`       | Show this help                                                      |
+
+
+</br>
+
+
 ### `gitb config <mode>`
 
 | **Mode**    | **Short**               | **Description**                                             |
@@ -302,6 +382,8 @@ Use `gitb c help` to get help about commit commands. You can get help with `help
 | `editor`    | `ed` `e`               | Update text editor for the commit messages                  |
 | `ticket`    | `ti` `t` `jira`       | Set ticket prefix to help with commit/branch building       |
 | `scopes`    | `sc` `s`               | Set a list of scopes to help with commit building           |
+| `ai`        | `llm` `key`            | Set AI API key for commit message generation                |
+| `proxy`     | `prx` `p`              | Set HTTP proxy for AI requests (bypass geo-restrictions)    |
 | `delete`    | `unset` `del`          | Unset global configuration                                  |
 
 
@@ -348,7 +430,9 @@ Here are the possible values for `<scope>` in a commit message header. Use only 
 | **branch**   | Changes mainly in `branch.sh` script, related to branching features and fixes   |
 | **tag**      | Changes mainly in `tag.sh` script, related to tag features and fixes            |  
 | **reset**    | Changes mainly in `reset.sh` script, related to reset features and fixes        |  
+| **stash**    | Changes mainly in `stash.sh` script, related to stash features and fixes        |  
 | **config**   | Changes mainly in `config.sh` script, related to config features and fixes      |
+| **ai**       | Changes mainly in `ai.sh` script, related to AI features and fixes              |
 
 
 #### Maintainers

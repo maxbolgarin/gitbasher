@@ -166,6 +166,7 @@ function rebase_branch {
     if [[ $rebase_output == *"Resolve all conflicts manually"* ]] || [[ $rebase_output == *"previous cherry-pick is now empty"* ]]; then
         echo -e "${RED}Cannot rebase! There are conflicts${ENDCOLOR}"
         rebase_conflicts $rebase_output 
+        echo
     fi
 
     ### Cannot rebase because of some error

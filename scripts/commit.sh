@@ -398,58 +398,122 @@ function commit_script {
         detected_scopes=""
         staged_files=$(git diff --name-only --cached)
         if [ -n "$staged_files" ]; then
-            # Extract unique directory names and filenames
-            declare -A scope_candidates
+            # Count occurrences of each path token with depth tracking
+            declare -A scope_counts
+            declare -A scope_depths
             
             while IFS= read -r file; do
                 if [ -n "$file" ]; then
-                    # Get directory path
-                    dir=$(dirname "$file")
+                    # Split the full path into components
+                    IFS='/' read -r -a path_components <<< "$file"
                     
-                    # Skip root directory
-                    if [ "$dir" != "." ]; then
-                        # Extract the last directory component for nested paths
-                        last_dir=$(basename "$dir")
-                        scope_candidates["$last_dir"]=1
+                    # Process each directory component
+                    for i in "${!path_components[@]}"; do
+                        component="${path_components[$i]}"
                         
-                        # For paths like internal/app, also consider 'app'
-                        if [[ "$dir" == */* ]]; then
-                            scope_candidates["$last_dir"]=1
+                        # Skip empty components
+                        if [ -n "$component" ]; then
+                            # For the last component (filename), remove extension if present
+                            if [ $i -eq $((${#path_components[@]} - 1)) ]; then
+                                component_no_ext="${component%.*}"
+                                # Only use filename if it's meaningful
+                                if [[ ! "$component_no_ext" =~ ^(index|main|app|test|spec|config|readme|license|makefile|dockerfile)$ ]]; then
+                                    scope_counts["$component_no_ext"]=$((${scope_counts["$component_no_ext"]:-0} + 1))
+                                    # Track minimum depth for this token
+                                    current_depth=$((i + 1))
+                                    if [ -z "${scope_depths["$component_no_ext"]}" ] || [ $current_depth -lt ${scope_depths["$component_no_ext"]} ]; then
+                                        scope_depths["$component_no_ext"]=$current_depth
+                                    fi
+                                fi
+                            else
+                                # Directory component - filter out common non-meaningful directories
+                                if [[ ! "$component" =~ ^(src|lib|test|tests|spec|specs|build|dist|node_modules|vendor|tmp|temp|cache|logs|log)$ ]]; then
+                                    scope_counts["$component"]=$((${scope_counts["$component"]:-0} + 1))
+                                    # Track minimum depth for this token
+                                    current_depth=$((i + 1))
+                                    if [ -z "${scope_depths["$component"]}" ] || [ $current_depth -lt ${scope_depths["$component"]} ]; then
+                                        scope_depths["$component"]=$current_depth
+                                    fi
+                                fi
+                            fi
                         fi
-                        
-                        # For single-level directories like scripts/, consider the dirname
-                        if [[ "$dir" != */* ]]; then
-                            scope_candidates["$dir"]=1
-                        fi
-                    fi
-                    
-                    # Get filename without extension for single files
-                    filename=$(basename "$file")
-                    filename_no_ext="${filename%.*}"
-                    
-                    # Only suggest filename if it's a meaningful name (not too generic)
-                    if [[ ! "$filename_no_ext" =~ ^(index|main|app|test|spec|config|readme|license)$ ]]; then
-                        scope_candidates["$filename_no_ext"]=1
-                    fi
+                    done
                 fi
             done <<< "$staged_files"
             
-            # Convert to array and sort
-            detected_scopes_array=()
-            for scope in "${!scope_candidates[@]}"; do
-                # Filter out common non-meaningful scopes
-                if [[ ! "$scope" =~ ^(src|lib|test|tests|spec|specs|build|dist|node_modules|vendor)$ ]]; then
-                    detected_scopes_array+=("$scope")
+            # Find maximum count to determine if we should filter out count=1 tokens
+            max_count=0
+            for token in "${!scope_counts[@]}"; do
+                if [ ${scope_counts["$token"]} -gt $max_count ]; then
+                    max_count=${scope_counts["$token"]}
                 fi
             done
             
-            # Sort the array
-            IFS=$'\n' detected_scopes_sorted=($(sort <<<"${detected_scopes_array[*]}"))
-            unset IFS
+             # Collect and sort scopes
+             detected_scopes_array=()
+             for token in "${!scope_counts[@]}"; do
+                 count=${scope_counts["$token"]}
+                 depth=${scope_depths["$token"]}
+                 
+                 # Apply count filter
+                 # If max_count > 1, only include tokens with count > 1
+                 if [ $max_count -gt 1 ]; then
+                     if [ $count -gt 1 ]; then
+                         # Format: count:depth:token for sorting
+                         detected_scopes_array+=("$count:$depth:$token")
+                     fi
+                 else
+                     # If all tokens have count=1, include all
+                     detected_scopes_array+=("$count:$depth:$token")
+                 fi
+             done
             
-            if [ ${#detected_scopes_sorted[@]} -gt 0 ]; then
-                detected_scopes="${detected_scopes_sorted[*]}"
-            fi
+                         # Sort by count (descending), then by depth (ascending), then by token name
+             if [ ${#detected_scopes_array[@]} -gt 0 ]; then
+                 # Separate filename tokens from directory tokens for better sorting
+                 filename_entries=()
+                 directory_entries=()
+                 
+                 for entry in "${detected_scopes_array[@]}"; do
+                     count="${entry%%:*}"  # Extract count (first field)
+                     rest="${entry#*:}"    # Remove count
+                     depth="${rest%%:*}"   # Extract depth (second field)
+                     token="${rest#*:}"    # Extract token (third field)
+                     
+                     # Check if this token came from a filename (higher depth usually means filename)
+                     # We'll put filename tokens first, then directories by ascending depth
+                     if [ $depth -ge 4 ]; then  # Assume depth 4+ are likely filenames
+                         filename_entries+=("$entry")
+                     else
+                         directory_entries+=("$entry")
+                     fi
+                 done
+                 
+                 # Sort filenames by count (desc), then depth (asc), then name
+                 IFS=$'\n' filename_sorted=($(printf '%s\n' "${filename_entries[@]}" | sort -t':' -k1,1nr -k2,2n -k3,3))
+                 unset IFS
+                 
+                 # Sort directories by count (desc), then depth (asc), then name  
+                 IFS=$'\n' directory_sorted=($(printf '%s\n' "${directory_entries[@]}" | sort -t':' -k1,1nr -k2,2n -k3,3))
+                 unset IFS
+                 
+                 # Combine: filenames first, then directories
+                 detected_scopes_sorted=("${filename_sorted[@]}" "${directory_sorted[@]}")
+                 
+                 # Extract just the token names for the final result (limit to 9 scopes)
+                 final_scopes=()
+                 count=0
+                 for entry in "${detected_scopes_sorted[@]}"; do
+                     if [ $count -ge 9 ]; then
+                         break
+                     fi
+                     token="${entry##*:}"  # Extract token after last colon
+                     final_scopes+=("$token")
+                     count=$((count + 1))
+                 done
+                 
+                 detected_scopes="${final_scopes[*]}"
+             fi
         fi
         
         # Use predefined scopes or detected scopes

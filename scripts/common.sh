@@ -13,6 +13,22 @@ ENDCOLOR_ES="\x1b[0m"
 
 
 
+### Function tries to get config from local, then from global, then returns default
+# $1: config name
+# $2: default value
+# Returns: config value
+function get_config_value {
+    value=$(git config --local --get "$1")
+    if [ "$value" == "" ]; then
+        value=$(git config --global --get "$1")
+        if [ "$value" == "" ]; then
+            value=$2
+        fi
+    fi
+    echo -e "$value"
+}
+
+
 ### Function sets git config value
 # $1: name
 # $2: value
@@ -20,9 +36,9 @@ ENDCOLOR_ES="\x1b[0m"
 # Returns: value
 function set_config_value {
     if [ -z $3 ]; then
-        git config --local $1 $2
+        git config --local "$1" "$2"
     else
-        git config --global $1 $2
+        git config --global "$1" "$2"
     fi
     echo "$2"
 }
@@ -43,7 +59,7 @@ function wrong_mode {
 ### Function echoes (true return) url to current user's repo (remote)
 # Return: url to repo
 function get_repo {
-    repo=$(git config --get remote.${origin_name}.url)
+    repo=$(git config --get "remote.${origin_name}.url")
     repo="${repo/"com:"/"com/"}"
     repo="${repo/"io:"/"io/"}"
     repo="${repo/"org:"/"org/"}"
@@ -77,6 +93,19 @@ function print_configuration {
     if [ "$scopes" != "" ]; then
         echo -e "\tscopes:\t\t${YELLOW}$scopes${ENDCOLOR}"
     fi
+    local ai_key=$(get_ai_api_key)
+    if [ -n "$ai_key" ]; then
+        ai_key=$(mask_api_key "$ai_key")
+        echo -e "\tAI key:\t\t${GREEN}$ai_key${ENDCOLOR}"
+    else
+        echo -e "\tAI key:\t\t${RED}not set${ENDCOLOR}"
+    fi
+    local ai_proxy=$(get_ai_proxy)
+    if [ -n "$ai_proxy" ]; then
+        echo -e "\tAI proxy:\t${GREEN}$ai_proxy${ENDCOLOR}"
+    else
+        echo -e "\tAI proxy:\t${YELLOW}not set${ENDCOLOR}"
+    fi
 }
 
 
@@ -106,7 +135,7 @@ function check_code {
         echo -e "${RED}Error during $3!${ENDCOLOR}"
         echo -e "$2"
         if [ -n "$git_add" ]; then
-            git restore --staged $git_add
+            git restore --staged "$git_add"
         fi
         exit $1
     fi
@@ -155,7 +184,7 @@ function choose {
 
         if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
             if [ -n "$git_add" ]; then
-                git restore --staged $git_add
+                git restore --staged "$git_add"
             fi
             if [ $number_of_values -le 9 ]; then
                 printf $choice
@@ -166,7 +195,7 @@ function choose {
         re='^[0-9=]+$'
         if ! [[ $choice =~ $re ]]; then
             if [ -n "$git_add" ]; then
-                git restore --staged $git_add
+                git restore --staged "$git_add"
             fi
             exit
         fi
@@ -186,7 +215,7 @@ function choose {
         else
             if [ $number_of_values -gt 9 ]; then
                 if [ -n "$git_add" ]; then
-                    git restore --staged $git_add
+                    git restore --staged "$git_add"
                 fi
                 exit
             fi
@@ -226,7 +255,7 @@ function commit_list {
     ref=$3
     if [[ "$(git --no-pager log -n 1 2>&1)" == *"does not have any commits yet"* ]]; then
         if [[ "$3" == *"HEAD"* ]]; then
-            ref="$(echo $3 | sed 's/HEAD..//')"
+            ref="$(echo "$3" | sed 's/HEAD..//')"
         else
             return 
         fi

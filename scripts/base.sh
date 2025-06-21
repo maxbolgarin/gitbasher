@@ -14,11 +14,12 @@ function print_help {
     msg="$msg\nmerge_m|me_Merge changes to the current branch"
     msg="$msg\nrebase_r|re|base_Rebase current branch"
     msg="$msg\nreset_res_Easy to use git reset"
+    msg="$msg\nstash_s|sta_Manage git stashes"
     msg="$msg\nconfig_cf|cfg|conf_Configurate gitbasher"
 
     msg="$msg\n_ _ _"
     msg="$msg\n${YELLOW}Command${ENDCOLOR}_\t${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description of ${BOLD}informational${NORMAL}${BLUE} commands${ENDCOLOR}"
-    msg="$msg\nstatus_s|st_Info about repo and changed files"
+    msg="$msg\nstatus_st_Info about repo and changed files"
     msg="$msg\nlog_l|lg_Open git log in a pretty format"
     msg="$msg\nreflog_rl|rlg_Open git reflog in a pretty format"
     msg="$msg\nlast-commit_lc|lastc_Show info about the last commit"
@@ -76,6 +77,9 @@ case "$1" in
     reset|res)
         reset_script $2
     ;;
+    stash|s|sta)
+        stash_script $2
+    ;;
     log|l|lg)
         gitlog
     ;;
@@ -88,7 +92,7 @@ case "$1" in
     last-ref|lr|lastr)
         last_ref
     ;;
-    status|s|st)
+    status|st)
         project_status
     ;;
 

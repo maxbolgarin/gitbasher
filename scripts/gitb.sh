@@ -32,6 +32,7 @@ source scripts/common.sh
 
 
 ### Include all scripts
+source scripts/ai.sh
 source scripts/config.sh
 source scripts/merge.sh
 source scripts/rebase.sh
@@ -41,6 +42,7 @@ source scripts/commit.sh
 source scripts/branch.sh
 source scripts/tag.sh
 source scripts/reset.sh
+source scripts/stash.sh
 source scripts/gitlog.sh
 
 source scripts/base.sh

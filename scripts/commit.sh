@@ -9,10 +9,158 @@
 # $1: git_add arguments
 function cleanup_on_exit {
     if [ -n "$1" ]; then
-        git restore --staged $1
+        git restore --staged "$1"
     fi
-    # Clean up the cached git add arguments
-    # git config --unset gitbasher.cached-git-add 2>/dev/null
+}
+
+### Function to handle AI commit message generation
+# $1: step number to display
+# $2: ai generation mode ("full", "subject", or "simple")
+# $3: commit prefix (for subject mode)
+# $4: skip_confirmation ("true" to auto-accept in fast mode without push)
+function handle_ai_commit_generation {
+    local step="$1"
+    local ai_mode="$2"
+    local commit_prefix="$3"
+    local skip_confirmation="$4"
+    
+    echo
+    if [ "$ai_mode" = "subject" ]; then
+        echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Generating ${YELLOW}commit message summary${ENDCOLOR} using AI..."
+    else
+        echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Generating ${YELLOW}commit message${ENDCOLOR} using AI..."
+    fi
+    
+    # Check if AI is available
+    if ! check_ai_available; then
+        cleanup_on_exit "$git_add"
+        exit 1
+    fi
+    
+    # Generate AI commit message based on mode
+    local ai_commit_message
+    if [ "$ai_mode" = "full" ] && [ -n "${msg}" ]; then
+        ai_commit_message=$(generate_ai_commit_message_full)
+    elif [ "$ai_mode" = "subject" ]; then
+        ai_commit_message=$(generate_ai_commit_message_subject "$commit_prefix")
+    else
+        ai_commit_message=$(generate_ai_commit_message)
+    fi
+    
+    if [ $? -ne 0 ] || [ -z "$ai_commit_message" ]; then
+        echo -e "${RED}Failed to generate AI commit message${ENDCOLOR}"
+        cleanup_on_exit "$git_add"
+        exit 1
+    fi
+    
+    # Clean up the AI response (remove quotes, trim)
+    ai_commit_message=$(echo "$ai_commit_message" | sed 's/^"//;s/"$//' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    
+    echo
+    echo -e "${GREEN}AI generated commit message:${ENDCOLOR}"
+    echo -e "${BOLD}$ai_commit_message${ENDCOLOR}"
+    echo
+    
+    # Determine if we should ask for confirmation
+    local choice="y"
+    if [ "$skip_confirmation" = "true" ] && [ -n "${fast}" ] && [ -z "${push}" ]; then
+        choice="y"
+    else
+        read -n 1 -p "Use this commit message? (y/n/e to edit) " -s choice
+        echo
+        if [ "$ai_mode" != "subject" ]; then
+            echo
+        fi
+    fi
+    
+    if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
+        commit="$ai_commit_message"
+        # Skip to final commit step
+        if [ "$ai_mode" = "subject" ]; then
+            echo
+        fi
+        result=$(git commit -m """$commit""" 2>&1)
+        check_code $? "$result" "commit"
+        
+        # Clean up cached git add on successful commit
+        git config --unset gitbasher.cached-git-add 2>/dev/null
+        
+        after_commit
+
+        if [ -n "${push}" ]; then
+            echo
+            push_script y
+        fi
+        exit
+
+    elif [ "$choice" = "e" ] || [ "$choice" = "E" ]; then
+        if [ "$ai_mode" = "full" ] && [ -n "${msg}" ]; then
+            echo -e "${YELLOW}Edit the AI generated message:${ENDCOLOR}"
+            # Create temp file with AI message
+            commitmsg_file=$(mktemp ".commitmsg.XXXXXX")
+            echo "$ai_commit_message" > $commitmsg_file
+
+            while [ true ]; do
+                $editor $commitmsg_file
+                commit_message=$(cat $commitmsg_file | sed '/^#/d')
+
+                if [ -n "$commit_message" ]; then
+                    break
+                fi
+                echo
+                echo -e "${YELLOW}Commit message cannot be empty${ENDCOLOR}"
+                echo
+                read -n 1 -p "Try for one more time? (y/n) " -s -e choice
+                if [ "$choice" != "y" ]; then
+                    cleanup_on_exit "$git_add"
+                    find . -name "$commitmsg_file*" -delete
+                    exit
+                fi    
+            done
+
+            commit_message=$(cat $commitmsg_file)
+            rm $commitmsg_file
+            echo
+        else
+            if [ "$ai_mode" = "subject" ]; then
+                echo
+            fi
+            echo -e "${YELLOW}Edit the AI generated message:${ENDCOLOR}"
+            read -p "" -e -i "$ai_commit_message" commit_message
+        fi
+        
+        if [ -z "$commit_message" ]; then
+            cleanup_on_exit "$git_add"
+            exit
+        fi
+        
+        commit="$commit_message"
+        # Skip to final commit step
+        echo
+        result=$(git commit -m """$commit""" 2>&1)
+        check_code $? "$result" "commit"
+        
+        # Clean up cached git add on successful commit
+        git config --unset gitbasher.cached-git-add 2>/dev/null
+        
+        after_commit
+
+        if [ -n "${push}" ]; then
+            echo
+            push_script y
+        fi
+        exit
+        
+    else
+        if [ "$ai_mode" = "subject" ]; then
+            echo
+        fi
+        echo -e "${YELLOW}Falling back to manual commit message creation...${ENDCOLOR}"
+        if [ "$ai_mode" = "subject" ]; then
+            echo
+        fi
+        # Continue with manual flow
+    fi
 }
 
 ### Function prints information about the last commit, use it after `git commit`
@@ -72,6 +220,7 @@ function after_commit {
     # help: print help
 function commit_script {
     case "$1" in
+        scope|s)            ;; # general commit with scope
         msg|m)              msg="true";;
         ticket|jira|j|t)    ticket="true";;
         fast|f)             fast="true";;
@@ -87,6 +236,12 @@ function commit_script {
         amendf|amf|af|fa)   amend="true"; fast="true";;
         last|l)             last="true";;
         revert|rev)         revert="true";;
+        llm|ai|i)           llm="true";;
+        llmf|aif|if)        llm="true"; fast="true";;
+        llmp|aip|ip)        llm="true"; push="true";;
+        llmfp|aifp|ifp|ipf) llm="true"; fast="true"; push="true";;
+        llms|ais|is)        llm="true"; scope="true";;
+        llmm|aim|im)        llm="true"; msg="true";;
         help|h)             help="true";;
         *)
             wrong_mode "commit" $1
@@ -95,6 +250,10 @@ function commit_script {
 
     ### Print header
     header_msg="GIT COMMIT"
+    if [ -n "${llm}" ]; then
+        header_msg="$header_msg AI"
+    fi
+
     if [ -n "${fast}" ]; then
         if [ -n "${push}" ]; then
             if [ -n "${fixup}" ]; then
@@ -135,8 +294,6 @@ function commit_script {
         echo
         echo -e "${YELLOW}Available modes${ENDCOLOR}"
         echo -e "<empty>\t\tSelect files to commit and create a conventional message in format: 'type(scope): message'"
-        echo -e "msg|m\t\tSame as <empty>, but create multiline commit message using text editor"
-        echo -e "ticket|t\tSame as <empty>, but add tracker's ticket info to the end of the commit header"
         echo -e "fast|f\t\tAdd all files (git add .) and create a conventional commit message without scope"
         echo -e "fasts|fs|sf\tAdd all files (git add .) and create a conventional commit message with scope"
         echo -e "push|pu|p\tCreate a conventional commit and push changes at the end"
@@ -146,10 +303,18 @@ function commit_script {
         echo -e "fixupp|fixp|xp\tSelect files and commit to make a --fixup commit and push changes"
         echo -e "fastfix|fx|xf\tAdd all files (git add .) and commit to make a --fixup commit"
         echo -e "fastfixp|fxp\tAdd all files (git add .) and commit to make a --fixup commit and push"
+        echo -e "msg|m\t\tSame as <empty>, but create multiline commit message using text editor"
+        echo -e "ticket|t\tSame as <empty>, but add tracker's ticket info to the end of the commit header"
         echo -e "amend|am|a\tSelect files and add them to the last commit without message edit (git commit --amend --no-edit)"
         echo -e "amendf|amf|af\tAdd all fiels to the last commit without message edit (git commit --amend --no-edit)"
         echo -e "last|l\t\tChange commit message to the last one"
         echo -e "revert|rev\tSelect a commit to revert (git revert -no-edit <commit>)"
+        echo -e "llm|ai|i\tUse AI to generate commit message based on staged changes"
+        echo -e "llmf|aif|if\tUse AI to generate commit message in the fast mode (git add .) without confirmation"
+        echo -e "llmp|aip|ip\tUse AI to generate commit message and push changes"
+        echo -e "llmfp|aifp|ifp\tUse AI to generate commit message in the fast mode and push changes"
+        echo -e "llms|ais|is\tUse AI to generate commit summary with manual type and scope enter"
+        echo -e "llmm|aim|im\tUse AI to generate multiline commit message with body"
         echo -e "help|h\t\tShow this help"
         # Clean up cached git add on help exit
         git config --unset gitbasher.cached-git-add 2>/dev/null
@@ -211,7 +376,7 @@ function commit_script {
             read -n 1 -p "Use them? (y/n) " -s choice
             echo
             if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
-                git add $saved_git_add
+                git add "$saved_git_add"
                 if [ $? -eq 0 ]; then
                     git_add="$saved_git_add"
                     use_saved_git_add="true"
@@ -253,7 +418,7 @@ function commit_script {
         else
             printf "commit to the ${YELLOW}${current_branch}${ENDCOLOR} branch\n"
         fi
-        echo "Leave it blank to exit without changes"
+        echo "Press Enter if you want to exit"
 
         while [ true ]; do
             read -p "$(echo -n -e "${BOLD}git add${ENDCOLOR} ")" -e git_add
@@ -264,11 +429,30 @@ function commit_script {
                 exit
             fi
 
-            git add $git_add
+            result=$(git add "$git_add" 2>&1)
             if [ $? -eq 0 ]; then
                 # Save git add arguments for potential retry
                 git config gitbasher.cached-git-add "$git_add"
                 break
+            else
+                # Check if error is about "did not match any files" and try with * appended
+                if [[ "$result" == *"did not match any files"* ]] && [[ "$git_add" != *"*" ]]; then
+                    echo "$result"
+                    git_add_with_star="${git_add}*"
+                    echo -e "${YELLOW}Trying with wildcard:${ENDCOLOR} ${BOLD}git add $git_add_with_star${ENDCOLOR}"
+                    result_star=$(git add "$git_add_with_star" 2>&1)
+                    if [ $? -eq 0 ]; then
+                        # Save the successful git add arguments for potential retry
+                        git config gitbasher.cached-git-add "$git_add_with_star"
+                        git_add="$git_add_with_star"
+                        break
+                    else
+                        echo "$result_star"
+                        echo
+                    fi
+                else
+                    echo "$result"
+                fi
             fi
         done
 
@@ -279,6 +463,18 @@ function commit_script {
     echo -e "${YELLOW}Staged files:${ENDCOLOR}"
     staged="$(sed 's/^/\t/' <<< "$(git diff --name-only --cached)")"
     echo -e "${GREEN}${staged}${ENDCOLOR}"
+
+
+    ### AI Logic: Generate commit message using AI (before manual steps)
+    if [ -n "${llm}" ] && [ -z "${scope}" ]; then
+        if [ -n "${fast}" ]; then
+            step="1"
+        else
+            step="2"
+        fi
+        
+        handle_ai_commit_generation "$step" "full" "" "true"
+    fi
 
 
     ### Run fixup logic
@@ -392,64 +588,128 @@ function commit_script {
         echo
         echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Enter a ${YELLOW}scope${ENDCOLOR} of changes to provide some additional context"
         echo -e "Final meesage will be ${BLUE}${commit_type}${ENDCOLOR}(${YELLOW}<scope>${ENDCOLOR}): ${BLUE}<summary>${ENDCOLOR}"
-        echo -e "Leave it blank to continue without scope or enter 0 to exit without changes"
+        echo -e "Press Enter to continue without scope or enter 0 to exit without changes"
         
         # Detect possible scopes from staged files
         detected_scopes=""
         staged_files=$(git diff --name-only --cached)
         if [ -n "$staged_files" ]; then
-            # Extract unique directory names and filenames
-            declare -A scope_candidates
+            # Count occurrences of each path token with depth tracking
+            declare -A scope_counts
+            declare -A scope_depths
             
             while IFS= read -r file; do
                 if [ -n "$file" ]; then
-                    # Get directory path
-                    dir=$(dirname "$file")
+                    # Split the full path into components
+                    IFS='/' read -r -a path_components <<< "$file"
                     
-                    # Skip root directory
-                    if [ "$dir" != "." ]; then
-                        # Extract the last directory component for nested paths
-                        last_dir=$(basename "$dir")
-                        scope_candidates["$last_dir"]=1
+                    # Process each directory component
+                    for i in "${!path_components[@]}"; do
+                        component="${path_components[$i]}"
                         
-                        # For paths like internal/app, also consider 'app'
-                        if [[ "$dir" == */* ]]; then
-                            scope_candidates["$last_dir"]=1
+                        # Skip empty components
+                        if [ -n "$component" ]; then
+                            # For the last component (filename), remove extension if present
+                            if [ $i -eq $((${#path_components[@]} - 1)) ]; then
+                                component_no_ext="${component%.*}"
+                                # Only use filename if it's meaningful
+                                if [[ ! "$component_no_ext" =~ ^(index|main|app|test|spec|config|readme|license|makefile|dockerfile)$ ]]; then
+                                    scope_counts["$component_no_ext"]=$((${scope_counts["$component_no_ext"]:-0} + 1))
+                                    # Track minimum depth for this token
+                                    current_depth=$((i + 1))
+                                    if [ -z "${scope_depths["$component_no_ext"]}" ] || [ $current_depth -lt ${scope_depths["$component_no_ext"]} ]; then
+                                        scope_depths["$component_no_ext"]=$current_depth
+                                    fi
+                                fi
+                            else
+                                # Directory component - filter out common non-meaningful directories
+                                if [[ ! "$component" =~ ^(src|lib|test|tests|spec|specs|build|dist|node_modules|vendor|tmp|temp|cache|logs|log)$ ]]; then
+                                    scope_counts["$component"]=$((${scope_counts["$component"]:-0} + 1))
+                                    # Track minimum depth for this token
+                                    current_depth=$((i + 1))
+                                    if [ -z "${scope_depths["$component"]}" ] || [ $current_depth -lt ${scope_depths["$component"]} ]; then
+                                        scope_depths["$component"]=$current_depth
+                                    fi
+                                fi
+                            fi
                         fi
-                        
-                        # For single-level directories like scripts/, consider the dirname
-                        if [[ "$dir" != */* ]]; then
-                            scope_candidates["$dir"]=1
-                        fi
-                    fi
-                    
-                    # Get filename without extension for single files
-                    filename=$(basename "$file")
-                    filename_no_ext="${filename%.*}"
-                    
-                    # Only suggest filename if it's a meaningful name (not too generic)
-                    if [[ ! "$filename_no_ext" =~ ^(index|main|app|test|spec|config|readme|license)$ ]]; then
-                        scope_candidates["$filename_no_ext"]=1
-                    fi
+                    done
                 fi
             done <<< "$staged_files"
             
-            # Convert to array and sort
-            detected_scopes_array=()
-            for scope in "${!scope_candidates[@]}"; do
-                # Filter out common non-meaningful scopes
-                if [[ ! "$scope" =~ ^(src|lib|test|tests|spec|specs|build|dist|node_modules|vendor)$ ]]; then
-                    detected_scopes_array+=("$scope")
+            # Find maximum count to determine if we should filter out count=1 tokens
+            max_count=0
+            for token in "${!scope_counts[@]}"; do
+                if [ ${scope_counts["$token"]} -gt $max_count ]; then
+                    max_count=${scope_counts["$token"]}
                 fi
             done
             
-            # Sort the array
-            IFS=$'\n' detected_scopes_sorted=($(sort <<<"${detected_scopes_array[*]}"))
-            unset IFS
+             # Collect and sort scopes
+             detected_scopes_array=()
+             for token in "${!scope_counts[@]}"; do
+                 count=${scope_counts["$token"]}
+                 depth=${scope_depths["$token"]}
+                 
+                 # Apply count filter
+                 # If max_count > 1, only include tokens with count > 1
+                 if [ $max_count -gt 1 ]; then
+                     if [ $count -gt 1 ]; then
+                         # Format: count:depth:token for sorting
+                         detected_scopes_array+=("$count:$depth:$token")
+                     fi
+                 else
+                     # If all tokens have count=1, include all
+                     detected_scopes_array+=("$count:$depth:$token")
+                 fi
+             done
             
-            if [ ${#detected_scopes_sorted[@]} -gt 0 ]; then
-                detected_scopes="${detected_scopes_sorted[*]}"
-            fi
+                         # Sort by count (descending), then by depth (ascending), then by token name
+             if [ ${#detected_scopes_array[@]} -gt 0 ]; then
+                 # Separate filename tokens from directory tokens for better sorting
+                 filename_entries=()
+                 directory_entries=()
+                 
+                 for entry in "${detected_scopes_array[@]}"; do
+                     count="${entry%%:*}"  # Extract count (first field)
+                     rest="${entry#*:}"    # Remove count
+                     depth="${rest%%:*}"   # Extract depth (second field)
+                     token="${rest#*:}"    # Extract token (third field)
+                     
+                     # Check if this token came from a filename (higher depth usually means filename)
+                     # We'll put filename tokens first, then directories by ascending depth
+                     if [ $depth -ge 4 ]; then  # Assume depth 4+ are likely filenames
+                         filename_entries+=("$entry")
+                     else
+                         directory_entries+=("$entry")
+                     fi
+                 done
+                 
+                 # Sort filenames by count (desc), then depth (asc), then name
+                 IFS=$'\n' filename_sorted=($(printf '%s\n' "${filename_entries[@]}" | sort -t':' -k1,1nr -k2,2n -k3,3))
+                 unset IFS
+                 
+                 # Sort directories by count (desc), then depth (asc), then name  
+                 IFS=$'\n' directory_sorted=($(printf '%s\n' "${directory_entries[@]}" | sort -t':' -k1,1nr -k2,2n -k3,3))
+                 unset IFS
+                 
+                 # Combine: filenames first, then directories
+                 detected_scopes_sorted=("${filename_sorted[@]}" "${directory_sorted[@]}")
+                 
+                 # Extract just the token names for the final result (limit to 9 scopes)
+                 final_scopes=()
+                 count=0
+                 for entry in "${detected_scopes_sorted[@]}"; do
+                     if [ $count -ge 9 ]; then
+                         break
+                     fi
+                     token="${entry##*:}"  # Extract token after last colon
+                     final_scopes+=("$token")
+                     count=$((count + 1))
+                 done
+                 
+                 detected_scopes="${final_scopes[*]}"
+             fi
         fi
         
         # Use predefined scopes or detected scopes
@@ -534,7 +794,13 @@ function commit_script {
     else
         step="4"
     fi
-    echo
+    
+    if [ -n "${llm}" ] && [ -n "${scope}" ]; then
+        handle_ai_commit_generation "$step" "subject" "$commit" "false"
+    else
+        echo
+    fi
+
     echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Write a ${YELLOW}summary${ENDCOLOR} about your changes"
     if [ -n "$is_empty" ]; then
         echo -e "Final meesage will be ${YELLOW}<summary>${ENDCOLOR}"
@@ -543,12 +809,10 @@ function commit_script {
     else
         echo -e "Final meesage will be ${BLUE}${commit_type}${ENDCOLOR}(${BLUE}${commit_scope}${ENDCOLOR}): ${YELLOW}<summary>${ENDCOLOR}"
     fi
-    echo -e "Leave it blank to exit without changes"
+    echo -e "Press Enter if you want to exit"
     # Use an editor and commitmsg file
     if [ -n "$msg" ]; then
-        commitmsg_file=".commitmsg__"
-        touch $commitmsg_file
-
+        commitmsg_file=$(mktemp ".commitmsg.XXXXXX")
         staged_with_tab="$(sed 's/^/####\t/' <<< "${staged}")"
 
         echo """
@@ -614,7 +878,7 @@ ${staged_with_tab}
         echo
         echo -e "${YELLOW}Step 5.${ENDCOLOR} Enter the number of a resolved issue (e.g. in JIRA or Youtrack)"
         echo -e "It will be added to the end of the summary header"
-        echo -e "Leave it blank to continue or 0 to exit without changes"
+        echo -e "Press Enter to continue or 0 to exit without changes"
 
         if [ -n "$ticket_name" ]; then
             read -p "${ticket_name}${sep}" -e commit_ticket

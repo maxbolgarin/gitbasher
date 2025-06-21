@@ -14,7 +14,7 @@
 
 > Simple **bash** utility that makes **git** easy to use
 
-With **gitbasher** usage of `git` becomes more simple and intuitive. It helps speeding up the development process, making it more consistent reducing mistakes. This is a wrapper around the most used git commands with a cleaner interface. It uses `bash` `git` `sed` `grep` and some built-in utilities.
+With **gitbasher** usage of `git` becomes more simple and intuitive. It helps speeding up the development process, making it more consistent reducing mistakes. This is a wrapper around the most used git commands with a cleaner interface. It uses `bash` `git` `sed` `grep`, `curl` and some built-in utilities.
 
 <picture>
     <img src=".github/commit.gif" width="600" alt="commit example">

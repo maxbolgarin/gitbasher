@@ -13,6 +13,22 @@ ENDCOLOR_ES="\x1b[0m"
 
 
 
+### Function tries to get config from local, then from global, then returns default
+# $1: config name
+# $2: default value
+# Returns: config value
+function get_config_value {
+    value=$(git config --local --get $1)
+    if [ "$value" == "" ]; then
+        value=$(git config --global --get $1)
+        if [ "$value" == "" ]; then
+            value=$2
+        fi
+    fi
+    echo -e "$value"
+}
+
+
 ### Function sets git config value
 # $1: name
 # $2: value
@@ -76,6 +92,19 @@ function print_configuration {
     fi
     if [ "$scopes" != "" ]; then
         echo -e "\tscopes:\t\t${YELLOW}$scopes${ENDCOLOR}"
+    fi
+    local ai_key=$(get_ai_api_key)
+    if [ -n "$ai_key" ]; then
+        ai_key=$(mask_api_key "$ai_key")
+        echo -e "\tAI key:\t\t${GREEN}$ai_key${ENDCOLOR}"
+    else
+        echo -e "\tAI key:\t\t${RED}not set${ENDCOLOR}"
+    fi
+    local ai_proxy=$(get_ai_proxy)
+    if [ -n "$ai_proxy" ]; then
+        echo -e "\tAI proxy:\t${GREEN}$ai_proxy${ENDCOLOR}"
+    else
+        echo -e "\tAI proxy:\t${YELLOW}not set${ENDCOLOR}"
     fi
 }
 

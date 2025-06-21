@@ -17,7 +17,7 @@ function select_files_for_stash {
     echo
 
     echo -e "Enter file patterns or paths to stash (like ${BOLD}git add${ENDCOLOR} command)"
-    echo "Leave it blank to exit without changes"
+    echo "Press Enter if you want to exit"
 
     while [ true ]; do
         read -p "$(echo -n -e "${BOLD}files to stash${ENDCOLOR} ")" -e git_add

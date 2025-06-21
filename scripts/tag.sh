@@ -312,7 +312,7 @@ function tag_script {
     echo
     echo -e "${YELLOW}Enter the name for a new tag${ENDCOLOR}"
     echo -e "If this is a release tag, use version number in semver format like '1.0.0-alpha'"
-    echo -e "Leave it blank to exit"
+    echo -e "Press Enter if you want to exit"
 
     if [ -n "${annotated}" ]; then
         prompt="$(echo -n -e "${BOLD}git tag -a${ENDCOLOR} ")"

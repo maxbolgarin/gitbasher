@@ -418,7 +418,7 @@ function commit_script {
         else
             printf "commit to the ${YELLOW}${current_branch}${ENDCOLOR} branch\n"
         fi
-        echo "Leave it blank to exit without changes"
+        echo "Press Enter if you want to exit"
 
         while [ true ]; do
             read -p "$(echo -n -e "${BOLD}git add${ENDCOLOR} ")" -e git_add
@@ -588,7 +588,7 @@ function commit_script {
         echo
         echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Enter a ${YELLOW}scope${ENDCOLOR} of changes to provide some additional context"
         echo -e "Final meesage will be ${BLUE}${commit_type}${ENDCOLOR}(${YELLOW}<scope>${ENDCOLOR}): ${BLUE}<summary>${ENDCOLOR}"
-        echo -e "Leave it blank to continue without scope or enter 0 to exit without changes"
+        echo -e "Press Enter to continue without scope or enter 0 to exit without changes"
         
         # Detect possible scopes from staged files
         detected_scopes=""
@@ -797,6 +797,8 @@ function commit_script {
     
     if [ -n "${llm}" ] && [ -n "${scope}" ]; then
         handle_ai_commit_generation "$step" "subject" "$commit" "false"
+    else
+        echo
     fi
 
     echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Write a ${YELLOW}summary${ENDCOLOR} about your changes"
@@ -807,7 +809,7 @@ function commit_script {
     else
         echo -e "Final meesage will be ${BLUE}${commit_type}${ENDCOLOR}(${BLUE}${commit_scope}${ENDCOLOR}): ${YELLOW}<summary>${ENDCOLOR}"
     fi
-    echo -e "Leave it blank to exit without changes"
+    echo -e "Press Enter if you want to exit"
     # Use an editor and commitmsg file
     if [ -n "$msg" ]; then
         commitmsg_file=".commitmsg__"
@@ -878,7 +880,7 @@ ${staged_with_tab}
         echo
         echo -e "${YELLOW}Step 5.${ENDCOLOR} Enter the number of a resolved issue (e.g. in JIRA or Youtrack)"
         echo -e "It will be added to the end of the summary header"
-        echo -e "Leave it blank to continue or 0 to exit without changes"
+        echo -e "Press Enter to continue or 0 to exit without changes"
 
         if [ -n "$ticket_name" ]; then
             read -p "${ticket_name}${sep}" -e commit_ticket

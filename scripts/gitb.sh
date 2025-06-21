@@ -42,6 +42,7 @@ source scripts/commit.sh
 source scripts/branch.sh
 source scripts/tag.sh
 source scripts/reset.sh
+source scripts/stash.sh
 source scripts/gitlog.sh
 
 source scripts/base.sh

@@ -97,7 +97,7 @@ function handle_ai_commit_generation {
         if [ "$ai_mode" = "full" ] && [ -n "${msg}" ]; then
             echo -e "${YELLOW}Edit the AI generated message:${ENDCOLOR}"
             # Create temp file with AI message
-            commitmsg_file=".commitmsg__"
+            commitmsg_file=$(mktemp ".commitmsg.XXXXXX")
             echo "$ai_commit_message" > $commitmsg_file
 
             while [ true ]; do
@@ -812,9 +812,7 @@ function commit_script {
     echo -e "Press Enter if you want to exit"
     # Use an editor and commitmsg file
     if [ -n "$msg" ]; then
-        commitmsg_file=".commitmsg__"
-        touch $commitmsg_file
-
+        commitmsg_file=$(mktemp ".commitmsg.XXXXXX")
         staged_with_tab="$(sed 's/^/####\t/' <<< "${staged}")"
 
         echo """

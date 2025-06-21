@@ -9,7 +9,157 @@
 # $1: git_add arguments
 function cleanup_on_exit {
     if [ -n "$1" ]; then
-        git restore --staged $1
+        git restore --staged "$1"
+    fi
+}
+
+### Function to handle AI commit message generation
+# $1: step number to display
+# $2: ai generation mode ("full", "subject", or "simple")
+# $3: commit prefix (for subject mode)
+# $4: skip_confirmation ("true" to auto-accept in fast mode without push)
+function handle_ai_commit_generation {
+    local step="$1"
+    local ai_mode="$2"
+    local commit_prefix="$3"
+    local skip_confirmation="$4"
+    
+    echo
+    if [ "$ai_mode" = "subject" ]; then
+        echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Generating ${YELLOW}commit message summary${ENDCOLOR} using AI..."
+    else
+        echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Generating ${YELLOW}commit message${ENDCOLOR} using AI..."
+    fi
+    
+    # Check if AI is available
+    if ! check_ai_available; then
+        cleanup_on_exit "$git_add"
+        exit 1
+    fi
+    
+    # Generate AI commit message based on mode
+    local ai_commit_message
+    if [ "$ai_mode" = "full" ] && [ -n "${msg}" ]; then
+        ai_commit_message=$(generate_ai_commit_message_full)
+    elif [ "$ai_mode" = "subject" ]; then
+        ai_commit_message=$(generate_ai_commit_message_subject "$commit_prefix")
+    else
+        ai_commit_message=$(generate_ai_commit_message)
+    fi
+    
+    if [ $? -ne 0 ] || [ -z "$ai_commit_message" ]; then
+        echo -e "${RED}Failed to generate AI commit message${ENDCOLOR}"
+        cleanup_on_exit "$git_add"
+        exit 1
+    fi
+    
+    # Clean up the AI response (remove quotes, trim)
+    ai_commit_message=$(echo "$ai_commit_message" | sed 's/^"//;s/"$//' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    
+    echo
+    echo -e "${GREEN}AI generated commit message:${ENDCOLOR}"
+    echo -e "${BOLD}$ai_commit_message${ENDCOLOR}"
+    echo
+    
+    # Determine if we should ask for confirmation
+    local choice="y"
+    if [ "$skip_confirmation" = "true" ] && [ -n "${fast}" ] && [ -z "${push}" ]; then
+        choice="y"
+    else
+        read -n 1 -p "Use this commit message? (y/n/e to edit) " -s choice
+        echo
+        if [ "$ai_mode" != "subject" ]; then
+            echo
+        fi
+    fi
+    
+    if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
+        commit="$ai_commit_message"
+        # Skip to final commit step
+        if [ "$ai_mode" = "subject" ]; then
+            echo
+        fi
+        result=$(git commit -m """$commit""" 2>&1)
+        check_code $? "$result" "commit"
+        
+        # Clean up cached git add on successful commit
+        git config --unset gitbasher.cached-git-add 2>/dev/null
+        
+        after_commit
+
+        if [ -n "${push}" ]; then
+            echo
+            push_script y
+        fi
+        exit
+
+    elif [ "$choice" = "e" ] || [ "$choice" = "E" ]; then
+        if [ "$ai_mode" = "full" ] && [ -n "${msg}" ]; then
+            echo -e "${YELLOW}Edit the AI generated message:${ENDCOLOR}"
+            # Create temp file with AI message
+            commitmsg_file=".commitmsg__"
+            echo "$ai_commit_message" > $commitmsg_file
+
+            while [ true ]; do
+                $editor $commitmsg_file
+                commit_message=$(cat $commitmsg_file | sed '/^#/d')
+
+                if [ -n "$commit_message" ]; then
+                    break
+                fi
+                echo
+                echo -e "${YELLOW}Commit message cannot be empty${ENDCOLOR}"
+                echo
+                read -n 1 -p "Try for one more time? (y/n) " -s -e choice
+                if [ "$choice" != "y" ]; then
+                    cleanup_on_exit "$git_add"
+                    find . -name "$commitmsg_file*" -delete
+                    exit
+                fi    
+            done
+
+            commit_message=$(cat $commitmsg_file)
+            rm $commitmsg_file
+            echo
+        else
+            if [ "$ai_mode" = "subject" ]; then
+                echo
+            fi
+            echo -e "${YELLOW}Edit the AI generated message:${ENDCOLOR}"
+            read -p "" -e -i "$ai_commit_message" commit_message
+        fi
+        
+        if [ -z "$commit_message" ]; then
+            cleanup_on_exit "$git_add"
+            exit
+        fi
+        
+        commit="$commit_message"
+        # Skip to final commit step
+        echo
+        result=$(git commit -m """$commit""" 2>&1)
+        check_code $? "$result" "commit"
+        
+        # Clean up cached git add on successful commit
+        git config --unset gitbasher.cached-git-add 2>/dev/null
+        
+        after_commit
+
+        if [ -n "${push}" ]; then
+            echo
+            push_script y
+        fi
+        exit
+        
+    else
+        if [ "$ai_mode" = "subject" ]; then
+            echo
+        fi
+        echo -e "${YELLOW}Falling back to manual commit message creation...${ENDCOLOR}"
+        if [ "$ai_mode" = "subject" ]; then
+            echo
+        fi
+        # Continue with manual flow
     fi
 }
 
@@ -226,7 +376,7 @@ function commit_script {
             read -n 1 -p "Use them? (y/n) " -s choice
             echo
             if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
-                git add $saved_git_add
+                git add "$saved_git_add"
                 if [ $? -eq 0 ]; then
                     git_add="$saved_git_add"
                     use_saved_git_add="true"
@@ -279,7 +429,7 @@ function commit_script {
                 exit
             fi
 
-            result=$(git add $git_add 2>&1)
+            result=$(git add "$git_add" 2>&1)
             if [ $? -eq 0 ]; then
                 # Save git add arguments for potential retry
                 git config gitbasher.cached-git-add "$git_add"
@@ -290,7 +440,7 @@ function commit_script {
                     echo "$result"
                     git_add_with_star="${git_add}*"
                     echo -e "${YELLOW}Trying with wildcard:${ENDCOLOR} ${BOLD}git add $git_add_with_star${ENDCOLOR}"
-                    result_star=$(git add $git_add_with_star 2>&1)
+                    result_star=$(git add "$git_add_with_star" 2>&1)
                     if [ $? -eq 0 ]; then
                         # Save the successful git add arguments for potential retry
                         git config gitbasher.cached-git-add "$git_add_with_star"
@@ -319,121 +469,11 @@ function commit_script {
     if [ -n "${llm}" ] && [ -z "${scope}" ]; then
         if [ -n "${fast}" ]; then
             step="1"
-        fi
-
-        echo
-        echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Generating ${YELLOW}commit message${ENDCOLOR} using AI..."
-        
-        # Check if AI is available
-        if ! check_ai_available; then
-            cleanup_on_exit "$git_add"
-            exit 1
-        fi
-        
-        # Generate AI commit message
-        if [ -n "${msg}" ]; then
-            ai_commit_message=$(generate_ai_commit_message_full)
         else
-            ai_commit_message=$(generate_ai_commit_message)
-        fi
-        if [ $? -ne 0 ] || [ -z "$ai_commit_message" ]; then
-            echo -e "${RED}Failed to generate AI commit message${ENDCOLOR}"
-            cleanup_on_exit "$git_add"
-            exit 1
+            step="2"
         fi
         
-        # Clean up the AI response (remove quotes, trim)
-        ai_commit_message=$(echo "$ai_commit_message" | sed 's/^"//;s/"$//' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-        
-        echo
-        echo -e "${GREEN}AI generated commit message:${ENDCOLOR}"
-        echo -e "${BOLD}$ai_commit_message${ENDCOLOR}"
-        echo
-        
-        if [ -z "${fast}" ] || [ -n "${push}" ]; then
-            # Ask user if they want to use it
-            read -n 1 -p "Use this commit message? (y/n/e to edit) " -s choice
-            echo
-            echo
-        else
-            choice="y"
-        fi
-        
-        if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
-            commit="$ai_commit_message"
-            # Skip to final commit step
-            result=$(git commit -m """$commit""" 2>&1)
-            check_code $? "$result" "commit"
-            
-            # Clean up cached git add on successful commit
-            git config --unset gitbasher.cached-git-add 2>/dev/null
-            
-            after_commit
-
-            if [ -n "${push}" ]; then
-                echo
-                push_script y
-            fi
-            exit
-
-        elif [ "$choice" = "e" ] || [ "$choice" = "E" ]; then
-            echo -e "${YELLOW}Edit the AI generated message:${ENDCOLOR}"
-            if [ -n "${msg}" ]; then
-                # Create temp file with AI message
-                commitmsg_file=".commitmsg__"
-                echo "$ai_commit_message" > $commitmsg_file
-
-                while [ true ]; do
-                    $editor $commitmsg_file
-                    commit_message=$(cat $commitmsg_file | sed '/^#/d')
-
-                    if [ -n "$commit_message" ]; then
-                        break
-                    fi
-                    echo
-                    echo -e "${YELLOW}Commit message cannot be empty${ENDCOLOR}"
-                    echo
-                    read -n 1 -p "Try for one more time? (y/n) " -s -e choice
-                    if [ "$choice" != "y" ]; then
-                        cleanup_on_exit "$git_add"
-                        find . -name "$commitmsg_file*" -delete
-                        exit
-                    fi    
-                done
-
-                commit_message=$(cat $commitmsg_file)
-                rm $commitmsg_file
-
-                echo
-            else
-                read -p "" -e -i "$ai_commit_message" commit_message
-            fi
-            if [ -z "$commit_message" ]; then
-                cleanup_on_exit "$git_add"
-                exit
-            fi
-            
-            commit="$commit_message"
-            # Skip to final commit step
-            echo
-            result=$(git commit -m """$commit""" 2>&1)
-            check_code $? "$result" "commit"
-            
-            # Clean up cached git add on successful commit
-            git config --unset gitbasher.cached-git-add 2>/dev/null
-            
-            after_commit
-
-            if [ -n "${push}" ]; then
-                echo
-                push_script y
-            fi
-            exit
-            
-        else
-            echo -e "${YELLOW}Falling back to manual commit message creation...${ENDCOLOR}"
-            # Continue with manual flow
-        fi
+        handle_ai_commit_generation "$step" "full" "" "true"
     fi
 
 
@@ -754,87 +794,9 @@ function commit_script {
     else
         step="4"
     fi
-    echo
-
+    
     if [ -n "${llm}" ] && [ -n "${scope}" ]; then
-        echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Generating ${YELLOW}commit message summary${ENDCOLOR} using AI..."
-        
-        # Check if AI is available
-        if ! check_ai_available; then
-            cleanup_on_exit "$git_add"
-            exit 1
-        fi
-        
-        # Generate AI commit message
-        ai_commit_message=$(generate_ai_commit_message_subject "$commit")
-        if [ $? -ne 0 ] || [ -z "$ai_commit_message" ]; then
-            echo -e "${RED}Failed to generate AI commit message${ENDCOLOR}"
-            cleanup_on_exit "$git_add"
-            exit 1
-        fi
-        
-        # Clean up the AI response (remove quotes, trim)
-        ai_commit_message=$(echo "$ai_commit_message" | sed 's/^"//;s/"$//' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-        
-        echo
-        echo -e "${GREEN}AI generated commit message:${ENDCOLOR}"
-        echo -e "${BOLD}$ai_commit_message${ENDCOLOR}"
-        echo
-        
-        # Ask user if they want to use it
-        read -n 1 -p "Use this commit message? (y/n/e to edit) " -s choice
-        echo
-        
-        if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
-            commit="$ai_commit_message"
-            # Skip to final commit step
-            echo
-            result=$(git commit -m """$commit""" 2>&1)
-            check_code $? "$result" "commit"
-            
-            # Clean up cached git add on successful commit
-            git config --unset gitbasher.cached-git-add 2>/dev/null
-            
-            after_commit
-
-            if [ -n "${push}" ]; then
-                echo
-                push_script y
-            fi
-            exit
-
-        elif [ "$choice" = "e" ] || [ "$choice" = "E" ]; then
-            echo
-            echo -e "${YELLOW}Edit the AI generated message:${ENDCOLOR}"
-            read -p "" -e -i "$ai_commit_message" commit_message
-            if [ -z "$commit_message" ]; then
-                cleanup_on_exit "$git_add"
-                exit
-            fi
-            
-            commit="$commit_message"
-            # Skip to final commit step
-            echo
-            result=$(git commit -m """$commit""" 2>&1)
-            check_code $? "$result" "commit"
-            
-            # Clean up cached git add on successful commit
-            git config --unset gitbasher.cached-git-add 2>/dev/null
-            
-            after_commit
-
-            if [ -n "${push}" ]; then
-                echo
-                push_script y
-            fi
-            exit
-            
-        else
-            echo
-            echo -e "${YELLOW}Falling back to manual commit message creation...${ENDCOLOR}"
-            echo
-            # Continue with manual flow
-        fi
+        handle_ai_commit_generation "$step" "subject" "$commit" "false"
     fi
 
     echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Write a ${YELLOW}summary${ENDCOLOR} about your changes"

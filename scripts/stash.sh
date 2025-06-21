@@ -30,7 +30,7 @@ function select_files_for_stash {
 
         # Test if the pattern matches any changed files
         # Use git add --dry-run to see what would be added
-        test_result=$(git add --dry-run $git_add 2>&1)
+        test_result=$(git add --dry-run "$git_add" 2>&1)
         test_code=$?
         
         if [ $test_code -eq 0 ] && [ -n "$test_result" ]; then
@@ -40,7 +40,7 @@ function select_files_for_stash {
             if [[ "$test_result" == *"did not match any files"* ]] && [[ "$git_add" != *"*" ]]; then
                 git_add_with_star="${git_add}*"
                 echo -e "${YELLOW}Trying with wildcard:${ENDCOLOR} ${BOLD}$git_add_with_star${ENDCOLOR}"
-                test_result_star=$(git add --dry-run $git_add_with_star 2>&1)
+                test_result_star=$(git add --dry-run "$git_add_with_star" 2>&1)
                 if [ $? -eq 0 ] && [ -n "$test_result_star" ]; then
                     git_add="$git_add_with_star"
                     break
@@ -220,7 +220,7 @@ function stash_script {
         echo
         echo -e "${YELLOW}Changed files to stash:${ENDCOLOR}"
         # Show what files would be staged (changed files only)
-        files_to_stash=$(git add --dry-run $git_add 2>/dev/null | sed 's/^add /\t/' | sed "s/'//g")
+        files_to_stash=$(git add --dry-run "$git_add" 2>/dev/null | sed 's/^add /\t/' | sed "s/'//g")
         echo -e "${GREEN}$files_to_stash${ENDCOLOR}"
         echo
 
@@ -234,7 +234,7 @@ function stash_script {
 
         # Create a temporary stash with only the specified files
         # First stage the files
-        result=$(git add $git_add 2>&1)
+        result=$(git add "$git_add" 2>&1)
         if [ $? -ne 0 ]; then
             echo -e "${RED}Failed to stage files! Error:${ENDCOLOR}"
             echo "$result"
@@ -252,7 +252,7 @@ function stash_script {
             echo -e "${RED}Failed to stash files! Error:${ENDCOLOR}"
             echo "$stash_output"
             # Restore staged files on error
-            git restore --staged $git_add 2>/dev/null
+            git restore --staged "$git_add" 2>/dev/null
             exit $stash_code
         fi
     fi

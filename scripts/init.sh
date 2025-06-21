@@ -21,9 +21,9 @@ NORMAL="\033[0m"
 # $2: default value
 # Returns: config value
 function get_config_value {
-    value=$(git config --local --get $1)
+    value=$(git config --local --get "$1")
     if [ "$value" == "" ]; then
-        value=$(git config --global --get $1)
+        value=$(git config --global --get "$1")
         if [ "$value" == "" ]; then
             value=$2
         fi

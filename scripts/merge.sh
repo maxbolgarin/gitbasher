@@ -304,8 +304,7 @@ function merge_commit {
     ### 2. Commit with entered message
     else
         staged_with_tab="$(sed 's/^/####\t/' <<< "$2")"
-        commitmsg_file=".commitmsg__"
-        touch $commitmsg_file
+        commitmsg_file=$(mktemp ".commitmsg.XXXXXX")
         echo """
 ####
 #### Write a message about merge from '$5/$4' into '$4'. Lines starting with '#' will be ignored. 

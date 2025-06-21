@@ -32,6 +32,7 @@ source scripts/common.sh
 
 
 ### Include all scripts
+source scripts/ai.sh
 source scripts/config.sh
 source scripts/merge.sh
 source scripts/rebase.sh

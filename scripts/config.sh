@@ -152,6 +152,117 @@ function set_ticket {
 }
 
 
+### Function asks user to set AI API key
+function configure_ai_key {
+    echo -e "${YELLOW}Enter AI API key${ENDCOLOR}"
+    echo
+    
+    ai_api_key=$(get_ai_api_key)
+    if [ -z "$ai_api_key" ]; then
+        echo -e "${YELLOW}AI API key is not set${ENDCOLOR}"
+    else
+        echo -e "AI API key is ${GREEN}configured${ENDCOLOR}: ${BLUE}$(mask_api_key "$ai_api_key")${ENDCOLOR}"
+    fi
+    echo -e "Enter your ${YELLOW}Gemini API key${ENDCOLOR} to enable AI commit message generation"
+    echo -e "Get your API key from: ${BLUE}https://aistudio.google.com/app/apikey${ENDCOLOR}"
+    echo -e "Press Enter to exit without changes or enter 0 to remove existing key"
+
+    echo
+    echo -e "${YELLOW}API key enters silently, so you can't see it, but it is entered${ENDCOLOR}"
+
+    read -p "API Key: " -s ai_key_input
+    echo
+
+    if [ "$ai_key_input" == "" ]; then
+        exit
+    fi
+
+    if [ "$ai_key_input" == "0" ]; then
+        git config --local --unset gitbasher.ai-api-key 2>/dev/null
+        echo
+        echo -e "${GREEN}AI API key removed from '${project_name}' repo${ENDCOLOR}"
+        exit
+    fi
+
+    echo
+
+    # Validate API key format (basic check)
+    if [[ ! "$ai_key_input" =~ ^AIza[A-Za-z0-9_-]{35}$ ]]; then
+        echo -e "${RED}Warning: API key format doesn't match expected Gemini format${ENDCOLOR}"
+        read -n 1 -p "Continue anyway? (y/n) " -s choice
+        echo
+        if [ "$choice" != "y" ] && [ "$choice" != "Y" ]; then
+            exit
+        fi
+    fi
+
+    ai_api_key=$(set_config_value gitbasher.ai-api-key "$ai_key_input")
+    echo -e "${GREEN}AI API key configured for '${project_name}' repo${ENDCOLOR}: ${BLUE}$(mask_api_key "$ai_api_key")${ENDCOLOR}"
+    echo
+
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+    yes_no_choice "\nSet AI API key globally" "true"
+    ai_api_key=$(set_config_value gitbasher.ai-api-key "$ai_key_input" "true")
+}
+
+
+### Function asks user to set AI proxy
+function configure_ai_proxy {    
+    echo -e "${YELLOW}Configure AI HTTP Proxy${ENDCOLOR}"
+    echo
+    
+    ai_proxy=$(get_ai_proxy)
+    if [ -z "$ai_proxy" ]; then
+        echo -e "${YELLOW}AI proxy is not configured${ENDCOLOR}"
+    else
+        echo -e "Current AI proxy: ${GREEN}$ai_proxy${ENDCOLOR}"
+    fi
+    
+    echo -e "Enter HTTP proxy URL to route AI requests through (useful for bypassing geo-restrictions)"
+    echo -e "Format: ${BLUE}http://proxy.example.com:8080${ENDCOLOR}"
+    echo -e "With auth: ${BLUE}http://username:password@proxy.example.com:8080${ENDCOLOR}"
+    echo -e "Press Enter to exit without changes or enter 0 to remove existing proxy"
+
+    read -p "Proxy URL: " ai_proxy_input
+
+    if [ "$ai_proxy_input" == "" ]; then
+        exit
+    fi
+
+    if [ "$ai_proxy_input" == "0" ]; then
+        clear_ai_proxy
+        echo
+        echo -e "${GREEN}AI proxy removed from '${project_name}' repo${ENDCOLOR}"
+        exit
+    fi
+
+    echo
+
+    # Validate proxy URL format (basic check)
+    if [[ ! "$ai_proxy_input" =~ ^https?://.*:[0-9]+$ ]]; then
+        echo -e "${YELLOW}Warning: Proxy URL format should be http://host:port or https://host:port${ENDCOLOR}"
+        read -n 1 -p "Continue anyway? (y/n) " -s choice
+        echo
+        if [ "$choice" != "y" ] && [ "$choice" != "Y" ]; then
+            exit
+        fi
+    fi
+
+    set_ai_proxy "$ai_proxy_input"
+    echo -e "${GREEN}AI proxy configured for '${project_name}' repo${ENDCOLOR}: ${BLUE}$ai_proxy_input${ENDCOLOR}"
+    echo
+    echo -e "${YELLOW}Example usage:${ENDCOLOR}"
+    echo -e "  ${BLUE}gitb commit ai${ENDCOLOR}    - Generate commit with AI through proxy"
+    echo -e "  ${BLUE}gitb commit aif${ENDCOLOR}   - Fast AI commit through proxy"
+    echo
+
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+    yes_no_choice "\nSet AI proxy globally" "true"
+    set_ai_proxy "$ai_proxy_input"
+    git config --global gitbasher.ai-proxy "$ai_proxy_input"
+}
+
+
 ### Function asks user to set scope
 function set_scopes {
     echo -e "${YELLOW}Enter a list of predefined scopes${ENDCOLOR}"
@@ -231,10 +342,20 @@ function delete_global {
         echo -e "5. Scopes list: ${YELLOW}${global_scopes}${ENDCOLOR}"
     fi
 
+    global_ai_key=$(git config --global --get gitbasher.ai-api-key)
+    if [ "$global_ai_key" != "" ]; then
+        echo -e "6. AI API key: ${GREEN}configured${ENDCOLOR}"
+    fi
+
+    global_ai_proxy=$(git config --global --get gitbasher.ai-proxy)
+    if [ "$global_ai_proxy" != "" ]; then
+        echo -e "7. AI proxy: ${GREEN}$global_ai_proxy${ENDCOLOR}"
+    fi
+
     echo -e "0. Exit"
 
     read -n 1 -s choice
-    re='^[012345]+$'
+    re='^[01234567]+$'
     if ! [[ $choice =~ $re ]]; then
         break
     fi
@@ -265,6 +386,14 @@ function delete_global {
         5)
             echo -e "${GREEN}Unset scopes list from global settings${ENDCOLOR}"
             git config --global --unset gitbasher.scopes
+            ;;
+        6)
+            echo -e "${GREEN}Unset AI API key from global settings${ENDCOLOR}"
+            git config --global --unset gitbasher.ai-api-key
+            ;;
+        7)
+            echo -e "${GREEN}Unset AI proxy from global settings${ENDCOLOR}"
+            git config --global --unset gitbasher.ai-proxy
             ;;
     esac
 }
@@ -316,6 +445,8 @@ function config_script {
         editor|ed|e)          set_editor_cfg="true";;
         ticket|jira|ti|t)     set_ticket_cfg="true";;
         scopes|scope|sc|s)    set_scopes_cfg="true";;
+        ai|llm|key)           set_ai_cfg="true";;
+        proxy|prx|p)          set_proxy_cfg="true";;
         delete|unset|del)     delete_cfg="true";;
         user|name|email|u)    set_user_cfg="true";;
         help|h)               help="true";;
@@ -334,7 +465,11 @@ function config_script {
         header="$header TICKET PREFIX"
     elif [ -n "${set_scopes_cfg}" ]; then
         header="$header SCOPES LIST"
-    elif [ -n "${delete}" ]; then
+    elif [ -n "${set_ai_cfg}" ]; then
+        header="$header AI API KEY"
+    elif [ -n "${set_proxy_cfg}" ]; then
+        header="$header AI PROXY"
+    elif [ -n "${delete_cfg}" ]; then
         header="$header UNSET GLOBAL CONFIG"
     elif [ -n "${set_user_cfg}" ]; then
         header="$header USER NAME & EMAIL"
@@ -373,6 +508,16 @@ function config_script {
         exit
     fi
 
+    if [ "$set_ai_cfg" == "true" ]; then
+        configure_ai_key
+        exit
+    fi
+
+    if [ "$set_proxy_cfg" == "true" ]; then
+        configure_ai_proxy
+        exit
+    fi
+
     if [ "$delete_cfg" == "true" ]; then
         delete_global
         exit
@@ -389,6 +534,8 @@ function config_script {
         echo -e "editor|ed|e\t\tUpdate text editor for the commit messages"
         echo -e "ticket|ti|t|jira\tSet ticket prefix to help with commit/branch building"
         echo -e "scopes|sc|s\t\tSet a list of scopes to help with commit building"
+        echo -e "ai|llm|key\t\tSet AI API key for commit message generation"
+        echo -e "proxy|prx|p\t\tSet HTTP proxy for AI requests (bypass geo-restrictions)"
         echo -e "delete|unset|del\tUnset global configuration"
         exit
     fi

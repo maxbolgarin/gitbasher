@@ -133,6 +133,19 @@ function print_configuration {
     if [ "$scopes" != "" ]; then
         echo -e "\tscopes:\t\t${YELLOW}$scopes${ENDCOLOR}"
     fi
+    local ai_key=$(get_ai_api_key)
+    if [ -n "$ai_key" ]; then
+        ai_key=$(mask_api_key "$ai_key")
+        echo -e "\tAI key:\t\t${GREEN}$ai_key${ENDCOLOR}"
+    else
+        echo -e "\tAI key:\t\t${RED}not set${ENDCOLOR}"
+    fi
+    local ai_proxy=$(get_ai_proxy)
+    if [ -n "$ai_proxy" ]; then
+        echo -e "\tAI proxy:\t${GREEN}$ai_proxy${ENDCOLOR}"
+    else
+        echo -e "\tAI proxy:\t${YELLOW}not set${ENDCOLOR}"
+    fi
 }
 function escape {
     string="$1"
@@ -463,6 +476,274 @@ function switch {
         echo -e "$switch_output"
         exit $switch_code
     fi
+}
+source scripts/common.sh
+function get_ai_api_key {
+    get_config_value gitbasher.ai-api-key ""
+}
+function set_ai_api_key {
+    set_config_value gitbasher.ai-api-key "$1"
+}
+function get_ai_proxy {
+    get_config_value gitbasher.ai-proxy ""
+}
+function set_ai_proxy {
+    set_config_value gitbasher.ai-proxy "$1"
+}
+function clear_ai_proxy {
+    git config --unset gitbasher.ai-proxy 2>/dev/null
+}
+function mask_api_key {
+    local api_key="$1"
+    if [ -z "$api_key" ]; then
+        echo ""
+        return
+    fi
+    local length=${#api_key}
+    if [ $length -le 4 ]; then
+        echo "$api_key"
+        return
+    fi
+    local visible_chars="${api_key:(-4)}"
+    echo "********${visible_chars}"
+}
+function call_gemini_api {
+    local prompt="$1"
+    local api_key=$(get_ai_api_key)
+    if [ -z "$api_key" ]; then
+        echo -e "${RED}AI API key not configured. Set it with: gitb config${ENDCOLOR}" >&2
+        return 1
+    fi
+    local escaped_prompt=$(echo "$prompt" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | tr '\n' ' ' | sed 's/  */ /g')
+    local json_payload="{
+        \"contents\": [{
+            \"parts\": [{
+                \"text\": \"$escaped_prompt\"
+            }]
+        }],
+        \"generationConfig\": {
+            \"temperature\": 0.1,
+            \"maxOutputTokens\": 100,
+            \"topP\": 0.8,
+            \"topK\": 10
+        }
+    }"
+    local proxy_url=$(get_ai_proxy)
+    local response=""
+    if [ -n "$proxy_url" ]; then
+        response=$(curl -s -X POST \
+            --proxy "$proxy_url" \
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${api_key}" \
+            -H "Content-Type: application/json" \
+            -d "$json_payload" 2>/dev/null)
+    else
+        response=$(curl -s -X POST \
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${api_key}" \
+            -H "Content-Type: application/json" \
+            -d "$json_payload" 2>/dev/null)
+    fi
+    if [ $? -ne 0 ] || [ -z "$response" ]; then
+        echo -e "${RED}Failed to connect to AI service${ENDCOLOR}" >&2
+        return 1
+    fi
+    local has_error=$(echo "$response" | grep -q '"error"' && echo "true" || echo "false")
+    if [ "$has_error" = "true" ]; then
+        local error_code=$(echo "$response" | grep -o '"code"[[:space:]]*:[[:space:]]*[0-9]*' | grep -o '[0-9]*')
+        local error_message=$(echo "$response" | grep -o '"message"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/"message"[[:space:]]*:[[:space:]]*"\([^"]*\)"/\1/')
+        echo -e "${RED}AI API Error${ENDCOLOR}" >&2
+        if [ -n "$error_code" ]; then
+            echo -e "${RED}Error Code: $error_code${ENDCOLOR}" >&2
+        fi
+        if [ -n "$error_message" ]; then
+            echo -e "${RED}Error Message: $error_message${ENDCOLOR}" >&2
+        fi
+        echo >&2
+        case "$error_code" in
+            400)
+                if [[ "$error_message" == *"location is not supported"* ]]; then
+                    echo -e "${YELLOW}⚠️  Geographic restriction: Google's Gemini API is not available in your region.${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}  • Configure proxy with: gitb cfg proxy${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}  • Use a VPN to connect from a supported region${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}  • Use manual commit messages for now${ENDCOLOR}" >&2
+                else
+                    echo -e "${YELLOW}⚠️  Bad request: Check your API configuration or prompt format.${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}  • Verify your API key is correct${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}  • Try again with a smaller commit diff${ENDCOLOR}" >&2
+                fi
+                ;;
+            401|403)
+                echo -e "${YELLOW}🔐 Authentication error: Invalid or expired API key.${ENDCOLOR}" >&2
+                echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
+                echo -e "${YELLOW}  • Check your API key with: gitb cfg ai${ENDCOLOR}" >&2
+                echo -e "${YELLOW}  • Generate a new API key at: https://makersuite.google.com/app/apikey${ENDCOLOR}" >&2
+                echo -e "${YELLOW}  • Ensure your API key has proper permissions${ENDCOLOR}" >&2
+                ;;
+            429)
+                echo -e "${YELLOW}⏱️  Rate limit exceeded: Too many requests.${ENDCOLOR}" >&2
+                echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
+                echo -e "${YELLOW}  • Wait a few minutes and try again${ENDCOLOR}" >&2
+                echo -e "${YELLOW}  • Consider upgrading your API plan for higher limits${ENDCOLOR}" >&2
+                ;;
+            500|502)
+                echo -e "${YELLOW}🔧 Server error: Google's service is experiencing issues.${ENDCOLOR}" >&2
+                echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
+                echo -e "${YELLOW}  • Try again in a few minutes${ENDCOLOR}" >&2
+                echo -e "${YELLOW}  • Check Google's API status page${ENDCOLOR}" >&2
+                ;;
+            503)
+                echo -e "${YELLOW}📊 Service overloaded: Google's servers are busy.${ENDCOLOR}" >&2
+                echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
+                echo -e "${YELLOW}  • Try again in a few minutes${ENDCOLOR}" >&2
+                echo -e "${YELLOW}  • Retry during off-peak hours${ENDCOLOR}" >&2
+                ;;
+            *)
+                if [[ "$error_message" == *"suspended"* ]]; then
+                    echo -e "${YELLOW}🚫 Account suspended: Your API access has been suspended.${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}  • Contact Google Support to resolve account issues${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}  • Check your Google Cloud Console for notices${ENDCOLOR}" >&2
+                elif [[ "$error_message" == *"location is not supported"* ]]; then
+                    echo -e "${YELLOW}⚠️  Geographic restriction: Google's Gemini API is not available in your region.${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}  • Configure proxy with: gitb cfg proxy${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}  • Use a VPN to connect from a supported region${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}  • Use manual commit messages for now${ENDCOLOR}" >&2
+                else
+                    echo -e "${YELLOW}❓ Unknown error occurred.${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}  • Check Google's API documentation${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}  • Try again later${ENDCOLOR}" >&2
+                fi
+                ;;
+        esac
+        return 1
+    fi
+    local ai_response=""
+    ai_response=$(echo "$response" | sed -n 's/.*"text"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+    if [ -z "$ai_response" ]; then
+        ai_response=$(echo "$response" | sed -n 's/.*"candidates".*"text"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+    fi
+    if [ -z "$ai_response" ]; then
+        ai_response=$(echo "$response" | sed -n 's/.*"content".*"parts".*"text"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+    fi
+    if [ -n "$ai_response" ]; then
+        ai_response=$(echo "$ai_response" | sed 's/\\n/\n/g' | sed 's/\\"/"/g' | sed 's/\\\\//g')
+    fi
+    if [ -z "$ai_response" ]; then
+        echo -e "${RED}Failed to parse AI response${ENDCOLOR}" >&2
+        echo -e "${YELLOW}Raw API response:${ENDCOLOR}" >&2
+        echo "$response" | head -5 >&2
+        echo -e "${YELLOW}...${ENDCOLOR}" >&2
+        echo -e "${YELLOW}To see full response, enable debug mode in ai.sh${ENDCOLOR}" >&2
+        return 1
+    fi
+    echo "$ai_response"
+}
+function check_ai_available {
+    if ! command -v curl >/dev/null 2>&1; then
+        echo -e "${RED}curl is required for AI functionality but not installed${ENDCOLOR}" >&2
+        return 1
+    fi
+    local api_key=$(get_ai_api_key)
+    if [ -z "$api_key" ]; then
+        echo -e "${RED}AI API key not configured${ENDCOLOR}" >&2
+        echo -e "${YELLOW}Configure it with: gitb cfg ai${ENDCOLOR}" >&2
+        return 1
+    fi
+    return 0
+}
+function generate_ai_commit_message {
+    local staged_files=$(git diff --name-only --cached)
+    if [ -z "$staged_files" ]; then
+        echo -e "${RED}No staged files found${ENDCOLOR}" >&2
+        return 1
+    fi
+    local diff_content=$(git diff --cached --stat)
+    local diff_details=$(git diff --cached | head -100)
+    local prompt="Analyze the following git changes and generate a conventional commit message in the format 'type(scope): subject'.
+Available types:
+- feat: new feature, logic change or performance improvement
+- fix: small changes, bug fix
+- refactor: code change that neither fixes a bug nor adds a feature, style changes
+- test: adding missing tests or changing existing tests
+- build: changes that affect the build system or external dependencies
+- ci: changes to CI configuration files and scripts
+- chore: maintenance and housekeeping
+- docs: documentation changes
+Staged files:
+$staged_files
+File changes summary:
+$diff_content
+Code changes (partial):
+$diff_details
+Generate ONLY the commit message in the format 'type(scope): subject'. The subject should:
+- Use imperative mood (e.g., 'add', 'fix', 'update')
+- Be lowercase
+- Not end with a period
+- Be concise and descriptive
+If you can determine a meaningful scope from the file paths, include it. Otherwise, omit the scope.
+Respond with only the commit message, nothing else."
+    call_gemini_api "$prompt"
+}
+function generate_ai_commit_message_subject {
+    local staged_files=$(git diff --name-only --cached)
+    if [ -z "$staged_files" ]; then
+        echo -e "${RED}No staged files found${ENDCOLOR}" >&2
+        return 1
+    fi
+    local diff_content=$(git diff --cached --stat)
+    local diff_details=$(git diff --cached | head -100)
+    local prompt="Analyze the following git changes and generate a conventional commit message that will be after appended to $1'.
+Staged files:
+$staged_files
+File changes summary:
+$diff_content
+Code changes (partial):
+$diff_details
+Generate ONLY the commit message. The message should:
+- Use imperative mood (e.g., 'add', 'fix', 'update')
+- Be lowercase
+- Not end with a period
+- Be concise and descriptive
+Respond with only the commit message without any other text, nothing else."
+    call_gemini_api "$prompt"
+}
+function generate_ai_commit_message_full {
+    local staged_files=$(git diff --name-only --cached)
+    if [ -z "$staged_files" ]; then
+        echo -e "${RED}No staged files found${ENDCOLOR}" >&2
+        return 1
+    fi
+    local diff_content=$(git diff --cached --stat)
+    local diff_details=$(git diff --cached | head -100)
+    local prompt="Analyze the following git changes and generate a conventional commit message in the format 'type(scope): subject'.
+Also write a body and footer for the commit message, where you can explain why you are making the change.
+Available types:
+- feat: new feature, logic change or performance improvement
+- fix: small changes, bug fix
+- refactor: code change that neither fixes a bug nor adds a feature, style changes
+- test: adding missing tests or changing existing tests
+- build: changes that affect the build system or external dependencies
+- ci: changes to CI configuration files and scripts
+- chore: maintenance and housekeeping
+- docs: documentation changes
+Staged files:
+$staged_files
+File changes summary:
+$diff_content
+Code changes (partial):
+$diff_details
+Generate ONLY the commit message in the format 'type(scope): subject' with body and footer. The subject should:
+- Use imperative mood (e.g., 'add', 'fix', 'update')
+- Be lowercase
+- Not end with a period
+- Be concise and descriptive
+If you can determine a meaningful scope from the file paths, include it. Otherwise, omit the scope.
+The body should explain why you are making the change. The length of the body should be 1-2 sentences, not more.
+Respond with only the full commit message, nothing else."
+    call_gemini_api "$prompt"
 }
 function set_default_branch {
     echo -e "${YELLOW}Fetching remote branches...${ENDCOLOR}"
@@ -1637,11 +1918,20 @@ function commit_script {
         amendf|amf|af|fa)   amend="true"; fast="true";;
         last|l)             last="true";;
         revert|rev)         revert="true";;
+        llm|ai|i)           llm="true";;
+        llmf|aif|if)        llm="true"; fast="true";;
+        llmp|aip|ip)        llm="true"; push="true";;
+        llmfp|aifp|ifp|ipf) llm="true"; fast="true"; push="true";;
+        llms|ais|is)        llm="true"; scope="true";;
+        llmm|aim|im)        llm="true"; msg="true";;
         help|h)             help="true";;
         *)
             wrong_mode "commit" $1
     esac
     header_msg="GIT COMMIT"
+    if [ -n "${llm}" ]; then
+        header_msg="$header_msg AI"
+    fi
     if [ -n "${fast}" ]; then
         if [ -n "${push}" ]; then
             if [ -n "${fixup}" ]; then
@@ -1695,6 +1985,11 @@ function commit_script {
         echo -e "amendf|amf|af\tAdd all fiels to the last commit without message edit (git commit --amend --no-edit)"
         echo -e "last|l\t\tChange commit message to the last one"
         echo -e "revert|rev\tSelect a commit to revert (git revert -no-edit <commit>)"
+        echo -e "llm|ai|i\tUse AI to generate commit message based on staged changes"
+        echo -e "llmf|aif|if\tUse AI to generate commit message in the fast mode (git add .) without confirmation"
+        echo -e "llmp|aip|ip\tUse AI to generate commit message and push changes"
+        echo -e "llmfp|aifp|ifp\tUse AI to generate commit message in the fast mode and push changes"
+        echo -e "llms|ais|is\tUse AI to generate commit summary with manual type and scope enter"
         echo -e "help|h\t\tShow this help"
         git config --unset gitbasher.cached-git-add 2>/dev/null
         exit
@@ -1791,6 +2086,95 @@ function commit_script {
     echo -e "${YELLOW}Staged files:${ENDCOLOR}"
     staged="$(sed 's/^/\t/' <<< "$(git diff --name-only --cached)")"
     echo -e "${GREEN}${staged}${ENDCOLOR}"
+    if [ -n "${llm}" ] && [ -z "${scope}" ]; then
+        if [ -n "${fast}" ]; then
+            step="1"
+        fi
+        echo
+        echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Generating ${YELLOW}commit message${ENDCOLOR} using AI..."
+        if ! check_ai_available; then
+            cleanup_on_exit "$git_add"
+            exit 1
+        fi
+        if [ -n "${msg}" ]; then
+            ai_commit_message=$(generate_ai_commit_message_full)
+        else
+            ai_commit_message=$(generate_ai_commit_message)
+        fi
+        if [ $? -ne 0 ] || [ -z "$ai_commit_message" ]; then
+            echo -e "${RED}Failed to generate AI commit message${ENDCOLOR}"
+            cleanup_on_exit "$git_add"
+            exit 1
+        fi
+        ai_commit_message=$(echo "$ai_commit_message" | sed 's/^"//;s/"$//' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        echo
+        echo -e "${GREEN}AI generated commit message:${ENDCOLOR}"
+        echo -e "${BOLD}$ai_commit_message${ENDCOLOR}"
+        echo
+        if [ -z "${fast}" ] || [ -n "${push}" ]; then
+            read -n 1 -p "Use this commit message? (y/n/e to edit) " -s choice
+            echo
+            echo
+        else
+            choice="y"
+        fi
+        if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
+            commit="$ai_commit_message"
+            result=$(git commit -m """$commit""" 2>&1)
+            check_code $? "$result" "commit"
+            git config --unset gitbasher.cached-git-add 2>/dev/null
+            after_commit
+            if [ -n "${push}" ]; then
+                echo
+                push_script y
+            fi
+            exit
+        elif [ "$choice" = "e" ] || [ "$choice" = "E" ]; then
+            echo -e "${YELLOW}Edit the AI generated message:${ENDCOLOR}"
+            if [ -n "${msg}" ]; then
+                commitmsg_file=".commitmsg__"
+                echo "$ai_commit_message" > $commitmsg_file
+                while [ true ]; do
+                    $editor $commitmsg_file
+                    commit_message=$(cat $commitmsg_file | sed '/^#/d')
+                    if [ -n "$commit_message" ]; then
+                        break
+                    fi
+                    echo
+                    echo -e "${YELLOW}Commit message cannot be empty${ENDCOLOR}"
+                    echo
+                    read -n 1 -p "Try for one more time? (y/n) " -s -e choice
+                    if [ "$choice" != "y" ]; then
+                        cleanup_on_exit "$git_add"
+                        find . -name "$commitmsg_file*" -delete
+                        exit
+                    fi    
+                done
+                commit_message=$(cat $commitmsg_file)
+                rm $commitmsg_file
+                echo
+            else
+                read -p "" -e -i "$ai_commit_message" commit_message
+            fi
+            if [ -z "$commit_message" ]; then
+                cleanup_on_exit "$git_add"
+                exit
+            fi
+            commit="$commit_message"
+            echo
+            result=$(git commit -m """$commit""" 2>&1)
+            check_code $? "$result" "commit"
+            git config --unset gitbasher.cached-git-add 2>/dev/null
+            after_commit
+            if [ -n "${push}" ]; then
+                echo
+                push_script y
+            fi
+            exit
+        else
+            echo -e "${YELLOW}Falling back to manual commit message creation...${ENDCOLOR}"
+        fi
+    fi
     if [ -n "${fixup}" ]; then
         echo
         echo -e "${YELLOW}Step 2.${ENDCOLOR} Select a commit to ${YELLOW}--fixup${ENDCOLOR}:"
@@ -1978,6 +2362,62 @@ function commit_script {
         step="4"
     fi
     echo
+    if [ -n "${llm}" ] && [ -n "${scope}" ]; then
+        echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Generating ${YELLOW}commit message summary${ENDCOLOR} using AI..."
+        if ! check_ai_available; then
+            cleanup_on_exit "$git_add"
+            exit 1
+        fi
+        ai_commit_message=$(generate_ai_commit_message_subject "$commit")
+        if [ $? -ne 0 ] || [ -z "$ai_commit_message" ]; then
+            echo -e "${RED}Failed to generate AI commit message${ENDCOLOR}"
+            cleanup_on_exit "$git_add"
+            exit 1
+        fi
+        ai_commit_message=$(echo "$ai_commit_message" | sed 's/^"//;s/"$//' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        echo
+        echo -e "${GREEN}AI generated commit message:${ENDCOLOR}"
+        echo -e "${BOLD}$ai_commit_message${ENDCOLOR}"
+        echo
+        read -n 1 -p "Use this commit message? (y/n/e to edit) " -s choice
+        echo
+        if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
+            commit="$ai_commit_message"
+            echo
+            result=$(git commit -m """$commit""" 2>&1)
+            check_code $? "$result" "commit"
+            git config --unset gitbasher.cached-git-add 2>/dev/null
+            after_commit
+            if [ -n "${push}" ]; then
+                echo
+                push_script y
+            fi
+            exit
+        elif [ "$choice" = "e" ] || [ "$choice" = "E" ]; then
+            echo
+            echo -e "${YELLOW}Edit the AI generated message:${ENDCOLOR}"
+            read -p "" -e -i "$ai_commit_message" commit_message
+            if [ -z "$commit_message" ]; then
+                cleanup_on_exit "$git_add"
+                exit
+            fi
+            commit="$commit_message"
+            echo
+            result=$(git commit -m """$commit""" 2>&1)
+            check_code $? "$result" "commit"
+            git config --unset gitbasher.cached-git-add 2>/dev/null
+            after_commit
+            if [ -n "${push}" ]; then
+                echo
+                push_script y
+            fi
+            exit
+        else
+            echo
+            echo -e "${YELLOW}Falling back to manual commit message creation...${ENDCOLOR}"
+            echo
+        fi
+    fi
     echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Write a ${YELLOW}summary${ENDCOLOR} about your changes"
     if [ -n "$is_empty" ]; then
         echo -e "Final meesage will be ${YELLOW}<summary>${ENDCOLOR}"

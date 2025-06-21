@@ -24,7 +24,7 @@ function branch_script {
             new="true"
             current="true"    
         ;;
-        newd|nd)        
+        newd|nd|cd)        
             new="true"
         ;;
         delete|del|d) delete="true";;
@@ -327,16 +327,18 @@ function branch_script {
         exit
     fi
 
-    echo -e "${YELLOW}Current local branches:${ENDCOLOR}"
-    list_branches
+    if [ -n "$current" ]; then
+        echo -e "${YELLOW}Current local branches:${ENDCOLOR}"
+        list_branches
+    else
+         echo -e "It will switch to ${BOLD}${BLUE}${main_branch}${ENDCOLOR} and pull it first"
+    fi
 
     if [ -n "$list" ]; then
         exit
     fi
 
-
     echo
-
 
     ### Run create new branch logic
     # Detect prefixes from existing branches
@@ -402,8 +404,13 @@ function branch_script {
         branch_name="${branch_name##*( )}"
     else
         ### Step 1. Select branch prefix
-        echo -e "${YELLOW}Step 1.${ENDCOLOR} Select a prefix for your branch name"
-        echo -e "Branches will be created with separator '${YELLOW}${sep}${ENDCOLOR}' (e.g., ${YELLOW}prefix${sep}name${ENDCOLOR})"
+        branch_to_show=$current_branch
+        if [ -z "$current" ]; then
+            branch_to_show=$main_branch
+        fi
+        echo -e "${YELLOW}Step 1.${ENDCOLOR} Enter a ${YELLOW}prefix${ENDCOLOR} for your new branch from ${BOLD}${BLUE}${branch_to_show}${ENDCOLOR}"
+        echo -e "A branch will be created with '${YELLOW}${sep}${ENDCOLOR}' as a separator (e.g., ${YELLOW}prefix${sep}name${ENDCOLOR})"
+        echo -e "Press Enter to continue without prefix or enter 0 to exit without changes"
         
         # Build the display array
         IFS=' ' read -r -a prefixes_array <<< "$all_prefixes"
@@ -420,17 +427,21 @@ function branch_script {
         # Add no prefix option
         no_prefix_option=$((${#prefixes_array[@]}+1))
         prefixes_map["$no_prefix_option"]=""
-        res="$res$no_prefix_option. ${BOLD}no prefix${ENDCOLOR}|"
         
-        echo -e "$(echo $res | column -ts'|')"
-        echo -e "0. Exit without changes"
-        echo
+        echo -e "You can select one of the ${YELLOW}detected prefixes${ENDCOLOR}: $(echo $res | column -ts'|')"
 
         while [ true ]; do
-            read -p "Select prefix number or enter custom prefix: " choice
+            read -p "<prefix>: " choice
 
-            if [ "$choice" == "0" ] || [ "$choice" == "" ]; then
+            if [ "$choice" == "0" ]; then
                 exit
+            fi
+            
+            # Handle empty input (Enter) - continue without prefix
+            if [ "$choice" == "" ]; then
+                branch_type=""
+                branch_type_and_sep=""
+                break
             fi
 
             # Check if it's a number (option selection)
@@ -466,8 +477,8 @@ function branch_script {
 
         ### Step 2. Enter branch name
         echo
-        echo -e "${YELLOW}Step 2.${ENDCOLOR} Enter the name of the branch"
-        echo "Leave it blank if you want to exit"
+        echo -e "${YELLOW}Step 2.${ENDCOLOR} Enter the ${YELLOW}name${ENDCOLOR} of the branch"
+        echo "Press Enter if you want to exit"
 
         printf "${BOLD}git branch${ENDCOLOR}"
         read -p " ${branch_type_and_sep}" -e branch_name

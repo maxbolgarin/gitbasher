@@ -487,7 +487,6 @@ function switch {
         exit $switch_code
     fi
 }
-source scripts/common.sh
 function get_ai_api_key {
     get_config_value gitbasher.ai-api-key ""
 }

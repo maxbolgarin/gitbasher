@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-source scripts/common.sh
-
 ### AI Functions for commit message generation
 
 ### Function to get AI API key from git config

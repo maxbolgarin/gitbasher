@@ -105,7 +105,6 @@ function set_config_value {
     else
         git config --global "$1" "$2"
     fi
-    echo "$2"
 }
 function wrong_mode {
     if [ -n "$2" ]; then
@@ -156,6 +155,8 @@ function print_configuration {
     else
         echo -e "\tAI proxy:\t${YELLOW}not set${ENDCOLOR}"
     fi
+    local ai_history_limit=$(get_ai_commit_history_limit)
+    echo -e "\tAI history:\t${GREEN}$ai_history_limit commits${ENDCOLOR}"
 }
 function escape {
     string="$1"
@@ -170,7 +171,7 @@ function check_code {
         echo -e "${RED}Error during $3!${ENDCOLOR}"
         echo -e "$2"
         if [ -n "$git_add" ]; then
-            git restore --staged "$git_add"
+            git restore --staged $git_add
         fi
         exit $1
     fi
@@ -203,7 +204,7 @@ function choose {
         fi
         if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
             if [ -n "$git_add" ]; then
-                git restore --staged "$git_add"
+                git restore --staged $git_add
             fi
             if [ $number_of_values -le 9 ]; then
                 printf $choice
@@ -213,7 +214,7 @@ function choose {
         re='^[0-9=]+$'
         if ! [[ $choice =~ $re ]]; then
             if [ -n "$git_add" ]; then
-                git restore --staged "$git_add"
+                git restore --staged $git_add
             fi
             exit
         fi
@@ -231,7 +232,7 @@ function choose {
         else
             if [ $number_of_values -gt 9 ]; then
                 if [ -n "$git_add" ]; then
-                    git restore --staged "$git_add"
+                    git restore --staged $git_add
                 fi
                 exit
             fi
@@ -508,6 +509,12 @@ function get_ai_diff_limit {
 function set_ai_diff_limit {
     set_config_value gitbasher.ai-diff-limit "$1"
 }
+function get_ai_commit_history_limit {
+    get_config_value gitbasher.ai-commit-history-limit "10"
+}
+function set_ai_commit_history_limit {
+    set_config_value gitbasher.ai-commit-history-limit "$1"
+}
 function mask_api_key {
     local api_key="$1"
     if [ -z "$api_key" ]; then
@@ -533,6 +540,16 @@ function get_limited_diff_for_ai {
     fi
     echo "$diff_content"
 }
+function get_recent_commit_messages_for_ai {
+    local limit=$(get_ai_commit_history_limit)  # Use configurable limit
+    local max_chars=1000  # Character limit to save tokens
+    local recent_commits=$(git log --no-merges --pretty=format:"%s" -n "$limit" 2>/dev/null | head -c "$max_chars")
+    if [ -z "$recent_commits" ]; then
+        echo "No commit history available."
+        return
+    fi
+    echo "$recent_commits"
+}
 function call_gemini_api {
     local prompt="$1"
     local api_key=$(get_ai_api_key)
@@ -557,19 +574,63 @@ function call_gemini_api {
     local proxy_url=$(get_ai_proxy)
     local response=""
     if [ -n "$proxy_url" ]; then
+        local proxy_opts=""
+        if [[ "$proxy_url" == socks5://* ]]; then
+            proxy_opts="--socks5-hostname"
+        fi
         response=$(curl -s -X POST \
             --proxy "$proxy_url" \
+            $proxy_opts \
+            --http0.9 \
+            --connect-timeout 30 \
+            --max-time 60 \
             "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${api_key}" \
             -H "Content-Type: application/json" \
             -d "$json_payload" 2>/dev/null)
+        if [ $? -ne 0 ] || [ -z "$response" ]; then
+            response=$(curl -s -X POST \
+                --proxy "$proxy_url" \
+                $proxy_opts \
+                --http1.0 \
+                --connect-timeout 30 \
+                --max-time 60 \
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${api_key}" \
+                -H "Content-Type: application/json" \
+                -d "$json_payload" 2>/dev/null)
+        fi
+        if [ $? -ne 0 ] || [ -z "$response" ]; then
+            if [[ "$proxy_url" != socks5://* ]]; then
+                response=$(curl -s -X POST \
+                    --proxy "$proxy_url" \
+                    --proxy-negotiate \
+                    --anyauth \
+                    --http1.1 \
+                    --connect-timeout 30 \
+                    --max-time 60 \
+                    --retry 1 \
+                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${api_key}" \
+                    -H "Content-Type: application/json" \
+                    -d "$json_payload" 2>/dev/null)
+            fi
+        fi
     else
         response=$(curl -s -X POST \
+            --http1.1 \
+            --connect-timeout 30 \
+            --max-time 60 \
+            --retry 2 \
             "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${api_key}" \
             -H "Content-Type: application/json" \
             -d "$json_payload" 2>/dev/null)
     fi
     if [ $? -ne 0 ] || [ -z "$response" ]; then
+        echo
         echo -e "${RED}Failed to connect to AI service${ENDCOLOR}" >&2
+        if [ -n "$proxy_url" ]; then
+            echo -e "${YELLOW}Proxy connection failed. Try:${ENDCOLOR}" >&2
+            echo -e "  • Test: ${BOLD}curl --proxy '$proxy_url' --connect-timeout 10 ifconfig.me${ENDCOLOR}" >&2
+            echo -e "  • Configure different proxy with: gitb cfg proxy" >&2
+        fi
         return 1
     fi
     local has_error=$(echo "$response" | grep -q '"error"' && echo "true" || echo "false")
@@ -688,6 +749,7 @@ function generate_ai_commit_message {
     fi
     local diff_content=$(git diff --cached --stat)
     local diff_details=$(get_limited_diff_for_ai)
+    local recent_commits=$(get_recent_commit_messages_for_ai)
     local prompt="Analyze the following git changes and generate a conventional commit message in the format 'type(scope): subject'.
 Available types:
 - feat: new feature, logic change or performance improvement
@@ -698,6 +760,8 @@ Available types:
 - ci: changes to CI configuration files and scripts
 - chore: maintenance and housekeeping
 - docs: documentation changes
+Recent commit messages from this repository (for style reference):
+$recent_commits
 Staged files:
 $staged_files
 File changes summary:
@@ -709,6 +773,7 @@ Generate ONLY the commit message in the format 'type(scope): subject'. The subje
 - Be lowercase
 - Not end with a period
 - Be concise and descriptive
+- Follow the style and patterns from the recent commits shown above
 If you can determine a meaningful scope from the file paths, include it. Otherwise, omit the scope.
 Respond with only the commit message, nothing else."
     call_gemini_api "$prompt"
@@ -721,7 +786,10 @@ function generate_ai_commit_message_subject {
     fi
     local diff_content=$(git diff --cached --stat)
     local diff_details=$(get_limited_diff_for_ai)
+    local recent_commits=$(get_recent_commit_messages_for_ai)
     local prompt="Analyze the following git changes and generate a conventional commit message that will be after appended to $1'.
+Recent commit messages from this repository (for style reference):
+$recent_commits
 Staged files:
 $staged_files
 File changes summary:
@@ -733,6 +801,7 @@ Generate ONLY the commit message. The message should:
 - Be lowercase
 - Not end with a period
 - Be concise and descriptive
+- Follow the style and patterns from the recent commits shown above
 Respond with only the commit message without any other text, nothing else."
     call_gemini_api "$prompt"
 }
@@ -744,6 +813,7 @@ function generate_ai_commit_message_full {
     fi
     local diff_content=$(git diff --cached --stat)
     local diff_details=$(get_limited_diff_for_ai)
+    local recent_commits=$(get_recent_commit_messages_for_ai)
     local prompt="Analyze the following git changes and generate a conventional commit message in the format 'type(scope): subject'.
 Also write a body for the commit message, where you can explain why you are making the change.
 Available types:
@@ -755,6 +825,8 @@ Available types:
 - ci: changes to CI configuration files and scripts
 - chore: maintenance and housekeeping
 - docs: documentation changes
+Recent commit messages from this repository (for style reference):
+$recent_commits
 Staged files:
 $staged_files
 File changes summary:
@@ -766,6 +838,7 @@ Generate ONLY the commit message in the format 'type(scope): subject' with body.
 - Be lowercase
 - Not end with a period
 - Be concise and descriptive
+- Follow the style and patterns from the recent commits shown above
 If you can determine a meaningful scope from the file paths, include it. Otherwise, omit the scope.
 The body should explain why you are making the change. The length of the body should be 1-2 sentences, not more.
 Respond with only the full commit message, nothing else."
@@ -921,7 +994,7 @@ function configure_ai_key {
     ai_api_key=$(set_config_value gitbasher.ai-api-key "$ai_key_input" "true")
 }
 function configure_ai_proxy {    
-    echo -e "${YELLOW}Configure AI HTTP Proxy${ENDCOLOR}"
+    echo -e "${YELLOW}Configure AI HTTP/SOCKS Proxy${ENDCOLOR}"
     echo
     ai_proxy=$(get_ai_proxy)
     if [ -z "$ai_proxy" ]; then
@@ -929,9 +1002,13 @@ function configure_ai_proxy {
     else
         echo -e "Current AI proxy: ${GREEN}$ai_proxy${ENDCOLOR}"
     fi
-    echo -e "Enter HTTP proxy URL to route AI requests through (useful for bypassing geo-restrictions)"
-    echo -e "Format: ${BLUE}http://proxy.example.com:8080${ENDCOLOR}"
-    echo -e "With auth: ${BLUE}http://username:password@proxy.example.com:8080${ENDCOLOR}"
+    echo -e "Enter proxy URL to route AI requests through (useful for bypassing geo-restrictions)"
+    echo -e ""
+    echo -e "${BLUE}HTTP proxy formats:${ENDCOLOR}"
+    echo -e "  • ${BLUE}http://proxy.example.com:8080${ENDCOLOR}"
+    echo -e "  • ${BLUE}http://username:password@proxy.example.com:8080${ENDCOLOR}"
+    echo -e "  • ${BLUE}http://[2001:db8::1]:8080${ENDCOLOR} (IPv6)"
+    echo -e ""
     echo -e "Press Enter to exit without changes or enter 0 to remove existing proxy"
     read -p "Proxy URL: " ai_proxy_input
     if [ "$ai_proxy_input" == "" ]; then
@@ -944,8 +1021,11 @@ function configure_ai_proxy {
         exit
     fi
     echo
-    if [[ ! "$ai_proxy_input" =~ ^https?://.*:[0-9]+$ ]]; then
-        echo -e "${YELLOW}Warning: Proxy URL format should be http://host:port or https://host:port${ENDCOLOR}"
+    if [[ ! "$ai_proxy_input" =~ ^(https?|socks5)://.*:[0-9]+$ ]] && [[ ! "$ai_proxy_input" =~ ^(https?|socks5)://\[[0-9a-fA-F:]+\]:[0-9]+$ ]]; then
+        echo -e "${YELLOW}Warning: Proxy URL format should be:${ENDCOLOR}"
+        echo -e "${YELLOW}  • http://host:port or https://host:port${ENDCOLOR}"
+        echo -e "${YELLOW}  • socks5://host:port${ENDCOLOR}"
+        echo -e "${YELLOW}  • For IPv6: http://[::1]:port or socks5://[::1]:port${ENDCOLOR}"
         read -n 1 -p "Continue anyway? (y/n) " -s choice
         echo
         if [ "$choice" != "y" ] && [ "$choice" != "Y" ]; then
@@ -963,6 +1043,47 @@ function configure_ai_proxy {
     yes_no_choice "\nSet AI proxy globally" "true"
     set_ai_proxy "$ai_proxy_input"
     git config --global gitbasher.ai-proxy "$ai_proxy_input"
+}
+function configure_ai_history {
+    echo -e "${YELLOW}Configure AI Commit History Limit${ENDCOLOR}"
+    echo
+    current_limit=$(get_ai_commit_history_limit)
+    echo -e "Current limit: ${GREEN}$current_limit${ENDCOLOR} recent commits"
+    echo
+    echo -e "This setting controls how many recent commit messages are included in AI prompts"
+    echo -e "to help the AI learn from your commit message patterns and style."
+    echo -e ""
+    echo -e "Recommended range: ${BLUE}5-15${ENDCOLOR} commits"
+    echo -e "• Lower values (5-8): Faster, uses fewer tokens, focuses on recent patterns"
+    echo -e "• Higher values (10-15): Better style learning, uses more tokens"
+    echo
+    echo -e "Press Enter to exit without changes"
+    read -p "Number of recent commits to include: " limit_input
+    if [ "$limit_input" == "" ]; then
+        exit
+    fi
+    echo
+    if ! [[ "$limit_input" =~ ^[1-9][0-9]*$ ]]; then
+        echo -e "${RED}Error: Please enter a positive number${ENDCOLOR}"
+        exit 1
+    fi
+    if [ "$limit_input" -lt 5 ] || [ "$limit_input" -gt 20 ]; then
+        echo -e "${YELLOW}Warning: Value outside recommended range (5-20)${ENDCOLOR}"
+        if [ "$limit_input" -gt 20 ]; then
+            echo -e "${YELLOW}High values may exceed token limits and slow down AI responses${ENDCOLOR}"
+        fi
+        read -n 1 -p "Continue anyway? (y/n) " -s choice
+        echo
+        if [ "$choice" != "y" ] && [ "$choice" != "Y" ]; then
+            exit
+        fi
+    fi
+    set_ai_commit_history_limit "$limit_input"
+    echo -e "${GREEN}AI commit history limit set to ${limit_input} for '${project_name}' repo${ENDCOLOR}"
+    echo
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+    yes_no_choice "\nSet AI commit history limit globally" "true"
+    git config --global gitbasher.ai-commit-history-limit "$limit_input"
 }
 function set_scopes {
     echo -e "${YELLOW}Enter a list of predefined scopes${ENDCOLOR}"
@@ -1030,9 +1151,13 @@ function delete_global {
     if [ "$global_ai_proxy" != "" ]; then
         echo -e "7. AI proxy: ${GREEN}$global_ai_proxy${ENDCOLOR}"
     fi
+    global_ai_history=$(git config --global --get gitbasher.ai-commit-history-limit)
+    if [ "$global_ai_history" != "" ]; then
+        echo -e "8. AI commit history limit: ${GREEN}$global_ai_history${ENDCOLOR}"
+    fi
     echo -e "0. Exit"
     read -n 1 -s choice
-    re='^[01234567]+$'
+    re='^[012345678]+$'
     if ! [[ $choice =~ $re ]]; then
         break
     fi
@@ -1069,6 +1194,10 @@ function delete_global {
             echo -e "${GREEN}Unset AI proxy from global settings${ENDCOLOR}"
             git config --global --unset gitbasher.ai-proxy
             ;;
+        8)
+            echo -e "${GREEN}Unset AI commit history limit from global settings${ENDCOLOR}"
+            git config --global --unset gitbasher.ai-commit-history-limit
+            ;;
     esac
 }
 function set_user {
@@ -1103,6 +1232,7 @@ function config_script {
         scopes|scope|sc|s)    set_scopes_cfg="true";;
         ai|llm|key)           set_ai_cfg="true";;
         proxy|prx|p)          set_proxy_cfg="true";;
+        history|hist)         set_ai_history_cfg="true";;
         delete|unset|del)     delete_cfg="true";;
         user|name|email|u)    set_user_cfg="true";;
         help|h)               help="true";;
@@ -1123,6 +1253,8 @@ function config_script {
         header="$header AI API KEY"
     elif [ -n "${set_proxy_cfg}" ]; then
         header="$header AI PROXY"
+    elif [ -n "${set_ai_history_cfg}" ]; then
+        header="$header AI COMMIT HISTORY"
     elif [ -n "${delete_cfg}" ]; then
         header="$header UNSET GLOBAL CONFIG"
     elif [ -n "${set_user_cfg}" ]; then
@@ -1162,6 +1294,10 @@ function config_script {
         configure_ai_proxy
         exit
     fi
+    if [ "$set_ai_history_cfg" == "true" ]; then
+        configure_ai_history
+        exit
+    fi
     if [ "$delete_cfg" == "true" ]; then
         delete_global
         exit
@@ -1179,6 +1315,7 @@ function config_script {
         echo -e "scopes|sc|s\t\tSet a list of scopes to help with commit building"
         echo -e "ai|llm|key\t\tSet AI API key for commit message generation"
         echo -e "proxy|prx|p\t\tSet HTTP proxy for AI requests (bypass geo-restrictions)"
+        echo -e "history|hist\t\tSet number of recent commits to include in AI prompts"
         echo -e "delete|unset|del\tUnset global configuration"
         exit
     fi
@@ -1212,6 +1349,10 @@ function merge_script {
         echo -e "to-main|to-master|tm\tSwitch to $main_branch and merge the current branch into $main_branch"
         echo -e "remote|r\t\tFetch $origin_name and select a remote branch to merge into current"
         echo -e "help|h\t\t\tShow this help"
+        echo
+        echo -e "${YELLOW}Conflict resolution options (available during merge conflicts):${ENDCOLOR}"
+        echo -e "Accept all incoming changes\tResolve all conflicts by accepting changes from the target branch"
+        echo -e "Accept all current changes\tResolve all conflicts by keeping changes from your current branch"
         exit
     fi
     if [ -n "$main" ]; then
@@ -1331,6 +1472,8 @@ function resolve_conflicts {
     printf "\t${YELLOW}${default_message}${ENDCOLOR}\n"
     echo -e "2. Create a merge commit with an entered message"
     echo -e "3. Abort merge and return to the original state: ${YELLOW}git merge --abort${ENDCOLOR}"
+    echo -e "4. Accept all incoming changes: ${GREEN}git checkout --theirs .${ENDCOLOR}"
+    echo -e "5. Accept all current changes: ${GREEN}git checkout --ours .${ENDCOLOR}"
     echo -e "0. Exit from this script ${BOLD}without${NORMAL} merge abort"
     echo
     echo -e "${YELLOW}Files with conflicts${ENDCOLOR}"
@@ -1351,6 +1494,68 @@ function resolve_conflicts {
             echo -e "${YELLOW}Aborting merge...${ENDCOLOR}"
             git merge --abort
             exit $?
+        fi
+        if [ "$choice" == "4" ]; then
+            echo
+            echo -e "Are you sure you want to ${GREEN}accept all incoming changes${ENDCOLOR} and discard current changes (y/n)?"
+            read -n 1 -s choice_yes
+            if [ "$choice_yes" == "y" ]; then
+                echo
+                echo -e "${YELLOW}Accepting all incoming changes...${ENDCOLOR}"
+                checkout_output=$(git checkout --theirs . 2>&1)
+                checkout_code=$?
+                if [ $checkout_code -ne 0 ]; then
+                    echo -e "${RED}Failed to accept incoming changes:${ENDCOLOR}"
+                    echo "$checkout_output"
+                    continue
+                fi
+                git add .
+                echo -e "${YELLOW}Creating merge commit with accepted incoming changes...${ENDCOLOR}"
+                commit_result=$(git commit -m "$default_message" 2>&1)
+                commit_code=$?
+                if [ $commit_code -eq 0 ]; then
+                    echo -e "${GREEN}Successfully accepted all incoming changes and created merge commit!${ENDCOLOR}"
+                    return
+                else
+                    echo -e "${RED}Failed to create merge commit:${ENDCOLOR}"
+                    echo "$commit_result"
+                    exit $commit_code
+                fi
+            else
+                echo -e "${YELLOW}Continuing...${ENDCOLOR}"
+            fi
+            continue
+        fi
+        if [ "$choice" == "5" ]; then
+            echo
+            echo -e "Are you sure you want to ${GREEN}accept all current changes${ENDCOLOR} and discard incoming changes (y/n)?"
+            read -n 1 -s choice_yes
+            if [ "$choice_yes" == "y" ]; then
+                echo
+                echo -e "${YELLOW}Accepting all current changes...${ENDCOLOR}"
+                checkout_output=$(git checkout --ours . 2>&1)
+                checkout_code=$?
+                if [ $checkout_code -ne 0 ]; then
+                    echo -e "${RED}Failed to accept current changes:${ENDCOLOR}"
+                    echo "$checkout_output"
+                    continue
+                fi
+                git add .
+                echo -e "${YELLOW}Creating merge commit with accepted current changes...${ENDCOLOR}"
+                commit_result=$(git commit -m "$default_message" 2>&1)
+                commit_code=$?
+                if [ $commit_code -eq 0 ]; then
+                    echo -e "${GREEN}Successfully accepted all current changes and created merge commit!${ENDCOLOR}"
+                    return
+                else
+                    echo -e "${RED}Failed to create merge commit:${ENDCOLOR}"
+                    echo "$commit_result"
+                    exit $commit_code
+                fi
+            else
+                echo -e "${YELLOW}Continuing...${ENDCOLOR}"
+            fi
+            continue
         fi
         if [ "$choice" == "0" ]; then
             exit
@@ -1418,7 +1623,8 @@ function rebase_script {
     case "$1" in
         main|master|m)           main="true";;
         interactive|i)           interactive="true";;
-        autosquash|a|s|f|ia|if)  autosquash="true";;
+        autosquash|a|s|ia|if)    autosquash="true";;
+        fastautosquash|fast|f)   fastautosquash="true";;
         help|h)                  help="true";;
         *)
             wrong_mode "rebase" $1
@@ -1428,6 +1634,8 @@ function rebase_script {
         header="$header INTERACTIVE"
     elif [ -n "${autosquash}" ]; then
         header="$header AUTOSQUASH"
+    elif [ -n "${fastautosquash}" ]; then
+        header="$header FAST AUTOSQUASH"
     elif [ -n "${main}" ]; then
         header="$header MAIN"
     fi
@@ -1440,8 +1648,13 @@ function rebase_script {
         echo -e "<empty>\t\t\tSelect base branch to rebase current changes"
         echo -e "main|master|m\t\tRebase current branch onto default branch"
         echo -e "interactive|i\t\tSelect base commit in current branch and rebase in an interactive mode"
-        echo -e "autosquash|a|s|f|ia|if\tRebase on the current local branch in an interactive mode with --autosquash"
+        echo -e "autosquash|a|s|ia|if\tRebase on the current local branch in an interactive mode with --autosquash"
+        echo -e "fastautosquash|fast|f\tFast autosquash rebase - automatically merge fixup commits without interaction"
         echo -e "help|h\t\t\tShow this help"
+        echo
+        echo -e "${YELLOW}Conflict resolution options (available during rebase conflicts):${ENDCOLOR}"
+        echo -e "Accept all incoming changes\tResolve all conflicts by accepting changes from the target branch"
+        echo -e "Accept all current changes\tResolve all conflicts by keeping changes from your current branch"
         exit
     fi
     is_clean=$(git status | tail -n 1)
@@ -1456,7 +1669,7 @@ function rebase_script {
             exit
         fi
         new_base_branch=${main_branch}
-    elif [ -n "$autosquash" ]; then
+    elif [ -n "$autosquash" ] || [ -n "$fastautosquash" ]; then
         new_base_branch=${current_branch}
     else
         echo -e "${YELLOW}Select which branch will become a new base for '${current_branch}'${ENDCOLOR}"
@@ -1464,7 +1677,7 @@ function rebase_script {
         new_base_branch=${branch_name}
         echo
     fi
-    if [ -z "$autosquash" ]; then
+    if [ -z "$autosquash" ] && [ -z "$fastautosquash" ]; then
         echo -e "Fetch ${YELLOW}${origin_name}/${new_base_branch}${ENDCOLOR} before rebase (y/n/0)?"
         read -n 1 -s choice
         if [ "$choice" == "0" ]; then
@@ -1478,7 +1691,7 @@ function rebase_script {
         fi
         echo
     fi
-    rebase_branch "$new_base_branch" "$origin_name" "$from_origin" "$interactive" "$autosquash" "$autosquash"
+    rebase_branch "$new_base_branch" "$origin_name" "$from_origin" "$interactive" "$autosquash" "$autosquash" "$fastautosquash"
     if [[ $rebase_output == *"is up to date"* ]]; then
         echo -e "${GREEN}Nothing to rebase - already up to date${ENDCOLOR}"
         exit
@@ -1496,7 +1709,39 @@ function rebase_branch {
     if [ "$3" == "true" ]; then
         ref=$2/$1
     fi
-    if [ "$5" == "true" ]; then
+    if [ "$7" == "true" ]; then
+        echo -e "${YELLOW}Finding fixup commits to squash automatically...${ENDCOLOR}"
+        merge_base=$(git merge-base HEAD ${main_branch} 2>/dev/null)
+        if [ -n "$merge_base" ] && [ "$merge_base" != "$(git rev-parse HEAD)" ]; then
+            ref="$merge_base"
+            echo -e "${YELLOW}Using merge-base with ${main_branch}: ${ref::7}${ENDCOLOR}"
+        else
+            commit_count=$(git rev-list --count HEAD 2>/dev/null || echo "0")
+            if [ "$commit_count" -gt 50 ]; then
+                ref="HEAD~50"
+                echo -e "${YELLOW}Using HEAD~50 as base commit${ENDCOLOR}"
+            else
+                ref=$(git rev-list --max-parents=0 HEAD 2>/dev/null | tail -1)
+                if [ -n "$ref" ]; then
+                    echo -e "${YELLOW}Using root commit: ${ref::7}${ENDCOLOR}"
+                else
+                    ref="HEAD~10"  # fallback
+                    echo -e "${YELLOW}Using HEAD~10 as fallback base commit${ENDCOLOR}"
+                fi
+            fi
+        fi
+        fixup_commits=$(git log --oneline --grep="^fixup!" $ref..HEAD 2>/dev/null || echo "")
+        if [ -z "$fixup_commits" ]; then
+            echo -e "${GREEN}No fixup commits found to squash${ENDCOLOR}"
+            rebase_code=0
+            rebase_output="No fixup commits to squash"
+            return
+        fi
+        echo -e "${GREEN}Found fixup commits:${ENDCOLOR}"
+        echo "$fixup_commits" | sed 's/^/\t/'
+        echo
+        rebase_output=$(GIT_SEQUENCE_EDITOR=true git rebase -i --autosquash $ref 3>&2 2>&1 1>&3)
+    elif [ "$5" == "true" ]; then
         if [ "$6" == "true" ]; then
             echo -e "Select a new ${BOLD}base${NORMAL} commit from which to squash fixup commits (third one or older):"
             choose_commit 20 "number" $ref
@@ -1589,6 +1834,8 @@ function rebase_conflicts {
             echo -e "2. Open editor to change rebase plan: ${BLUE}git rebase --edit-todo${ENDCOLOR}"
             echo -e "3. Throw away the commit from the history: ${RED}git rebase --skip${ENDCOLOR}"
             echo -e "4. Abort rebase and return to the original state: ${YELLOW}git rebase --abort${ENDCOLOR}"
+            echo -e "5. Accept all incoming changes: ${GREEN}git checkout --theirs .${ENDCOLOR}"
+            echo -e "6. Accept all current changes: ${GREEN}git checkout --ours .${ENDCOLOR}"
             echo -e "0. Exit from this script ${BOLD}without${NORMAL} rebase abort"
             print_menu="false"
         fi
@@ -1619,7 +1866,7 @@ function rebase_conflicts {
         fi
         while [ true ]; do
             read -n 1 -s choice
-            re='^[01234]+$'
+            re='^[0123456]+$'
             if [[ $choice =~ $re ]]; then
                 break
             fi
@@ -1690,6 +1937,72 @@ function rebase_conflicts {
                 echo -e "${YELLOW}Aborting rebase...${ENDCOLOR}"
                 git rebase --abort
                 exit $?
+            else
+                echo -e "${YELLOW}Continuing...${ENDCOLOR}"
+            fi
+            continue
+        fi
+        if [ "$choice" == "5" ]; then
+            echo
+            echo -e "Are you sure you want to ${GREEN}accept all incoming changes${ENDCOLOR} and discard current changes (y/n)?"
+            read -n 1 -s choice_yes
+            if [ "$choice_yes" == "y" ]; then
+                echo
+                echo -e "${YELLOW}Accepting all incoming changes...${ENDCOLOR}"
+                checkout_output=$(git checkout --theirs . 2>&1)
+                checkout_code=$?
+                if [ $checkout_code -ne 0 ]; then
+                    echo -e "${RED}Failed to accept incoming changes:${ENDCOLOR}"
+                    echo "$checkout_output"
+                    continue
+                fi
+                git add .
+                rebase_output=$(git -c core.editor=true rebase --continue 2>&1)
+                rebase_code=$?
+                if [[ $rebase_output == *"Successfully rebased"* ]]; then
+                    echo -e "${GREEN}Successfully accepted all incoming changes and continued rebase!${ENDCOLOR}"
+                    return
+                fi
+                if [[ $rebase_output != *"CONFLICT"* ]]; then
+                    echo -e "${RED}Cannot rebase! Error message:${ENDCOLOR}"
+                    echo "$rebase_output"
+                    exit $rebase_code
+                fi
+                echo -e "${GREEN}Accepted all incoming changes, moving to next conflict${ENDCOLOR}"
+                new_step="true"
+            else
+                echo -e "${YELLOW}Continuing...${ENDCOLOR}"
+            fi
+            continue
+        fi
+        if [ "$choice" == "6" ]; then
+            echo
+            echo -e "Are you sure you want to ${GREEN}accept all current changes${ENDCOLOR} and discard incoming changes (y/n)?"
+            read -n 1 -s choice_yes
+            if [ "$choice_yes" == "y" ]; then
+                echo
+                echo -e "${YELLOW}Accepting all current changes...${ENDCOLOR}"
+                checkout_output=$(git checkout --ours . 2>&1)
+                checkout_code=$?
+                if [ $checkout_code -ne 0 ]; then
+                    echo -e "${RED}Failed to accept current changes:${ENDCOLOR}"
+                    echo "$checkout_output"
+                    continue
+                fi
+                git add .
+                rebase_output=$(git -c core.editor=true rebase --continue 2>&1)
+                rebase_code=$?
+                if [[ $rebase_output == *"Successfully rebased"* ]]; then
+                    echo -e "${GREEN}Successfully accepted all current changes and continued rebase!${ENDCOLOR}"
+                    return
+                fi
+                if [[ $rebase_output != *"CONFLICT"* ]]; then
+                    echo -e "${RED}Cannot rebase! Error message:${ENDCOLOR}"
+                    echo "$rebase_output"
+                    exit $rebase_code
+                fi
+                echo -e "${GREEN}Accepted all current changes, moving to next conflict${ENDCOLOR}"
+                new_step="true"
             else
                 echo -e "${YELLOW}Continuing...${ENDCOLOR}"
             fi
@@ -2020,7 +2333,7 @@ function push_script {
 }
 function cleanup_on_exit {
     if [ -n "$1" ]; then
-        git restore --staged "$1"
+        git restore --staged $1
     fi
 }
 function handle_ai_commit_generation {
@@ -2047,6 +2360,7 @@ function handle_ai_commit_generation {
         ai_commit_message=$(generate_ai_commit_message)
     fi
     if [ $? -ne 0 ] || [ -z "$ai_commit_message" ]; then
+        echo
         echo -e "${RED}Failed to generate AI commit message${ENDCOLOR}"
         cleanup_on_exit "$git_add"
         exit 1
@@ -2165,14 +2479,17 @@ function commit_script {
         ticket|jira|j|t)    ticket="true";;
         fast|f)             fast="true";;
         fasts|fs|sf)        fast="true"; scope="true";;
+        staged|st)          staged="true";;
         push|pu|p)          push="true";;
         fastp|fp|pf)        fast="true"; push="true";;
         fastsp|fsp|fps)     fast="true"; push="true"; scope="true";;
         fixup|fix|x)        fixup="true";;
         fixupp|fixp|xp|px)  fixup="true"; push="true";;
+        fixupst|xst|stx)    fixup="true"; staged="true";;
         fastfix|fx|xf)      fixup="true"; fast="true";;
         fastfixp|fxp|xfp)   fixup="true"; fast="true"; push="true";;
         amend|am|a)         amend="true";;
+        amendst|ast|sta)    amend="true"; staged="true";;
         amendf|amf|af|fa)   amend="true"; fast="true";;
         last|l)             last="true";;
         revert|rev)         revert="true";;
@@ -2190,7 +2507,9 @@ function commit_script {
     if [ -n "${llm}" ]; then
         header_msg="$header_msg AI"
     fi
-    if [ -n "${fast}" ]; then
+    if [ -n "${staged}" ]; then
+        header_msg="$header_msg STAGED"
+    elif [ -n "${fast}" ]; then
         if [ -n "${push}" ]; then
             if [ -n "${fixup}" ]; then
                 header_msg="$header_msg FAST FIXUP & PUSH"
@@ -2230,16 +2549,19 @@ function commit_script {
         echo -e "<empty>\t\tSelect files to commit and create a conventional message in format: 'type(scope): message'"
         echo -e "fast|f\t\tAdd all files (git add .) and create a conventional commit message without scope"
         echo -e "fasts|fs|sf\tAdd all files (git add .) and create a conventional commit message with scope"
+        echo -e "staged|st\tUse already staged files for commit (skip git add step)"
         echo -e "push|pu|p\tCreate a conventional commit and push changes at the end"
         echo -e "fastp|fp|pf\tCreate a conventional commit in the fast mode and push changes"
         echo -e "fastsp|fsp|fps\tCreate a conventional commit in the fast mode with scope and push changes"
         echo -e "fixup|fix|x\tSelect files and commit to make a --fixup commit (git commit --fixup <hash>)"
         echo -e "fixupp|fixp|xp\tSelect files and commit to make a --fixup commit and push changes"
+        echo -e "fixupst|xst|stx\tSelect files and commit to make a --fixup commit (git commit --fixup <hash>)"
         echo -e "fastfix|fx|xf\tAdd all files (git add .) and commit to make a --fixup commit"
         echo -e "fastfixp|fxp\tAdd all files (git add .) and commit to make a --fixup commit and push"
         echo -e "msg|m\t\tSame as <empty>, but create multiline commit message using text editor"
         echo -e "ticket|t\tSame as <empty>, but add tracker's ticket info to the end of the commit header"
         echo -e "amend|am|a\tSelect files and add them to the last commit without message edit (git commit --amend --no-edit)"
+        echo -e "amendst|ast|sta\tSelect files and add them to the last commit without message edit (git commit --amend --no-edit)"
         echo -e "amendf|amf|af\tAdd all fiels to the last commit without message edit (git commit --amend --no-edit)"
         echo -e "last|l\t\tChange commit message to the last one"
         echo -e "revert|rev\tSelect a commit to revert (git revert -no-edit <commit>)"
@@ -2269,6 +2591,16 @@ function commit_script {
         echo -e "${RED}Cannot revert! There are uncommited changes:${ENDCOLOR}"
         exit
     fi
+    if [ -n "${staged}" ]; then
+        staged_files_check=$(git diff --name-only --cached)
+        if [ -z "$staged_files_check" ]; then
+            echo -e "${RED}No staged files found!${ENDCOLOR}"
+            exit 1
+        fi
+        echo -e "${YELLOW}Using already staged files:${ENDCOLOR}"
+        staged_display="$(sed 's/^/\t/' <<< "$staged_files_check")"
+        echo -e "${GREEN}${staged_display}${ENDCOLOR}"
+    fi
     if [ -n "${revert}" ]; then
         echo -e "${YELLOW}Step 1.${ENDCOLOR} Select a commit to ${YELLOW}revert${ENDCOLOR} it:"
         choose_commit 20
@@ -2277,12 +2609,12 @@ function commit_script {
         after_commit "revert"
         exit
     fi
-    if [ -z "${fast}" ]; then 
+    if [ -z "${fast}" ] && [ -z "${staged}" ]; then 
         echo -e "${YELLOW}Changed files${ENDCOLOR}"
         git_status
     fi
     saved_git_add=""
-    if [ -z "${fast}" ]; then
+    if [ -z "${fast}" ] && [ -z "${staged}" ]; then
         saved_git_add=$(git config --get gitbasher.cached-git-add 2>/dev/null)
         if [ -n "$saved_git_add" ]; then
             echo
@@ -2290,7 +2622,7 @@ function commit_script {
             read -n 1 -p "Use them? (y/n) " -s choice
             echo
             if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
-                git add "$saved_git_add"
+                git add $saved_git_add
                 if [ $? -eq 0 ]; then
                     git_add="$saved_git_add"
                     use_saved_git_add="true"
@@ -2305,7 +2637,10 @@ function commit_script {
             fi
         fi
     fi
-    if [ -n "${fast}" ]; then
+    if [ -n "${staged}" ]; then
+        git_add=""
+        git config --unset gitbasher.cached-git-add 2>/dev/null
+    elif [ -n "${fast}" ]; then
         git add .
         git_add="."
         git config --unset gitbasher.cached-git-add 2>/dev/null
@@ -2334,22 +2669,26 @@ function commit_script {
             if [ "$git_add" == "" ]; then
                 exit
             fi
-            result=$(git add "$git_add" 2>&1)
-            if [ $? -eq 0 ]; then
+            result=$(git add $git_add 2>&1)
+            code=$?
+            staged_files_list="$(git diff --name-only --cached)"
+            if [ $code -eq 0 ] && [ -n "$staged_files_list" ]; then
                 git config gitbasher.cached-git-add "$git_add"
                 break
             else
-                if [[ "$result" == *"did not match any files"* ]] && [[ "$git_add" != *"*" ]]; then
-                    echo "$result"
+                if [[ "$git_add" != *"*" ]]; then
+                    echo
                     git_add_with_star="${git_add}*"
-                    echo -e "${YELLOW}Trying with wildcard:${ENDCOLOR} ${BOLD}git add $git_add_with_star${ENDCOLOR}"
-                    result_star=$(git add "$git_add_with_star" 2>&1)
-                    if [ $? -eq 0 ]; then
+                    echo -e "${YELLOW}No files were staged! Trying with wildcard:${ENDCOLOR} ${BOLD}git add $git_add_with_star${ENDCOLOR}"
+                    result_star=$(git add $git_add_with_star 2>&1)
+                    code_star=$?
+                    staged_files_list_star="$(git diff --name-only --cached)"
+                    if [ $code_star -eq 0 ] && [ -n "$staged_files_list_star" ]; then
                         git config gitbasher.cached-git-add "$git_add_with_star"
                         git_add="$git_add_with_star"
                         break
                     else
-                        echo "$result_star"
+                        echo -e "${RED}Failed to add files with wildcard:${ENDCOLOR} ${BOLD}$result_star${ENDCOLOR}"
                         echo
                     fi
                 else
@@ -2359,11 +2698,15 @@ function commit_script {
         done
         echo
     fi
-    echo -e "${YELLOW}Staged files:${ENDCOLOR}"
-    staged="$(sed 's/^/\t/' <<< "$(git diff --name-only --cached)")"
-    echo -e "${GREEN}${staged}${ENDCOLOR}"
+    if [ -z "${staged}" ]; then
+        echo -e "${YELLOW}Staged files:${ENDCOLOR}"
+        staged="$(sed 's/^/\t/' <<< "$(git diff --name-only --cached)")"
+        echo -e "${GREEN}${staged}${ENDCOLOR}"
+    else
+        staged="$(sed 's/^/\t/' <<< "$(git diff --name-only --cached)")"
+    fi
     if [ -n "${llm}" ] && [ -z "${scope}" ]; then
-        if [ -n "${fast}" ]; then
+        if [ -n "${fast}" ] || [ -n "${staged}" ]; then
             step="1"
         else
             step="2"
@@ -2372,8 +2715,12 @@ function commit_script {
     fi
     if [ -n "${fixup}" ]; then
         echo
-        echo -e "${YELLOW}Step 2.${ENDCOLOR} Select a commit to ${YELLOW}--fixup${ENDCOLOR}:"
-        if [ -n "${fast}" ]; then
+        step="2"
+        if [ -n "${fast}" ] || [ -n "${staged}" ]; then
+            step="1"
+        fi
+        echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Select a commit to ${YELLOW}--fixup${ENDCOLOR}:"
+        if [ -n "${fast}" ] || [ -n "${staged}" ]; then
             choose_commit 9
         else
             choose_commit 19
@@ -2398,7 +2745,7 @@ function commit_script {
     fi
     echo
     step="2"
-    if [ -n "${fast}" ]; then
+    if [ -n "${fast}" ] || [ -n "${staged}" ]; then
         step="1"
     fi
     echo -e "${YELLOW}Step ${step}.${ENDCOLOR} What ${YELLOW}type${ENDCOLOR} of changes do you want to commit?"
@@ -2448,7 +2795,7 @@ function commit_script {
     fi
     if [ -z "$is_empty" ] && ([ -z "$fast" ] || [ -n "$scope" ]); then
         step="3"
-        if [ -n "${fast}" ]; then
+        if [ -n "${fast}" ] || [ -n "${staged}" ]; then
             step="2"
         fi
         echo
@@ -2468,19 +2815,19 @@ function commit_script {
                         if [ -n "$component" ]; then
                             if [ $i -eq $((${#path_components[@]} - 1)) ]; then
                                 component_no_ext="${component%.*}"
-                                if [[ ! "$component_no_ext" =~ ^(index|main|app|test|spec|config|readme|license|makefile|dockerfile)$ ]]; then
-                                    scope_counts["$component_no_ext"]=$((${scope_counts["$component_no_ext"]:-0} + 1))
-                                    current_depth=$((i + 1))
-                                    if [ -z "${scope_depths["$component_no_ext"]}" ] || [ $current_depth -lt ${scope_depths["$component_no_ext"]} ]; then
-                                        scope_depths["$component_no_ext"]=$current_depth
-                                    fi
+                                component_no_ext_lower="${component_no_ext,,}"
+                                scope_counts["$component_no_ext_lower"]=$((${scope_counts["$component_no_ext_lower"]:-0} + 1))
+                                current_depth=$((i + 1))
+                                if [ -z "${scope_depths["$component_no_ext_lower"]}" ] || [ $current_depth -lt ${scope_depths["$component_no_ext_lower"]} ]; then
+                                    scope_depths["$component_no_ext_lower"]=$current_depth
                                 fi
                             else
-                                if [[ ! "$component" =~ ^(src|lib|test|tests|spec|specs|build|dist|node_modules|vendor|tmp|temp|cache|logs|log)$ ]]; then
-                                    scope_counts["$component"]=$((${scope_counts["$component"]:-0} + 1))
+                                component_lower="${component,,}"
+                                if [[ ! "$component_lower" =~ ^(src|lib|test|tests|spec|specs|build|dist|node_modules|vendor|tmp|temp|cache|logs|log)$ ]]; then
+                                    scope_counts["$component_lower"]=$((${scope_counts["$component_lower"]:-0} + 1))
                                     current_depth=$((i + 1))
-                                    if [ -z "${scope_depths["$component"]}" ] || [ $current_depth -lt ${scope_depths["$component"]} ]; then
-                                        scope_depths["$component"]=$current_depth
+                                    if [ -z "${scope_depths["$component_lower"]}" ] || [ $current_depth -lt ${scope_depths["$component_lower"]} ]; then
+                                        scope_depths["$component_lower"]=$current_depth
                                     fi
                                 fi
                             fi
@@ -2589,7 +2936,7 @@ function commit_script {
             fi
         done
     fi
-    if [ -z "$is_empty" ] && [ -n "$fast" ] && [ -z "$scope" ]; then
+    if [ -z "$is_empty" ] && ([ -n "$fast" ]) && [ -z "$scope" ]; then
         commit="$commit: "
     fi
     if [ -n "${fast}" ]; then
@@ -2598,7 +2945,7 @@ function commit_script {
         else
             step="2"
         fi
-    elif [ -n "$is_empty" ]; then
+    elif [ -n "$is_empty" ] || [ -n "${staged}" ]; then
         step="3"
     else
         step="4"
@@ -3654,7 +4001,7 @@ function stash_script {
         fi
         echo -e "${YELLOW}Stashing selected files...${ENDCOLOR}"
         echo
-        result=$(git add "$git_add" 2>&1)
+        result=$(git add $git_add 2>&1)
         if [ $? -ne 0 ]; then
             echo -e "${RED}Failed to stage files! Error:${ENDCOLOR}"
             echo "$result"
@@ -3668,7 +4015,7 @@ function stash_script {
         else
             echo -e "${RED}Failed to stash files! Error:${ENDCOLOR}"
             echo "$stash_output"
-            git restore --staged "$git_add" 2>/dev/null
+            git restore --staged $git_add 2>/dev/null
             exit $stash_code
         fi
     fi
@@ -3759,6 +4106,317 @@ function stash_script {
         fi
     fi
 } 
+function cherry_script {
+    case "$1" in
+        hash|hs)                hash_mode="true"; commit_hash="$2";;
+        range|r)                range_mode="true"; commit_range="$2";;
+        abort|a)                abort_mode="true";;
+        continue|cont|c)        continue_mode="true";;
+        help|h)                 help="true";;
+        *)
+            if [ -n "$1" ] && [[ ! "$1" =~ ^[a-f0-9]+$ ]]; then
+                wrong_mode "cherry" $1
+            elif [ -n "$1" ]; then
+                hash_mode="true"
+                commit_hash="$1"
+            else
+                interactive_mode="true"
+            fi
+    esac
+    header="GIT CHERRY-PICK"
+    if [ -n "${hash_mode}" ]; then
+        header="$header HASH"
+    elif [ -n "${range_mode}" ]; then
+        header="$header RANGE"
+    elif [ -n "${abort_mode}" ]; then
+        header="$header ABORT"
+    elif [ -n "${continue_mode}" ]; then
+        header="$header CONTINUE"
+    elif [ -n "${interactive_mode}" ]; then
+        header="$header INTERACTIVE"
+    fi
+    echo -e "${YELLOW}${header}${ENDCOLOR}"
+    echo
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb cherry <mode> [args]${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Available modes${ENDCOLOR}"
+        echo -e "<empty>\t\t\tInteractive mode: select commits from a branch to cherry-pick"
+        echo -e "\t\t\t(Use '=' to show all commits, space-separated numbers to select multiple)"
+        echo -e "hash|hs <hash>\t\tCherry-pick a specific commit by its hash"
+        echo -e "range|r <from>..<to>\tCherry-pick a range of commits (e.g., abc123..def456)"
+        echo -e "<commit-hash>\t\tShorthand for cherry-pick by hash"
+        echo -e "abort|a\t\t\tAbort current cherry-pick operation"
+        echo -e "continue|cont|c\t\tContinue cherry-pick after resolving conflicts"
+        echo -e "help|h\t\t\tShow this help"
+        exit
+    fi
+    if [ -d ".git/sequencer" ]; then
+        if [ -z "${continue_mode}" ] && [ -z "${abort_mode}" ]; then
+            echo -e "${YELLOW}You are in the middle of a cherry-pick operation${ENDCOLOR}"
+            echo -e "Use ${GREEN}gitb cherry continue${ENDCOLOR} to continue after resolving conflicts"
+            echo -e "Use ${GREEN}gitb cherry abort${ENDCOLOR} to abort the operation"
+            exit 1
+        fi
+    fi
+    if [ -n "${abort_mode}" ]; then
+        if [ ! -d ".git/sequencer" ]; then
+            echo -e "${YELLOW}No cherry-pick operation in progress${ENDCOLOR}"
+            exit
+        fi
+        echo -e "${YELLOW}Aborting cherry-pick operation...${ENDCOLOR}"
+        abort_output=$(git cherry-pick --abort 2>&1)
+        check_code $? "$abort_output" "cherry-pick abort"
+        echo -e "${GREEN}Cherry-pick operation aborted successfully${ENDCOLOR}"
+        exit
+    fi
+    if [ -n "${continue_mode}" ]; then
+        if [ ! -d ".git/sequencer" ]; then
+            echo -e "${YELLOW}No cherry-pick operation in progress${ENDCOLOR}"
+            exit
+        fi
+        if git diff --name-only --diff-filter=U | grep -q .; then
+            echo -e "${RED}There are still unresolved conflicts${ENDCOLOR}"
+            echo -e "${YELLOW}Conflicted files:${ENDCOLOR}"
+            git diff --name-only --diff-filter=U | sed 's/^/  /'
+            echo
+            echo -e "Resolve conflicts and then run ${GREEN}gitb cherry continue${ENDCOLOR} again"
+            exit 1
+        fi
+        echo -e "${YELLOW}Continuing cherry-pick operation...${ENDCOLOR}"
+        continue_output=$(git cherry-pick --continue 2>&1)
+        continue_code=$?
+        if [ $continue_code == 0 ]; then
+            echo -e "${GREEN}Cherry-pick operation completed successfully${ENDCOLOR}"
+            after_cherry_pick
+        else
+            handle_cherry_pick_conflicts "$continue_output" $continue_code
+        fi
+        exit
+    fi
+    if [ -z "${continue_mode}" ] && [ -z "${abort_mode}" ] && [ -z "${hash_mode}" ] && [ -z "${range_mode}" ]; then
+        is_clean=$(git status --porcelain)
+        if [ -n "$is_clean" ]; then
+            echo -e "${YELLOW}Warning: You have uncommitted changes${ENDCOLOR}"
+            echo -e "Files with changes:"
+            git status --porcelain | sed 's/^/  /'
+            echo
+            echo -e "Continue with cherry-pick? This may cause conflicts. (y/n)"
+            yes_no_choice "Proceeding..."
+            echo
+        fi
+    fi
+    if [ -n "${hash_mode}" ]; then
+        if [ -z "${commit_hash}" ]; then
+            echo -e "${RED}No commit hash provided${ENDCOLOR}"
+            echo -e "Usage: ${YELLOW}gitb cherry hash <commit-hash>${ENDCOLOR}"
+            exit 1
+        fi
+        if ! git cat-file -e "${commit_hash}" 2>/dev/null; then
+            echo -e "${RED}Invalid commit hash: ${commit_hash}${ENDCOLOR}"
+            exit 1
+        fi
+        perform_cherry_pick "${commit_hash}"
+        exit
+    fi
+    if [ -n "${range_mode}" ]; then
+        if [ -z "${commit_range}" ]; then
+            echo -e "${RED}No commit range provided${ENDCOLOR}"
+            echo -e "Usage: ${YELLOW}gitb cherry range <from>..<to>${ENDCOLOR}"
+            exit 1
+        fi
+        if [[ ! "${commit_range}" =~ \.\. ]]; then
+            echo -e "${RED}Invalid range format. Use: <from>..<to>${ENDCOLOR}"
+            exit 1
+        fi
+        perform_cherry_pick "${commit_range}"
+        exit
+    fi
+    if [ -n "${interactive_mode}" ]; then
+        echo -e "${YELLOW}Select a branch to cherry-pick commits from:${ENDCOLOR}"
+        choose_branch "cherry-pick"
+        source_branch=${branch_name}
+        echo
+        echo -e "${YELLOW}Select commits to cherry-pick from '${source_branch}':${ENDCOLOR}"
+        echo -e "${GRAY}(You can select multiple commits)${ENDCOLOR}"
+        echo
+        choose_commits_interactive "${source_branch}"
+        exit
+    fi
+}
+function perform_cherry_pick {
+    local target="$1"
+    echo -e "${YELLOW}Cherry-picking ${target}...${ENDCOLOR}"
+    echo
+    cherry_output=$(git cherry-pick "${target}" 2>&1)
+    cherry_code=$?
+    if [ $cherry_code == 0 ]; then
+        echo -e "${GREEN}Cherry-pick completed successfully${ENDCOLOR}"
+        after_cherry_pick
+    else
+        handle_cherry_pick_conflicts "$cherry_output" $cherry_code
+    fi
+}
+function handle_cherry_pick_conflicts {
+    local output="$1"
+    local code="$2"
+    if [[ $output == *"fix conflicts and run \"git cherry-pick --continue\""* ]] || [[ $output == *"after resolving the conflicts"* ]]; then
+        echo -e "${RED}Cherry-pick conflicts detected${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Conflicted files:${ENDCOLOR}"
+        git diff --name-only --diff-filter=U | sed 's/^/  /'
+        echo
+        echo -e "${YELLOW}Steps to resolve:${ENDCOLOR}"
+        echo -e "1. Edit the conflicted files to resolve conflicts"
+        echo -e "2. Add the resolved files: ${BLUE}git add <files>${ENDCOLOR}"
+        echo -e "3. Continue cherry-pick: ${GREEN}gitb cherry continue${ENDCOLOR}"
+        echo
+        echo -e "Or abort the operation: ${GREEN}gitb cherry abort${ENDCOLOR}"
+        return
+    fi
+    if [[ $output == *"The previous cherry-pick is now empty"* ]]; then
+        echo -e "${YELLOW}The commit is empty after cherry-pick (changes already applied)${ENDCOLOR}"
+        echo -e "Skip this commit? (y/n)"
+        yes_no_choice "Skipping empty commit..."
+        skip_output=$(git cherry-pick --skip 2>&1)
+        if [ $? == 0 ]; then
+            echo -e "${GREEN}Empty commit skipped${ENDCOLOR}"
+            after_cherry_pick
+        else
+            echo -e "${RED}Failed to skip commit:${ENDCOLOR}"
+            echo "$skip_output"
+        fi
+        return
+    fi
+    echo -e "${RED}Cherry-pick failed with error:${ENDCOLOR}"
+    echo "$output"
+    exit $code
+}
+function after_cherry_pick {
+    echo
+    commit_hash=$(git rev-parse HEAD)
+    commit_message=$(git log -1 --pretty=%B | head -n 1)
+    echo -e "${BLUE}[${current_branch} ${commit_hash::7}]${ENDCOLOR}"
+    echo -e "${commit_message}"
+    echo
+    changes=$(git --no-pager show ${commit_hash} --stat --format="")
+    if [ -n "$changes" ]; then
+        print_changes_stat "$changes"
+    fi
+    echo
+    echo -e "Push your changes: ${YELLOW}gitb push${ENDCOLOR}"
+    echo -e "Undo cherry-pick: ${YELLOW}gitb reset${ENDCOLOR}"
+}
+function choose_commits_interactive {
+    local source_branch="$1"
+    local commits=()
+    local commit_messages=()
+    local commit_hashes=()
+    local show_all=false
+    mapfile -t all_commits < <(git rev-list "${current_branch}..${source_branch}" --reverse)
+    if [ ${#all_commits[@]} -eq 0 ]; then
+        echo -e "${YELLOW}No commits to cherry-pick from '${source_branch}'${ENDCOLOR}"
+        echo -e "All commits from '${source_branch}' are already in '${current_branch}'"
+        exit
+    fi
+    while true; do
+        local max_commits=20
+        if [ "$show_all" = true ] || [ ${#all_commits[@]} -le $max_commits ]; then
+            commits=("${all_commits[@]}")
+            if [ "$show_all" = true ]; then
+                echo -e "${GRAY}Showing all ${#all_commits[@]} commits${ENDCOLOR}"
+            fi
+        else
+            echo -e "${GRAY}Showing last ${max_commits} commits (${#all_commits[@]} total available)${ENDCOLOR}"
+            commits=("${all_commits[@]: -$max_commits}")
+        fi
+        commit_hashes=()
+        commit_messages=()
+        for commit in "${commits[@]}"; do
+            commit_hashes+=("$commit")
+            message=$(git log -1 --pretty=format:"%s" "$commit")
+            author=$(git log -1 --pretty=format:"%an" "$commit")
+            date=$(git log -1 --pretty=format:"%cr" "$commit")
+            commit_messages+=("${commit::7} - $message ${GRAY}($author, $date)${ENDCOLOR}")
+        done
+        echo -e "${YELLOW}Available commits:${ENDCOLOR}"
+        for i in "${!commit_messages[@]}"; do
+            echo -e "$((i+1)). ${commit_messages[$i]}"
+        done
+        echo -e "0. Exit"
+        if [ "$show_all" = false ] && [ ${#all_commits[@]} -gt $max_commits ]; then
+            echo -e "Enter = to show all commits"
+        fi
+        echo
+        echo -e "Enter commit numbers to cherry-pick (space-separated, e.g., '1 3 5'):"
+        read -e selected_numbers
+        if [ -z "$selected_numbers" ]; then
+            exit
+        fi
+        if [ "$selected_numbers" = "=" ] && [ "$show_all" = false ] && [ ${#all_commits[@]} -gt $max_commits ]; then
+            show_all=true
+            echo
+            continue
+        fi
+        break
+    done
+    local selected_commits=()
+    local IFS=' '
+    local selected_array=($selected_numbers)
+    for num in "${selected_array[@]}"; do
+        num=$(echo "$num" | xargs)
+        if [ -z "$num" ]; then
+            continue
+        fi
+        if [[ "$num" =~ ^[0-9]+$ ]]; then
+            if [ "$num" == "0" ]; then
+                exit
+            elif [ "$num" -gt 0 ] && [ "$num" -le ${#commits[@]} ]; then
+                selected_commits+=("${commit_hashes[$((num-1))]}")
+            else
+                echo -e "${RED}Invalid selection: $num (must be between 1 and ${#commits[@]})${ENDCOLOR}"
+                exit 1
+            fi
+        else
+            echo -e "${RED}Invalid selection: '$num' (must be a number)${ENDCOLOR}"
+            exit 1
+        fi
+    done
+    if [ ${#selected_commits[@]} -eq 0 ]; then
+        echo -e "${YELLOW}No valid commits selected${ENDCOLOR}"
+        exit
+    fi
+    echo
+    echo -e "${YELLOW}Selected commits to cherry-pick:${ENDCOLOR}"
+    for commit in "${selected_commits[@]}"; do
+        message=$(git log -1 --pretty=format:"%s" "$commit")
+        echo -e "  ${commit::7} - $message"
+    done
+    echo
+    echo -e "Proceed with cherry-pick? (y/n)"
+    yes_no_choice "Proceeding with cherry-pick..."
+    local success_count=0
+    local total_count=${#selected_commits[@]}
+    for commit in "${selected_commits[@]}"; do
+        echo -e "${YELLOW}Cherry-picking ${commit::7}...${ENDCOLOR}"
+        cherry_output=$(git cherry-pick "$commit" 2>&1)
+        cherry_code=$?
+        if [ $cherry_code == 0 ]; then
+            ((success_count++))
+            message=$(git log -1 --pretty=format:"%s" "$commit")
+            echo -e "${GREEN}✓${ENDCOLOR} Successfully cherry-picked: $message"
+        else
+            echo -e "${RED}✗${ENDCOLOR} Failed to cherry-pick ${commit::7}"
+            handle_cherry_pick_conflicts "$cherry_output" $cherry_code
+            break
+        fi
+        echo
+    done
+    if [ $success_count -eq $total_count ]; then
+        echo -e "${GREEN}All ${total_count} commits cherry-picked successfully!${ENDCOLOR}"
+        after_cherry_pick
+    fi
+} 
 function project_status {
     echo -e "${YELLOW}$project_name${ENDCOLOR} | ${CYAN}$repo_url${ENDCOLOR}"
     echo
@@ -3773,7 +4431,91 @@ function project_status {
     fi
 }
 function gitlog {
-    git log --pretty="%C(Yellow)%h%C(reset) | %C(Cyan)%ad%C(reset) | %C(Blue)%an%C(reset) | %s (%C(Green)%cr%C(reset))"
+    local branch="$1"
+    if [ -n "$branch" ]; then
+        echo -e "${YELLOW}Git log for branch: ${BLUD}$branch${ENDCOLOR}"
+        git log "$branch" --pretty="%C(Yellow)%h%C(reset) | %C(Cyan)%ad%C(reset) | %C(Blue)%an%C(reset) | %s (%C(Green)%cr%C(reset))"
+    else
+        git log --pretty="%C(Yellow)%h%C(reset) | %C(Cyan)%ad%C(reset) | %C(Blue)%an%C(reset) | %s (%C(Green)%cr%C(reset))"
+    fi
+}
+function gitlog_branch {
+    local mode="$1"
+    case "$mode" in
+        "local"|"l")
+            echo -e "${YELLOW}GIT LOG BRANCH LOCAL${ENDCOLOR}"
+            echo
+            echo -e "${YELLOW}Select a local branch to view git log:${ENDCOLOR}"
+            choose_branch
+        ;;
+        "remote"|"r")
+            echo -e "${YELLOW}GIT LOG BRANCH REMOTE${ENDCOLOR}"
+            echo
+            echo -e "${YELLOW}Select a remote branch to view git log:${ENDCOLOR}"
+            choose_branch "remote"
+        ;;
+        "all"|"a"|"")
+            echo -e "${YELLOW}GIT LOG BRANCH${ENDCOLOR}"
+            echo
+            echo -e "${YELLOW}Select a branch to view git log:${ENDCOLOR}"
+            choose_branch
+        ;;
+        "help"|"h")
+            echo -e "${YELLOW}gitb log branch${ENDCOLOR} - View git log from different branches"
+            echo
+            echo -e "${YELLOW}Usage:${ENDCOLOR}"
+            echo -e "  gitb log branch [mode]"
+            echo
+            echo -e "${YELLOW}Modes:${ENDCOLOR}"
+            echo -e "  ${GREEN}local, l${ENDCOLOR}     Show log from local branches"
+            echo -e "  ${GREEN}remote, r${ENDCOLOR}    Show log from remote branches"
+            echo -e "  ${GREEN}all, a${ENDCOLOR}       Show log from all branches (default)"
+            echo -e "  ${GREEN}help, h${ENDCOLOR}      Show this help"
+            return
+        ;;
+        *)
+            echo -e "${RED}Unknown mode: $mode${ENDCOLOR}"
+            echo -e "Use ${GREEN}gitb log branch help${ENDCOLOR} to see available modes"
+            return
+        ;;
+    esac
+    if [ -n "$to_exit" ]; then
+        return
+    fi
+    if [ -n "$branch_name" ]; then
+        echo
+        gitlog "$branch_name"
+    fi
+}
+function gitlog_compare {
+    echo -e "${YELLOW}GIT LOG COMPARE${ENDCOLOR}"
+    echo
+    echo -e "${YELLOW}Select first branch:${ENDCOLOR}"
+    choose_branch
+    if [ -n "$to_exit" ]; then
+        return
+    fi
+    if [ -z "$branch_name" ]; then
+        return
+    fi
+    local first_branch="$branch_name"
+    echo
+    echo -e "${YELLOW}Select second branch:${ENDCOLOR}"
+    choose_branch
+    if [ -n "$to_exit" ]; then
+        return
+    fi
+    if [ -n "$branch_name" ]; then
+        local second_branch="$branch_name"
+        echo
+        echo -e "${YELLOW}Commits in '$first_branch' but not in '$second_branch':${ENDCOLOR}"
+        echo
+        git log "$second_branch..$first_branch" --pretty="%C(Yellow)%h%C(reset) | %C(Cyan)%ad%C(reset) | %C(Blue)%an%C(reset) | %s (%C(Green)%cr%C(reset))" --oneline
+        echo
+        echo -e "${YELLOW}Commits in '$second_branch' but not in '$first_branch':${ENDCOLOR}"
+        echo
+        git log "$first_branch..$second_branch" --pretty="%C(Yellow)%h%C(reset) | %C(Cyan)%ad%C(reset) | %C(Blue)%an%C(reset) | %s (%C(Green)%cr%C(reset))" --oneline
+    fi
 }
 function reflog {
     git reflog --pretty="%C(Yellow)%h%C(reset) | %C(Blue)%gd%C(reset) | %C(Cyan)%ad%C(reset) | %gs (%C(Green)%cr%C(reset))"
@@ -3783,6 +4525,41 @@ function last_commit {
 }
 function last_ref {
     git --no-pager reflog -n 1 --pretty="%C(Yellow)%h%C(reset) | %C(Cyan)%gd%C(reset) | %gs | %C(Green)%cr%C(reset) | %C(Cyan)%ad%C(reset)"
+}
+function gitlog_script {
+    local mode="$1"
+    case "$mode" in
+        "branch"|"b")
+            gitlog_branch "$2"
+        ;;
+        "compare"|"comp"|"c")
+            gitlog_compare
+        ;;
+        "help"|"h")
+            echo -e "${YELLOW}gitb log${ENDCOLOR} - Git log utilities"
+            echo
+            echo -e "${YELLOW}Usage:${ENDCOLOR}"
+            echo -e "  gitb log [command]"
+            echo
+            echo -e "${YELLOW}Commands:${ENDCOLOR}"
+            echo -e "  ${GREEN}(no command)${ENDCOLOR}   Show log for current branch"
+            echo -e "  ${GREEN}branch, b${ENDCOLOR}      View log from different branches"
+            echo -e "  ${GREEN}compare, c${ENDCOLOR}     Compare log between two branches"
+            echo -e "  ${GREEN}help, h${ENDCOLOR}        Show this help"
+            echo
+            echo -e "${YELLOW}Examples:${ENDCOLOR}"
+            echo -e "  gitb log"
+            echo -e "  gitb log branch"
+            echo -e "  gitb log branch local"
+            echo -e "  gitb log compare"
+        ;;
+        "")
+            gitlog
+        ;;
+        *)
+            wrong_mode "log" "$mode"
+        ;;
+    esac
 }
 function print_help {
     echo -e "usage: ${YELLOW}gitb <command> <mode>${ENDCOLOR}"
@@ -3795,13 +4572,14 @@ function print_help {
     msg="$msg\ntag_t|tg_Managing tags"
     msg="$msg\nmerge_m|me_Merge changes to the current branch"
     msg="$msg\nrebase_r|re|base_Rebase current branch"
+    msg="$msg\ncherry_ch|cp_Cherry-pick commits from other branches"
     msg="$msg\nreset_res_Easy to use git reset"
     msg="$msg\nstash_s|sta_Manage git stashes"
     msg="$msg\nconfig_cf|cfg|conf_Configurate gitbasher"
     msg="$msg\n_ _ _"
     msg="$msg\n${YELLOW}Command${ENDCOLOR}_\t${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description of ${BOLD}informational${NORMAL}${BLUE} commands${ENDCOLOR}"
     msg="$msg\nstatus_st_Info about repo and changed files"
-    msg="$msg\nlog_l|lg_Open git log in a pretty format"
+    msg="$msg\nlog_l|lg_Git log with branch selection and comparison"
     msg="$msg\nreflog_rl|rlg_Open git reflog in a pretty format"
     msg="$msg\nlast-commit_lc|lastc_Show info about the last commit"
     msg="$msg\nlast-ref_lr|lastr_Show info about the last reference"
@@ -3837,6 +4615,9 @@ case "$1" in
     rebase|r|re|base)         
         rebase_script $2
     ;;
+    cherry|ch|cp)         
+        cherry_script $2 $3
+    ;;
     branch|b|br|bran)         
         branch_script $2
     ;;
@@ -3853,7 +4634,7 @@ case "$1" in
         stash_script $2
     ;;
     log|l|lg)
-        gitlog
+        gitlog_script $2 $3
     ;;
     reflog|rl|rlg)
         reflog

@@ -135,7 +135,7 @@ function check_code {
         echo -e "${RED}Error during $3!${ENDCOLOR}"
         echo -e "$2"
         if [ -n "$git_add" ]; then
-            git restore --staged "$git_add"
+            git restore --staged $git_add
         fi
         exit $1
     fi
@@ -184,7 +184,7 @@ function choose {
 
         if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
             if [ -n "$git_add" ]; then
-                git restore --staged "$git_add"
+                git restore --staged $git_add
             fi
             if [ $number_of_values -le 9 ]; then
                 printf $choice
@@ -195,7 +195,7 @@ function choose {
         re='^[0-9=]+$'
         if ! [[ $choice =~ $re ]]; then
             if [ -n "$git_add" ]; then
-                git restore --staged "$git_add"
+                git restore --staged $git_add
             fi
             exit
         fi
@@ -215,7 +215,7 @@ function choose {
         else
             if [ $number_of_values -gt 9 ]; then
                 if [ -n "$git_add" ]; then
-                    git restore --staged "$git_add"
+                    git restore --staged $git_add
                 fi
                 exit
             fi

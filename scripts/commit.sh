@@ -9,7 +9,7 @@
 # $1: git_add arguments
 function cleanup_on_exit {
     if [ -n "$1" ]; then
-        git restore --staged "$1"
+        git restore --staged $1
     fi
 }
 
@@ -376,7 +376,7 @@ function commit_script {
             read -n 1 -p "Use them? (y/n) " -s choice
             echo
             if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
-                git add "$saved_git_add"
+                git add $saved_git_add
                 if [ $? -eq 0 ]; then
                     git_add="$saved_git_add"
                     use_saved_git_add="true"
@@ -429,7 +429,7 @@ function commit_script {
                 exit
             fi
 
-            result=$(git add "$git_add" 2>&1)
+            result=$(git add $git_add 2>&1)
             if [ $? -eq 0 ]; then
                 # Save git add arguments for potential retry
                 git config gitbasher.cached-git-add "$git_add"
@@ -440,7 +440,7 @@ function commit_script {
                     echo "$result"
                     git_add_with_star="${git_add}*"
                     echo -e "${YELLOW}Trying with wildcard:${ENDCOLOR} ${BOLD}git add $git_add_with_star${ENDCOLOR}"
-                    result_star=$(git add "$git_add_with_star" 2>&1)
+                    result_star=$(git add $git_add_with_star 2>&1)
                     if [ $? -eq 0 ]; then
                         # Save the successful git add arguments for potential retry
                         git config gitbasher.cached-git-add "$git_add_with_star"

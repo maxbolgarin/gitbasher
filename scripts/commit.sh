@@ -226,14 +226,17 @@ function commit_script {
         ticket|jira|j|t)    ticket="true";;
         fast|f)             fast="true";;
         fasts|fs|sf)        fast="true"; scope="true";;
+        staged|st)          staged="true";;
         push|pu|p)          push="true";;
         fastp|fp|pf)        fast="true"; push="true";;
         fastsp|fsp|fps)     fast="true"; push="true"; scope="true";;
         fixup|fix|x)        fixup="true";;
         fixupp|fixp|xp|px)  fixup="true"; push="true";;
+        fixupst|xst|stx)    fixup="true"; staged="true";;
         fastfix|fx|xf)      fixup="true"; fast="true";;
         fastfixp|fxp|xfp)   fixup="true"; fast="true"; push="true";;
         amend|am|a)         amend="true";;
+        amendst|ast|sta)    amend="true"; staged="true";;
         amendf|amf|af|fa)   amend="true"; fast="true";;
         last|l)             last="true";;
         revert|rev)         revert="true";;
@@ -255,7 +258,9 @@ function commit_script {
         header_msg="$header_msg AI"
     fi
 
-    if [ -n "${fast}" ]; then
+    if [ -n "${staged}" ]; then
+        header_msg="$header_msg STAGED"
+    elif [ -n "${fast}" ]; then
         if [ -n "${push}" ]; then
             if [ -n "${fixup}" ]; then
                 header_msg="$header_msg FAST FIXUP & PUSH"
@@ -297,16 +302,19 @@ function commit_script {
         echo -e "<empty>\t\tSelect files to commit and create a conventional message in format: 'type(scope): message'"
         echo -e "fast|f\t\tAdd all files (git add .) and create a conventional commit message without scope"
         echo -e "fasts|fs|sf\tAdd all files (git add .) and create a conventional commit message with scope"
+        echo -e "staged|st\tUse already staged files for commit (skip git add step)"
         echo -e "push|pu|p\tCreate a conventional commit and push changes at the end"
         echo -e "fastp|fp|pf\tCreate a conventional commit in the fast mode and push changes"
         echo -e "fastsp|fsp|fps\tCreate a conventional commit in the fast mode with scope and push changes"
         echo -e "fixup|fix|x\tSelect files and commit to make a --fixup commit (git commit --fixup <hash>)"
         echo -e "fixupp|fixp|xp\tSelect files and commit to make a --fixup commit and push changes"
+        echo -e "fixupst|xst|stx\tSelect files and commit to make a --fixup commit (git commit --fixup <hash>)"
         echo -e "fastfix|fx|xf\tAdd all files (git add .) and commit to make a --fixup commit"
         echo -e "fastfixp|fxp\tAdd all files (git add .) and commit to make a --fixup commit and push"
         echo -e "msg|m\t\tSame as <empty>, but create multiline commit message using text editor"
         echo -e "ticket|t\tSame as <empty>, but add tracker's ticket info to the end of the commit header"
         echo -e "amend|am|a\tSelect files and add them to the last commit without message edit (git commit --amend --no-edit)"
+        echo -e "amendst|ast|sta\tSelect files and add them to the last commit without message edit (git commit --amend --no-edit)"
         echo -e "amendf|amf|af\tAdd all fiels to the last commit without message edit (git commit --amend --no-edit)"
         echo -e "last|l\t\tChange commit message to the last one"
         echo -e "revert|rev\tSelect a commit to revert (git revert -no-edit <commit>)"
@@ -346,6 +354,19 @@ function commit_script {
     fi
 
 
+    ### Check for staged files when using staged mode
+    if [ -n "${staged}" ]; then
+        staged_files_check=$(git diff --name-only --cached)
+        if [ -z "$staged_files_check" ]; then
+            echo -e "${RED}No staged files found!${ENDCOLOR}"
+            exit 1
+        fi
+        echo -e "${YELLOW}Using already staged files:${ENDCOLOR}"
+        staged_display="$(sed 's/^/\t/' <<< "$staged_files_check")"
+        echo -e "${GREEN}${staged_display}${ENDCOLOR}"
+    fi
+
+
     ### Run revert logic
     if [ -n "${revert}" ]; then
         echo -e "${YELLOW}Step 1.${ENDCOLOR} Select a commit to ${YELLOW}revert${ENDCOLOR} it:"
@@ -360,8 +381,8 @@ function commit_script {
     fi
 
 
-    ### Print status (don't need to print in fast mode because we add everything)
-    if [ -z "${fast}" ]; then 
+    ### Print status (don't need to print in fast or staged mode)
+    if [ -z "${fast}" ] && [ -z "${staged}" ]; then 
         echo -e "${YELLOW}Changed files${ENDCOLOR}"
         git_status
     fi
@@ -369,7 +390,7 @@ function commit_script {
 
     ### Check for previously saved git add arguments
     saved_git_add=""
-    if [ -z "${fast}" ]; then
+    if [ -z "${fast}" ] && [ -z "${staged}" ]; then
         saved_git_add=$(git config --get gitbasher.cached-git-add 2>/dev/null)
         if [ -n "$saved_git_add" ]; then
             echo
@@ -395,7 +416,12 @@ function commit_script {
 
 
     ### Commit Step 1: add files to commit
-    if [ -n "${fast}" ]; then
+    if [ -n "${staged}" ]; then
+        # Files are already staged, skip git add step
+        git_add=""
+        # Clean up any existing cached git add since we're using staged files
+        git config --unset gitbasher.cached-git-add 2>/dev/null
+    elif [ -n "${fast}" ]; then
         git add .
         git_add="."
         # Clean up any existing cached git add since we're using fast mode
@@ -431,16 +457,20 @@ function commit_script {
             fi
 
             result=$(git add $git_add 2>&1)
-            if [ $? -eq 0 ]; then
+            code=$?
+            staged_files_list="$(git diff --name-only --cached)"
+            if [ $code -eq 0 ] && [ -n "$staged_files_list" ]; then
                 # Save git add arguments for potential retry
                 git config gitbasher.cached-git-add "$git_add"
                 break
             else
                 # Check if error is about "did not match any files" and try with * appended
-                if [[ "$result" == *"did not match any files"* ]] && [[ "$git_add" != *"*" ]]; then
-                    echo "$result"
+                if [[ "$git_add" != *"*" ]]; then
+                    echo
+
                     git_add_with_star="${git_add}*"
-                    echo -e "${YELLOW}Trying with wildcard:${ENDCOLOR} ${BOLD}git add $git_add_with_star${ENDCOLOR}"
+                    echo -e "${YELLOW}No files were staged! Trying with wildcard:${ENDCOLOR} ${BOLD}git add $git_add_with_star${ENDCOLOR}"
+                   
                     result_star=$(git add $git_add_with_star 2>&1)
                     if [ $? -eq 0 ]; then
                         # Save the successful git add arguments for potential retry
@@ -448,7 +478,7 @@ function commit_script {
                         git_add="$git_add_with_star"
                         break
                     else
-                        echo "$result_star"
+                        echo -e "${RED}Failed to add files with wildcard:${ENDCOLOR} ${BOLD}$result_star${ENDCOLOR}"
                         echo
                     fi
                 else
@@ -461,14 +491,19 @@ function commit_script {
     fi
 
     ### Print staged files that we add at step 1
-    echo -e "${YELLOW}Staged files:${ENDCOLOR}"
-    staged="$(sed 's/^/\t/' <<< "$(git diff --name-only --cached)")"
-    echo -e "${GREEN}${staged}${ENDCOLOR}"
+    if [ -z "${staged}" ]; then
+        echo -e "${YELLOW}Staged files:${ENDCOLOR}"
+        staged="$(sed 's/^/\t/' <<< "$staged_files_list")"
+        echo -e "${GREEN}${staged}${ENDCOLOR}"
+    else
+        # Still need to set the staged variable for later use
+        staged="$(sed 's/^/\t/' <<< "$staged_files_list")"
+    fi
 
 
     ### AI Logic: Generate commit message using AI (before manual steps)
     if [ -n "${llm}" ] && [ -z "${scope}" ]; then
-        if [ -n "${fast}" ]; then
+        if [ -n "${fast}" ] || [ -n "${staged}" ]; then
             step="1"
         else
             step="2"
@@ -481,9 +516,13 @@ function commit_script {
     ### Run fixup logic
     if [ -n "${fixup}" ]; then
         echo
-        echo -e "${YELLOW}Step 2.${ENDCOLOR} Select a commit to ${YELLOW}--fixup${ENDCOLOR}:"
+        step="2"
+        if [ -n "${fast}" ] || [ -n "${staged}" ]; then
+            step="1"
+        fi
+        echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Select a commit to ${YELLOW}--fixup${ENDCOLOR}:"
 
-        if [ -n "${fast}" ]; then
+        if [ -n "${fast}" ] || [ -n "${staged}" ]; then
             choose_commit 9
         else
             choose_commit 19
@@ -523,7 +562,7 @@ function commit_script {
     ### Commit Step 2: Select commit type
     echo
     step="2"
-    if [ -n "${fast}" ]; then
+    if [ -n "${fast}" ] || [ -n "${staged}" ]; then
         step="1"
     fi
     echo -e "${YELLOW}Step ${step}.${ENDCOLOR} What ${YELLOW}type${ENDCOLOR} of changes do you want to commit?"
@@ -583,7 +622,7 @@ function commit_script {
     ### Commit Step 3: enter a commit scope
     if [ -z "$is_empty" ] && ([ -z "$fast" ] || [ -n "$scope" ]); then
         step="3"
-        if [ -n "${fast}" ]; then
+        if [ -n "${fast}" ] || [ -n "${staged}" ]; then
             step="2"
         fi
         echo
@@ -777,7 +816,7 @@ function commit_script {
 
     fi
 
-    if [ -z "$is_empty" ] && [ -n "$fast" ] && [ -z "$scope" ]; then
+    if [ -z "$is_empty" ] && ([ -n "$fast" ]) && [ -z "$scope" ]; then
         commit="$commit: "
     fi
 
@@ -789,7 +828,7 @@ function commit_script {
         else
             step="2"
         fi
-    elif [ -n "$is_empty" ]; then
+    elif [ -n "$is_empty" ] || [ -n "${staged}" ]; then
         step="3"
     else
         step="4"

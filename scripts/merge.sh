@@ -44,6 +44,10 @@ function merge_script {
         echo -e "to-main|to-master|tm\tSwitch to $main_branch and merge the current branch into $main_branch"
         echo -e "remote|r\t\tFetch $origin_name and select a remote branch to merge into current"
         echo -e "help|h\t\t\tShow this help"
+        echo
+        echo -e "${YELLOW}Conflict resolution options (available during merge conflicts):${ENDCOLOR}"
+        echo -e "Accept all incoming changes\tResolve all conflicts by accepting changes from the target branch"
+        echo -e "Accept all current changes\tResolve all conflicts by keeping changes from your current branch"
         exit
     fi
 
@@ -222,6 +226,8 @@ function resolve_conflicts {
     printf "\t${YELLOW}${default_message}${ENDCOLOR}\n"
     echo -e "2. Create a merge commit with an entered message"
     echo -e "3. Abort merge and return to the original state: ${YELLOW}git merge --abort${ENDCOLOR}"
+    echo -e "4. Accept all incoming changes: ${GREEN}git checkout --theirs .${ENDCOLOR}"
+    echo -e "5. Accept all current changes: ${GREEN}git checkout --ours .${ENDCOLOR}"
     echo -e "0. Exit from this script ${BOLD}without${NORMAL} merge abort"
 
     ### Print files with conflicts
@@ -248,6 +254,84 @@ function resolve_conflicts {
             echo -e "${YELLOW}Aborting merge...${ENDCOLOR}"
             git merge --abort
             exit $?
+        fi
+
+        if [ "$choice" == "4" ]; then
+            echo
+            echo -e "Are you sure you want to ${GREEN}accept all incoming changes${ENDCOLOR} and discard current changes (y/n)?"
+            read -n 1 -s choice_yes
+            if [ "$choice_yes" == "y" ]; then
+                echo
+                echo -e "${YELLOW}Accepting all incoming changes...${ENDCOLOR}"
+                
+                # Accept all incoming changes (theirs)
+                checkout_output=$(git checkout --theirs . 2>&1)
+                checkout_code=$?
+                
+                if [ $checkout_code -ne 0 ]; then
+                    echo -e "${RED}Failed to accept incoming changes:${ENDCOLOR}"
+                    echo "$checkout_output"
+                    continue
+                fi
+                
+                # Add all changes and create merge commit
+                git add .
+                
+                echo -e "${YELLOW}Creating merge commit with accepted incoming changes...${ENDCOLOR}"
+                commit_result=$(git commit -m "$default_message" 2>&1)
+                commit_code=$?
+                
+                if [ $commit_code -eq 0 ]; then
+                    echo -e "${GREEN}Successfully accepted all incoming changes and created merge commit!${ENDCOLOR}"
+                    return
+                else
+                    echo -e "${RED}Failed to create merge commit:${ENDCOLOR}"
+                    echo "$commit_result"
+                    exit $commit_code
+                fi
+            else
+                echo -e "${YELLOW}Continuing...${ENDCOLOR}"
+            fi
+            continue
+        fi
+
+        if [ "$choice" == "5" ]; then
+            echo
+            echo -e "Are you sure you want to ${GREEN}accept all current changes${ENDCOLOR} and discard incoming changes (y/n)?"
+            read -n 1 -s choice_yes
+            if [ "$choice_yes" == "y" ]; then
+                echo
+                echo -e "${YELLOW}Accepting all current changes...${ENDCOLOR}"
+                
+                # Accept all current changes (ours)
+                checkout_output=$(git checkout --ours . 2>&1)
+                checkout_code=$?
+                
+                if [ $checkout_code -ne 0 ]; then
+                    echo -e "${RED}Failed to accept current changes:${ENDCOLOR}"
+                    echo "$checkout_output"
+                    continue
+                fi
+                
+                # Add all changes and create merge commit
+                git add .
+                
+                echo -e "${YELLOW}Creating merge commit with accepted current changes...${ENDCOLOR}"
+                commit_result=$(git commit -m "$default_message" 2>&1)
+                commit_code=$?
+                
+                if [ $commit_code -eq 0 ]; then
+                    echo -e "${GREEN}Successfully accepted all current changes and created merge commit!${ENDCOLOR}"
+                    return
+                else
+                    echo -e "${RED}Failed to create merge commit:${ENDCOLOR}"
+                    echo "$commit_result"
+                    exit $commit_code
+                fi
+            else
+                echo -e "${YELLOW}Continuing...${ENDCOLOR}"
+            fi
+            continue
         fi
 
         if [ "$choice" == "0" ]; then

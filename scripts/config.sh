@@ -208,7 +208,7 @@ function configure_ai_key {
 
 ### Function asks user to set AI proxy
 function configure_ai_proxy {    
-    echo -e "${YELLOW}Configure AI HTTP Proxy${ENDCOLOR}"
+    echo -e "${YELLOW}Configure AI HTTP/SOCKS Proxy${ENDCOLOR}"
     echo
     
     ai_proxy=$(get_ai_proxy)
@@ -218,9 +218,13 @@ function configure_ai_proxy {
         echo -e "Current AI proxy: ${GREEN}$ai_proxy${ENDCOLOR}"
     fi
     
-    echo -e "Enter HTTP proxy URL to route AI requests through (useful for bypassing geo-restrictions)"
-    echo -e "Format: ${BLUE}http://proxy.example.com:8080${ENDCOLOR}"
-    echo -e "With auth: ${BLUE}http://username:password@proxy.example.com:8080${ENDCOLOR}"
+    echo -e "Enter proxy URL to route AI requests through (useful for bypassing geo-restrictions)"
+    echo -e ""
+    echo -e "${BLUE}HTTP proxy formats:${ENDCOLOR}"
+    echo -e "  • ${BLUE}http://proxy.example.com:8080${ENDCOLOR}"
+    echo -e "  • ${BLUE}http://username:password@proxy.example.com:8080${ENDCOLOR}"
+    echo -e "  • ${BLUE}http://[2001:db8::1]:8080${ENDCOLOR} (IPv6)"
+    echo -e ""
     echo -e "Press Enter to exit without changes or enter 0 to remove existing proxy"
 
     read -p "Proxy URL: " ai_proxy_input
@@ -238,9 +242,12 @@ function configure_ai_proxy {
 
     echo
 
-    # Validate proxy URL format (basic check)
-    if [[ ! "$ai_proxy_input" =~ ^https?://.*:[0-9]+$ ]]; then
-        echo -e "${YELLOW}Warning: Proxy URL format should be http://host:port or https://host:port${ENDCOLOR}"
+    # Validate proxy URL format (enhanced check for multiple protocols)
+    if [[ ! "$ai_proxy_input" =~ ^(https?|socks5)://.*:[0-9]+$ ]] && [[ ! "$ai_proxy_input" =~ ^(https?|socks5)://\[[0-9a-fA-F:]+\]:[0-9]+$ ]]; then
+        echo -e "${YELLOW}Warning: Proxy URL format should be:${ENDCOLOR}"
+        echo -e "${YELLOW}  • http://host:port or https://host:port${ENDCOLOR}"
+        echo -e "${YELLOW}  • socks5://host:port${ENDCOLOR}"
+        echo -e "${YELLOW}  • For IPv6: http://[::1]:port or socks5://[::1]:port${ENDCOLOR}"
         read -n 1 -p "Continue anyway? (y/n) " -s choice
         echo
         if [ "$choice" != "y" ] && [ "$choice" != "Y" ]; then
@@ -255,11 +262,65 @@ function configure_ai_proxy {
     echo -e "  ${BLUE}gitb commit ai${ENDCOLOR}    - Generate commit with AI through proxy"
     echo -e "  ${BLUE}gitb commit aif${ENDCOLOR}   - Fast AI commit through proxy"
     echo
-
+   
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet AI proxy globally" "true"
     set_ai_proxy "$ai_proxy_input"
     git config --global gitbasher.ai-proxy "$ai_proxy_input"
+}
+
+
+### Function asks user to configure AI commit history limit
+function configure_ai_history {
+    echo -e "${YELLOW}Configure AI Commit History Limit${ENDCOLOR}"
+    echo
+    
+    current_limit=$(get_ai_commit_history_limit)
+    echo -e "Current limit: ${GREEN}$current_limit${ENDCOLOR} recent commits"
+    echo
+    echo -e "This setting controls how many recent commit messages are included in AI prompts"
+    echo -e "to help the AI learn from your commit message patterns and style."
+    echo -e ""
+    echo -e "Recommended range: ${BLUE}5-15${ENDCOLOR} commits"
+    echo -e "• Lower values (5-8): Faster, uses fewer tokens, focuses on recent patterns"
+    echo -e "• Higher values (10-15): Better style learning, uses more tokens"
+    echo
+    echo -e "Press Enter to exit without changes"
+
+    read -p "Number of recent commits to include: " limit_input
+
+    if [ "$limit_input" == "" ]; then
+        exit
+    fi
+
+    echo
+
+    # Validate input is a positive number
+    if ! [[ "$limit_input" =~ ^[1-9][0-9]*$ ]]; then
+        echo -e "${RED}Error: Please enter a positive number${ENDCOLOR}"
+        exit 1
+    fi
+
+    # Warn if value is outside recommended range
+    if [ "$limit_input" -lt 5 ] || [ "$limit_input" -gt 20 ]; then
+        echo -e "${YELLOW}Warning: Value outside recommended range (5-20)${ENDCOLOR}"
+        if [ "$limit_input" -gt 20 ]; then
+            echo -e "${YELLOW}High values may exceed token limits and slow down AI responses${ENDCOLOR}"
+        fi
+        read -n 1 -p "Continue anyway? (y/n) " -s choice
+        echo
+        if [ "$choice" != "y" ] && [ "$choice" != "Y" ]; then
+            exit
+        fi
+    fi
+
+    set_ai_commit_history_limit "$limit_input"
+    echo -e "${GREEN}AI commit history limit set to ${limit_input} for '${project_name}' repo${ENDCOLOR}"
+    echo
+
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+    yes_no_choice "\nSet AI commit history limit globally" "true"
+    git config --global gitbasher.ai-commit-history-limit "$limit_input"
 }
 
 
@@ -352,10 +413,15 @@ function delete_global {
         echo -e "7. AI proxy: ${GREEN}$global_ai_proxy${ENDCOLOR}"
     fi
 
+    global_ai_history=$(git config --global --get gitbasher.ai-commit-history-limit)
+    if [ "$global_ai_history" != "" ]; then
+        echo -e "8. AI commit history limit: ${GREEN}$global_ai_history${ENDCOLOR}"
+    fi
+
     echo -e "0. Exit"
 
     read -n 1 -s choice
-    re='^[01234567]+$'
+    re='^[012345678]+$'
     if ! [[ $choice =~ $re ]]; then
         break
     fi
@@ -394,6 +460,10 @@ function delete_global {
         7)
             echo -e "${GREEN}Unset AI proxy from global settings${ENDCOLOR}"
             git config --global --unset gitbasher.ai-proxy
+            ;;
+        8)
+            echo -e "${GREEN}Unset AI commit history limit from global settings${ENDCOLOR}"
+            git config --global --unset gitbasher.ai-commit-history-limit
             ;;
     esac
 }
@@ -447,6 +517,7 @@ function config_script {
         scopes|scope|sc|s)    set_scopes_cfg="true";;
         ai|llm|key)           set_ai_cfg="true";;
         proxy|prx|p)          set_proxy_cfg="true";;
+        history|hist)         set_ai_history_cfg="true";;
         delete|unset|del)     delete_cfg="true";;
         user|name|email|u)    set_user_cfg="true";;
         help|h)               help="true";;
@@ -469,6 +540,8 @@ function config_script {
         header="$header AI API KEY"
     elif [ -n "${set_proxy_cfg}" ]; then
         header="$header AI PROXY"
+    elif [ -n "${set_ai_history_cfg}" ]; then
+        header="$header AI COMMIT HISTORY"
     elif [ -n "${delete_cfg}" ]; then
         header="$header UNSET GLOBAL CONFIG"
     elif [ -n "${set_user_cfg}" ]; then
@@ -518,6 +591,11 @@ function config_script {
         exit
     fi
 
+    if [ "$set_ai_history_cfg" == "true" ]; then
+        configure_ai_history
+        exit
+    fi
+
     if [ "$delete_cfg" == "true" ]; then
         delete_global
         exit
@@ -536,6 +614,7 @@ function config_script {
         echo -e "scopes|sc|s\t\tSet a list of scopes to help with commit building"
         echo -e "ai|llm|key\t\tSet AI API key for commit message generation"
         echo -e "proxy|prx|p\t\tSet HTTP proxy for AI requests (bypass geo-restrictions)"
+        echo -e "history|hist\t\tSet number of recent commits to include in AI prompts"
         echo -e "delete|unset|del\tUnset global configuration"
         exit
     fi

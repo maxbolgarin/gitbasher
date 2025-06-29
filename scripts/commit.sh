@@ -48,6 +48,7 @@ function handle_ai_commit_generation {
     fi
     
     if [ $? -ne 0 ] || [ -z "$ai_commit_message" ]; then
+        echo
         echo -e "${RED}Failed to generate AI commit message${ENDCOLOR}"
         cleanup_on_exit "$git_add"
         exit 1

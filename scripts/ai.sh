@@ -43,6 +43,18 @@ function set_ai_diff_limit {
     set_config_value gitbasher.ai-diff-limit "$1"
 }
 
+### Function to get AI commit history limit from git config
+# Returns: Maximum number of recent commits to include in AI prompts (default: 10)
+function get_ai_commit_history_limit {
+    get_config_value gitbasher.ai-commit-history-limit "10"
+}
+
+### Function to set AI commit history limit in git config
+# $1: Maximum number of recent commits to include (recommended: 5-15)
+function set_ai_commit_history_limit {
+    set_config_value gitbasher.ai-commit-history-limit "$1"
+}
+
 ### Function to mask API key for display, showing only last 4 characters
 # $1: API key to mask
 # Returns: Masked API key string with asterisks
@@ -82,6 +94,23 @@ function get_limited_diff_for_ai {
     echo "$diff_content"
 }
 
+### Function to get recent commit messages for AI context
+# Returns: Recent commit messages formatted for AI prompt
+function get_recent_commit_messages_for_ai {
+    local limit=$(get_ai_commit_history_limit)  # Use configurable limit
+    local max_chars=1000  # Character limit to save tokens
+    
+    # Get recent commit messages (excluding merge commits)
+    local recent_commits=$(git log --no-merges --pretty=format:"%s" -n "$limit" 2>/dev/null | head -c "$max_chars")
+    
+    if [ -z "$recent_commits" ]; then
+        echo "No commit history available."
+        return
+    fi
+    
+    echo "$recent_commits"
+}
+
 ### Function to make request to Gemini API
 # $1: prompt text
 # Returns: AI response text
@@ -117,20 +146,72 @@ function call_gemini_api {
     
     if [ -n "$proxy_url" ]; then
         # echo -e "${BLUE}Using proxy: ${proxy_url}${ENDCOLOR}" >&2
+        
+        # Configure curl options based on proxy type
+        local proxy_opts=""
+        if [[ "$proxy_url" == socks5://* ]]; then
+            proxy_opts="--socks5-hostname"
+        fi
+        
+        # For HTTP/0.9 proxies, start with the most permissive approach
         response=$(curl -s -X POST \
             --proxy "$proxy_url" \
+            $proxy_opts \
+            --http0.9 \
+            --connect-timeout 30 \
+            --max-time 60 \
             "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${api_key}" \
             -H "Content-Type: application/json" \
             -d "$json_payload" 2>/dev/null)
+        
+        # If HTTP/0.9 fails, try with HTTP/1.0
+        if [ $? -ne 0 ] || [ -z "$response" ]; then
+            response=$(curl -s -X POST \
+                --proxy "$proxy_url" \
+                $proxy_opts \
+                --http1.0 \
+                --connect-timeout 30 \
+                --max-time 60 \
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${api_key}" \
+                -H "Content-Type: application/json" \
+                -d "$json_payload" 2>/dev/null)
+        fi
+        
+        # If still failing, try with HTTP/1.1 and auth options for HTTP proxies
+        if [ $? -ne 0 ] || [ -z "$response" ]; then
+            if [[ "$proxy_url" != socks5://* ]]; then
+                response=$(curl -s -X POST \
+                    --proxy "$proxy_url" \
+                    --proxy-negotiate \
+                    --anyauth \
+                    --http1.1 \
+                    --connect-timeout 30 \
+                    --max-time 60 \
+                    --retry 1 \
+                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${api_key}" \
+                    -H "Content-Type: application/json" \
+                    -d "$json_payload" 2>/dev/null)
+            fi
+        fi
     else
         response=$(curl -s -X POST \
+            --http1.1 \
+            --connect-timeout 30 \
+            --max-time 60 \
+            --retry 2 \
             "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${api_key}" \
             -H "Content-Type: application/json" \
             -d "$json_payload" 2>/dev/null)
     fi
     
     if [ $? -ne 0 ] || [ -z "$response" ]; then
+        echo
         echo -e "${RED}Failed to connect to AI service${ENDCOLOR}" >&2
+        if [ -n "$proxy_url" ]; then
+            echo -e "${YELLOW}Proxy connection failed. Try:${ENDCOLOR}" >&2
+            echo -e "  • Test: ${BOLD}curl --proxy '$proxy_url' --connect-timeout 10 ifconfig.me${ENDCOLOR}" >&2
+            echo -e "  • Configure different proxy with: gitb cfg proxy" >&2
+        fi
         return 1
     fi
     
@@ -289,6 +370,7 @@ function generate_ai_commit_message {
     # Get the diff for staged files (limited to save tokens)
     local diff_content=$(git diff --cached --stat)
     local diff_details=$(get_limited_diff_for_ai)
+    local recent_commits=$(get_recent_commit_messages_for_ai)
     
     # Create prompt for AI
     local prompt="Analyze the following git changes and generate a conventional commit message in the format 'type(scope): subject'.
@@ -302,6 +384,9 @@ Available types:
 - ci: changes to CI configuration files and scripts
 - chore: maintenance and housekeeping
 - docs: documentation changes
+
+Recent commit messages from this repository (for style reference):
+$recent_commits
 
 Staged files:
 $staged_files
@@ -317,6 +402,7 @@ Generate ONLY the commit message in the format 'type(scope): subject'. The subje
 - Be lowercase
 - Not end with a period
 - Be concise and descriptive
+- Follow the style and patterns from the recent commits shown above
 
 If you can determine a meaningful scope from the file paths, include it. Otherwise, omit the scope.
 
@@ -341,9 +427,13 @@ function generate_ai_commit_message_subject {
     # Get the diff for staged files (limited to save tokens)
     local diff_content=$(git diff --cached --stat)
     local diff_details=$(get_limited_diff_for_ai)
+    local recent_commits=$(get_recent_commit_messages_for_ai)
     
     # Create prompt for AI
     local prompt="Analyze the following git changes and generate a conventional commit message that will be after appended to $1'.
+
+Recent commit messages from this repository (for style reference):
+$recent_commits
 
 Staged files:
 $staged_files
@@ -359,6 +449,7 @@ Generate ONLY the commit message. The message should:
 - Be lowercase
 - Not end with a period
 - Be concise and descriptive
+- Follow the style and patterns from the recent commits shown above
 
 Respond with only the commit message without any other text, nothing else."
 
@@ -380,6 +471,7 @@ function generate_ai_commit_message_full {
     # Get the diff for staged files (limited to save tokens)
     local diff_content=$(git diff --cached --stat)
     local diff_details=$(get_limited_diff_for_ai)
+    local recent_commits=$(get_recent_commit_messages_for_ai)
     
     # Create prompt for AI
     local prompt="Analyze the following git changes and generate a conventional commit message in the format 'type(scope): subject'.
@@ -396,6 +488,9 @@ Available types:
 - chore: maintenance and housekeeping
 - docs: documentation changes
 
+Recent commit messages from this repository (for style reference):
+$recent_commits
+
 Staged files:
 $staged_files
 
@@ -410,6 +505,7 @@ Generate ONLY the commit message in the format 'type(scope): subject' with body.
 - Be lowercase
 - Not end with a period
 - Be concise and descriptive
+- Follow the style and patterns from the recent commits shown above
 
 If you can determine a meaningful scope from the file paths, include it. Otherwise, omit the scope.
 

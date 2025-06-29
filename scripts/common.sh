@@ -40,7 +40,6 @@ function set_config_value {
     else
         git config --global "$1" "$2"
     fi
-    echo "$2"
 }
 
 
@@ -106,6 +105,8 @@ function print_configuration {
     else
         echo -e "\tAI proxy:\t${YELLOW}not set${ENDCOLOR}"
     fi
+    local ai_history_limit=$(get_ai_commit_history_limit)
+    echo -e "\tAI history:\t${GREEN}$ai_history_limit commits${ENDCOLOR}"
 }
 
 

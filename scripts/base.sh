@@ -13,6 +13,7 @@ function print_help {
     msg="$msg\ntag_t|tg_Managing tags"
     msg="$msg\nmerge_m|me_Merge changes to the current branch"
     msg="$msg\nrebase_r|re|base_Rebase current branch"
+    msg="$msg\ncherry_ch|cp_Cherry-pick commits from other branches"
     msg="$msg\nreset_res_Easy to use git reset"
     msg="$msg\nstash_s|sta_Manage git stashes"
     msg="$msg\nconfig_cf|cfg|conf_Configurate gitbasher"
@@ -64,6 +65,9 @@ case "$1" in
     ;;
     rebase|r|re|base)         
         rebase_script $2
+    ;;
+    cherry|ch|cp)         
+        cherry_script $2 $3
     ;;
     branch|b|br|bran)         
         branch_script $2

@@ -15,7 +15,8 @@ function rebase_script {
     case "$1" in
         main|master|m)           main="true";;
         interactive|i)           interactive="true";;
-        autosquash|a|s|f|ia|if)  autosquash="true";;
+        autosquash|a|s|ia|if)    autosquash="true";;
+        fastautosquash|fast|f)   fastautosquash="true";;
         help|h)                  help="true";;
         *)
             wrong_mode "rebase" $1
@@ -27,6 +28,8 @@ function rebase_script {
         header="$header INTERACTIVE"
     elif [ -n "${autosquash}" ]; then
         header="$header AUTOSQUASH"
+    elif [ -n "${fastautosquash}" ]; then
+        header="$header FAST AUTOSQUASH"
     elif [ -n "${main}" ]; then
         header="$header MAIN"
     fi
@@ -41,7 +44,8 @@ function rebase_script {
         echo -e "<empty>\t\t\tSelect base branch to rebase current changes"
         echo -e "main|master|m\t\tRebase current branch onto default branch"
         echo -e "interactive|i\t\tSelect base commit in current branch and rebase in an interactive mode"
-        echo -e "autosquash|a|s|f|ia|if\tRebase on the current local branch in an interactive mode with --autosquash"
+        echo -e "autosquash|a|s|ia|if\tRebase on the current local branch in an interactive mode with --autosquash"
+        echo -e "fastautosquash|fast|f\tFast autosquash rebase - automatically merge fixup commits without interaction"
         echo -e "help|h\t\t\tShow this help"
         exit
     fi
@@ -64,7 +68,7 @@ function rebase_script {
         fi
         new_base_branch=${main_branch}
 
-    elif [ -n "$autosquash" ]; then
+    elif [ -n "$autosquash" ] || [ -n "$fastautosquash" ]; then
         new_base_branch=${current_branch}
     else
         echo -e "${YELLOW}Select which branch will become a new base for '${current_branch}'${ENDCOLOR}"
@@ -73,7 +77,7 @@ function rebase_script {
         echo
     fi
 
-    if [ -z "$autosquash" ]; then
+    if [ -z "$autosquash" ] && [ -z "$fastautosquash" ]; then
         ### Fetch before rebase
         echo -e "Fetch ${YELLOW}${origin_name}/${new_base_branch}${ENDCOLOR} before rebase (y/n/0)?"
         read -n 1 -s choice
@@ -93,7 +97,7 @@ function rebase_script {
 
     ### Run rebase and handle conflicts
 
-    rebase_branch "$new_base_branch" "$origin_name" "$from_origin" "$interactive" "$autosquash" "$autosquash"
+    rebase_branch "$new_base_branch" "$origin_name" "$from_origin" "$interactive" "$autosquash" "$autosquash" "$fastautosquash"
 
 
     ### Nothing to rebase
@@ -119,6 +123,7 @@ function rebase_script {
 # $4: interactive
 # $5: autosquash
 # $6: base commit for autosquash
+# $7: fastautosquash
 # Returns:
 #      * rebase_output
 #      * rebase_code - 0 if everything is ok, not zero if there are conflicts
@@ -128,7 +133,50 @@ function rebase_branch {
         ref=$2/$1
     fi
 
-    if [ "$5" == "true" ]; then
+    if [ "$7" == "true" ]; then
+        # Fast autosquash mode - automatically determine base commit
+        echo -e "${YELLOW}Finding fixup commits to squash automatically...${ENDCOLOR}"
+        
+        # Try to find merge-base with main branch first
+        merge_base=$(git merge-base HEAD ${main_branch} 2>/dev/null)
+        if [ -n "$merge_base" ] && [ "$merge_base" != "$(git rev-parse HEAD)" ]; then
+            ref="$merge_base"
+            echo -e "${YELLOW}Using merge-base with ${main_branch}: ${ref::7}${ENDCOLOR}"
+        else
+            # Fall back to HEAD~50 or the root commit if less than 50 commits
+            commit_count=$(git rev-list --count HEAD 2>/dev/null || echo "0")
+            if [ "$commit_count" -gt 50 ]; then
+                ref="HEAD~50"
+                echo -e "${YELLOW}Using HEAD~50 as base commit${ENDCOLOR}"
+            else
+                # Use root commit
+                ref=$(git rev-list --max-parents=0 HEAD 2>/dev/null | tail -1)
+                if [ -n "$ref" ]; then
+                    echo -e "${YELLOW}Using root commit: ${ref::7}${ENDCOLOR}"
+                else
+                    ref="HEAD~10"  # fallback
+                    echo -e "${YELLOW}Using HEAD~10 as fallback base commit${ENDCOLOR}"
+                fi
+            fi
+        fi
+        
+        # Check if there are any fixup commits
+        fixup_commits=$(git log --oneline --grep="^fixup!" $ref..HEAD 2>/dev/null || echo "")
+        if [ -z "$fixup_commits" ]; then
+            echo -e "${GREEN}No fixup commits found to squash${ENDCOLOR}"
+            rebase_code=0
+            rebase_output="No fixup commits to squash"
+            return
+        fi
+        
+        echo -e "${GREEN}Found fixup commits:${ENDCOLOR}"
+        echo "$fixup_commits" | sed 's/^/\t/'
+        echo
+        
+        # Run fast autosquash with non-interactive editor
+        rebase_output=$(GIT_SEQUENCE_EDITOR=true git rebase -i --autosquash $ref 3>&2 2>&1 1>&3)
+
+    elif [ "$5" == "true" ]; then
         if [ "$6" == "true" ]; then
             echo -e "Select a new ${BOLD}base${NORMAL} commit from which to squash fixup commits (third one or older):"
             choose_commit 20 "number" $ref

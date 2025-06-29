@@ -613,23 +613,22 @@ function commit_script {
                             # For the last component (filename), remove extension if present
                             if [ $i -eq $((${#path_components[@]} - 1)) ]; then
                                 component_no_ext="${component%.*}"
-                                # Only use filename if it's meaningful
-                                if [[ ! "$component_no_ext" =~ ^(index|main|app|test|spec|config|readme|license|makefile|dockerfile)$ ]]; then
-                                    scope_counts["$component_no_ext"]=$((${scope_counts["$component_no_ext"]:-0} + 1))
-                                    # Track minimum depth for this token
-                                    current_depth=$((i + 1))
-                                    if [ -z "${scope_depths["$component_no_ext"]}" ] || [ $current_depth -lt ${scope_depths["$component_no_ext"]} ]; then
-                                        scope_depths["$component_no_ext"]=$current_depth
-                                    fi
+                                component_no_ext_lower="${component_no_ext,,}"
+                                scope_counts["$component_no_ext_lower"]=$((${scope_counts["$component_no_ext_lower"]:-0} + 1))
+                                # Track minimum depth for this token
+                                current_depth=$((i + 1))
+                                if [ -z "${scope_depths["$component_no_ext_lower"]}" ] || [ $current_depth -lt ${scope_depths["$component_no_ext_lower"]} ]; then
+                                    scope_depths["$component_no_ext_lower"]=$current_depth
                                 fi
                             else
                                 # Directory component - filter out common non-meaningful directories
-                                if [[ ! "$component" =~ ^(src|lib|test|tests|spec|specs|build|dist|node_modules|vendor|tmp|temp|cache|logs|log)$ ]]; then
-                                    scope_counts["$component"]=$((${scope_counts["$component"]:-0} + 1))
+                                component_lower="${component,,}"
+                                if [[ ! "$component_lower" =~ ^(src|lib|test|tests|spec|specs|build|dist|node_modules|vendor|tmp|temp|cache|logs|log)$ ]]; then
+                                    scope_counts["$component_lower"]=$((${scope_counts["$component_lower"]:-0} + 1))
                                     # Track minimum depth for this token
                                     current_depth=$((i + 1))
-                                    if [ -z "${scope_depths["$component"]}" ] || [ $current_depth -lt ${scope_depths["$component"]} ]; then
-                                        scope_depths["$component"]=$current_depth
+                                    if [ -z "${scope_depths["$component_lower"]}" ] || [ $current_depth -lt ${scope_depths["$component_lower"]} ]; then
+                                        scope_depths["$component_lower"]=$current_depth
                                     fi
                                 fi
                             fi

@@ -103,9 +103,16 @@ function set_editor {
         exit
     fi
 
+    # Sanitize editor command input
+    if ! sanitize_command "$choice"; then
+        show_sanitization_error "editor" "Use only letters, numbers, dots, dashes, underscores, and slashes."
+        exit 1
+    fi
+    choice="$sanitized_command"
+
     echo
 
-    which_output=$(which $choice)
+    which_output=$(which "$choice")
     if [ "${which_output}" == *"not found"* ] || [ "${which_output}" == "" ]; then
         echo -e "${RED}Binary '${choice}' not found!${ENDCOLOR}"
         exit
@@ -138,7 +145,12 @@ function set_ticket {
         exit
     fi
 
-    ticket_name="${ticket_name##*( )}"
+    # Sanitize ticket prefix input
+    if ! sanitize_text_input "$ticket_name" 50; then
+        show_sanitization_error "ticket prefix" "Use printable characters only, max 50 characters."
+        exit 1
+    fi
+    ticket_name="$sanitized_text"
 
     echo 
 
@@ -294,11 +306,12 @@ function configure_ai_history {
 
     echo
 
-    # Validate input is a positive number
-    if ! [[ "$limit_input" =~ ^[1-9][0-9]*$ ]]; then
-        echo -e "${RED}Error: Please enter a positive number${ENDCOLOR}"
+    # Validate numeric input
+    if ! validate_numeric_input "$limit_input" 1 100; then
+        show_sanitization_error "commit history limit" "Please enter a positive number between 1 and 100."
         exit 1
     fi
+    limit_input="$validated_number"
 
     # Warn if value is outside recommended range
     if [ "$limit_input" -lt 5 ] || [ "$limit_input" -gt 20 ]; then
@@ -351,11 +364,12 @@ function set_scopes {
 
     echo
 
-    re='^([a-zA-Z]+ ){0,8}([a-zA-Z]+)+$'
-    if ! [[ $scopes_raw =~ $re ]]; then
-        echo -e "${RED}Invalid scopes list!${ENDCOLOR}"
-        exit
+    # Validate scope list format
+    if ! validate_scope_list "$scopes_raw"; then
+        show_sanitization_error "scopes" "Use only letters and spaces, maximum 9 scopes (e.g., 'feat docs test')."
+        exit 1
     fi
+    scopes_raw="$validated_scopes"
 
     git config --local --replace-all gitbasher.scopes "$scopes_raw"
 
@@ -483,6 +497,23 @@ function set_user {
 
     if [ "$user_name" == "" ] && [ "$user_email" == "" ]; then
         exit
+    fi
+
+    # Validate user inputs
+    if [ "$user_name" != "" ]; then
+        if ! sanitize_text_input "$user_name" 100; then
+            show_sanitization_error "user name" "Use printable characters only, max 100 characters."
+            exit 1
+        fi
+        user_name="$sanitized_text"
+    fi
+
+    if [ "$user_email" != "" ]; then
+        if ! validate_email "$user_email"; then
+            show_sanitization_error "email" "Please enter a valid email address."
+            exit 1
+        fi
+        user_email="$validated_email"
     fi
 
     echo

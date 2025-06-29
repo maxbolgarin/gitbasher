@@ -22,11 +22,16 @@ function select_files_for_stash {
     while [ true ]; do
         read -p "$(echo -n -e "${BOLD}files to stash${ENDCOLOR} ")" -e git_add
 
-        # Trim spaces and remove quotes
-        git_add=$(echo "$git_add" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e "s/^'//" -e "s/'$//")
+        # Sanitize file pattern input
         if [ "$git_add" == "" ]; then
             exit
         fi
+        
+        if ! sanitize_file_path "$git_add"; then
+            show_sanitization_error "file pattern" "Invalid file path or pattern. Avoid dangerous characters and sequences."
+            continue
+        fi
+        git_add="$sanitized_file_path"
 
         # Test if the pattern matches any changed files
         # Use git add --dry-run to see what would be added
@@ -228,6 +233,13 @@ function stash_script {
         if [ -z "$stash_message" ]; then
             exit 0
         fi
+        
+        # Sanitize stash message
+        if ! sanitize_text_input "$stash_message" 200; then
+            show_sanitization_error "stash message" "Use printable characters only, max 200 characters."
+            exit 1
+        fi
+        stash_message="$sanitized_text"
 
         echo -e "${YELLOW}Stashing selected files...${ENDCOLOR}"
         echo
@@ -269,6 +281,13 @@ function stash_script {
         if [ -z "$stash_message" ]; then
             exit 0
         fi
+        
+        # Sanitize stash message
+        if ! sanitize_text_input "$stash_message" 200; then
+            show_sanitization_error "stash message" "Use printable characters only, max 200 characters."
+            exit 1
+        fi
+        stash_message="$sanitized_text"
 
         echo -e "${YELLOW}Stashing all changes...${ENDCOLOR}"
         echo

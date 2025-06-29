@@ -12,6 +12,323 @@ GRAY_ES="\x1b[37m"
 ENDCOLOR_ES="\x1b[0m"
 
 
+### ===== INPUT SANITIZATION FRAMEWORK =====
+### These functions provide security validation for all user inputs
+
+### Function to sanitize git-safe names (branches, tags, etc.)
+# $1: input string
+# Returns: sanitized string safe for git operations
+# Sets: sanitized_git_name global variable
+function sanitize_git_name {
+    local input="$1"
+    sanitized_git_name=""
+    
+    if [ -z "$input" ]; then
+        return 1
+    fi
+    
+    # Remove dangerous characters, keep git-safe ones
+    # Allow: letters, numbers, dash, underscore, dot, slash
+    local cleaned=$(echo "$input" | sed 's/[^a-zA-Z0-9._/-]//g')
+    
+    # Remove leading/trailing dots and slashes (git restrictions)
+    cleaned=$(echo "$cleaned" | sed 's/^[./]*//;s/[./]*$//')
+    
+    # Prevent git-unsafe patterns
+    if [[ "$cleaned" =~ \.\. ]] || [[ "$cleaned" =~ ^- ]] || [[ "$cleaned" =~ -$ ]] || \
+       [[ "$cleaned" =~ ^@ ]] || [[ "$cleaned" == "HEAD" ]] || [[ "$cleaned" =~ ^refs/ ]]; then
+        return 1
+    fi
+    
+    # Ensure minimum length
+    if [ ${#cleaned} -lt 1 ] || [ ${#cleaned} -gt 255 ]; then
+        return 1
+    fi
+    
+    sanitized_git_name="$cleaned"
+    return 0
+}
+
+### Function to sanitize file paths and patterns for git add
+# $1: input string
+# Returns: sanitized string safe for file operations
+# Sets: sanitized_file_path global variable
+function sanitize_file_path {
+    local input="$1"
+    sanitized_file_path=""
+    
+    if [ -z "$input" ]; then
+        return 1
+    fi
+    
+    # Remove null bytes and control characters (except tab and newline for multiline patterns)
+    local cleaned=$(echo "$input" | tr -d '\000-\010\013\014\016-\037\177')
+    
+    # Remove dangerous sequences
+    cleaned=$(echo "$cleaned" | sed 's/\.\.\///g')  # Remove ../
+    cleaned=$(echo "$cleaned" | sed 's/;\s*rm\s/; /g')  # Remove rm commands
+    cleaned=$(echo "$cleaned" | sed 's/&&\s*rm\s/\&\& /g')  # Remove rm commands
+    cleaned=$(echo "$cleaned" | sed 's/|\s*rm\s/| /g')  # Remove rm commands
+    
+    # Limit length
+    if [ ${#cleaned} -gt 1000 ]; then
+        return 1
+    fi
+    
+    sanitized_file_path="$cleaned"
+    return 0
+}
+
+### Function to sanitize commit messages
+# $1: input string
+# Returns: sanitized commit message
+# Sets: sanitized_commit_message global variable
+function sanitize_commit_message {
+    local input="$1"
+    sanitized_commit_message=""
+    
+    if [ -z "$input" ]; then
+        return 1
+    fi
+    
+    # Remove null bytes and control characters except newlines and tabs
+    local cleaned=$(echo "$input" | tr -d '\000-\010\013\014\016-\037\177')
+    
+    # Trim leading/trailing whitespace
+    cleaned=$(echo "$cleaned" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    
+    # Validate length (typical git limit is ~50-72 chars for subject, longer for body)
+    if [ ${#cleaned} -lt 1 ] || [ ${#cleaned} -gt 2000 ]; then
+        return 1
+    fi
+    
+    sanitized_commit_message="$cleaned"
+    return 0
+}
+
+### Function to sanitize command names (like editor)
+# $1: input string
+# Returns: sanitized command name
+# Sets: sanitized_command global variable
+function sanitize_command {
+    local input="$1"
+    sanitized_command=""
+    
+    if [ -z "$input" ]; then
+        return 1
+    fi
+    
+    # Only allow alphanumeric, dash, underscore, and slash for paths
+    local cleaned=$(echo "$input" | sed 's/[^a-zA-Z0-9._/-]//g')
+    
+    # Remove dangerous patterns
+    if [[ "$cleaned" =~ \.\. ]] || [[ "$cleaned" == *";"* ]] || [[ "$cleaned" == *"|"* ]] || \
+       [[ "$cleaned" == *"&"* ]] || [[ "$cleaned" == *"$"* ]] || [[ "$cleaned" == *"\`"* ]]; then
+        return 1
+    fi
+    
+    # Validate length and format
+    if [ ${#cleaned} -lt 1 ] || [ ${#cleaned} -gt 100 ] || [[ "$cleaned" =~ ^- ]]; then
+        return 1
+    fi
+    
+    sanitized_command="$cleaned"
+    return 0
+}
+
+### Function to sanitize general text input
+# $1: input string
+# $2: max length (optional, default 500)
+# Returns: sanitized text
+# Sets: sanitized_text global variable
+function sanitize_text_input {
+    local input="$1"
+    local max_length="${2:-500}"
+    sanitized_text=""
+    
+    if [ -z "$input" ]; then
+        return 1
+    fi
+    
+    # Remove null bytes and most control characters, keep printable ones
+    local cleaned=$(echo "$input" | tr -d '\000-\010\013\014\016-\037\177')
+    
+    # Trim whitespace
+    cleaned=$(echo "$cleaned" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    
+    # Validate length
+    if [ ${#cleaned} -lt 1 ] || [ ${#cleaned} -gt "$max_length" ]; then
+        return 1
+    fi
+    
+    sanitized_text="$cleaned"
+    return 0
+}
+
+### Function to validate numeric input
+# $1: input string
+# $2: min value (optional)
+# $3: max value (optional)
+# Returns: 0 if valid number, 1 if invalid
+# Sets: validated_number global variable
+function validate_numeric_input {
+    local input="$1"
+    local min_val="$2"
+    local max_val="$3"
+    validated_number=""
+    
+    if [ -z "$input" ]; then
+        return 1
+    fi
+    
+    # Check if it's a valid positive integer
+    if ! [[ "$input" =~ ^[0-9]+$ ]]; then
+        return 1
+    fi
+    
+    # Convert to number for range checking
+    local num=$((input))
+    
+    # Check minimum value
+    if [ -n "$min_val" ] && [ "$num" -lt "$min_val" ]; then
+        return 1
+    fi
+    
+    # Check maximum value
+    if [ -n "$max_val" ] && [ "$num" -gt "$max_val" ]; then
+        return 1
+    fi
+    
+    validated_number="$num"
+    return 0
+}
+
+### Function to validate email format
+# $1: email string
+# Returns: 0 if valid email format, 1 if invalid
+# Sets: validated_email global variable
+function validate_email {
+    local input="$1"
+    validated_email=""
+    
+    if [ -z "$input" ]; then
+        return 1
+    fi
+    
+    # Basic email regex validation
+    if [[ "$input" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+        # Additional length check
+        if [ ${#input} -le 254 ]; then
+            validated_email="$input"
+            return 0
+        fi
+    fi
+    
+    return 1
+}
+
+### Function to validate scope list
+# $1: scope list string
+# Returns: 0 if valid, 1 if invalid
+# Sets: validated_scopes global variable
+function validate_scope_list {
+    local input="$1"
+    validated_scopes=""
+    
+    if [ -z "$input" ]; then
+        return 1
+    fi
+    
+    # Check format: letters and spaces only, max 9 scopes
+    if [[ "$input" =~ ^([a-zA-Z]+ ){0,8}([a-zA-Z]+)$ ]]; then
+        # Count words
+        local word_count=$(echo "$input" | wc -w)
+        if [ "$word_count" -le 9 ] && [ "$word_count" -ge 1 ]; then
+            validated_scopes="$input"
+            return 0
+        fi
+    fi
+    
+    return 1
+}
+
+### Function to sanitize choice input (y/n/numbers/etc.)
+# $1: input string
+# $2: allowed pattern (optional, default allows y/n/0-9/=)
+# Returns: sanitized choice
+# Sets: sanitized_choice global variable
+function sanitize_choice_input {
+    local input="$1"
+    local pattern="${2:-^[yn0-9=]$}"
+    sanitized_choice=""
+    
+    if [ -z "$input" ]; then
+        return 1
+    fi
+    
+    # Convert to lowercase for consistency
+    local cleaned=$(echo "$input" | tr '[:upper:]' '[:lower:]')
+    
+    # Validate against pattern
+    if [[ "$cleaned" =~ $pattern ]]; then
+        sanitized_choice="$cleaned"
+        return 0
+    fi
+    
+    return 1
+}
+
+### Function to display sanitization error with helpful message
+# $1: input type name
+# $2: error message
+function show_sanitization_error {
+    local input_type="$1"
+    local error_msg="$2"
+    
+    echo -e "${RED}Invalid $input_type input!${ENDCOLOR}" >&2
+    if [ -n "$error_msg" ]; then
+        echo -e "${YELLOW}$error_msg${ENDCOLOR}" >&2
+    fi
+    echo -e "${YELLOW}Please try again with valid input.${ENDCOLOR}" >&2
+}
+
+### Function to validate git remote URL
+# $1: URL string
+# Returns: 0 if valid URL format, 1 if invalid
+# Sets: validated_url global variable
+function validate_git_url {
+    local input="$1"
+    validated_url=""
+    
+    if [ -z "$input" ]; then
+        return 1
+    fi
+    
+    # Remove dangerous characters first
+    local cleaned=$(echo "$input" | tr -d '\000-\037\177')
+    
+    # Basic validation for common git URL formats:
+    # https://github.com/user/repo.git
+    # git@github.com:user/repo.git
+    # ssh://git@server.com/repo.git
+    # /path/to/repo.git (local)
+    if [[ "$cleaned" =~ ^https?://[a-zA-Z0-9.-]+/[a-zA-Z0-9._/-]+(.git)?$ ]] || \
+       [[ "$cleaned" =~ ^git@[a-zA-Z0-9.-]+:[a-zA-Z0-9._/-]+(.git)?$ ]] || \
+       [[ "$cleaned" =~ ^ssh://[a-zA-Z0-9@.-]+/[a-zA-Z0-9._/-]+(.git)?$ ]] || \
+       [[ "$cleaned" =~ ^[a-zA-Z0-9._/-]+(.git)?$ ]]; then
+        
+        # Length check
+        if [ ${#cleaned} -le 500 ]; then
+            validated_url="$cleaned"
+            return 0
+        fi
+    fi
+    
+    return 1
+}
+
+### ===== END INPUT SANITIZATION FRAMEWORK =====
+
 
 ### Function tries to get config from local, then from global, then returns default
 # $1: config name

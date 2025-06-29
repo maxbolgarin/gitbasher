@@ -326,7 +326,14 @@ function tag_script {
         exit
     fi
 
-    if [[ "$tag_name" == "tag" ]] || [[ "$tag_name" == *" "* ]]; then
+    # Sanitize tag name input
+    if ! sanitize_git_name "$tag_name"; then
+        show_sanitization_error "tag name" "Use only letters, numbers, dots, dashes, underscores, and slashes."
+        exit 1
+    fi
+    tag_name="$sanitized_git_name"
+
+    if [[ "$tag_name" == "tag" ]]; then
         echo
         echo -e "${RED}This name is forbidden!${ENDCOLOR}"
         exit

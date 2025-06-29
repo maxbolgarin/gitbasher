@@ -401,7 +401,12 @@ function branch_script {
             exit
         fi
         
-        branch_name="${branch_name##*( )}"
+        # Sanitize branch name input
+        if ! sanitize_git_name "$branch_name"; then
+            show_sanitization_error "branch name" "Use only letters, numbers, dots, dashes, underscores, and slashes."
+            exit 1
+        fi
+        branch_name="$sanitized_git_name"
     else
         ### Step 1. Select branch prefix
         branch_to_show=$current_branch
@@ -453,20 +458,17 @@ function branch_script {
                 fi
                 break
             else
-                # Manual prefix entry - validate format
-                choice=$(echo "$choice" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+                # Manual prefix entry - sanitize and validate format
                 if [ -n "$choice" ]; then
-                    # Validate prefix format (letters, numbers, no special characters)
-                    re_prefix='^[a-zA-Z0-9]+$'
-                    if [[ $choice =~ $re_prefix ]]; then
-                        branch_type="$choice"
-                        branch_type_and_sep="${branch_type}${sep}"
-                        break
-                    else
-                        echo -e "${RED}Invalid prefix format! Use only letters and numbers.${ENDCOLOR}"
+                    # Sanitize prefix input
+                    if ! sanitize_git_name "$choice"; then
+                        show_sanitization_error "branch prefix" "Use only letters, numbers, dots, dashes, underscores, and slashes."
                         echo
                         continue
                     fi
+                    branch_type="$sanitized_git_name"
+                    branch_type_and_sep="${branch_type}${sep}"
+                    break
                 else
                     echo -e "${RED}Please enter a valid option number or custom prefix.${ENDCOLOR}"
                     echo
@@ -487,7 +489,12 @@ function branch_script {
             exit
         fi
 
-        branch_name="${branch_type_and_sep}${branch_name##*( )}"
+        # Sanitize branch name input
+        if ! sanitize_git_name "$branch_name"; then
+            show_sanitization_error "branch name" "Use only letters, numbers, dots, dashes, underscores, and slashes."
+            exit 1
+        fi
+        branch_name="${branch_type_and_sep}${sanitized_git_name}"
     fi
 
 

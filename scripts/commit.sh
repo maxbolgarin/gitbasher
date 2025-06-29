@@ -450,11 +450,16 @@ function commit_script {
         while [ true ]; do
             read -p "$(echo -n -e "${BOLD}git add${ENDCOLOR} ")" -e git_add
 
-            # Trim spaces
-            git_add=$(echo "$git_add" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+            # Sanitize file path input
             if [ "$git_add" == "" ]; then
                 exit
             fi
+            
+            if ! sanitize_file_path "$git_add"; then
+                show_sanitization_error "file path" "Invalid file path or pattern. Avoid dangerous characters and sequences."
+                continue
+            fi
+            git_add="$sanitized_file_path"
 
             result=$(git add $git_add 2>&1)
             code=$?
@@ -803,16 +808,14 @@ function commit_script {
                     continue
                 fi
             else
-                # Validate custom scope format
-                re='^[a-zA-Z0-9/,_.-]+$'
-                if [[ $commit_scope =~ $re ]]; then
-                    commit="$commit($commit_scope): "
-                    break
-                else
-                    echo -e "${RED}Invalid scope format! Use only letters, numbers, hyphens, underscores, and dots.${ENDCOLOR}"
-                    echo -e "${RED}Debug: input was '$commit_scope'${ENDCOLOR}"
+                # Sanitize custom scope input
+                if ! sanitize_git_name "$commit_scope"; then
+                    show_sanitization_error "scope" "Use only letters, numbers, hyphens, underscores, dots, and slashes."
                     continue
                 fi
+                commit_scope="$sanitized_git_name"
+                commit="$commit($commit_scope): "
+                break
             fi
         done
 
@@ -911,6 +914,14 @@ ${staged_with_tab}
             cleanup_on_exit "$git_add"
             exit
         fi
+        
+        # Sanitize commit message
+        if ! sanitize_commit_message "$commit_message"; then
+            show_sanitization_error "commit message" "Use printable characters only, 1-2000 characters."
+            cleanup_on_exit "$git_add"
+            exit 1
+        fi
+        commit_message="$sanitized_commit_message"
     fi
 
 
@@ -932,7 +943,13 @@ ${staged_with_tab}
         fi
 
         if [ "$commit_ticket" != "" ]; then
-            commit_ticket=$(echo "$commit_ticket" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+            # Sanitize ticket input
+            if ! sanitize_text_input "$commit_ticket" 50; then
+                show_sanitization_error "ticket" "Use printable characters only, max 50 characters."
+                cleanup_on_exit "$git_add"
+                exit 1
+            fi
+            commit_ticket="$sanitized_text"
 
             summary=$(echo "$commit_message" | head -n 1)
             remaining_message=""

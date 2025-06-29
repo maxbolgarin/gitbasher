@@ -68,6 +68,18 @@ if [ "$origin_name" == "" ]; then
         exit
     fi
 
+    # Validate remote URL format
+    if ! validate_git_url "$remote_url"; then
+        echo
+        echo -e "${RED}Invalid git URL format!${ENDCOLOR}"
+        echo -e "${YELLOW}Expected formats:${ENDCOLOR}"
+        echo -e "  • https://github.com/user/repo.git"
+        echo -e "  • git@github.com:user/repo.git"
+        echo -e "  • ssh://git@server.com/repo.git"
+        exit 1
+    fi
+    remote_url="$validated_url"
+
     remote_check=$(git ls-remote "$remote_url" 2>&1)
     if [[ "$remote_check" == *"does not appear to be a git"* ]]; then
         echo

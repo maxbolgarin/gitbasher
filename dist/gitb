@@ -550,6 +550,23 @@ function get_recent_commit_messages_for_ai {
     fi
     echo "$recent_commits"
 }
+function validate_proxy_url {
+    local proxy_url="$1"
+    validated_proxy_url=""
+    if [ -z "$proxy_url" ]; then
+        return 1
+    fi
+    local cleaned_url=$(echo "$proxy_url" | sed 's/[^a-zA-Z0-9.:/@_%?&=-]//g')
+    if [[ "$cleaned_url" =~ ^(https?|socks5)://([a-zA-Z0-9._%-]+(:([a-zA-Z0-9._%-]+))?@)?[a-zA-Z0-9.-]+:[0-9]+(/.*)?$ ]]; then
+        validated_proxy_url="$cleaned_url"
+        return 0
+    elif [[ "$cleaned_url" =~ ^[a-zA-Z0-9.-]+:[0-9]+$ ]]; then
+        validated_proxy_url="$cleaned_url"
+        return 0
+    else
+        return 1
+    fi
+}
 function call_gemini_api {
     local prompt="$1"
     local api_key=$(get_ai_api_key)
@@ -572,14 +589,22 @@ function call_gemini_api {
         }
     }"
     local proxy_url=$(get_ai_proxy)
+    local safe_proxy_url=""
     local response=""
     if [ -n "$proxy_url" ]; then
+        if ! validate_proxy_url "$proxy_url"; then
+            echo -e "${RED}Invalid proxy URL format: $proxy_url${ENDCOLOR}" >&2
+            echo -e "${YELLOW}Expected format: protocol://host:port (e.g., http://proxy.example.com:8080)${ENDCOLOR}" >&2
+            echo -e "${YELLOW}Or: host:port (e.g., proxy.example.com:8080)${ENDCOLOR}" >&2
+            return 1
+        fi
+        safe_proxy_url="$validated_proxy_url"
         local proxy_opts=""
-        if [[ "$proxy_url" == socks5://* ]]; then
+        if [[ "$safe_proxy_url" == socks5://* ]]; then
             proxy_opts="--socks5-hostname"
         fi
         response=$(curl -s -X POST \
-            --proxy "$proxy_url" \
+            --proxy "$safe_proxy_url" \
             $proxy_opts \
             --http0.9 \
             --connect-timeout 30 \
@@ -589,7 +614,7 @@ function call_gemini_api {
             -d "$json_payload" 2>/dev/null)
         if [ $? -ne 0 ] || [ -z "$response" ]; then
             response=$(curl -s -X POST \
-                --proxy "$proxy_url" \
+                --proxy "$safe_proxy_url" \
                 $proxy_opts \
                 --http1.0 \
                 --connect-timeout 30 \
@@ -599,9 +624,9 @@ function call_gemini_api {
                 -d "$json_payload" 2>/dev/null)
         fi
         if [ $? -ne 0 ] || [ -z "$response" ]; then
-            if [[ "$proxy_url" != socks5://* ]]; then
+            if [[ "$safe_proxy_url" != socks5://* ]]; then
                 response=$(curl -s -X POST \
-                    --proxy "$proxy_url" \
+                    --proxy "$safe_proxy_url" \
                     --proxy-negotiate \
                     --anyauth \
                     --http1.1 \
@@ -626,9 +651,9 @@ function call_gemini_api {
     if [ $? -ne 0 ] || [ -z "$response" ]; then
         echo
         echo -e "${RED}Failed to connect to AI service${ENDCOLOR}" >&2
-        if [ -n "$proxy_url" ]; then
+        if [ -n "$safe_proxy_url" ]; then
             echo -e "${YELLOW}Proxy connection failed. Try:${ENDCOLOR}" >&2
-            echo -e "  • Test: ${BOLD}curl --proxy '$proxy_url' --connect-timeout 10 ifconfig.me${ENDCOLOR}" >&2
+            echo -e "  • Test: ${BOLD}curl --proxy '$safe_proxy_url' --connect-timeout 10 ifconfig.me${ENDCOLOR}" >&2
             echo -e "  • Configure different proxy with: gitb cfg proxy" >&2
         fi
         return 1
@@ -1021,17 +1046,14 @@ function configure_ai_proxy {
         exit
     fi
     echo
-    if [[ ! "$ai_proxy_input" =~ ^(https?|socks5)://.*:[0-9]+$ ]] && [[ ! "$ai_proxy_input" =~ ^(https?|socks5)://\[[0-9a-fA-F:]+\]:[0-9]+$ ]]; then
-        echo -e "${YELLOW}Warning: Proxy URL format should be:${ENDCOLOR}"
-        echo -e "${YELLOW}  • http://host:port or https://host:port${ENDCOLOR}"
-        echo -e "${YELLOW}  • socks5://host:port${ENDCOLOR}"
-        echo -e "${YELLOW}  • For IPv6: http://[::1]:port or socks5://[::1]:port${ENDCOLOR}"
-        read -n 1 -p "Continue anyway? (y/n) " -s choice
-        echo
-        if [ "$choice" != "y" ] && [ "$choice" != "Y" ]; then
-            exit
-        fi
+    if ! validate_proxy_url "$ai_proxy_input"; then
+        echo -e "${RED}Invalid proxy URL format: $ai_proxy_input${ENDCOLOR}"
+        echo -e "${YELLOW}Expected format: protocol://host:port (e.g., http://proxy.example.com:8080)${ENDCOLOR}"
+        echo -e "${YELLOW}Or: host:port (e.g., proxy.example.com:8080)${ENDCOLOR}"
+        echo -e "${YELLOW}Supported protocols: http, https, socks5${ENDCOLOR}"
+        exit 1
     fi
+    ai_proxy_input="$validated_proxy_url"
     set_ai_proxy "$ai_proxy_input"
     echo -e "${GREEN}AI proxy configured for '${project_name}' repo${ENDCOLOR}: ${BLUE}$ai_proxy_input${ENDCOLOR}"
     echo

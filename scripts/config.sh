@@ -242,18 +242,17 @@ function configure_ai_proxy {
 
     echo
 
-    # Validate proxy URL format (enhanced check for multiple protocols)
-    if [[ ! "$ai_proxy_input" =~ ^(https?|socks5)://.*:[0-9]+$ ]] && [[ ! "$ai_proxy_input" =~ ^(https?|socks5)://\[[0-9a-fA-F:]+\]:[0-9]+$ ]]; then
-        echo -e "${YELLOW}Warning: Proxy URL format should be:${ENDCOLOR}"
-        echo -e "${YELLOW}  • http://host:port or https://host:port${ENDCOLOR}"
-        echo -e "${YELLOW}  • socks5://host:port${ENDCOLOR}"
-        echo -e "${YELLOW}  • For IPv6: http://[::1]:port or socks5://[::1]:port${ENDCOLOR}"
-        read -n 1 -p "Continue anyway? (y/n) " -s choice
-        echo
-        if [ "$choice" != "y" ] && [ "$choice" != "Y" ]; then
-            exit
-        fi
+    # Validate and sanitize proxy URL to prevent command injection
+    if ! validate_proxy_url "$ai_proxy_input"; then
+        echo -e "${RED}Invalid proxy URL format: $ai_proxy_input${ENDCOLOR}"
+        echo -e "${YELLOW}Expected format: protocol://host:port (e.g., http://proxy.example.com:8080)${ENDCOLOR}"
+        echo -e "${YELLOW}Or: host:port (e.g., proxy.example.com:8080)${ENDCOLOR}"
+        echo -e "${YELLOW}Supported protocols: http, https, socks5${ENDCOLOR}"
+        exit 1
     fi
+    
+    # Use the validated proxy URL
+    ai_proxy_input="$validated_proxy_url"
 
     set_ai_proxy "$ai_proxy_input"
     echo -e "${GREEN}AI proxy configured for '${project_name}' repo${ENDCOLOR}: ${BLUE}$ai_proxy_input${ENDCOLOR}"

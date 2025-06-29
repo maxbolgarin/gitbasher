@@ -47,6 +47,10 @@ function rebase_script {
         echo -e "autosquash|a|s|ia|if\tRebase on the current local branch in an interactive mode with --autosquash"
         echo -e "fastautosquash|fast|f\tFast autosquash rebase - automatically merge fixup commits without interaction"
         echo -e "help|h\t\t\tShow this help"
+        echo
+        echo -e "${YELLOW}Conflict resolution options (available during rebase conflicts):${ENDCOLOR}"
+        echo -e "Accept all incoming changes\tResolve all conflicts by accepting changes from the target branch"
+        echo -e "Accept all current changes\tResolve all conflicts by keeping changes from your current branch"
         exit
     fi
 
@@ -298,6 +302,8 @@ function rebase_conflicts {
             echo -e "2. Open editor to change rebase plan: ${BLUE}git rebase --edit-todo${ENDCOLOR}"
             echo -e "3. Throw away the commit from the history: ${RED}git rebase --skip${ENDCOLOR}"
             echo -e "4. Abort rebase and return to the original state: ${YELLOW}git rebase --abort${ENDCOLOR}"
+            echo -e "5. Accept all incoming changes: ${GREEN}git checkout --theirs .${ENDCOLOR}"
+            echo -e "6. Accept all current changes: ${GREEN}git checkout --ours .${ENDCOLOR}"
             echo -e "0. Exit from this script ${BOLD}without${NORMAL} rebase abort"
 
             print_menu="false"
@@ -333,7 +339,7 @@ function rebase_conflicts {
 
         while [ true ]; do
             read -n 1 -s choice
-            re='^[01234]+$'
+            re='^[0123456]+$'
             if [[ $choice =~ $re ]]; then
                 break
             fi
@@ -421,6 +427,92 @@ function rebase_conflicts {
                 echo -e "${YELLOW}Aborting rebase...${ENDCOLOR}"
                 git rebase --abort
                 exit $?
+            else
+                echo -e "${YELLOW}Continuing...${ENDCOLOR}"
+            fi
+            continue
+        fi
+
+        if [ "$choice" == "5" ]; then
+            echo
+            echo -e "Are you sure you want to ${GREEN}accept all incoming changes${ENDCOLOR} and discard current changes (y/n)?"
+            read -n 1 -s choice_yes
+            if [ "$choice_yes" == "y" ]; then
+                echo
+                echo -e "${YELLOW}Accepting all incoming changes...${ENDCOLOR}"
+                
+                # Accept all incoming changes (theirs)
+                checkout_output=$(git checkout --theirs . 2>&1)
+                checkout_code=$?
+                
+                if [ $checkout_code -ne 0 ]; then
+                    echo -e "${RED}Failed to accept incoming changes:${ENDCOLOR}"
+                    echo "$checkout_output"
+                    continue
+                fi
+                
+                # Add all changes and continue
+                git add .
+                
+                rebase_output=$(git -c core.editor=true rebase --continue 2>&1)
+                rebase_code=$?
+
+                if [[ $rebase_output == *"Successfully rebased"* ]]; then
+                    echo -e "${GREEN}Successfully accepted all incoming changes and continued rebase!${ENDCOLOR}"
+                    return
+                fi
+
+                if [[ $rebase_output != *"CONFLICT"* ]]; then
+                    echo -e "${RED}Cannot rebase! Error message:${ENDCOLOR}"
+                    echo "$rebase_output"
+                    exit $rebase_code
+                fi
+                
+                echo -e "${GREEN}Accepted all incoming changes, moving to next conflict${ENDCOLOR}"
+                new_step="true"
+            else
+                echo -e "${YELLOW}Continuing...${ENDCOLOR}"
+            fi
+            continue
+        fi
+
+        if [ "$choice" == "6" ]; then
+            echo
+            echo -e "Are you sure you want to ${GREEN}accept all current changes${ENDCOLOR} and discard incoming changes (y/n)?"
+            read -n 1 -s choice_yes
+            if [ "$choice_yes" == "y" ]; then
+                echo
+                echo -e "${YELLOW}Accepting all current changes...${ENDCOLOR}"
+                
+                # Accept all current changes (ours)
+                checkout_output=$(git checkout --ours . 2>&1)
+                checkout_code=$?
+                
+                if [ $checkout_code -ne 0 ]; then
+                    echo -e "${RED}Failed to accept current changes:${ENDCOLOR}"
+                    echo "$checkout_output"
+                    continue
+                fi
+                
+                # Add all changes and continue
+                git add .
+                
+                rebase_output=$(git -c core.editor=true rebase --continue 2>&1)
+                rebase_code=$?
+
+                if [[ $rebase_output == *"Successfully rebased"* ]]; then
+                    echo -e "${GREEN}Successfully accepted all current changes and continued rebase!${ENDCOLOR}"
+                    return
+                fi
+
+                if [[ $rebase_output != *"CONFLICT"* ]]; then
+                    echo -e "${RED}Cannot rebase! Error message:${ENDCOLOR}"
+                    echo "$rebase_output"
+                    exit $rebase_code
+                fi
+                
+                echo -e "${GREEN}Accepted all current changes, moving to next conflict${ENDCOLOR}"
+                new_step="true"
             else
                 echo -e "${YELLOW}Continuing...${ENDCOLOR}"
             fi

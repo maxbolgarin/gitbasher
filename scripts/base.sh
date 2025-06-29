@@ -21,7 +21,7 @@ function print_help {
     msg="$msg\n_ _ _"
     msg="$msg\n${YELLOW}Command${ENDCOLOR}_\t${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description of ${BOLD}informational${NORMAL}${BLUE} commands${ENDCOLOR}"
     msg="$msg\nstatus_st_Info about repo and changed files"
-    msg="$msg\nlog_l|lg_Open git log in a pretty format"
+    msg="$msg\nlog_l|lg_Git log with branch selection and comparison"
     msg="$msg\nreflog_rl|rlg_Open git reflog in a pretty format"
     msg="$msg\nlast-commit_lc|lastc_Show info about the last commit"
     msg="$msg\nlast-ref_lr|lastr_Show info about the last reference"
@@ -85,7 +85,7 @@ case "$1" in
         stash_script $2
     ;;
     log|l|lg)
-        gitlog
+        gitlog_script $2 $3
     ;;
     reflog|rl|rlg)
         reflog

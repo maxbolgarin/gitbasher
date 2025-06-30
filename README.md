@@ -19,9 +19,9 @@ With **gitbasher** usage of `git` becomes more simple and intuitive. It helps sp
     <img src=".github/commit.gif" width="600" alt="commit example">
 </picture>
 
-### Installation
+### Quick Installation
 
-```
+```bash
 GITB_PATH=/usr/local/bin/gitb && \
 curl -SL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/dist/gitb -o $GITB_PATH && \
 chmod +x $GITB_PATH
@@ -30,164 +30,283 @@ chmod +x $GITB_PATH
 In Windows use `wsl` (enter `wsl` in terminal, [read more](https://learn.microsoft.com/en-us/windows/wsl/setup/environment)) to enable Linux environment. Directory `/usr/local/bin/` is not mandatory. If you get `Permission denied`, use `sudo` or put it to `~/.local/bin` with adding it to `PATH` ([how](https://discussions.apple.com/thread/254226896)).
 
 
-## Getting Started
-- [Why you should try this](#why-you-should-try-this)
-- [How to start](#how-to-start)
-- [Examples](#examples)
-- [AI-powered commits](#ai-powered-commits)
-- [Documentation](#documentation)
-- [Troubleshooting](#troubleshooting)
+## Table of Contents
+- [Quick Start Guide](#quick-start-guide)
+- [Why You Should Try This](#why-you-should-try-this)
+- [Real-World Examples](#real-world-examples)
+- [AI-Powered Commits](#ai-powered-commits)
+- [Common Workflows](#common-workflows)
+- [Complete Documentation](#complete-documentation)
+- [Troubleshooting & FAQ](#troubleshooting--faq)
 - [Contributing](#contributing)
 
 
-## Why you should try this
+## Quick Start Guide
+
+### 1. First Steps
+```bash
+# Navigate to any git repository
+cd your-project
+
+# See all available commands
+gitb
+
+# Get help for any command
+gitb c help    # commit help
+gitb b help    # branch help
+gitb p help    # push help
+```
+
+### 2. Your First Commit
+```bash
+# Smart commit - select files and create conventional message
+gitb c
+
+# Fast commit - add all files with quick message
+gitb c f
+
+# AI-powered commit (after setting up API key)
+gitb c ai
+```
+
+### 3. Essential Daily Commands
+```bash
+gitb st        # Check status
+gitb c         # Make a commit
+gitb p         # Push changes
+gitb pu        # Pull changes
+gitb b         # Switch branches
+```
+
+### 4. Set Up Your Environment
+```bash
+# Configure your identity
+gitb cfg user
+
+# Set default branch (usually 'main' or 'master')
+gitb cfg default
+
+# Set up AI features (optional but recommended)
+gitb cfg ai
+```
+
+
+## Why You Should Try This
 
 **gitbasher** is essential if you use `git` on the daily basis. Benefits you will get:
 
-* Development process will be faster because you will spend almost no time on git
-* No need to remember/google the exact names of commands and their parameters
-* Making the development process clearer by using conventional commits (manual or **AI generated**); **gitbasher** uses [Conventional style of commits](https://www.conventionalcommits.org/en) ([example](https://gist.github.com/brianclements/841ea7bffdb01346392c))
-* Making "advanced" commands like `git rebase` more user-friendly, so you will be able to unleash the full potential of the git system without any particular difficulties
-* Following the [GitHub flow](https://docs.github.com/en/get-started/quickstart/github-flow) in the development process by simplifying the work with branches
-
+* **⚡ Faster Development**: Spend almost no time on git commands
+* **🧠 No More Memorizing**: No need to remember/google exact command names and parameters
+* **📝 Better Commit Messages**: Conventional commits with manual or **AI-generated** messages
+* **🔧 Advanced Commands Made Easy**: Use `git rebase`, `git stash`, and hooks without complexity
+* **🌊 GitHub Flow**: Simplified branch management following best practices
+* **🎯 Consistent Workflow**: Standardized processes across your team
 
 <picture>
     <img src=".github/push.gif" width="600" alt="push example">
 </picture>
 
 
-## How to start
+## Real-World Examples
 
-Just [install](#installation) gitbasher and use it in any git repository - run `gitb` in the terminal. It requires bash version 4 or higher.
+### 🚀 Scenario 1: Starting a New Feature
 
-Usage `gitb <command> <mode>`
-
-* `gitb c` for commit creation
-* `gitb b n` for branch creation
-* `gitb pu` for pulling from the remote
-* `gitb p` for pushing to the remote
-* `gitb h` to show all commands
-
-Use `gitb c help` to get help about commit commands. You can get help with `help` for all other commands. To get a global help enter `gitb`. You can find all commands description in the [documentation](#documentation).
-
-
-## Examples
-
-#### Commit: [`gitb c`](#gitb-commit-mode)
-
-* Select files to commit and create a message in the format: `type(scope): message`
-* **AI-powered commits**: Use `gitb c ai` to generate commit messages automatically based on your changes
-* There are a lot of modes for commit creation, e.g. `--amend` `--fixup` `revert` `push` after commit
-* For example, a single `gitb c p` replaces 4 commands: 
-
+**Traditional Git:**
 ```bash
-    git status
-    git add ...
-    git commit -m "type(scope): ..."
-    git push
+git switch main                   # Switch to main
+git pull origin main                # Get latest changes
+git switch -c feature/user-auth   # Create new branch
+# ... make changes ...
+git add src/auth.js src/login.js    # Stage files
+git commit -m "feat(auth): add user authentication system"
+git push -u origin feature/user-auth
+```
+
+**With gitbasher:**
+```bash
+gitb b nd                   # Create new branch from updated main
+# ... make changes ...
+gitb c p                    # Smart commit + push
+```
+
+### 🐛 Scenario 2: Quick Bug Fix
+
+**Traditional Git:**
+```bash
+git status                          # Check what's changed
+git add .                          # Add all files
+git commit -m "fix: resolve login issue"
+git push
+```
+
+**With gitbasher:**
+```bash
+gitb c fp                   # Fast commit + push (one command!)
+```
+
+### 🔀 Scenario 3: Merging Feature Branch
+
+**Traditional Git:**
+```bash
+git switch main
+git pull origin main
+git merge feature/user-auth
+git push origin main
+git branch -d feature/user-auth
+```
+
+**With gitbasher:**
+```bash
+gitb m to-main             # Switch to main and merge current branch
+gitb b del                 # Select and delete the merged branch
+```
+
+### 🤖 Scenario 4: AI-Powered Development
+
+**After making changes to multiple files:**
+```bash
+gitb c ai                   # AI analyzes changes and generates:
+                           # "feat(auth): implement JWT authentication with refresh tokens"
+```
+
+**For quick fixes:**
+```bash
+gitb c aif                  # AI commit all files with smart message
+```
+
+### 🎯 Scenario 5: Code Review Preparation
+
+**Clean up commits before PR:**
+```bash
+gitb r i                    # Interactive rebase to squash/reorder commits
+gitb c fix                  # Create fixup commits for review feedback
+gitb r a                    # Auto-squash fixup commits
+```
+
+### 📦 Scenario 6: Release Management
+
+**Creating and managing releases:**
+```bash
+gitb t                      # Create version tag
+gitb t push                 # Push tag to remote
+gitb l                      # Review commit history
 ```
 
 
-#### Push: [`gitb p`](#gitb-push-mode)
+## AI-Powered Commits
 
-* Print a list of unpushed commits, push them to the current remote branch or pull changes first
-* Avoid calling `git push ... -> git pull ... -> git push ...` if there are unpulled changes in branch, `gitb push` handles such changes in a single call
+Transform your commit workflow with AI-generated messages that follow conventional commit standards.
 
+### Setup (One-time)
 
-
-#### Pull: [`gitb pu`](#gitb-pull-mode)
-
-* Fetch current branch and then ff/merge/rebase changes with conflicts fixing
-* You can choose `merge` or `rebase` mode if fast-forward is not possible
-* For example, you can avoid starting a merge due to an accidental call of `git pull origin main` while being in another branch
-
-
-
-#### Branch: [`gitb b`](#gitb-branch-mode)
-* With `gitb b` you can select a branch to switch from a list, it may be helpful if you don't remember the name of the branch
-* With `gitb b nd` you can create a new branch from the default one with latest changes. It replaces these commands:
-
-```bash
-    git switch main
-    git pull origin main
-    git switch -c ...
-```
-
-
-#### Tags: [`gitb t`](#gitb-tag-mode)
-* With `gitb t` you can create a new tag from a current commit and push it to a remote
-* Full tag managment: creation, fetching, pushing, deleting, checkout
-
-
-#### Merge: [`gitb m`](#gitb-merge-mode)
-* Select branch to merge into the current one and fix conflicts
-* Create a merge commit after merging
-
-
-#### Rebase: [`gitb r`](#gitb-rebase-mode)
-* Rebase branch with pretty conflict fixing without infinite writing of `git rebase --continue`
-* Select a commit to rebase with autosquash, it is very helpful to make a commit history better
-
-
-#### Reset: [`gitb res`](#gitb-reset-mode)
-* Undo commits and actions in the fast way
-
-
-#### Stash: [`gitb stash`](#gitb-stash-mode)
-* Interactive stash management with multiple options: select files, stash all, list, pop, show, apply, and drop
-* Smart file selection with pattern matching and wildcard support
-* Easy navigation through existing stashes with formatted display
-
-
-## AI-powered commits
-
-**gitbasher** supports AI-powered commit message generation using Google's Gemini API. The AI analyzes your staged changes and generates conventional commit messages automatically.
-
-### Setup AI Features
-
-#### 1. Get Gemini API Key
+#### 1. Get Your API Key
 - Visit [Google AI Studio](https://aistudio.google.com/app/apikey)
 - Create a new API key
-- Copy the API key for configuration
+- Copy it for the next step
 
-#### 2. Configure API Key
+#### 2. Configure gitbasher
 ```bash
 gitb cfg ai
+# Enter your API key when prompted
+# Choose local (current repo) or global (all repos)
 ```
-Enter your Gemini API key when prompted. You can set it locally (for current repo) or globally (for all repos).
 
-#### 3. Configure Proxy (Optional)
-If you're in a region where Gemini API is restricted, configure an HTTP proxy:
+#### 3. Optional: Proxy Setup
+For regions with API restrictions:
 ```bash
 gitb cfg proxy
+# Examples:
+# http://proxy.example.com:8080
+# http://username:password@proxy.example.com:8080
 ```
-Examples:
-- `http://proxy.example.com:8080`
-- `http://username:password@proxy.example.com:8080`
 
-### AI Commit Commands
+### AI Command Examples
 
-| **Command** | **Aliases** | **Description** |
-|-------------|-------------|-----------------|
-| `gitb c ai` | `i` `llm` | Generate AI commit message for staged files |
-| `gitb c aif` | `if` `llmf` | Fast AI commit (add all files + AI message) |
-| `gitb c aip` | `ip` `llmp` | AI commit with automatic push |
-| `gitb c aifp` | `ifp` `llmfp` | Fast AI commit with push |
-| `gitb c ais` | `is` `llms` | AI commit with manual type/scope selection |
-| `gitb c aim` | `im` `llmm` | AI commit with multiline message |
+| **Scenario** | **Command** | **What It Does** |
+|--------------|-------------|------------------|
+| **Staged files ready** | `gitb c ai` | Analyzes staged changes, generates message |
+| **Quick fix needed** | `gitb c aif` | Adds all files + AI message |
+| **Ready to ship** | `gitb c aip` | AI commit + automatic push |
+| **Full workflow** | `gitb c aifp` | Add all + AI commit + push |
+| **Need control** | `gitb c ais` | AI message + manual type/scope |
+| **Detailed commit** | `gitb c aim` | Generates multiline commit message |
 
-### AI Features
+## Common Workflows
 
-- **Smart analysis**: AI examines file changes, diff content, and commit patterns
-- **Conventional commits**: Generates proper `type(scope): subject` format
-- **Geographic bypass**: Proxy support for regions with API restrictions
-- **Multi-modal**: Short and long commit message generation
-- **Error handling**: Helpful error messages and solution suggestions
+### 🔄 Daily Development Workflow
+
+```bash
+# Start your day
+gitb st                     # Check repository status
+gitb pu                     # Pull latest changes
+
+# Work on features
+gitb b n                    # Create new feature branch
+# ... code changes ...
+gitb c ai                   # AI-powered commit
+gitb p                      # Push changes
+
+# Code review cycle
+gitb c fix                  # Create fixup commits
+gitb r a                    # Clean up with autosquash
+gitb p f                    # Force push cleaned history
+```
+
+### 🚨 Hotfix Workflow
+
+```bash
+gitb b main                 # Switch to main branch
+gitb pu                     # Get latest changes
+gitb b n                    # Create hotfix branch
+# ... fix the issue ...
+gitb c aif                  # Fast AI commit
+gitb p                      # Push hotfix
+gitb m to-main             # Merge to main
+```
+
+### 🔀 Feature Integration
+
+```bash
+# Prepare feature for merge
+gitb pu                     # Update current branch
+gitb r main                 # Rebase on main
+gitb l                      # Review commit history
+gitb c fix                  # Address review feedback
+gitb r a                    # Squash fixups
+
+# Integrate
+gitb m to-main             # Merge to main
+gitb b del                 # Clean up feature branch
+```
+
+### 🎯 Release Workflow
+
+```bash
+gitb b main                 # Switch to main
+gitb pu                     # Get latest changes
+gitb l                      # Review changes since last release
+gitb t a                    # Create annotated release tag
+gitb t push                 # Push tag to trigger CI/CD
+```
+
+### 🛠️ Maintenance Workflow
+
+```bash
+# Clean up old branches
+gitb b del                  # Interactive branch deletion
+
+# Manage stashes
+gitb stash                  # Interactive stash management
+
+# Check hooks
+gitb hook list              # See all git hooks status
+gitb hook create            # Set up project hooks
+```
 
 
-## Documentation
+## Complete Documentation
 
-### Available commands
+### Available Commands
 
 | Command                         | Short aliases       | Description                              |
 |---------------------------------|---------------------|------------------------------------------|
@@ -200,240 +319,293 @@ Examples:
 | [**rebase**](#gitb-rebase-mode) | `r` `re` `base`   | Rebase current branch                    |
 | [**reset**](#gitb-reset-mode)   | `res`               | Easy to use git reset                    |
 | [**stash**](#gitb-stash-mode)   | `s` `sta`          | Manage git stashes                       |
+| [**hook**](#gitb-hook-mode)     | `ho` `hk`          | Comprehensive git hooks management with interactive menus |
 | [**config**](#gitb-config-mode) | `cf` `cfg` `conf` | Configurate gitbasher                    |
 | **status**                      | `st`                | Info about repo and changed files        |
-| **log**                         | `l` `lg`           | Open git log in a pretty format          |
+| [**log**](#gitb-log-mode)       | `l` `lg`           | Git log utilities and search functions   |
 | **reflog**                      | `rl` `rlg`         | Open git reflog in a pretty format       |
 | **help**                        | `h` `man`          | Show help                                |
 
 
-</br>
-
-
 ### `gitb commit <mode>`
 
-| **Mode**   | **Short**    | **Description**                                                                                  |
-|------------|--------------|--------------------------------------------------------------------------------------------------|
-| `<empty>`  |              | Select files to commit and create a conventional message in format: `type(scope): message`       |
-| `msg`      | `m`          | Same as `<empty>`, but create multiline commit message using text editor                         |
-| `ticket`   | `t`          | Same as `<empty>`, but add tracker's ticket info to the end of the commit header                 |
-| `fast`     | `f`          | Add all files (`git add .`) and create a conventional commit message without scope               |
-| `fasts`    | `fs`         | Add all files (`git add .`) and create a conventional commit message with scope                  |
-| `push`     | `pu` `p`    | Create a conventional commit and push changes at the end                                         |
-| `fastp`    | `fp`         | Create a conventional commit in the fast mode and push changes                                   |
-| `fastsp`   | `fsp` `fps` | Create a conventional commit in the fast mode with scope and push changes                        |
-| `ai`       | `llm` `i`   | Generate AI commit message based on staged changes                                               |
-| `aif`      | `llmf` `if` | Fast AI commit (add all files + AI message) without confirmation                                 |
-| `aip`      | `llmp` `ip` | Generate AI commit message and push changes                                                      |
-| `aifp`     | `llmfp` `ifp` | Fast AI commit with push (add all + AI message + push)                                        |
-| `ais`      | `llms` `is` | Generate AI commit summary with manual type and scope selection                                  |
-| `aim`      | `llmm` `im` | Generate AI commit message with multiline format                                                |
-| `fixup`    | `fix` `x`   | Select files and commit to make a `--fixup` commit (`git commit --fixup <hash>`)                     |
-| `fixupp`   | `fixp` `xp` | Select files and commit to make a `--fixup` commit and push changes                                |
-| `fastfix`  | `fx`         | Add all files (`git add .`) and commit to make a `--fixup` commit                                  |
-| `fastfixp` | `fxp`        | Add all files (`git add .`) and commit to make a `--fixup` commit and push changes                 |
-| `amend`    | `am` `a`    | Select files and add them to the last commit without message edit (`git commit --amend --no-edit`) |
-| `amendf`   | `amf` `af`  | Add all fiels to the last commit without message edit (`git commit --amend --no-edit`)             |
-| `last`     | `l`          | Change commit message to the last one                                                            |
-| `revert`   | `rev`        | Select a commit to revert (`git revert -no-edit <commit>`)                                         |
-| `help`     | `h`          | Show this help                                                                                   |
-
-
-</br>
-
+| **Mode**   | **Short**    | **Description** | **Example Use Case** |
+|------------|--------------|-----------------|---------------------|
+| `<empty>`  |              | Select files to commit and create conventional message | Regular feature development |
+| `msg`      | `m`          | Create multiline commit message using text editor | Detailed commit descriptions |
+| `ticket`   | `t`          | Add tracker's ticket info to commit header | JIRA/GitHub issue integration |
+| `fast`     | `f`          | Add all files and create commit without scope | Quick bug fixes |
+| `fasts`    | `fs`         | Add all files and create commit with scope | Feature additions |
+| `push`     | `pu` `p`    | Create commit and push changes | Deploy-ready commits |
+| `fastp`    | `fp`         | Fast commit and push | One-command workflow |
+| `fastsp`   | `fsp` `fps` | Fast commit with scope and push | Complete feature deployment |
+| `ai`       | `llm` `i`   | AI-generated commit message | Smart commit automation |
+| `aif`      | `llmf` `if` | Fast AI commit without confirmation | Rapid development |
+| `aip`      | `llmp` `ip` | AI commit and push | AI-powered deployment |
+| `aifp`     | `llmfp` `ifp` | Fast AI commit with push | Complete AI workflow |
+| `ais`      | `llms` `is` | AI summary with manual type/scope | Controlled AI assistance |
+| `aim`      | `llmm` `im` | AI multiline commit message | Detailed AI documentation |
+| `fixup`    | `fix` `x`   | Create fixup commit for rebase | Code review fixes |
+| `fixupp`   | `fixp` `xp` | Fixup commit and push | Remote fixup commits |
+| `fastfix`  | `fx`         | Fast fixup all files | Quick fixup workflow |
+| `fastfixp` | `fxp`        | Fast fixup and push | Complete fixup deployment |
+| `amend`    | `am` `a`    | Add files to last commit | Forgot to include files |
+| `amendf`   | `amf` `af`  | Amend with all files | Complete last commit |
+| `last`     | `l`          | Change last commit message | Fix commit message typos |
+| `revert`   | `rev`        | Revert selected commit | Undo problematic changes |
 
 ### `gitb push <mode>`
 
-| **Mode**  | **Short** | **Description**                                                          |
-|-----------|-----------|--------------------------------------------------------------------------|
-| `<empty>` |           | Print list of commits, push them to current branch or pull changes first |
-| `yes`     | `y`       | Same as `<empty>` but without pressing 'y'                               |
-| `force`   | `f`       | Same as `<empty>` but with --force                                       |
-| `list`    | `log` `l` | Print a list of unpushed local commits without actual pushing it         |
-| `help`    | `h`       | Show this help                                                           |
-
-
-</br>
-
+| **Mode**  | **Short** | **Description** | **When to Use** |
+|-----------|-----------|-----------------|-----------------|
+| `<empty>` |           | Show commits and push with conflict handling | Regular push workflow |
+| `yes`     | `y`       | Push without confirmation | Automated scripts |
+| `force`   | `f`       | Force push (use with caution) | After rebase/amend |
+| `list`    | `log` `l` | Show unpushed commits only | Review before push |
 
 ### `gitb pull <mode>`
 
-| **Mode**      | **Short**  | **Description**                                                              |
-|---------------|------------|------------------------------------------------------------------------------|
-| `<empty>`     |            | Fetch current branch, try to fast-forward or ask about strategy              |
-| `fetch`       | `fe`       | Fetch current branch without merge                                           |
-| `all`         | `fa`       | Fetch all without merge                                                      |
-| `upd`         | `u`        | Run git remote update to fetch all branches                                  |
-| `ffonly`      | `ff`       | Fetch and then merge in fast forward only mode                               |
-| `merge`       | `m`        | Fetch current branch and then merge it                                       |
-| `rebase`      | `r`        | Fetch current branch and then rebase                                         |
-| `interactive` | `ri` `rs` | Fetch current branch and then rebase in interactive mode with `--autosquash` |
-| `help`        | `h`        | Show this help                                                               |
-
-
-</br>
-
+| **Mode**      | **Short**  | **Description** | **Best For** |
+|---------------|------------|-----------------|--------------|
+| `<empty>`     |            | Smart pull with strategy selection | Daily workflow |
+| `fetch`       | `fe`       | Fetch only, no merge | Review changes first |
+| `all`         | `fa`       | Fetch all branches | Sync repository |
+| `upd`         | `u`        | Update all remote references | Branch cleanup |
+| `ffonly`      | `ff`       | Fast-forward only merge | Linear history |
+| `merge`       | `m`        | Always create merge commit | Feature branches |
+| `rebase`      | `r`        | Rebase current branch | Clean history |
+| `interactive` | `ri` `rs` | Interactive rebase with autosquash | Commit cleanup |
 
 ### `gitb branch <mode>`
 
-| **Mode**  | **Short**  | **Description**                                                          |
-|-----------|------------|--------------------------------------------------------------------------|
-| `<empty>` |            | Select a local branch to switch                                          |
-| `list`    | `l`        | Print a list of local branches                                           |
-| `remote`  | `re` `r`  | Fetch origin and select a remote branch to switch                        |
-| `main`    | `def` `m` | Switch to main without additional confirmations                          |
-| `new`     | `n` `c`   | Build a conventional name and create a new branch from main              |
-| `newd`    | `nd`       | Build a conventional name, switch to main, pull it and create new branch |
-| `delete`  | `del` `d` | Select a local branch to delete                                          |
-| `help`    | `h`        | Show this help                                                           |
-
-
-</br>
-
+| **Mode**  | **Short**  | **Description** | **Use Case** |
+|-----------|------------|-----------------|--------------|
+| `<empty>` |            | Interactive branch selection | Switch branches |
+| `list`    | `l`        | Show local branches | Branch overview |
+| `remote`  | `re` `r`  | Switch to remote branch | Work on others' branches |
+| `main`    | `def` `m` | Quick switch to main | Back to main branch |
+| `new`     | `n` `c`   | Create branch from current | Feature from current state |
+| `newd`    | `nd`       | Create branch from updated main | New feature branch |
+| `delete`  | `del` `d` | Delete local branch | Cleanup merged branches |
 
 ### `gitb tag <mode>`
 
-| **Mode**     | **Short**       | **Description**                                         |
-|--------------|-----------------|---------------------------------------------------------|
-| `<empty>`    |                 | Create a new tag from the last commit                   |
-| `annotated`  | `a` `an`       | Create a new annotated tag from the last commit         |
-| `commit`     | `c` `co` `cm` | Create a new tag from a selected commit                 |
-| `all`        | `al`            | Create a new annotated tag from a selected commit       |
-| `push`       | `ps` `ph` `p` | Select a local tag and push it to the remote repository |
-| `push-all`   | `pa`            | Push all tags to the remote repository                  |
-| `delete`     | `del` `d`      | Select a tag to delete                                  |
-| `delete-all` | `da`            | Delete all local tags                                   |
-| `list`       | `log` `l`      | Print a list of local tags                              |
-| `remote`     | `fetch` `r`    | Fetch tags from the remote repository and print it      |
-| `help`       | `h`             | Show this help                                          |
-
-
-</br>
-
+| **Mode**     | **Short**       | **Description** | **Perfect For** |
+|--------------|-----------------|---------------------------------------------------------|-----------------|
+| `<empty>`    |                 | Create new tag from last commit | Quick releases |
+| `annotated`  | `a` `an`       | Create annotated tag with message | Official releases |
+| `commit`     | `c` `co` `cm` | Create tag from selected commit | Retrospective tagging |
+| `all`        | `al`            | Create annotated tag from selected commit | Complex releases |
+| `push`       | `ps` `ph` `p` | Push local tag to remote | Deploy releases |
+| `push-all`   | `pa`            | Push all tags to remote | Sync all releases |
+| `delete`     | `del` `d`      | Delete local tag | Fix tag mistakes |
+| `delete-all` | `da`            | Delete all local tags | Clean slate |
+| `list`       | `log` `l`      | Show local tags | Review releases |
+| `remote`     | `fetch` `r`    | Fetch and show remote tags | Check remote releases |
 
 ### `gitb merge <mode>`
 
-| **Mode**  | **Short** | **Description**                                                 |
-|-----------|-----------|-----------------------------------------------------------------|
-| `<empty>` |           | Select a branch to merge into the current one and fix conflicts |
-| `main`    | `m`       | Merge main to the current branch and fix conflicts              |
-| `to-main` | `tm`      | Switch to main and merge the current branch into main           |
-| `help`    | `h`       | Show this help                                                  |
-
-
-</br>
-
+| **Mode**  | **Short** | **Description** | **When to Use** |
+|-----------|-----------|-----------------------------------------------------------------|--------------|
+| `<empty>` |           | Select branch to merge with conflict resolution | Feature integration |
+| `main`    | `m`       | Merge main into current branch | Update feature branch |
+| `to-main` | `tm`      | Switch to main and merge current branch | Complete feature |
 
 ### `gitb rebase <mode>`
 
-| **Mode**      | **Short**           | **Description**                                                               |
-|---------------|---------------------|-------------------------------------------------------------------------------|
-| `<empty>`     |                     | Select base branch to rebase current changes                                  |
-| `main`        | `m`                 | Rebase current branch onto default branch                                     |
-| `interactive` | `i`                 | Select base commit in current branch and rebase in an interactive mode        |
-| `autosquash`  | `a` `s` `f` `ia` | Rebase on the current local branch in an interactive mode with `--autosquash` |
-| `help`        | `h`                 | Show this help                                                                |
-
-
-</br>
-
+| **Mode**      | **Short**           | **Description** | **Best For** |
+|---------------|---------------------|-------------------------------------------------------------------------------|--------------|
+| `<empty>`     |                     | Select base branch for rebase | Branch updates |
+| `main`        | `m`                 | Rebase current branch onto main | Linear history |
+| `interactive` | `i`                 | Interactive rebase from selected commit | History editing |
+| `autosquash`  | `a` `s` `f` `ia` | Interactive rebase with fixup commits | Clean commit history |
 
 ### `gitb reset <mode>`
 
-| **Mode**      | **Short** | **Description**                                                         |
-|---------------|-----------|-------------------------------------------------------------------------|
-| `<empty>`     |           | Reset last commit (git reset HEAD^ --mixed)                             |
-| `soft`        | `s`       | Reset last commit, but remain all fiels staged (git reset HEAD^ --soft) |
-| `undo`        | `u`       | Undo last commit reset (git reset HEAD@{1})                             |
-| `interactive` | `i`       | Select a commit to reset                                                |
-| `ref`         | `r`       | Select a HEAD reference to reset                                        |
-| `help`        | `h`       | Show this help                                                          |
-
-
-</br>
-
+| **Mode**      | **Short** | **Description** | **Use Case** |
+|---------------|-----------|-------------------------------------------------------------------------|--------------|
+| `<empty>`     |           | Reset last commit (mixed mode) | Undo last commit, keep changes |
+| `soft`        | `s`       | Soft reset last commit | Redo commit message |
+| `undo`        | `u`       | Undo last reset operation | Recover from mistake |
+| `interactive` | `i`       | Select commit to reset to | Go back multiple commits |
+| `ref`         | `r`       | Reset to selected HEAD reference | Use reflog recovery |
 
 ### `gitb stash <mode>`
 
-| **Mode**     | **Short** | **Description**                                                     |
-|--------------|-----------|---------------------------------------------------------------------|
-| `<empty>`    |           | Show interactive menu with all stash operations                     |
-| `select`     | `sel`     | Select specific files to stash                                      |
-| `all`        |           | Stash all changes including untracked files                         |
-| `list`       | `l`       | List all existing stashes                                           |
-| `pop`        | `p`       | Pop (apply and remove) from selected stash                          |
-| `show`       | `s`       | Show contents of selected stash                                     |
-| `apply`      | `a`       | Apply selected stash without removing it                            |
-| `drop`       | `d`       | Drop (delete) selected stash                                        |
-| `help`       | `h`       | Show this help                                                      |
+| **Mode**     | **Short** | **Description** | **Perfect For** |
+|--------------|-----------|-----------------|-----------------|
+| `<empty>`    |           | Interactive stash menu | Explore all options |
+| `select`     | `sel`     | Stash specific files | Partial work saving |
+| `all`        |           | Stash everything including untracked | Complete state save |
+| `list`       | `l`       | View all stashes | Find specific stash |
+| `pop`        | `p`       | Apply and remove stash | Continue work |
+| `show`       | `s`       | Preview stash contents | Check before apply |
+| `apply`      | `a`       | Apply without removing | Keep stash backup |
+| `drop`       | `d`       | Delete stash | Cleanup unused stashes |
 
+### `gitb hook <mode>`
 
-</br>
-
+| **Mode**     | **Short**       | **Description** | **Use Case** |
+|--------------|-----------------|-----------------|--------------|
+| `<empty>`    |                 | Interactive action menu | Explore all operations |
+| `list`       | `l`             | Show all hooks with status | Audit current setup |
+| `create`     | `new` `c`       | Create new hook with templates | Set up automation |
+| `edit`       | `e`             | Edit existing hook | Modify behavior |
+| `toggle`     | `t`             | Enable/disable hook | Temporary control |
+| `remove`     | `rm` `r`        | Delete hook(s) | Cleanup |
+| `test`       | `run` `check`   | Test hook execution | Verify functionality |
+| `show`       | `cat` `view` `s`| Display hook contents | Review implementation |
 
 ### `gitb config <mode>`
 
-| **Mode**    | **Short**               | **Description**                                             |
-|-------------|-------------------------|-------------------------------------------------------------|
-| `<empty>`   |                         | Print current gitbasher configuration                       |
-| `user`      | `u` `name` `email`    | Set user name and email                                     |
-| `default`   | `def` `d` `b` `main` | Update gitbasher's default branch (not in remote git repo!) |
-| `separator` | `sep` `s`              | Update separator between type and name in branch            |
-| `editor`    | `ed` `e`               | Update text editor for the commit messages                  |
-| `ticket`    | `ti` `t` `jira`       | Set ticket prefix to help with commit/branch building       |
-| `scopes`    | `sc` `s`               | Set a list of scopes to help with commit building           |
-| `ai`        | `llm` `key`            | Set AI API key for commit message generation                |
-| `proxy`     | `prx` `p`              | Set HTTP proxy for AI requests (bypass geo-restrictions)    |
-| `delete`    | `unset` `del`          | Unset global configuration                                  |
+| **Mode**    | **Short**               | **Description** | **Example** |
+|-------------|-------------------------|-------------------------------------------------------------|-------------|
+| `<empty>`   |                         | Show current gitbasher configuration | Check setup |
+| `user`      | `u` `name` `email`    | Set user name and email | Initial setup |
+| `default`   | `def` `d` `b` `main` | Set default branch name | Project standards |
+| `separator` | `sep` `s`              | Set branch name separator | Naming conventions |
+| `editor`    | `ed` `e`               | Set commit message editor | Personal preference |
+| `ticket`    | `ti` `t` `jira`       | Set ticket prefix for commits/branches | Issue tracking |
+| `scopes`    | `sc` `s`               | Set common scopes for commits | Project structure |
+| `ai`        | `llm` `key`            | Configure AI API key | Smart commits |
+| `proxy`     | `prx` `p`              | Set HTTP proxy for AI requests | Geographic restrictions |
+| `delete`    | `unset` `del`          | Remove global configuration | Reset settings |
+
+### `gitb log <mode>`
+
+| **Mode**      | **Short**     | **Description** | **Great For** |
+|---------------|---------------|-----------------------------------------------------------------------|--------------|
+| `<empty>`     |               | Pretty git log for current branch | Review recent work |
+| `branch`      | `b`           | Select branch to view log | Compare branches |
+| `compare`     | `comp` `c`    | Compare logs between two branches | Merge preparation |
+| `search`      | `s`           | Search commits with various criteria | Find specific changes |
+
+#### Log Search Options
+
+| **Search Mode** | **Short** | **Description** | **Example Use** |
+|-----------------|-----------|-----------------------------------------------------------------------|--------------|
+| `message`       | `msg` `m` | Search by commit message | Find feature commits |
+| `author`        | `a`       | Search by author name/email | Team member contributions |
+| `file`          | `f`       | Search commits affecting specific files | File history |
+| `content`       | `pickaxe` `p` | Search by added/removed content | Code archaeology |
+| `date`          | `d`       | Search within date range | Release timeframes |
+| `hash`          | `commit` `h` | Search by commit hash pattern | Specific commit lookup |
 
 
-</br>
+## Troubleshooting & FAQ
 
+### 📋 Common Issues & Solutions
 
-## Troubleshooting
+#### ❓ "Command not found: gitb"
+```bash
+# Check if gitb is installed
+which gitb
 
-Most likely, if you have Linux, the necessary software is already installed on your machine. On MacOS, there is an outdated `bash` and there may be no `git` by default, so you should use `homebrew` to install it. On Windows you should use `wsl`, it will create a Linux environment for you with all necessary software.
+# If not found, reinstall
+GITB_PATH=/usr/local/bin/gitb && \
+curl -SL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/dist/gitb -o $GITB_PATH && \
+chmod +x $GITB_PATH
 
-
-#### Requirements
-
-* `bash` version from 4.0
-	* Debian-based: `apt install --only-upgrade bash`
-	* MacOS: `brew install bash`
-* `git` version from 2.23
-	* Debian-based: `git --version || apt install git`
-	* MacOS: `git --version || brew install git`
-
-
-#### Uninstall
-
+# Alternative: Install to user directory
+mkdir -p ~/.local/bin
+GITB_PATH=~/.local/bin/gitb && \
+curl -SL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/dist/gitb -o $GITB_PATH && \
+chmod +x $GITB_PATH
+# Add to PATH: echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 ```
+
+#### ❓ "Permission denied" when installing
+```bash
+# Use sudo for system-wide installation
+sudo curl -SL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/dist/gitb -o /usr/local/bin/gitb
+sudo chmod +x /usr/local/bin/gitb
+
+# Or install to user directory (no sudo needed)
+mkdir -p ~/.local/bin
+curl -SL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/dist/gitb -o ~/.local/bin/gitb
+chmod +x ~/.local/bin/gitb
+```
+
+#### ❓ AI features not working
+```bash
+# Check if API key is configured
+gitb cfg
+
+# Set up API key
+gitb cfg ai
+
+# Test with a simple commit
+echo "test" >> test.txt
+git add test.txt
+gitb c ai
+
+# If in restricted region, set up proxy
+gitb cfg proxy
+# Example: http://proxy.example.com:8080
+```
+
+#### ❓ "Bad substitution" or bash errors
+```bash
+# Check bash version (needs 4.0+)
+bash --version
+
+# On macOS, install newer bash
+brew install bash
+
+# On Ubuntu/Debian
+sudo apt update && sudo apt install --only-upgrade bash
+```
+
+#### ❓ Git operations fail
+```bash
+# Check git version (needs 2.23+)
+git --version
+
+# Update git
+# macOS: brew install git
+# Ubuntu: sudo apt install git
+# Or download from: https://git-scm.com/downloads
+```
+
+### 🔧 System Requirements
+
+| **System** | **Bash** | **Git** | **Installation Method** |
+|------------|----------|---------|------------------------|
+| **Linux** | 4.0+ | 2.23+ | `apt install bash git` |
+| **macOS** | 4.0+ | 2.23+ | `brew install bash git` |
+| **Windows** | WSL | WSL | `wsl --install` then Linux steps |
+
+### 💡 Pro Tips
+
+#### 🎯 **Workflow Optimization**
+```bash
+# Set up aliases for even faster usage
+echo 'alias gc="gitb c"' >> ~/.bashrc
+echo 'alias gp="gitb p"' >> ~/.bashrc
+echo 'alias gpu="gitb pu"' >> ~/.bashrc
+echo 'alias gb="gitb b"' >> ~/.bashrc
+```
+
+### 🆘 **Still Having Issues?**
+
+**Ask for help**: [Open an issue](https://github.com/maxbolgarin/gitbasher/issues) or contact [@maxbolgarin](https://t.me/maxbolgarin)
+
+### 🗑️ **Uninstall**
+
+```bash
+# Remove gitbasher
 sudo rm /usr/local/bin/gitb
+# or
+rm ~/.local/bin/gitb
+
+# Remove configuration (optional)
+rm -rf ~/.gitbasher
 ```
 
 
 ## Contributing
 
 If you'd like to contribute to **gitbasher**, make a fork and submit a pull request. You also can open an issue or text me on Telegram: https://t.me/maxbolgarin
-
-#### Scopes
-
-Here are the possible values for `<scope>` in a commit message header. Use only these values when making commits in this repository (use no scope for global changes):
-
-| **Scope**    | **Description**                                                                 |
-|--------------|---------------------------------------------------------------------------------|
-| **commit**   | Changes mainly in `commit.sh` script, related to commit features and fixes      |
-| **push**     | Changes mainly in `push.sh` script, related to push features and fixes          |
-| **pull**     | Changes mainly in `pull.sh` script, related to pull features and fixes          |
-| **merge**    | Changes mainly in `merge.sh` script, related to merge features and fixes        |
-| **rebase**   | Changes mainly in `rebase.sh` script, related to rebase features and fixes      |
-| **branch**   | Changes mainly in `branch.sh` script, related to branching features and fixes   |
-| **tag**      | Changes mainly in `tag.sh` script, related to tag features and fixes            |  
-| **reset**    | Changes mainly in `reset.sh` script, related to reset features and fixes        |  
-| **stash**    | Changes mainly in `stash.sh` script, related to stash features and fixes        |  
-| **config**   | Changes mainly in `config.sh` script, related to config features and fixes      |
-| **ai**       | Changes mainly in `ai.sh` script, related to AI features and fixes              |
-
 
 #### Maintainers
 

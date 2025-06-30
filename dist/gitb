@@ -60,6 +60,16 @@ if [ "$origin_name" == "" ]; then
     if [ "$remote_url" == "" ]; then
         exit
     fi
+    if ! validate_git_url "$remote_url"; then
+        echo
+        echo -e "${RED}Invalid git URL format!${ENDCOLOR}"
+        echo -e "${YELLOW}Expected formats:${ENDCOLOR}"
+        echo -e "  • https://github.com/user/repo.git"
+        echo -e "  • git@github.com:user/repo.git"
+        echo -e "  • ssh://git@server.com/repo.git"
+        exit 1
+    fi
+    remote_url="$validated_url"
     remote_check=$(git ls-remote "$remote_url" 2>&1)
     if [[ "$remote_check" == *"does not appear to be a git"* ]]; then
         echo
@@ -89,6 +99,178 @@ PURPLE_ES="\x1b[35m"
 CYAN_ES="\x1b[36m"
 GRAY_ES="\x1b[37m"
 ENDCOLOR_ES="\x1b[0m"
+function sanitize_git_name {
+    local input="$1"
+    sanitized_git_name=""
+    if [ -z "$input" ]; then
+        return 1
+    fi
+    local cleaned=$(echo "$input" | sed 's/[^a-zA-Z0-9._/-]//g')
+    cleaned=$(echo "$cleaned" | sed 's/^[./]*//;s/[./]*$//')
+    if [[ "$cleaned" =~ \.\. ]] || [[ "$cleaned" =~ ^- ]] || [[ "$cleaned" =~ -$ ]] || \
+       [[ "$cleaned" =~ ^@ ]] || [[ "$cleaned" == "HEAD" ]] || [[ "$cleaned" =~ ^refs/ ]]; then
+        return 1
+    fi
+    if [ ${#cleaned} -lt 1 ] || [ ${#cleaned} -gt 255 ]; then
+        return 1
+    fi
+    sanitized_git_name="$cleaned"
+    return 0
+}
+function sanitize_file_path {
+    local input="$1"
+    sanitized_file_path=""
+    if [ -z "$input" ]; then
+        return 1
+    fi
+    local cleaned=$(echo "$input" | tr -d '\000-\010\013\014\016-\037\177')
+    cleaned=$(echo "$cleaned" | sed 's/\.\.\///g')  # Remove ../
+    cleaned=$(echo "$cleaned" | sed 's/;\s*rm\s/; /g')  # Remove rm commands
+    cleaned=$(echo "$cleaned" | sed 's/&&\s*rm\s/\&\& /g')  # Remove rm commands
+    cleaned=$(echo "$cleaned" | sed 's/|\s*rm\s/| /g')  # Remove rm commands
+    if [ ${#cleaned} -gt 1000 ]; then
+        return 1
+    fi
+    sanitized_file_path="$cleaned"
+    return 0
+}
+function sanitize_commit_message {
+    local input="$1"
+    sanitized_commit_message=""
+    if [ -z "$input" ]; then
+        return 1
+    fi
+    local cleaned=$(echo "$input" | tr -d '\000-\010\013\014\016-\037\177')
+    cleaned=$(echo "$cleaned" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    if [ ${#cleaned} -lt 1 ] || [ ${#cleaned} -gt 2000 ]; then
+        return 1
+    fi
+    sanitized_commit_message="$cleaned"
+    return 0
+}
+function sanitize_command {
+    local input="$1"
+    sanitized_command=""
+    if [ -z "$input" ]; then
+        return 1
+    fi
+    local cleaned=$(echo "$input" | sed 's/[^a-zA-Z0-9._/-]//g')
+    if [[ "$cleaned" =~ \.\. ]] || [[ "$cleaned" == *";"* ]] || [[ "$cleaned" == *"|"* ]] || \
+       [[ "$cleaned" == *"&"* ]] || [[ "$cleaned" == *"$"* ]] || [[ "$cleaned" == *"\`"* ]]; then
+        return 1
+    fi
+    if [ ${#cleaned} -lt 1 ] || [ ${#cleaned} -gt 100 ] || [[ "$cleaned" =~ ^- ]]; then
+        return 1
+    fi
+    sanitized_command="$cleaned"
+    return 0
+}
+function sanitize_text_input {
+    local input="$1"
+    local max_length="${2:-500}"
+    sanitized_text=""
+    if [ -z "$input" ]; then
+        return 1
+    fi
+    local cleaned=$(echo "$input" | tr -d '\000-\010\013\014\016-\037\177')
+    cleaned=$(echo "$cleaned" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    if [ ${#cleaned} -lt 1 ] || [ ${#cleaned} -gt "$max_length" ]; then
+        return 1
+    fi
+    sanitized_text="$cleaned"
+    return 0
+}
+function validate_numeric_input {
+    local input="$1"
+    local min_val="$2"
+    local max_val="$3"
+    validated_number=""
+    if [ -z "$input" ]; then
+        return 1
+    fi
+    if ! [[ "$input" =~ ^[0-9]+$ ]]; then
+        return 1
+    fi
+    local num=$((input))
+    if [ -n "$min_val" ] && [ "$num" -lt "$min_val" ]; then
+        return 1
+    fi
+    if [ -n "$max_val" ] && [ "$num" -gt "$max_val" ]; then
+        return 1
+    fi
+    validated_number="$num"
+    return 0
+}
+function validate_email {
+    local input="$1"
+    validated_email=""
+    if [ -z "$input" ]; then
+        return 1
+    fi
+    if [[ "$input" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+        if [ ${#input} -le 254 ]; then
+            validated_email="$input"
+            return 0
+        fi
+    fi
+    return 1
+}
+function validate_scope_list {
+    local input="$1"
+    validated_scopes=""
+    if [ -z "$input" ]; then
+        return 1
+    fi
+    if [[ "$input" =~ ^([a-zA-Z]+ ){0,8}([a-zA-Z]+)$ ]]; then
+        local word_count=$(echo "$input" | wc -w)
+        if [ "$word_count" -le 9 ] && [ "$word_count" -ge 1 ]; then
+            validated_scopes="$input"
+            return 0
+        fi
+    fi
+    return 1
+}
+function sanitize_choice_input {
+    local input="$1"
+    local pattern="${2:-^[yn0-9=]$}"
+    sanitized_choice=""
+    if [ -z "$input" ]; then
+        return 1
+    fi
+    local cleaned=$(echo "$input" | tr '[:upper:]' '[:lower:]')
+    if [[ "$cleaned" =~ $pattern ]]; then
+        sanitized_choice="$cleaned"
+        return 0
+    fi
+    return 1
+}
+function show_sanitization_error {
+    local input_type="$1"
+    local error_msg="$2"
+    echo -e "${RED}Invalid $input_type input!${ENDCOLOR}" >&2
+    if [ -n "$error_msg" ]; then
+        echo -e "${YELLOW}$error_msg${ENDCOLOR}" >&2
+    fi
+    echo -e "${YELLOW}Please try again with valid input.${ENDCOLOR}" >&2
+}
+function validate_git_url {
+    local input="$1"
+    validated_url=""
+    if [ -z "$input" ]; then
+        return 1
+    fi
+    local cleaned=$(echo "$input" | tr -d '\000-\037\177')
+    if [[ "$cleaned" =~ ^https?://[a-zA-Z0-9.-]+/[a-zA-Z0-9._/-]+(.git)?$ ]] || \
+       [[ "$cleaned" =~ ^git@[a-zA-Z0-9.-]+:[a-zA-Z0-9._/-]+(.git)?$ ]] || \
+       [[ "$cleaned" =~ ^ssh://[a-zA-Z0-9@.-]+/[a-zA-Z0-9._/-]+(.git)?$ ]] || \
+       [[ "$cleaned" =~ ^[a-zA-Z0-9._/-]+(.git)?$ ]]; then
+        if [ ${#cleaned} -le 500 ]; then
+            validated_url="$cleaned"
+            return 0
+        fi
+    fi
+    return 1
+}
 function get_config_value {
     value=$(git config --local --get "$1")
     if [ "$value" == "" ]; then
@@ -104,6 +286,20 @@ function set_config_value {
         git config --local "$1" "$2"
     else
         git config --global "$1" "$2"
+    fi
+}
+function unset_config_value {
+    git config --unset "$1"
+    local global_config=$(git config --global --get "$1" 2>/dev/null)
+    if [ -n "$global_config" ]; then
+        echo
+        echo -e "${YELLOW}Global $1 is also configured: ${BLUE}$global_config${ENDCOLOR}"
+        echo -e "Do you want to clear it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+        yes_no_choice "\nClear AI proxy globally" "false"
+        if [ $? -eq 0 ]; then
+            git config --global --unset "$1" 2>/dev/null
+            echo -e "${GREEN}$1 cleared globally${ENDCOLOR}"
+        fi
     fi
 }
 function wrong_mode {
@@ -488,6 +684,7 @@ function switch {
         exit $switch_code
     fi
 }
+readonly GOOGLE_API_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
 function get_ai_api_key {
     get_config_value gitbasher.ai-api-key ""
 }
@@ -499,9 +696,6 @@ function get_ai_proxy {
 }
 function set_ai_proxy {
     set_config_value gitbasher.ai-proxy "$1"
-}
-function clear_ai_proxy {
-    git config --unset gitbasher.ai-proxy 2>/dev/null
 }
 function get_ai_diff_limit {
     get_config_value gitbasher.ai-diff-limit "50"
@@ -567,11 +761,36 @@ function validate_proxy_url {
         return 1
     fi
 }
+function secure_curl_with_api_key {
+    local proxy_url="$1"
+    local api_key="$2"
+    local json_payload="$3"
+    (
+        unset HISTFILE
+        local curl_cmd=(
+            curl -s -X POST
+            --connect-timeout 30
+            --max-time 60
+        )
+        if [ -n "$proxy_url" ]; then
+            curl_cmd+=(--proxy "$proxy_url")
+        fi
+        curl_cmd+=(
+            "$GOOGLE_API_URL"
+            -H "Content-Type: application/json"
+            -H "x-goog-api-key: $api_key"
+            -d "$json_payload"
+        )
+        "${curl_cmd[@]}" 2>&1
+    )
+}
 function call_gemini_api {
+    trap 'clear_sensitive_vars' EXIT INT TERM
     local prompt="$1"
     local api_key=$(get_ai_api_key)
     if [ -z "$api_key" ]; then
         echo -e "${RED}AI API key not configured. Set it with: gitb config${ENDCOLOR}" >&2
+        clear_sensitive_vars
         return 1
     fi
     local escaped_prompt=$(echo "$prompt" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | tr '\n' ' ' | sed 's/  */ /g')
@@ -596,66 +815,58 @@ function call_gemini_api {
             echo -e "${RED}Invalid proxy URL format: $proxy_url${ENDCOLOR}" >&2
             echo -e "${YELLOW}Expected format: protocol://host:port (e.g., http://proxy.example.com:8080)${ENDCOLOR}" >&2
             echo -e "${YELLOW}Or: host:port (e.g., proxy.example.com:8080)${ENDCOLOR}" >&2
+            clear_sensitive_vars
             return 1
         fi
         safe_proxy_url="$validated_proxy_url"
-        local proxy_opts=""
-        if [[ "$safe_proxy_url" == socks5://* ]]; then
-            proxy_opts="--socks5-hostname"
-        fi
-        response=$(curl -s -X POST \
-            --proxy "$safe_proxy_url" \
-            $proxy_opts \
-            --http0.9 \
-            --connect-timeout 30 \
-            --max-time 60 \
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${api_key}" \
-            -H "Content-Type: application/json" \
-            -d "$json_payload" 2>/dev/null)
-        if [ $? -ne 0 ] || [ -z "$response" ]; then
-            response=$(curl -s -X POST \
-                --proxy "$safe_proxy_url" \
-                $proxy_opts \
-                --http1.0 \
-                --connect-timeout 30 \
-                --max-time 60 \
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${api_key}" \
-                -H "Content-Type: application/json" \
-                -d "$json_payload" 2>/dev/null)
-        fi
-        if [ $? -ne 0 ] || [ -z "$response" ]; then
-            if [[ "$safe_proxy_url" != socks5://* ]]; then
-                response=$(curl -s -X POST \
-                    --proxy "$safe_proxy_url" \
-                    --proxy-negotiate \
-                    --anyauth \
-                    --http1.1 \
-                    --connect-timeout 30 \
-                    --max-time 60 \
-                    --retry 1 \
-                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${api_key}" \
-                    -H "Content-Type: application/json" \
-                    -d "$json_payload" 2>/dev/null)
-            fi
-        fi
+        response=$(secure_curl_with_api_key "$safe_proxy_url" "$api_key" "$json_payload")
     else
-        response=$(curl -s -X POST \
-            --http1.1 \
-            --connect-timeout 30 \
-            --max-time 60 \
-            --retry 2 \
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${api_key}" \
-            -H "Content-Type: application/json" \
-            -d "$json_payload" 2>/dev/null)
+        response=$(secure_curl_with_api_key "" "$api_key" "$json_payload")
     fi
-    if [ $? -ne 0 ] || [ -z "$response" ]; then
+    local curl_exit_code=$?
+    if [ $curl_exit_code -ne 0 ] || [ -z "$response" ]; then
         echo
         echo -e "${RED}Failed to connect to AI service${ENDCOLOR}" >&2
+        echo -e "${YELLOW}Debug Information:${ENDCOLOR}" >&2
+        echo -e "  • Curl exit code: $curl_exit_code" >&2
+        echo -e "  • Response length: ${#response}" >&2
         if [ -n "$safe_proxy_url" ]; then
-            echo -e "${YELLOW}Proxy connection failed. Try:${ENDCOLOR}" >&2
-            echo -e "  • Test: ${BOLD}curl --proxy '$safe_proxy_url' --connect-timeout 10 ifconfig.me${ENDCOLOR}" >&2
-            echo -e "  • Configure different proxy with: gitb cfg proxy" >&2
+            echo -e "  • Using proxy: $safe_proxy_url" >&2
+            echo -e "${YELLOW}Proxy troubleshooting:${ENDCOLOR}" >&2
+            echo -e "  • Test proxy: ${BOLD}curl --proxy '$safe_proxy_url' --connect-timeout 10 https://ifconfig.me${ENDCOLOR}" >&2
+            echo -e "  • Test direct: ${BOLD}curl --connect-timeout 10 https://ifconfig.me${ENDCOLOR}" >&2
+            echo -e "  • Configure different proxy: gitb cfg proxy" >&2
+            echo -e "${YELLOW}Testing proxy connectivity...${ENDCOLOR}" >&2
+            local proxy_test=$(curl --proxy "$safe_proxy_url" --connect-timeout 5 --max-time 10 -s https://ifconfig.me 2>&1)
+            local proxy_test_code=$?
+            if [ $proxy_test_code -eq 0 ]; then
+                echo -e "  ✅ Proxy connection: Working" >&2
+                echo -e "  📍 Your IP via proxy: $(echo "$proxy_test" | head -1)" >&2
+            else
+                echo -e "  ❌ Proxy connection: Failed (exit code: $proxy_test_code)" >&2
+                echo -e "  📝 Error: $proxy_test" >&2
+            fi
+        else
+            echo -e "  • No proxy configured" >&2
+            echo -e "${YELLOW}Direct connection troubleshooting:${ENDCOLOR}" >&2
+            echo -e "  • Test connection: ${BOLD}curl --connect-timeout 10 https://generativelanguage.googleapis.com${ENDCOLOR}" >&2
+            echo -e "${YELLOW}Testing direct connectivity to Google AI...${ENDCOLOR}" >&2
+            local direct_test=$(curl --connect-timeout 5 --max-time 10 -s -I https://generativelanguage.googleapis.com 2>&1)
+            local direct_test_code=$?
+            if [ $direct_test_code -eq 0 ]; then
+                echo -e "  ✅ Google AI endpoint: Reachable" >&2
+            else
+                echo -e "  ❌ Google AI endpoint: Failed (exit code: $direct_test_code)" >&2
+                echo -e "  📝 Error: $(echo "$direct_test" | head -1)" >&2
+                echo -e "  💡 Consider configuring a proxy: gitb cfg proxy" >&2
+            fi
         fi
+        if [ -n "$response" ]; then
+            echo -e "${YELLOW}Partial response received:${ENDCOLOR}" >&2
+            echo "$response" | head -3 >&2
+            echo -e "${YELLOW}...${ENDCOLOR}" >&2
+        fi
+        clear_sensitive_vars
         return 1
     fi
     local has_error=$(echo "$response" | grep -q '"error"' && echo "true" || echo "false")
@@ -730,6 +941,7 @@ function call_gemini_api {
                 fi
                 ;;
         esac
+        clear_sensitive_vars
         return 1
     fi
     local ai_response=""
@@ -749,8 +961,10 @@ function call_gemini_api {
         echo "$response" | head -5 >&2
         echo -e "${YELLOW}...${ENDCOLOR}" >&2
         echo -e "${YELLOW}To see full response, enable debug mode in ai.sh${ENDCOLOR}" >&2
+        clear_sensitive_vars
         return 1
     fi
+    clear_sensitive_vars
     echo "$ai_response"
 }
 function check_ai_available {
@@ -869,6 +1083,18 @@ The body should explain why you are making the change. The length of the body sh
 Respond with only the full commit message, nothing else."
     call_gemini_api "$prompt"
 }
+function clear_sensitive_vars {
+    api_key=""
+    ai_key_input=""
+    validated_proxy_url=""
+    unset api_key 2>/dev/null
+    unset ai_key_input 2>/dev/null
+    unset AI_API_KEY 2>/dev/null
+    unset GEMINI_API_KEY 2>/dev/null
+    if [ -n "$BASH_VERSION" ]; then
+        hash -r 2>/dev/null
+    fi
+}
 function set_default_branch {
     echo -e "${YELLOW}Fetching remote branches...${ENDCOLOR}"
     echo
@@ -943,8 +1169,13 @@ function set_editor {
     if [ "$choice" == "" ]; then
         exit
     fi
+    if ! sanitize_command "$choice"; then
+        show_sanitization_error "editor" "Use only letters, numbers, dots, dashes, underscores, and slashes."
+        exit 1
+    fi
+    choice="$sanitized_command"
     echo
-    which_output=$(which $choice)
+    which_output=$(which "$choice")
     if [ "${which_output}" == *"not found"* ] || [ "${which_output}" == "" ]; then
         echo -e "${RED}Binary '${choice}' not found!${ENDCOLOR}"
         exit
@@ -963,12 +1194,23 @@ function set_ticket {
         echo -e "${YELLOW}Ticket prefix is not set in gitbasher${ENDCOLOR}"
     else
         echo -e "Current ticket prefix: ${YELLOW}$ticket_name${ENDCOLOR}"
+        echo -e "Press Enter to exit without changes or enter 0 to remove existing ticket prefix"
     fi
     read -p "Ticket prefix: " -e ticket_name
+    if [ "$ticket_name" == "0" ]; then
+        unset_config_value gitbasher.ticket
+        echo
+        echo -e "${GREEN}Ticket prefix removed from '${project_name}' repo${ENDCOLOR}"
+        exit
+    fi
     if [ -z $ticket_name ]; then
         exit
     fi
-    ticket_name="${ticket_name##*( )}"
+    if ! sanitize_text_input "$ticket_name" 50; then
+        show_sanitization_error "ticket prefix" "Use printable characters only, max 50 characters."
+        exit 1
+    fi
+    ticket_name="$sanitized_text"
     echo 
     ticket_name=$(set_config_value gitbasher.ticket $ticket_name)
     echo -e "${GREEN}Set '${ticket_name}' as a ticket name in '${project_name}' repo${ENDCOLOR}"
@@ -997,7 +1239,7 @@ function configure_ai_key {
         exit
     fi
     if [ "$ai_key_input" == "0" ]; then
-        git config --local --unset gitbasher.ai-api-key 2>/dev/null
+        unset_config_value gitbasher.ai-api-key
         echo
         echo -e "${GREEN}AI API key removed from '${project_name}' repo${ENDCOLOR}"
         exit
@@ -1040,7 +1282,7 @@ function configure_ai_proxy {
         exit
     fi
     if [ "$ai_proxy_input" == "0" ]; then
-        clear_ai_proxy
+        unset_config_value gitbasher.ai-proxy
         echo
         echo -e "${GREEN}AI proxy removed from '${project_name}' repo${ENDCOLOR}"
         exit
@@ -1085,10 +1327,11 @@ function configure_ai_history {
         exit
     fi
     echo
-    if ! [[ "$limit_input" =~ ^[1-9][0-9]*$ ]]; then
-        echo -e "${RED}Error: Please enter a positive number${ENDCOLOR}"
+    if ! validate_numeric_input "$limit_input" 1 100; then
+        show_sanitization_error "commit history limit" "Please enter a positive number between 1 and 100."
         exit 1
     fi
+    limit_input="$validated_number"
     if [ "$limit_input" -lt 5 ] || [ "$limit_input" -gt 20 ]; then
         echo -e "${YELLOW}Warning: Value outside recommended range (5-20)${ENDCOLOR}"
         if [ "$limit_input" -gt 20 ]; then
@@ -1116,23 +1359,25 @@ function set_scopes {
         echo -e "Current list of scopes: ${YELLOW}$scopes${ENDCOLOR}"
     fi
     echo -e "Use only english letters and space as separator, maximum is 9 scopes"
-    echo -e "Enter 0 if you want to remove scopes"
+    if [ "$scopes" != "" ]; then
+        echo -e "Press Enter to exit without changes or enter 0 to remove existing scopes"
+    fi
     read -p "Scopes: " -e scopes_raw
     if [ "$scopes_raw" == "" ]; then
         exit
     fi
     if [ "$scopes_raw" == "0" ]; then
-        git config --local --unset-all gitbasher.scopes
+        unset_config_value gitbasher.scopes
         echo
         echo -e "${GREEN}Scopes list removed from '${project_name}' repo${ENDCOLOR}"
         exit
     fi
     echo
-    re='^([a-zA-Z]+ ){0,8}([a-zA-Z]+)+$'
-    if ! [[ $scopes_raw =~ $re ]]; then
-        echo -e "${RED}Invalid scopes list!${ENDCOLOR}"
-        exit
+    if ! validate_scope_list "$scopes_raw"; then
+        show_sanitization_error "scopes" "Use only letters and spaces, maximum 9 scopes (e.g., 'feat docs test')."
+        exit 1
     fi
+    scopes_raw="$validated_scopes"
     git config --local --replace-all gitbasher.scopes "$scopes_raw"
     scopes="$scopes_raw"
     echo -e "${GREEN}Set '${scopes}' as a scopes list in '${project_name}' repo${ENDCOLOR}"
@@ -1234,6 +1479,20 @@ function set_user {
     read -p "Email: " -e user_email
     if [ "$user_name" == "" ] && [ "$user_email" == "" ]; then
         exit
+    fi
+    if [ "$user_name" != "" ]; then
+        if ! sanitize_text_input "$user_name" 100; then
+            show_sanitization_error "user name" "Use printable characters only, max 100 characters."
+            exit 1
+        fi
+        user_name="$sanitized_text"
+    fi
+    if [ "$user_email" != "" ]; then
+        if ! validate_email "$user_email"; then
+            show_sanitization_error "email" "Please enter a valid email address."
+            exit 1
+        fi
+        user_email="$validated_email"
     fi
     echo
     if [ "$user_name" != "" ]; then
@@ -1608,7 +1867,7 @@ function merge_commit {
         fi  
     else
         staged_with_tab="$(sed 's/^/####\t/' <<< "$2")"
-        commitmsg_file=$(mktemp ".commitmsg.XXXXXX")
+        commitmsg_file=$(mktemp "/tmp/commitmsg.XXXXXX")
         echo """
 ####
 #### Write a message about merge from '$5/$4' into '$4'. Lines starting with '#' will be ignored. 
@@ -1629,12 +1888,12 @@ ${staged_with_tab}
             read -n 1 -p "Do you want to try for one more time? (y/n) " -s -e choice
             if [ "$choice" != "y" ]; then
                 git restore --staged $files_with_conflicts_one_line
-                find . -name "$commitmsg_file*" -delete
+                rm -f "$commitmsg_file"
                 merge_error="true"
                 exit
             fi    
         done
-        find . -name "$commitmsg_file*" -delete
+        rm -f "$commitmsg_file"
         result=$(git commit -m """$commit_message""" 2>&1)
         if [[ $result != *"not staged for commit"* ]]; then
             check_code $? "$result" "creating merge commit"
@@ -2419,7 +2678,7 @@ function handle_ai_commit_generation {
     elif [ "$choice" = "e" ] || [ "$choice" = "E" ]; then
         if [ "$ai_mode" = "full" ] && [ -n "${msg}" ]; then
             echo -e "${YELLOW}Edit the AI generated message:${ENDCOLOR}"
-            commitmsg_file=$(mktemp ".commitmsg.XXXXXX")
+            commitmsg_file=$(mktemp "/tmp/commitmsg.XXXXXX")
             echo "$ai_commit_message" > $commitmsg_file
             while [ true ]; do
                 $editor $commitmsg_file
@@ -2433,12 +2692,12 @@ function handle_ai_commit_generation {
                 read -n 1 -p "Try for one more time? (y/n) " -s -e choice
                 if [ "$choice" != "y" ]; then
                     cleanup_on_exit "$git_add"
-                    find . -name "$commitmsg_file*" -delete
+                    rm -f "$commitmsg_file"
                     exit
                 fi    
             done
             commit_message=$(cat $commitmsg_file)
-            rm $commitmsg_file
+            rm -f "$commitmsg_file"
             echo
         else
             if [ "$ai_mode" = "subject" ]; then
@@ -2687,10 +2946,14 @@ function commit_script {
         echo "Press Enter if you want to exit"
         while [ true ]; do
             read -p "$(echo -n -e "${BOLD}git add${ENDCOLOR} ")" -e git_add
-            git_add=$(echo "$git_add" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
             if [ "$git_add" == "" ]; then
                 exit
             fi
+            if ! sanitize_file_path "$git_add"; then
+                show_sanitization_error "file path" "Invalid file path or pattern. Avoid dangerous characters and sequences."
+                continue
+            fi
+            git_add="$sanitized_file_path"
             result=$(git add $git_add 2>&1)
             code=$?
             staged_files_list="$(git diff --name-only --cached)"
@@ -2946,15 +3209,13 @@ function commit_script {
                     continue
                 fi
             else
-                re='^[a-zA-Z0-9/,_.-]+$'
-                if [[ $commit_scope =~ $re ]]; then
-                    commit="$commit($commit_scope): "
-                    break
-                else
-                    echo -e "${RED}Invalid scope format! Use only letters, numbers, hyphens, underscores, and dots.${ENDCOLOR}"
-                    echo -e "${RED}Debug: input was '$commit_scope'${ENDCOLOR}"
+                if ! sanitize_git_name "$commit_scope"; then
+                    show_sanitization_error "scope" "Use only letters, numbers, hyphens, underscores, dots, and slashes."
                     continue
                 fi
+                commit_scope="$sanitized_git_name"
+                commit="$commit($commit_scope): "
+                break
             fi
         done
     fi
@@ -2987,11 +3248,13 @@ function commit_script {
     fi
     echo -e "Press Enter if you want to exit"
     if [ -n "$msg" ]; then
-        commitmsg_file=$(mktemp ".commitmsg.XXXXXX")
+        commitmsg_file=$(mktemp "/tmp/commitmsg.XXXXXX")
         staged_with_tab="$(sed 's/^/####\t/' <<< "${staged}")"
         echo """
 ####
-#### Step ${step}. Write a <summary> about your changes. Lines starting with '#' will be ignored. 
+#### Step ${step}. Write only <summary> about your changes without type and scope. 
+#### It will be appended to '${commit}'. 
+#### Lines starting with '#' will be ignored. 
 #### 
 #### On branch ${current_branch}
 #### Changes to be commited:
@@ -3028,17 +3291,23 @@ ${staged_with_tab}
             read -n 1 -p "Try for one more time? (y/n) " -s -e choice
             if [ "$choice" != "y" ]; then
                 cleanup_on_exit "$git_add"
-                find . -name "$commitmsg_file*" -delete
+                rm -f "$commitmsg_file"
                 exit
             fi    
         done
-        find . -name "$commitmsg_file*" -delete
+        rm -f "$commitmsg_file"
     else
         read -p "$(echo -n -e "${commit}")" -e commit_message
         if [ -z "$commit_message" ]; then
             cleanup_on_exit "$git_add"
             exit
         fi
+        if ! sanitize_commit_message "$commit_message"; then
+            show_sanitization_error "commit message" "Use printable characters only, 1-2000 characters."
+            cleanup_on_exit "$git_add"
+            exit 1
+        fi
+        commit_message="$sanitized_commit_message"
     fi
     if [ -n "${ticket}" ]; then
         echo
@@ -3055,7 +3324,12 @@ ${staged_with_tab}
             exit
         fi
         if [ "$commit_ticket" != "" ]; then
-            commit_ticket=$(echo "$commit_ticket" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+            if ! sanitize_text_input "$commit_ticket" 50; then
+                show_sanitization_error "ticket" "Use printable characters only, max 50 characters."
+                cleanup_on_exit "$git_add"
+                exit 1
+            fi
+            commit_ticket="$sanitized_text"
             summary=$(echo "$commit_message" | head -n 1)
             remaining_message=""
             if [ "$summary" != "$commit_message" ]; then
@@ -3375,7 +3649,11 @@ function branch_script {
         if [ -z "$branch_name" ]; then
             exit
         fi
-        branch_name="${branch_name##*( )}"
+        if ! sanitize_git_name "$branch_name"; then
+            show_sanitization_error "branch name" "Use only letters, numbers, dots, dashes, underscores, and slashes."
+            exit 1
+        fi
+        branch_name="$sanitized_git_name"
     else
         branch_to_show=$current_branch
         if [ -z "$current" ]; then
@@ -3413,18 +3691,15 @@ function branch_script {
                 fi
                 break
             else
-                choice=$(echo "$choice" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
                 if [ -n "$choice" ]; then
-                    re_prefix='^[a-zA-Z0-9]+$'
-                    if [[ $choice =~ $re_prefix ]]; then
-                        branch_type="$choice"
-                        branch_type_and_sep="${branch_type}${sep}"
-                        break
-                    else
-                        echo -e "${RED}Invalid prefix format! Use only letters and numbers.${ENDCOLOR}"
+                    if ! sanitize_git_name "$choice"; then
+                        show_sanitization_error "branch prefix" "Use only letters, numbers, dots, dashes, underscores, and slashes."
                         echo
                         continue
                     fi
+                    branch_type="$sanitized_git_name"
+                    branch_type_and_sep="${branch_type}${sep}"
+                    break
                 else
                     echo -e "${RED}Please enter a valid option number or custom prefix.${ENDCOLOR}"
                     echo
@@ -3440,7 +3715,11 @@ function branch_script {
         if [ -z "$branch_name" ]; then
             exit
         fi
-        branch_name="${branch_type_and_sep}${branch_name##*( )}"
+        if ! sanitize_git_name "$branch_name"; then
+            show_sanitization_error "branch name" "Use only letters, numbers, dots, dashes, underscores, and slashes."
+            exit 1
+        fi
+        branch_name="${branch_type_and_sep}${sanitized_git_name}"
     fi
     if [[ "$branch_name" == "HEAD" ]] || [[ "$branch_name" == "$origin_name" ]]; then
         echo
@@ -3709,7 +3988,12 @@ function tag_script {
     if [ -z "$tag_name" ]; then
         exit
     fi
-    if [[ "$tag_name" == "tag" ]] || [[ "$tag_name" == *" "* ]]; then
+    if ! sanitize_git_name "$tag_name"; then
+        show_sanitization_error "tag name" "Use only letters, numbers, dots, dashes, underscores, and slashes."
+        exit 1
+    fi
+    tag_name="$sanitized_git_name"
+    if [[ "$tag_name" == "tag" ]]; then
         echo
         echo -e "${RED}This name is forbidden!${ENDCOLOR}"
         exit
@@ -3870,10 +4154,14 @@ function select_files_for_stash {
     echo "Press Enter if you want to exit"
     while [ true ]; do
         read -p "$(echo -n -e "${BOLD}files to stash${ENDCOLOR} ")" -e git_add
-        git_add=$(echo "$git_add" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e "s/^'//" -e "s/'$//")
         if [ "$git_add" == "" ]; then
             exit
         fi
+        if ! sanitize_file_path "$git_add"; then
+            show_sanitization_error "file pattern" "Invalid file path or pattern. Avoid dangerous characters and sequences."
+            continue
+        fi
+        git_add="$sanitized_file_path"
         test_result=$(git add --dry-run "$git_add" 2>&1)
         test_code=$?
         if [ $test_code -eq 0 ] && [ -n "$test_result" ]; then
@@ -4021,6 +4309,11 @@ function stash_script {
         if [ -z "$stash_message" ]; then
             exit 0
         fi
+        if ! sanitize_text_input "$stash_message" 200; then
+            show_sanitization_error "stash message" "Use printable characters only, max 200 characters."
+            exit 1
+        fi
+        stash_message="$sanitized_text"
         echo -e "${YELLOW}Stashing selected files...${ENDCOLOR}"
         echo
         result=$(git add $git_add 2>&1)
@@ -4050,6 +4343,11 @@ function stash_script {
         if [ -z "$stash_message" ]; then
             exit 0
         fi
+        if ! sanitize_text_input "$stash_message" 200; then
+            show_sanitization_error "stash message" "Use printable characters only, max 200 characters."
+            exit 1
+        fi
+        stash_message="$sanitized_text"
         echo -e "${YELLOW}Stashing all changes...${ENDCOLOR}"
         echo
         stash_output=$(git stash push -m "$stash_message" --include-untracked 2>&1)

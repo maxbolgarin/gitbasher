@@ -227,6 +227,8 @@ function rebase_branch {
         echo "$rebase_output"
         exit $rebase_code
     fi
+
+    echo
 }
 
 ### Function helps to fix errors in todo plan

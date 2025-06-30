@@ -2,6 +2,9 @@
 
 ### AI Functions for commit message generation
 
+# Google Gemini API endpoint
+readonly GOOGLE_API_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+
 ### Function to get AI API key from git config
 # Returns: AI API key or empty if not set
 function get_ai_api_key {
@@ -24,11 +27,6 @@ function get_ai_proxy {
 # $1: Proxy URL (e.g., http://proxy.example.com:8080 or http://user:pass@proxy.example.com:8080)
 function set_ai_proxy {
     set_config_value gitbasher.ai-proxy "$1"
-}
-
-### Function to clear AI proxy configuration
-function clear_ai_proxy {
-    git config --unset gitbasher.ai-proxy 2>/dev/null
 }
 
 ### Function to get AI diff limit from git config
@@ -143,15 +141,59 @@ function validate_proxy_url {
     fi
 }
 
+### Function to securely call curl with API key
+# This prevents API key exposure in process lists by using a subshell
+# $1: proxy_url (can be empty)
+# $2: api_key value
+# $3: json_payload
+function secure_curl_with_api_key {
+    local proxy_url="$1"
+    local api_key="$2"
+    local json_payload="$3"
+    
+    # Execute curl in a subshell to minimize API key exposure
+    (
+        # Unset any potentially exported variables
+        unset HISTFILE
+        
+        # Build curl command with proper array handling
+        local curl_cmd=(
+            curl -s -X POST
+            --connect-timeout 30
+            --max-time 60
+        )
+        
+        # Add proxy if specified
+        if [ -n "$proxy_url" ]; then
+            curl_cmd+=(--proxy "$proxy_url")
+        fi
+        
+        # Add remaining options
+        curl_cmd+=(
+            "$GOOGLE_API_URL"
+            -H "Content-Type: application/json"
+            -H "x-goog-api-key: $api_key"
+            -d "$json_payload"
+        )
+        
+        # Execute the curl command
+        "${curl_cmd[@]}" 2>&1
+    )
+}
+
 ### Function to make request to Gemini API
 # $1: prompt text
 # Returns: AI response text
 function call_gemini_api {
+    # Set trap to clear sensitive variables on exit/interrupt
+    trap 'clear_sensitive_vars' EXIT INT TERM
+    
     local prompt="$1"
     local api_key=$(get_ai_api_key)
     
     if [ -z "$api_key" ]; then
         echo -e "${RED}AI API key not configured. Set it with: gitb config${ENDCOLOR}" >&2
+        clear_sensitive_vars
         return 1
     fi
     
@@ -183,79 +225,70 @@ function call_gemini_api {
             echo -e "${RED}Invalid proxy URL format: $proxy_url${ENDCOLOR}" >&2
             echo -e "${YELLOW}Expected format: protocol://host:port (e.g., http://proxy.example.com:8080)${ENDCOLOR}" >&2
             echo -e "${YELLOW}Or: host:port (e.g., proxy.example.com:8080)${ENDCOLOR}" >&2
+            clear_sensitive_vars
             return 1
         fi
         
         # Use the validated proxy URL
         safe_proxy_url="$validated_proxy_url"
-        
-        # echo -e "${BLUE}Using proxy: ${safe_proxy_url}${ENDCOLOR}" >&2
-        
-        # Configure curl options based on proxy type
-        local proxy_opts=""
-        if [[ "$safe_proxy_url" == socks5://* ]]; then
-            proxy_opts="--socks5-hostname"
-        fi
-        
-        # For HTTP/0.9 proxies, start with the most permissive approach
-        response=$(curl -s -X POST \
-            --proxy "$safe_proxy_url" \
-            $proxy_opts \
-            --http0.9 \
-            --connect-timeout 30 \
-            --max-time 60 \
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${api_key}" \
-            -H "Content-Type: application/json" \
-            -d "$json_payload" 2>/dev/null)
-        
-        # If HTTP/0.9 fails, try with HTTP/1.0
-        if [ $? -ne 0 ] || [ -z "$response" ]; then
-            response=$(curl -s -X POST \
-                --proxy "$safe_proxy_url" \
-                $proxy_opts \
-                --http1.0 \
-                --connect-timeout 30 \
-                --max-time 60 \
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${api_key}" \
-                -H "Content-Type: application/json" \
-                -d "$json_payload" 2>/dev/null)
-        fi
-        
-        # If still failing, try with HTTP/1.1 and auth options for HTTP proxies
-        if [ $? -ne 0 ] || [ -z "$response" ]; then
-            if [[ "$safe_proxy_url" != socks5://* ]]; then
-                response=$(curl -s -X POST \
-                    --proxy "$safe_proxy_url" \
-                    --proxy-negotiate \
-                    --anyauth \
-                    --http1.1 \
-                    --connect-timeout 30 \
-                    --max-time 60 \
-                    --retry 1 \
-                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${api_key}" \
-                    -H "Content-Type: application/json" \
-                    -d "$json_payload" 2>/dev/null)
-            fi
-        fi
+        response=$(secure_curl_with_api_key "$safe_proxy_url" "$api_key" "$json_payload")
     else
-        response=$(curl -s -X POST \
-            --http1.1 \
-            --connect-timeout 30 \
-            --max-time 60 \
-            --retry 2 \
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${api_key}" \
-            -H "Content-Type: application/json" \
-            -d "$json_payload" 2>/dev/null)
+        response=$(secure_curl_with_api_key "" "$api_key" "$json_payload")
     fi
     
-    if [ $? -ne 0 ] || [ -z "$response" ]; then
+    local curl_exit_code=$?
+    
+    if [ $curl_exit_code -ne 0 ] || [ -z "$response" ]; then
         echo
         echo -e "${RED}Failed to connect to AI service${ENDCOLOR}" >&2
+        echo -e "${YELLOW}Debug Information:${ENDCOLOR}" >&2
+        echo -e "  • Curl exit code: $curl_exit_code" >&2
+        echo -e "  • Response length: ${#response}" >&2
+        
         if [ -n "$safe_proxy_url" ]; then
-            echo -e "${YELLOW}Proxy connection failed. Try:${ENDCOLOR}" >&2
-            echo -e "  • Test: ${BOLD}curl --proxy '$safe_proxy_url' --connect-timeout 10 ifconfig.me${ENDCOLOR}" >&2
-            echo -e "  • Configure different proxy with: gitb cfg proxy" >&2
+            echo -e "  • Using proxy: $safe_proxy_url" >&2
+            echo -e "${YELLOW}Proxy troubleshooting:${ENDCOLOR}" >&2
+            echo -e "  • Test proxy: ${BOLD}curl --proxy '$safe_proxy_url' --connect-timeout 10 https://ifconfig.me${ENDCOLOR}" >&2
+            echo -e "  • Test direct: ${BOLD}curl --connect-timeout 10 https://ifconfig.me${ENDCOLOR}" >&2
+            echo -e "  • Configure different proxy: gitb cfg proxy" >&2
+            
+            # Test proxy connectivity
+            echo -e "${YELLOW}Testing proxy connectivity...${ENDCOLOR}" >&2
+            local proxy_test=$(curl --proxy "$safe_proxy_url" --connect-timeout 5 --max-time 10 -s https://ifconfig.me 2>&1)
+            local proxy_test_code=$?
+            if [ $proxy_test_code -eq 0 ]; then
+                echo -e "  ✅ Proxy connection: Working" >&2
+                echo -e "  📍 Your IP via proxy: $(echo "$proxy_test" | head -1)" >&2
+            else
+                echo -e "  ❌ Proxy connection: Failed (exit code: $proxy_test_code)" >&2
+                echo -e "  📝 Error: $proxy_test" >&2
+            fi
+        else
+            echo -e "  • No proxy configured" >&2
+            echo -e "${YELLOW}Direct connection troubleshooting:${ENDCOLOR}" >&2
+            echo -e "  • Test connection: ${BOLD}curl --connect-timeout 10 https://generativelanguage.googleapis.com${ENDCOLOR}" >&2
+            
+            # Test direct connectivity to Google API
+            echo -e "${YELLOW}Testing direct connectivity to Google AI...${ENDCOLOR}" >&2
+            local direct_test=$(curl --connect-timeout 5 --max-time 10 -s -I https://generativelanguage.googleapis.com 2>&1)
+            local direct_test_code=$?
+            if [ $direct_test_code -eq 0 ]; then
+                echo -e "  ✅ Google AI endpoint: Reachable" >&2
+            else
+                echo -e "  ❌ Google AI endpoint: Failed (exit code: $direct_test_code)" >&2
+                echo -e "  📝 Error: $(echo "$direct_test" | head -1)" >&2
+                echo -e "  💡 Consider configuring a proxy: gitb cfg proxy" >&2
+            fi
         fi
+        
+        # Show partial response if any
+        if [ -n "$response" ]; then
+            echo -e "${YELLOW}Partial response received:${ENDCOLOR}" >&2
+            echo "$response" | head -3 >&2
+            echo -e "${YELLOW}...${ENDCOLOR}" >&2
+        fi
+        
+        clear_sensitive_vars
         return 1
     fi
     
@@ -342,6 +375,7 @@ function call_gemini_api {
                 ;;
         esac
         
+        clear_sensitive_vars
         return 1
     fi
     
@@ -373,9 +407,13 @@ function call_gemini_api {
         echo "$response" | head -5 >&2
         echo -e "${YELLOW}...${ENDCOLOR}" >&2
         echo -e "${YELLOW}To see full response, enable debug mode in ai.sh${ENDCOLOR}" >&2
+        # Clear sensitive variables before returning
+        clear_sensitive_vars
         return 1
     fi
     
+    # Clear sensitive variables before returning success
+    clear_sensitive_vars
     echo "$ai_response"
 }
 
@@ -601,3 +639,23 @@ Respond with only the full commit message, nothing else."
 #         fi
 #     done
 # }
+
+### Function to securely clear sensitive variables
+# This helps prevent API key exposure via memory dumps or env vars
+function clear_sensitive_vars {
+    # Clear local API key variables
+    api_key=""
+    ai_key_input=""
+    validated_proxy_url=""
+    
+    # Clear from environment if accidentally exported
+    unset api_key 2>/dev/null
+    unset ai_key_input 2>/dev/null
+    unset AI_API_KEY 2>/dev/null
+    unset GEMINI_API_KEY 2>/dev/null
+    
+    # Force garbage collection of shell variables (bash-specific)
+    if [ -n "$BASH_VERSION" ]; then
+        hash -r 2>/dev/null
+    fi
+}

@@ -45,5 +45,6 @@ source scripts/reset.sh
 source scripts/stash.sh
 source scripts/cherry.sh
 source scripts/gitlog.sh
+source scripts/hooks.sh
 
 source scripts/base.sh

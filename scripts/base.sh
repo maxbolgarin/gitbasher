@@ -16,6 +16,7 @@ function print_help {
     msg="$msg\ncherry_ch|cp_Cherry-pick commits from other branches"
     msg="$msg\nreset_res_Easy to use git reset"
     msg="$msg\nstash_s|sta_Manage git stashes"
+    msg="$msg\nhook_ho|hk_Git hooks management"
     msg="$msg\nconfig_cf|cfg|conf_Configurate gitbasher"
 
     msg="$msg\n_ _ _"
@@ -83,6 +84,9 @@ case "$1" in
     ;;
     stash|s|sta)
         stash_script $2
+    ;;
+    hook|ho|hk)
+        hooks_script $2 $3 $4
     ;;
     log|l|lg)
         gitlog_script $2 $3

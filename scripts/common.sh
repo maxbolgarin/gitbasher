@@ -292,41 +292,6 @@ function show_sanitization_error {
     echo -e "${YELLOW}Please try again with valid input.${ENDCOLOR}" >&2
 }
 
-### Function to validate git remote URL
-# $1: URL string
-# Returns: 0 if valid URL format, 1 if invalid
-# Sets: validated_url global variable
-function validate_git_url {
-    local input="$1"
-    validated_url=""
-    
-    if [ -z "$input" ]; then
-        return 1
-    fi
-    
-    # Remove dangerous characters first
-    local cleaned=$(echo "$input" | tr -d '\000-\037\177')
-    
-    # Basic validation for common git URL formats:
-    # https://github.com/user/repo.git
-    # git@github.com:user/repo.git
-    # ssh://git@server.com/repo.git
-    # /path/to/repo.git (local)
-    if [[ "$cleaned" =~ ^https?://[a-zA-Z0-9.-]+/[a-zA-Z0-9._/-]+(.git)?$ ]] || \
-       [[ "$cleaned" =~ ^git@[a-zA-Z0-9.-]+:[a-zA-Z0-9._/-]+(.git)?$ ]] || \
-       [[ "$cleaned" =~ ^ssh://[a-zA-Z0-9@.-]+/[a-zA-Z0-9._/-]+(.git)?$ ]] || \
-       [[ "$cleaned" =~ ^[a-zA-Z0-9._/-]+(.git)?$ ]]; then
-        
-        # Length check
-        if [ ${#cleaned} -le 500 ]; then
-            validated_url="$cleaned"
-            return 0
-        fi
-    fi
-    
-    return 1
-}
-
 ### ===== END INPUT SANITIZATION FRAMEWORK =====
 
 

@@ -98,7 +98,7 @@ function handle_ai_commit_generation {
         if [ "$ai_mode" = "full" ] && [ -n "${msg}" ]; then
             echo -e "${YELLOW}Edit the AI generated message:${ENDCOLOR}"
             # Create temp file with AI message
-            commitmsg_file=$(mktemp ".commitmsg.XXXXXX")
+            commitmsg_file=$(mktemp "/tmp/commitmsg.XXXXXX")
             echo "$ai_commit_message" > $commitmsg_file
 
             while [ true ]; do
@@ -114,13 +114,13 @@ function handle_ai_commit_generation {
                 read -n 1 -p "Try for one more time? (y/n) " -s -e choice
                 if [ "$choice" != "y" ]; then
                     cleanup_on_exit "$git_add"
-                    find . -name "$commitmsg_file*" -delete
+                    rm -f "$commitmsg_file"
                     exit
                 fi    
             done
 
             commit_message=$(cat $commitmsg_file)
-            rm $commitmsg_file
+            rm -f "$commitmsg_file"
             echo
         else
             if [ "$ai_mode" = "subject" ]; then
@@ -856,12 +856,14 @@ function commit_script {
     echo -e "Press Enter if you want to exit"
     # Use an editor and commitmsg file
     if [ -n "$msg" ]; then
-        commitmsg_file=$(mktemp ".commitmsg.XXXXXX")
+        commitmsg_file=$(mktemp "/tmp/commitmsg.XXXXXX")
         staged_with_tab="$(sed 's/^/####\t/' <<< "${staged}")"
 
         echo """
 ####
-#### Step ${step}. Write a <summary> about your changes. Lines starting with '#' will be ignored. 
+#### Step ${step}. Write only <summary> about your changes without type and scope. 
+#### It will be appended to '${commit}'. 
+#### Lines starting with '#' will be ignored. 
 #### 
 #### On branch ${current_branch}
 #### Changes to be commited:
@@ -900,12 +902,12 @@ ${staged_with_tab}
             read -n 1 -p "Try for one more time? (y/n) " -s -e choice
             if [ "$choice" != "y" ]; then
                 cleanup_on_exit "$git_add"
-                find . -name "$commitmsg_file*" -delete
+                rm -f "$commitmsg_file"
                 exit
             fi    
         done
 
-        find . -name "$commitmsg_file*" -delete
+        rm -f "$commitmsg_file"
 
     # Use read from console
     else

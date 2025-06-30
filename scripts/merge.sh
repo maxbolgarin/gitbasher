@@ -388,7 +388,7 @@ function merge_commit {
     ### 2. Commit with entered message
     else
         staged_with_tab="$(sed 's/^/####\t/' <<< "$2")"
-        commitmsg_file=$(mktemp ".commitmsg.XXXXXX")
+        commitmsg_file=$(mktemp "/tmp/commitmsg.XXXXXX")
         echo """
 ####
 #### Write a message about merge from '$5/$4' into '$4'. Lines starting with '#' will be ignored. 
@@ -411,13 +411,13 @@ ${staged_with_tab}
             read -n 1 -p "Do you want to try for one more time? (y/n) " -s -e choice
             if [ "$choice" != "y" ]; then
                 git restore --staged $files_with_conflicts_one_line
-                find . -name "$commitmsg_file*" -delete
+                rm -f "$commitmsg_file"
                 merge_error="true"
                 exit
             fi    
         done
 
-        find . -name "$commitmsg_file*" -delete
+        rm -f "$commitmsg_file"
         
         result=$(git commit -m """$commit_message""" 2>&1)
 

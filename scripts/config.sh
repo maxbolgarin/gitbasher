@@ -137,9 +137,17 @@ function set_ticket {
         echo -e "${YELLOW}Ticket prefix is not set in gitbasher${ENDCOLOR}"
     else
         echo -e "Current ticket prefix: ${YELLOW}$ticket_name${ENDCOLOR}"
+        echo -e "Press Enter to exit without changes or enter 0 to remove existing ticket prefix"
     fi
    
     read -p "Ticket prefix: " -e ticket_name
+
+    if [ "$ticket_name" == "0" ]; then
+        unset_config_value gitbasher.ticket
+        echo
+        echo -e "${GREEN}Ticket prefix removed from '${project_name}' repo${ENDCOLOR}"
+        exit
+    fi
 
     if [ -z $ticket_name ]; then
         exit
@@ -190,7 +198,7 @@ function configure_ai_key {
     fi
 
     if [ "$ai_key_input" == "0" ]; then
-        git config --local --unset gitbasher.ai-api-key 2>/dev/null
+        unset_config_value gitbasher.ai-api-key
         echo
         echo -e "${GREEN}AI API key removed from '${project_name}' repo${ENDCOLOR}"
         exit
@@ -246,7 +254,7 @@ function configure_ai_proxy {
     fi
 
     if [ "$ai_proxy_input" == "0" ]; then
-        clear_ai_proxy
+        unset_config_value gitbasher.ai-proxy
         echo
         echo -e "${GREEN}AI proxy removed from '${project_name}' repo${ENDCOLOR}"
         exit
@@ -346,7 +354,9 @@ function set_scopes {
         echo -e "Current list of scopes: ${YELLOW}$scopes${ENDCOLOR}"
     fi
     echo -e "Use only english letters and space as separator, maximum is 9 scopes"
-    echo -e "Enter 0 if you want to remove scopes"
+    if [ "$scopes" != "" ]; then
+        echo -e "Press Enter to exit without changes or enter 0 to remove existing scopes"
+    fi
 
     read -p "Scopes: " -e scopes_raw
 
@@ -355,7 +365,7 @@ function set_scopes {
     fi
 
     if [ "$scopes_raw" == "0" ]; then
-        git config --local --unset-all gitbasher.scopes
+        unset_config_value gitbasher.scopes
 
         echo
         echo -e "${GREEN}Scopes list removed from '${project_name}' repo${ENDCOLOR}"

@@ -39,7 +39,7 @@ function handle_ai_commit_generation {
     
     # Generate AI commit message based on mode
     local ai_commit_message
-    if [ "$ai_mode" = "full" ] && [ -n "${msg}" ]; then
+    if [ "$ai_mode" = "full" ]; then
         ai_commit_message=$(generate_ai_commit_message_full)
     elif [ "$ai_mode" = "subject" ]; then
         ai_commit_message=$(generate_ai_commit_message_subject "$commit_prefix")
@@ -95,7 +95,7 @@ function handle_ai_commit_generation {
         exit
 
     elif [ "$choice" = "e" ] || [ "$choice" = "E" ]; then
-        if [ "$ai_mode" = "full" ] && [ -n "${msg}" ]; then
+        if [ "$ai_mode" = "full" ]; then
             echo -e "${YELLOW}Edit the AI generated message:${ENDCOLOR}"
             # Create temp file with AI message
             commitmsg_file=$(mktemp "/tmp/commitmsg.XXXXXX")

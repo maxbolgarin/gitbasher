@@ -380,8 +380,9 @@ function merge_commit {
     if [ "$1" == "1" ]; then
         commit_message="$3"
         result=$(git commit -m "$commit_message" 2>&1)
+        commit_status=$?
         if [[ $result != *"not staged for commit"* ]]; then
-            check_code $? "$result" "creating default merge commit"
+            check_code $commit_status "$result" "creating default merge commit"
         fi  
         
 

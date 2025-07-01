@@ -32,20 +32,39 @@ function get_config_value {
 }
 
 
-### Branches
-current_branch=$(git branch --show-current)
+### Function sets git config value
+# $1: name
+# $2: value
+# $3: global flag
+# Returns: value
+function set_config_value {
+    if [ -z $3 ]; then
+        git config --local "$1" "$2"
+    else
+        git config --global "$1" "$2"
+    fi
+}
 
-main_branch=$(get_config_value gitbasher.branch "main")
-if [[ "$( git branch | grep "^[\s\*]*\s*main\s*$" )" == "" ]] && [[ "$( git branch | grep "^[\s\*]*\s*master\s*$" )" != "" ]]; then
-    main_branch="master"
-elif [[ "$(git branch | cat)" == "" ]]; then
-    main_branch=$current_branch
-fi
 
-if [ "$(get_config_value gitbasher.branch "")" == "" ]; then
-    git config --local gitbasher.branch "$main_branch"
-fi
+### Function to unset git config value
+# $1: config name
+# Returns: value
+function unset_config_value {
+    git config --unset "$1"
 
+    # Check if global config exists and ask user if they want to clear it too
+    local global_config=$(git config --global --get "$1" 2>/dev/null)
+    if [ -n "$global_config" ]; then
+        echo
+        echo -e "${YELLOW}Global $1 is also configured: ${BLUE}$global_config${ENDCOLOR}"
+        echo -e "Do you want to clear it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+        yes_no_choice "\nClear AI proxy globally" "false"
+        if [ $? -eq 0 ]; then
+            git config --global --unset "$1" 2>/dev/null
+            echo -e "${GREEN}$1 cleared globally${ENDCOLOR}"
+        fi
+    fi
+}
 
 
 ### Function to validate git remote URL
@@ -82,6 +101,22 @@ function validate_git_url {
     
     return 1
 }
+
+
+### Branches
+current_branch=$(git branch --show-current)
+
+main_branch=$(get_config_value gitbasher.branch "main")
+if [[ "$( git branch | grep "^[\s\*]*\s*main\s*$" )" == "" ]] && [[ "$( git branch | grep "^[\s\*]*\s*master\s*$" )" != "" ]]; then
+    main_branch="master"
+elif [[ "$(git branch | cat)" == "" ]]; then
+    main_branch=$current_branch
+fi
+
+if [ "$(get_config_value gitbasher.branch "")" == "" ]; then
+    git config --local gitbasher.branch "$main_branch"
+fi
+
 
 ### Remote
 origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')

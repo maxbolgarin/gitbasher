@@ -295,56 +295,6 @@ function show_sanitization_error {
 ### ===== END INPUT SANITIZATION FRAMEWORK =====
 
 
-### Function tries to get config from local, then from global, then returns default
-# $1: config name
-# $2: default value
-# Returns: config value
-function get_config_value {
-    value=$(git config --local --get "$1")
-    if [ "$value" == "" ]; then
-        value=$(git config --global --get "$1")
-        if [ "$value" == "" ]; then
-            value=$2
-        fi
-    fi
-    echo -e "$value"
-}
-
-
-### Function sets git config value
-# $1: name
-# $2: value
-# $3: global flag
-# Returns: value
-function set_config_value {
-    if [ -z $3 ]; then
-        git config --local "$1" "$2"
-    else
-        git config --global "$1" "$2"
-    fi
-}
-
-
-### Function to unset git config value
-# $1: config name
-# Returns: value
-function unset_config_value {
-    git config --unset "$1"
-
-    # Check if global config exists and ask user if they want to clear it too
-    local global_config=$(git config --global --get "$1" 2>/dev/null)
-    if [ -n "$global_config" ]; then
-        echo
-        echo -e "${YELLOW}Global $1 is also configured: ${BLUE}$global_config${ENDCOLOR}"
-        echo -e "Do you want to clear it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
-        yes_no_choice "\nClear AI proxy globally" "false"
-        if [ $? -eq 0 ]; then
-            git config --global --unset "$1" 2>/dev/null
-            echo -e "${GREEN}$1 cleared globally${ENDCOLOR}"
-        fi
-    fi
-}
-
 
 ### Function should be used in default case in script mode selection
 # $1: script name
@@ -361,7 +311,8 @@ function wrong_mode {
 ### Function echoes (true return) url to current user's repo (remote)
 # Return: url to repo
 function get_repo {
-    repo=$(git config --get "remote.${origin_name}.url")
+    local remote_name=${origin_name:-origin}
+    repo=$(git config --get "remote.${remote_name}.url")
     repo="${repo/"com:"/"com/"}"
     repo="${repo/"io:"/"io/"}"
     repo="${repo/"org:"/"org/"}"
@@ -567,7 +518,7 @@ function commit_list {
 
     IFS=$'\n' 
     read -rd '' -a commits_info <<<"$(git --no-pager log -n $1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} | %s | ${BLUE_ES}%an${ENDCOLOR_ES} | ${GREEN_ES}%cr${ENDCOLOR_ES}" $ref | column -ts'|')"
-    read -rd '' -a commits_hash <<<"$(git --no-pager log -n $1 --pretty="%h"$ref)"
+    read -rd '' -a commits_hash <<<"$(git --no-pager log -n $1 --pretty="%h" $ref)"
 
     for index in "${!commits_info[@]}"
     do
@@ -791,6 +742,11 @@ function list_branches {
             branches_info_first_main+=("${branches_info[index]}")
         fi
     done
+
+    if [[ "${branches_info_first_main[0]}" == "dummy" ]]; then
+        branches_info_first_main=("${branches_info_first_main[@]:1}")
+        branches_first_main=("${branches_first_main[@]:1}")
+    fi
 
     for index in "${!branches_info_first_main[@]}"
     do

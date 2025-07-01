@@ -86,7 +86,7 @@ function set_sep {
 
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet '${sep}' globally" "true"
-    sep=$(set_config_value gitbasher.sep $branch_name $new_sep)
+    sep=$(set_config_value gitbasher.sep "$new_sep" "true")
 }
 
 
@@ -113,7 +113,7 @@ function set_editor {
     echo
 
     which_output=$(which "$choice")
-    if [ "${which_output}" == *"not found"* ] || [ "${which_output}" == "" ]; then
+    if [[ "${which_output}" == *"not found"* ]] || [[ "${which_output}" == "" ]]; then
         echo -e "${RED}Binary '${choice}' not found!${ENDCOLOR}"
         exit
     fi
@@ -124,7 +124,7 @@ function set_editor {
 
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet '${editor}' globally" "true"
-    sep=$(set_config_value core.editor $branch_name $new_sep)
+    editor=$(set_config_value core.editor "$choice" "true")
 }
 
 
@@ -446,7 +446,8 @@ function delete_global {
     read -n 1 -s choice
     re='^[012345678]+$'
     if ! [[ $choice =~ $re ]]; then
-        break
+        echo -e "${RED}Invalid choice${ENDCOLOR}"
+        return 1
     fi
 
     if [ "$choice" == "0" ]; then

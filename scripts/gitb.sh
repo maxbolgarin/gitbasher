@@ -17,6 +17,11 @@ fi
 
 ### Cannot use bash version less than 4 because of many features that was added to language in that version
 if ((BASH_VERSINFO[0] < 4)); then 
+    # fallback colours if not yet sourced
+    YELLOW=${YELLOW:-"\e[33m"}
+    GREEN=${GREEN:-"\e[32m"}
+    ENDCOLOR=${ENDCOLOR:-"\e[0m"}
+    
     printf "Sorry, you need at least ${YELLOW}bash-4.0${ENDCOLOR} to run gitbasher.\n
 If your OS is debian-based, use:
     ${GREEN}apt install --only-upgrade bash${ENDCOLOR}\n

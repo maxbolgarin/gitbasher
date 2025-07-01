@@ -126,7 +126,7 @@ function rebase_script {
 # $3: is from origin?
 # $4: interactive
 # $5: autosquash
-# $6: base commit for autosquash
+# $6: is select base commit for autosquash
 # $7: fastautosquash
 # Returns:
 #      * rebase_output
@@ -349,7 +349,7 @@ function rebase_conflicts {
 
         if [ "$choice" == "1" ]; then
             files_with_conflicts_one_line="$(tr '\n' ' ' <<< "$(git --no-pager diff --name-only --diff-filter=U --relative)")"
-            files_with_conflicts_new="$(git grep -l --name-only -E "[<=>]{7} HEAD" $files_with_conflicts_one_lined)"
+            files_with_conflicts_new="$(git grep -l --name-only -E "[<=>]{7} HEAD" $files_with_conflicts_one_line)"
             
             if [ "$files_with_conflicts_new" != "" ]; then
                 echo

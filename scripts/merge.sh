@@ -219,7 +219,7 @@ function resolve_conflicts {
 
     ### Ask user what he wants to do
     echo
-    default_message="Merge branch '$2/$1' into '$1'"
+    default_message="Merge branch '$2/$1' into '$current_branch'"
     echo -e "${YELLOW}You should resolve conflicts manually${ENDCOLOR}"
     echo -e "After resolving, select an option to continue"
     echo -e "1. Create a merge commit with a generated message:"

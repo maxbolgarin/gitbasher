@@ -8,6 +8,9 @@ echo "You can use gitb only in a git repository"
 exit
 fi
 if ((BASH_VERSINFO[0] < 4)); then
+YELLOW=${YELLOW:-"e[33m"}
+GREEN=${GREEN:-"e[32m"}
+ENDCOLOR=${ENDCOLOR:-"e[0m"}
 printf "Sorry, you need at least ${YELLOW}bash-4.0${ENDCOLOR} to run gitbasher.n
 If your OS is debian-based, use:
 ${GREEN}apt install --only-upgrade bash${ENDCOLOR}n
@@ -35,16 +38,27 @@ function get_config_value {
     fi
     echo -e "$value"
 }
-current_branch=$(git branch --show-current)
-main_branch=$(get_config_value gitbasher.branch "main")
-if [[ "$( git branch | grep "^[\s\*]*\s*main\s*$" )" == "" ]] && [[ "$( git branch | grep "^[\s\*]*\s*master\s*$" )" != "" ]]; then
-    main_branch="master"
-elif [[ "$(git branch | cat)" == "" ]]; then
-    main_branch=$current_branch
-fi
-if [ "$(get_config_value gitbasher.branch "")" == "" ]; then
-    git config --local gitbasher.branch "$main_branch"
-fi
+function set_config_value {
+    if [ -z $3 ]; then
+        git config --local "$1" "$2"
+    else
+        git config --global "$1" "$2"
+    fi
+}
+function unset_config_value {
+    git config --unset "$1"
+    local global_config=$(git config --global --get "$1" 2>/dev/null)
+    if [ -n "$global_config" ]; then
+        echo
+        echo -e "${YELLOW}Global $1 is also configured: ${BLUE}$global_config${ENDCOLOR}"
+        echo -e "Do you want to clear it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+        yes_no_choice "\nClear AI proxy globally" "false"
+        if [ $? -eq 0 ]; then
+            git config --global --unset "$1" 2>/dev/null
+            echo -e "${GREEN}$1 cleared globally${ENDCOLOR}"
+        fi
+    fi
+}
 function validate_git_url {
     local input="$1"
     validated_url=""
@@ -63,6 +77,16 @@ function validate_git_url {
     fi
     return 1
 }
+current_branch=$(git branch --show-current)
+main_branch=$(get_config_value gitbasher.branch "main")
+if [[ "$( git branch | grep "^[\s\*]*\s*main\s*$" )" == "" ]] && [[ "$( git branch | grep "^[\s\*]*\s*master\s*$" )" != "" ]]; then
+    main_branch="master"
+elif [[ "$(git branch | cat)" == "" ]]; then
+    main_branch=$current_branch
+fi
+if [ "$(get_config_value gitbasher.branch "")" == "" ]; then
+    git config --local gitbasher.branch "$main_branch"
+fi
 origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')
 if [ "$origin_name" == "" ]; then 
     echo -e "${YELLOW}There is no configured remote in this repo!${ENDCOLOR}"
@@ -271,37 +295,6 @@ function show_sanitization_error {
     fi
     echo -e "${YELLOW}Please try again with valid input.${ENDCOLOR}" >&2
 }
-function get_config_value {
-    value=$(git config --local --get "$1")
-    if [ "$value" == "" ]; then
-        value=$(git config --global --get "$1")
-        if [ "$value" == "" ]; then
-            value=$2
-        fi
-    fi
-    echo -e "$value"
-}
-function set_config_value {
-    if [ -z $3 ]; then
-        git config --local "$1" "$2"
-    else
-        git config --global "$1" "$2"
-    fi
-}
-function unset_config_value {
-    git config --unset "$1"
-    local global_config=$(git config --global --get "$1" 2>/dev/null)
-    if [ -n "$global_config" ]; then
-        echo
-        echo -e "${YELLOW}Global $1 is also configured: ${BLUE}$global_config${ENDCOLOR}"
-        echo -e "Do you want to clear it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
-        yes_no_choice "\nClear AI proxy globally" "false"
-        if [ $? -eq 0 ]; then
-            git config --global --unset "$1" 2>/dev/null
-            echo -e "${GREEN}$1 cleared globally${ENDCOLOR}"
-        fi
-    fi
-}
 function wrong_mode {
     if [ -n "$2" ]; then
         echo -e "Unknown mode ${YELLOW}$2${ENDCOLOR} for ${YELLOW}gitb $1${ENDCOLOR}"
@@ -310,7 +303,8 @@ function wrong_mode {
     fi
 }
 function get_repo {
-    repo=$(git config --get "remote.${origin_name}.url")
+    local remote_name=${origin_name:-origin}
+    repo=$(git config --get "remote.${remote_name}.url")
     repo="${repo/"com:"/"com/"}"
     repo="${repo/"io:"/"io/"}"
     repo="${repo/"org:"/"org/"}"
@@ -458,7 +452,7 @@ function commit_list {
     fi
     IFS=$'\n' 
     read -rd '' -a commits_info <<<"$(git --no-pager log -n $1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} | %s | ${BLUE_ES}%an${ENDCOLOR_ES} | ${GREEN_ES}%cr${ENDCOLOR_ES}" $ref | column -ts'|')"
-    read -rd '' -a commits_hash <<<"$(git --no-pager log -n $1 --pretty="%h"$ref)"
+    read -rd '' -a commits_hash <<<"$(git --no-pager log -n $1 --pretty="%h" $ref)"
     for index in "${!commits_info[@]}"
     do
         line=${commits_info[index]}
@@ -616,6 +610,10 @@ function list_branches {
             branches_info_first_main+=("${branches_info[index]}")
         fi
     done
+    if [[ "${branches_info_first_main[0]}" == "dummy" ]]; then
+        branches_info_first_main=("${branches_info_first_main[@]:1}")
+        branches_first_main=("${branches_first_main[@]:1}")
+    fi
     for index in "${!branches_info_first_main[@]}"
     do
         branch=$(escape "${branches_first_main[index]}" "/")
@@ -1157,7 +1155,7 @@ function set_sep {
     echo
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet '${sep}' globally" "true"
-    sep=$(set_config_value gitbasher.sep $branch_name $new_sep)
+    sep=$(set_config_value gitbasher.sep "$new_sep" "true")
 }
 function set_editor {
     echo -e "${YELLOW}Enter an editor for commit messages${ENDCOLOR}"
@@ -1176,7 +1174,7 @@ function set_editor {
     choice="$sanitized_command"
     echo
     which_output=$(which "$choice")
-    if [ "${which_output}" == *"not found"* ] || [ "${which_output}" == "" ]; then
+    if [[ "${which_output}" == *"not found"* ]] || [[ "${which_output}" == "" ]]; then
         echo -e "${RED}Binary '${choice}' not found!${ENDCOLOR}"
         exit
     fi
@@ -1185,7 +1183,7 @@ function set_editor {
     echo
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet '${editor}' globally" "true"
-    sep=$(set_config_value core.editor $branch_name $new_sep)
+    editor=$(set_config_value core.editor "$choice" "true")
 }
 function set_ticket {
     echo -e "${YELLOW}Enter a ticket prefix${ENDCOLOR}"
@@ -1426,7 +1424,8 @@ function delete_global {
     read -n 1 -s choice
     re='^[012345678]+$'
     if ! [[ $choice =~ $re ]]; then
-        break
+        echo -e "${RED}Invalid choice${ENDCOLOR}"
+        return 1
     fi
     if [ "$choice" == "0" ]; then
         exit
@@ -1862,8 +1861,9 @@ function merge_commit {
     if [ "$1" == "1" ]; then
         commit_message="$3"
         result=$(git commit -m "$commit_message" 2>&1)
+        commit_status=$?
         if [[ $result != *"not staged for commit"* ]]; then
-            check_code $? "$result" "creating default merge commit"
+            check_code $commit_status "$result" "creating default merge commit"
         fi  
     else
         staged_with_tab="$(sed 's/^/####\t/' <<< "$2")"
@@ -2057,6 +2057,7 @@ function rebase_branch {
         echo "$rebase_output"
         exit $rebase_code
     fi
+    echo
 }
 function rebase_todo_errors {
     rebase_output=$1
@@ -2154,7 +2155,7 @@ function rebase_conflicts {
         done
         if [ "$choice" == "1" ]; then
             files_with_conflicts_one_line="$(tr '\n' ' ' <<< "$(git --no-pager diff --name-only --diff-filter=U --relative)")"
-            files_with_conflicts_new="$(git grep -l --name-only -E "[<=>]{7} HEAD" $files_with_conflicts_one_lined)"
+            files_with_conflicts_new="$(git grep -l --name-only -E "[<=>]{7} HEAD" $files_with_conflicts_one_line)"
             if [ "$files_with_conflicts_new" != "" ]; then
                 echo
                 echo -e "${YELLOW}There are files with conflicts${ENDCOLOR}"
@@ -2633,7 +2634,7 @@ function handle_ai_commit_generation {
         exit 1
     fi
     local ai_commit_message
-    if [ "$ai_mode" = "full" ] && [ -n "${msg}" ]; then
+    if [ "$ai_mode" = "full" ]; then
         ai_commit_message=$(generate_ai_commit_message_full)
     elif [ "$ai_mode" = "subject" ]; then
         ai_commit_message=$(generate_ai_commit_message_subject "$commit_prefix")
@@ -2676,7 +2677,7 @@ function handle_ai_commit_generation {
         fi
         exit
     elif [ "$choice" = "e" ] || [ "$choice" = "E" ]; then
-        if [ "$ai_mode" = "full" ] && [ -n "${msg}" ]; then
+        if [ "$ai_mode" = "full" ]; then
             echo -e "${YELLOW}Edit the AI generated message:${ENDCOLOR}"
             commitmsg_file=$(mktemp "/tmp/commitmsg.XXXXXX")
             echo "$ai_commit_message" > $commitmsg_file
@@ -4098,7 +4099,6 @@ function reset_script {
         echo -e "help|h\t\tShow this help"
         exit
     fi
-    echo $soft
     cancelled_commit=$(git log -n 1 --pretty="%s | ${YELLOW}%h${ENDCOLOR} | ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})")
     cancelled_action=$(git reflog -n 1 --pretty="%gs | ${YELLOW}%h${ENDCOLOR} |  ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})")
     if [ -n "$interactive" ]; then
@@ -5958,7 +5958,7 @@ function print_help {
 }
 project_name="$(get_repo_name)"
 repo_url="$(get_repo)"
-if [ $is_first == "true" ]; then 
+if [[ $is_first == "true" ]]; then 
     git config --local gitbasher.scopes ""
     echo -e "${GREEN}Thanks for using gitbasher in project '$project_name'${ENDCOLOR}"
     print_configuration

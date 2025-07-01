@@ -2155,12 +2155,14 @@ function rebase_conflicts {
         done
         if [ "$choice" == "1" ]; then
             files_with_conflicts_one_line="$(tr '\n' ' ' <<< "$(git --no-pager diff --name-only --diff-filter=U --relative)")"
-            files_with_conflicts_new="$(git grep -l --name-only -E "[<=>]{7} HEAD" $files_with_conflicts_one_line)"
-            if [ "$files_with_conflicts_new" != "" ]; then
-                echo
-                echo -e "${YELLOW}There are files with conflicts${ENDCOLOR}"
-                echo -e "$(echo -e "${files_with_conflicts_new}" | tr ' ' '\n' | sed 's/^/\t/')"
-                continue
+            if [ -n "$files_with_conflicts_one_line" ] && [ "$files_with_conflicts_one_line" != " " ]; then
+                files_with_conflicts_new="$(git grep -l --name-only -E "[<=>]{7}" $files_with_conflicts_one_line 2>/dev/null || echo "")"
+                if [ "$files_with_conflicts_new" != "" ]; then
+                    echo
+                    echo -e "${YELLOW}There are files with conflicts${ENDCOLOR}"
+                    echo -e "$(echo -e "${files_with_conflicts_new}" | tr ' ' '\n' | sed 's/^/\t/')"
+                    continue
+                fi
             fi
             git add .
             rebase_output=$(git -c core.editor=true rebase --continue 2>&1)

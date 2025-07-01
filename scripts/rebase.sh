@@ -489,14 +489,35 @@ function rebase_conflicts {
                 echo
                 echo -e "${YELLOW}Accepting all current changes...${ENDCOLOR}"
                 
-                # Accept all current changes (ours)
-                checkout_output=$(git checkout --ours . 2>&1)
-                checkout_code=$?
+                # Get list of conflicted files
+                conflicted_files=$(git --no-pager diff --name-only --diff-filter=U --relative)
                 
-                if [ $checkout_code -ne 0 ]; then
-                    echo -e "${RED}Failed to accept current changes:${ENDCOLOR}"
-                    echo "$checkout_output"
-                    continue
+                if [ -n "$conflicted_files" ]; then
+                    checkout_failed_files=""
+                    
+                    # Process each conflicted file individually
+                    while IFS= read -r file; do
+                        if [ -n "$file" ]; then
+                            # Try to checkout our version of the file
+                            checkout_output=$(git checkout --ours "$file" 2>&1)
+                            checkout_code=$?
+                            
+                            if [ $checkout_code -ne 0 ]; then
+                                # If checkout fails, the file doesn't have "our version"
+                                # This typically means it was added by them but doesn't exist in our branch
+                                # Remove it from the index to keep it deleted/non-existent
+                                git rm --cached "$file" 2>/dev/null || git reset HEAD "$file" 2>/dev/null
+                                checkout_failed_files="$checkout_failed_files\n\t$file (removed - didn't exist in our branch)"
+                            fi
+                        fi
+                    done <<< "$conflicted_files"
+                    
+                    if [ -n "$checkout_failed_files" ]; then
+                        echo -e "${YELLOW}Some files were removed because they don't exist in your current branch:${ENDCOLOR}"
+                        echo -e "$checkout_failed_files"
+                    fi
+                else
+                    echo -e "${YELLOW}No conflicted files found${ENDCOLOR}"
                 fi
                 
                 # Add all changes and continue

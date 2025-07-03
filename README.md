@@ -50,32 +50,27 @@ cd your-project
 
 # See all available commands
 gitb
-
-# Get help for any command
-gitb c help    # commit help
-gitb b help    # branch help
-gitb p help    # push help
 ```
 
 ### 2. Your First Commit
 ```bash
 # Smart commit - select files and create conventional message
-gitb c
+gitb commit
 
 # Fast commit - add all files with quick message
-gitb c f
+gitb commit fast
 
 # AI-powered commit (after setting up API key)
-gitb c ai
+gitb commit ai
 ```
 
 ### 3. Essential Daily Commands
 ```bash
-gitb st        # Check status
-gitb c         # Make a commit
-gitb p         # Push changes
-gitb pu        # Pull changes
-gitb b         # Switch branches
+gitb status        # Check status
+gitb commit        # Make a commit
+gitb push          # Push changes
+gitb pull          # Pull changes
+gitb branch        # Switch branches
 ```
 
 ### 4. Set Up Your Environment
@@ -124,9 +119,9 @@ git push -u origin feature/user-auth
 
 **With gitbasher:**
 ```bash
-gitb b nd                   # Create new branch from updated main
+gitb branch newd                   # Create new branch from updated main
 # ... make changes ...
-gitb c p                    # Smart commit + push
+gitb commit push                    # Smart commit + push
 ```
 
 ### 🐛 Scenario 2: Quick Bug Fix
@@ -141,7 +136,7 @@ git push
 
 **With gitbasher:**
 ```bash
-gitb c fp                   # Fast commit + push (one command!)
+gitb commit push                   # Fast commit + push (one command!)
 ```
 
 ### 🔀 Scenario 3: Merging Feature Branch
@@ -157,39 +152,39 @@ git branch -d feature/user-auth
 
 **With gitbasher:**
 ```bash
-gitb m to-main             # Switch to main and merge current branch
-gitb b del                 # Select and delete the merged branch
+gitb merge to-main             # Switch to main and merge current branch
+gitb branch delete                 # Select and delete the merged branch
 ```
 
 ### 🤖 Scenario 4: AI-Powered Development
 
 **After making changes to multiple files:**
 ```bash
-gitb c ai                   # AI analyzes changes and generates:
+gitb commit ai                   # AI analyzes changes and generates:
                            # "feat(auth): implement JWT authentication with refresh tokens"
 ```
 
 **For quick fixes:**
 ```bash
-gitb c aif                  # AI commit all files with smart message
+gitb commit aif                  # AI commit all files with smart message
 ```
 
 ### 🎯 Scenario 5: Code Review Preparation
 
 **Clean up commits before PR:**
 ```bash
-gitb r i                    # Interactive rebase to squash/reorder commits
-gitb c fix                  # Create fixup commits for review feedback
-gitb r a                    # Auto-squash fixup commits
+gitb rebase i                    # Interactive rebase to squash/reorder commits
+gitb commit fix                  # Create fixup commits for review feedback
+gitb rebase s                    # Auto-squash fixup commits
 ```
 
 ### 📦 Scenario 6: Release Management
 
 **Creating and managing releases:**
 ```bash
-gitb t                      # Create version tag
-gitb t push                 # Push tag to remote
-gitb l                      # Review commit history
+gitb tag                      # Create version tag
+gitb tag push                 # Push tag to remote
+gitb log                      # Review commit history
 ```
 
 

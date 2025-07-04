@@ -598,6 +598,13 @@ rm -rf ~/.gitbasher
 ```
 
 
+## Roadmap for v4
+
+1. Add support of multi modes, e.g. `gitb c fastp` -> `gitb c fast push` to prevent from a lot of modes to support all combinations
+2. Add more interactive menus, because it is difficult to remember all commands and modes
+3. Add better error messages and settings for verbosity
+4. Add more AI APIs providers
+
 ## Contributing
 
 If you'd like to contribute to **gitbasher**, make a fork and submit a pull request. You also can open an issue or text me on Telegram: https://t.me/maxbolgarin

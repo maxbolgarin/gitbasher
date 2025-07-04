@@ -1012,6 +1012,7 @@ Generate ONLY the commit message in the format 'type(scope): subject'. The subje
 - Be concise and descriptive
 - Follow the style and patterns from the recent commits shown above
 If you can determine a meaningful scope from the file paths, include it. Otherwise, omit the scope.
+Write ONLY the commit header in the format 'type(scope): subject', do not write body or foote after a new line!
 Respond with only the commit message, nothing else."
     call_gemini_api "$prompt"
 }
@@ -1024,7 +1025,7 @@ function generate_ai_commit_message_subject {
     local diff_content=$(git diff --cached --stat)
     local diff_details=$(get_limited_diff_for_ai)
     local recent_commits=$(get_recent_commit_messages_for_ai)
-    local prompt="Analyze the following git changes and generate a conventional commit message that will be after appended to $1'.
+    local prompt="Analyze the following git changes and generate a conventional commit message that will be after appended to $1.
 Recent commit messages from this repository (for style reference):
 $recent_commits
 Staged files:
@@ -1039,6 +1040,7 @@ Generate ONLY the commit message. The message should:
 - Not end with a period
 - Be concise and descriptive
 - Follow the style and patterns from the recent commits shown above
+Write ONLY the commit message, do not write body or footer.
 Respond with only the commit message without any other text, nothing else."
     call_gemini_api "$prompt"
 }
@@ -1051,8 +1053,8 @@ function generate_ai_commit_message_full {
     local diff_content=$(git diff --cached --stat)
     local diff_details=$(get_limited_diff_for_ai)
     local recent_commits=$(get_recent_commit_messages_for_ai)
-    local prompt="Analyze the following git changes and generate a conventional commit message in the format 'type(scope): subject'.
-Also write a body for the commit message, where you can explain why you are making the change.
+    local prompt="Analyze the following git changes and generate a conventional commit message in the format 'type(scope): subject' with body.
+Write a body for the commit message, where you can explain why you are making the change. The length of the body should be 1-2 sentences, not more.
 Available types:
 - feat: new feature, logic change or performance improvement
 - fix: small changes, bug fix
@@ -2626,8 +2628,10 @@ function handle_ai_commit_generation {
     local commit_prefix="$3"
     local skip_confirmation="$4"
     echo
-    if [ "$ai_mode" = "subject" ]; then
-        echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Generating ${YELLOW}commit message summary${ENDCOLOR} using AI..."
+    if [ "$ai_mode" = "full" ]; then
+        echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Generating ${YELLOW}multiline commit message${ENDCOLOR} using AI..."
+    elif [ "$ai_mode" = "subject" ]; then
+        echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Generating ${YELLOW}commit message subject${ENDCOLOR} using AI..."
     else
         echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Generating ${YELLOW}commit message${ENDCOLOR} using AI..."
     fi
@@ -2782,7 +2786,11 @@ function commit_script {
         llmp|aip|ip)        llm="true"; push="true";;
         llmfp|aifp|ifp|ipf) llm="true"; fast="true"; push="true";;
         llms|ais|is)        llm="true"; scope="true";;
+        llmsf|aisf|isf)     llm="true"; scope="true"; fast="true";;
+        llmsfp|aisfp|isfp)  llm="true"; scope="true"; fast="true"; push="true";;
         llmm|aim|im)        llm="true"; msg="true";;
+        llmmf|aimf|imf)     llm="true"; msg="true"; fast="true";;
+        llmmfp|aimfp|imfp)  llm="true"; msg="true"; fast="true"; push="true";;
         help|h)             help="true";;
         *)
             wrong_mode "commit" $1
@@ -2854,7 +2862,11 @@ function commit_script {
         echo -e "llmp|aip|ip\tUse AI to generate commit message and push changes"
         echo -e "llmfp|aifp|ifp\tUse AI to generate commit message in the fast mode and push changes"
         echo -e "llms|ais|is\tUse AI to generate commit summary with manual type and scope enter"
+        echo -e "llmsf|aisf|isf\tUse AI to generate commit summary with manual type and scope enter in the fast mode (git add .)"
+        echo -e "llmsfp|aisfp|isfp\tUse AI to generate commit summary with manual type and scope enter in the fast mode and push changes"
         echo -e "llmm|aim|im\tUse AI to generate multiline commit message with body"
+        echo -e "llmmf|aimf|imf\tUse AI to generate multiline commit message with body in the fast mode (git add .)"
+        echo -e "llmmfp|aimfp|imfp\tUse AI to generate multiline commit message with body in the fast mode and push changes"
         echo -e "help|h\t\tShow this help"
         git config --unset gitbasher.cached-git-add 2>/dev/null
         exit
@@ -2999,7 +3011,15 @@ function commit_script {
         else
             step="2"
         fi
-        handle_ai_commit_generation "$step" "full" "" "true"
+        type="simple"
+        if [ -n "${msg}" ]; then
+            type="full"
+        fi
+        ignore_confirmation="true"
+        if [ -n "${push}" ]; then
+            ignore_confirmation="false"
+        fi
+        handle_ai_commit_generation "$step" "$type" "" "$ignore_confirmation"
     fi
     if [ -n "${fixup}" ]; then
         echo

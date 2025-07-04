@@ -488,6 +488,8 @@ Generate ONLY the commit message in the format 'type(scope): subject'. The subje
 
 If you can determine a meaningful scope from the file paths, include it. Otherwise, omit the scope.
 
+Write ONLY the commit header in the format 'type(scope): subject', do not write body or foote after a new line!
+
 Respond with only the commit message, nothing else."
 
     call_gemini_api "$prompt"
@@ -512,7 +514,7 @@ function generate_ai_commit_message_subject {
     local recent_commits=$(get_recent_commit_messages_for_ai)
     
     # Create prompt for AI
-    local prompt="Analyze the following git changes and generate a conventional commit message that will be after appended to $1'.
+    local prompt="Analyze the following git changes and generate a conventional commit message that will be after appended to $1.
 
 Recent commit messages from this repository (for style reference):
 $recent_commits
@@ -532,6 +534,8 @@ Generate ONLY the commit message. The message should:
 - Not end with a period
 - Be concise and descriptive
 - Follow the style and patterns from the recent commits shown above
+
+Write ONLY the commit message, do not write body or footer.
 
 Respond with only the commit message without any other text, nothing else."
 
@@ -556,9 +560,9 @@ function generate_ai_commit_message_full {
     local recent_commits=$(get_recent_commit_messages_for_ai)
     
     # Create prompt for AI
-    local prompt="Analyze the following git changes and generate a conventional commit message in the format 'type(scope): subject'.
+    local prompt="Analyze the following git changes and generate a conventional commit message in the format 'type(scope): subject' with body.
 
-Also write a body for the commit message, where you can explain why you are making the change.
+Write a body for the commit message, where you can explain why you are making the change. The length of the body should be 1-2 sentences, not more.
 
 Available types:
 - feat: new feature, logic change or performance improvement

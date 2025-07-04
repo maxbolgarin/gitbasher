@@ -25,8 +25,10 @@ function handle_ai_commit_generation {
     local skip_confirmation="$4"
     
     echo
-    if [ "$ai_mode" = "subject" ]; then
-        echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Generating ${YELLOW}commit message summary${ENDCOLOR} using AI..."
+    if [ "$ai_mode" = "full" ]; then
+        echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Generating ${YELLOW}multiline commit message${ENDCOLOR} using AI..."
+    elif [ "$ai_mode" = "subject" ]; then
+        echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Generating ${YELLOW}commit message subject${ENDCOLOR} using AI..."
     else
         echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Generating ${YELLOW}commit message${ENDCOLOR} using AI..."
     fi
@@ -245,7 +247,11 @@ function commit_script {
         llmp|aip|ip)        llm="true"; push="true";;
         llmfp|aifp|ifp|ipf) llm="true"; fast="true"; push="true";;
         llms|ais|is)        llm="true"; scope="true";;
+        llmsf|aisf|isf)     llm="true"; scope="true"; fast="true";;
+        llmsfp|aisfp|isfp)  llm="true"; scope="true"; fast="true"; push="true";;
         llmm|aim|im)        llm="true"; msg="true";;
+        llmmf|aimf|imf)     llm="true"; msg="true"; fast="true";;
+        llmmfp|aimfp|imfp)  llm="true"; msg="true"; fast="true"; push="true";;
         help|h)             help="true";;
         *)
             wrong_mode "commit" $1
@@ -323,7 +329,11 @@ function commit_script {
         echo -e "llmp|aip|ip\tUse AI to generate commit message and push changes"
         echo -e "llmfp|aifp|ifp\tUse AI to generate commit message in the fast mode and push changes"
         echo -e "llms|ais|is\tUse AI to generate commit summary with manual type and scope enter"
+        echo -e "llmsf|aisf|isf\tUse AI to generate commit summary with manual type and scope enter in the fast mode (git add .)"
+        echo -e "llmsfp|aisfp|isfp\tUse AI to generate commit summary with manual type and scope enter in the fast mode and push changes"
         echo -e "llmm|aim|im\tUse AI to generate multiline commit message with body"
+        echo -e "llmmf|aimf|imf\tUse AI to generate multiline commit message with body in the fast mode (git add .)"
+        echo -e "llmmfp|aimfp|imfp\tUse AI to generate multiline commit message with body in the fast mode and push changes"
         echo -e "help|h\t\tShow this help"
         # Clean up cached git add on help exit
         git config --unset gitbasher.cached-git-add 2>/dev/null
@@ -515,8 +525,16 @@ function commit_script {
         else
             step="2"
         fi
+        type="simple"
+        if [ -n "${msg}" ]; then
+            type="full"
+        fi
+        ignore_confirmation="true"
+        if [ -n "${push}" ]; then
+            ignore_confirmation="false"
+        fi
         
-        handle_ai_commit_generation "$step" "full" "" "true"
+        handle_ai_commit_generation "$step" "$type" "" "$ignore_confirmation"
     fi
 
 

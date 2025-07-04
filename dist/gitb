@@ -2059,7 +2059,6 @@ function rebase_branch {
         echo "$rebase_output"
         exit $rebase_code
     fi
-    echo
 }
 function rebase_todo_errors {
     rebase_output=$1
@@ -2268,12 +2267,25 @@ function rebase_conflicts {
             if [ "$choice_yes" == "y" ]; then
                 echo
                 echo -e "${YELLOW}Accepting all current changes...${ENDCOLOR}"
-                checkout_output=$(git checkout --ours . 2>&1)
-                checkout_code=$?
-                if [ $checkout_code -ne 0 ]; then
-                    echo -e "${RED}Failed to accept current changes:${ENDCOLOR}"
-                    echo "$checkout_output"
-                    continue
+                conflicted_files=$(git --no-pager diff --name-only --diff-filter=U --relative)
+                if [ -n "$conflicted_files" ]; then
+                    checkout_failed_files=""
+                    while IFS= read -r file; do
+                        if [ -n "$file" ]; then
+                            checkout_output=$(git checkout --ours "$file" 2>&1)
+                            checkout_code=$?
+                            if [ $checkout_code -ne 0 ]; then
+                                git rm --cached "$file" 2>/dev/null || git reset HEAD "$file" 2>/dev/null
+                                checkout_failed_files="$checkout_failed_files\n\t$file (removed - didn't exist in our branch)"
+                            fi
+                        fi
+                    done <<< "$conflicted_files"
+                    if [ -n "$checkout_failed_files" ]; then
+                        echo -e "${YELLOW}Some files were removed because they don't exist in your current branch:${ENDCOLOR}"
+                        echo -e "$checkout_failed_files"
+                    fi
+                else
+                    echo -e "${YELLOW}No conflicted files found${ENDCOLOR}"
                 fi
                 git add .
                 rebase_output=$(git -c core.editor=true rebase --continue 2>&1)

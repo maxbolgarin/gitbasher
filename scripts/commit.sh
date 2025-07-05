@@ -70,6 +70,9 @@ function detect_scopes_from_staged_files {
             fi
         done
         
+        # Count total unique tokens
+        total_unique_tokens=${#scope_counts[@]}
+        
         # Collect and sort scopes
         detected_scopes_array=()
         for token in "${!scope_counts[@]}"; do
@@ -77,8 +80,12 @@ function detect_scopes_from_staged_files {
             depth=${scope_depths["$token"]}
             
             # Apply count filter
-            # If max_count > 1, only include tokens with count > 1
-            if [ $max_count -gt 1 ]; then
+            # If we have few unique tokens (≤ 7), include all regardless of count
+            # If we have many tokens and max_count > 1, only include tokens with count > 1
+            if [ $total_unique_tokens -le 7 ]; then
+                # Include all tokens when we have few unique ones
+                detected_scopes_array+=("$count:$depth:$token")
+            elif [ $max_count -gt 1 ]; then
                 if [ $count -gt 1 ]; then
                     # Format: count:depth:token for sorting
                     detected_scopes_array+=("$count:$depth:$token")

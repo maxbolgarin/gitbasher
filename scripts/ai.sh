@@ -492,9 +492,9 @@ Code changes (partial):
 $diff_details
 
 Generate ONLY the commit message in the format 'type(scope): subject'. The subject should:
-- Use imperative mood (e.g., 'add', 'fix', 'update')
-- Be lowercase
-- Not end with a period
+- Explain the idea of the change in details
+- Don't be very general, so do NOT write 'improve existing feature' or 'fix bug', write more details
+- Be lowercase and not end with a period
 - Be concise and descriptive
 - Follow the style and patterns from the recent commits shown above
 
@@ -544,9 +544,9 @@ Code changes (partial):
 $diff_details
 
 Generate ONLY the commit message. The message should:
-- Use imperative mood (e.g., 'add', 'fix', 'update')
-- Be lowercase
-- Not end with a period
+- Explain the idea of the change in details
+- Don't be very general, so do NOT write 'improve existing feature' or 'fix bug', write more details
+- Be lowercase and not end with a period
 - Be concise and descriptive
 - Follow the style and patterns from the recent commits shown above
 
@@ -614,9 +614,9 @@ Code changes (partial):
 $diff_details
 
 Generate ONLY the commit message in the format 'type(scope): subject' with body. The subject should:
-- Use imperative mood (e.g., 'add', 'fix', 'update')
-- Be lowercase
-- Not end with a period
+- Explain the idea of the change in details
+- Don't be very general, so do NOT write 'improve existing feature' or 'fix bug', write more details
+- Be lowercase and not end with a period
 - Be concise and descriptive
 - Follow the style and patterns from the recent commits shown above
 

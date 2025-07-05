@@ -17,12 +17,10 @@ function cleanup_on_exit {
 # $1: step number to display
 # $2: ai generation mode ("full", "subject", or "simple")
 # $3: commit prefix (for subject mode)
-# $4: skip_confirmation ("true" to auto-accept in fast mode without push)
 function handle_ai_commit_generation {
     local step="$1"
     local ai_mode="$2"
     local commit_prefix="$3"
-    local skip_confirmation="$4"
     
     echo
     if [ "$ai_mode" = "full" ]; then
@@ -64,16 +62,10 @@ function handle_ai_commit_generation {
     echo -e "${BOLD}$ai_commit_message${ENDCOLOR}"
     echo
     
-    # Determine if we should ask for confirmation
-    local choice="y"
-    if [ "$skip_confirmation" = "true" ] && [ -n "${fast}" ] && [ -z "${push}" ]; then
-        choice="y"
-    else
-        read -n 1 -p "Use this commit message? (y/n/e to edit) " -s choice
+    read -n 1 -p "Use this commit message? (y/n/e to edit) " -s choice
+    echo
+    if [ "$ai_mode" != "subject" ]; then
         echo
-        if [ "$ai_mode" != "subject" ]; then
-            echo
-        fi
     fi
     
     if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
@@ -529,12 +521,8 @@ function commit_script {
         if [ -n "${msg}" ]; then
             type="full"
         fi
-        ignore_confirmation="true"
-        if [ -n "${push}" ]; then
-            ignore_confirmation="false"
-        fi
         
-        handle_ai_commit_generation "$step" "$type" "" "$ignore_confirmation"
+        handle_ai_commit_generation "$step" "$type" ""
     fi
 
 
@@ -858,7 +846,7 @@ function commit_script {
     fi
     
     if [ -n "${llm}" ] && [ -n "${scope}" ]; then
-        handle_ai_commit_generation "$step" "subject" "$commit" "false"
+        handle_ai_commit_generation "$step" "subject" "$commit"
     else
         echo
     fi

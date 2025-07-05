@@ -2638,7 +2638,6 @@ function handle_ai_commit_generation {
     local step="$1"
     local ai_mode="$2"
     local commit_prefix="$3"
-    local skip_confirmation="$4"
     echo
     if [ "$ai_mode" = "full" ]; then
         echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Generating ${YELLOW}multiline commit message${ENDCOLOR} using AI..."
@@ -2670,15 +2669,10 @@ function handle_ai_commit_generation {
     echo -e "${GREEN}AI generated commit message:${ENDCOLOR}"
     echo -e "${BOLD}$ai_commit_message${ENDCOLOR}"
     echo
-    local choice="y"
-    if [ "$skip_confirmation" = "true" ] && [ -n "${fast}" ] && [ -z "${push}" ]; then
-        choice="y"
-    else
-        read -n 1 -p "Use this commit message? (y/n/e to edit) " -s choice
+    read -n 1 -p "Use this commit message? (y/n/e to edit) " -s choice
+    echo
+    if [ "$ai_mode" != "subject" ]; then
         echo
-        if [ "$ai_mode" != "subject" ]; then
-            echo
-        fi
     fi
     if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
         commit="$ai_commit_message"

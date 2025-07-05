@@ -241,6 +241,7 @@ function commit_script {
         llm|ai|i)           llm="true";;
         llmf|aif|if)        llm="true"; fast="true";;
         llmp|aip|ip)        llm="true"; push="true";;
+        llmst|aist|ist)     llm="true"; staged="true";;
         llmfp|aifp|ifp|ipf) llm="true"; fast="true"; push="true";;
         llms|ais|is)        llm="true"; scope="true";;
         llmsf|aisf|isf)     llm="true"; scope="true"; fast="true";;
@@ -324,6 +325,7 @@ function commit_script {
         echo -e "llmf|aif|if\tUse AI to generate commit message in the fast mode (git add .) without confirmation"
         echo -e "llmp|aip|ip\tUse AI to generate commit message and push changes"
         echo -e "llmfp|aifp|ifp\tUse AI to generate commit message in the fast mode and push changes"
+        echo -e "llmst|aist|ist\tUse AI to generate commit message in the staged mode"
         echo -e "llms|ais|is\tUse AI to generate commit summary with manual type and scope enter"
         echo -e "llmsf|aisf|isf\tUse AI to generate commit summary with manual type and scope enter in the fast mode (git add .)"
         echo -e "llmsfp|aisfp|isfp\tUse AI to generate commit summary with manual type and scope enter in the fast mode and push changes"

@@ -493,9 +493,9 @@ $diff_details
 
 Generate ONLY the commit message in the format 'type(scope): subject'. The subject should:
 - Explain the idea of the change in details
-- Don't be very general, so do NOT write 'improve existing feature' or 'fix bug', write more details
+- Be short, it should not be more that 100 characters
+- Be specific, don't be very general, so do NOT write 'improve existing feature' or 'fix bug'
 - Be lowercase and not end with a period
-- Be concise and descriptive
 - Follow the style and patterns from the recent commits shown above
 
 If you can determine a meaningful scope from the file paths and LOGIC OF UPDATES, include it. If detected scopes are provided above, prefer using one of them. Otherwise, omit the scope.
@@ -545,9 +545,9 @@ $diff_details
 
 Generate ONLY the commit message. The message should:
 - Explain the idea of the change in details
-- Don't be very general, so do NOT write 'improve existing feature' or 'fix bug', write more details
+- Be short, it should not be more that 100 characters with prefix
+- Be specific, don't be very general, so do NOT write 'improve existing feature' or 'fix bug'
 - Be lowercase and not end with a period
-- Be concise and descriptive
 - Follow the style and patterns from the recent commits shown above
 
 Write ONLY the commit message, do not write body or footer.
@@ -615,9 +615,9 @@ $diff_details
 
 Generate ONLY the commit message in the format 'type(scope): subject' with body. The subject should:
 - Explain the idea of the change in details
-- Don't be very general, so do NOT write 'improve existing feature' or 'fix bug', write more details
+- Be short, it should not be more that 100 characters in title and 1-2 sentences in body
+- Be specific, don't be very general, so do NOT write 'improve existing feature' or 'fix bug'
 - Be lowercase and not end with a period
-- Be concise and descriptive
 - Follow the style and patterns from the recent commits shown above
 
 If you can determine a meaningful scope from the file paths and LOGIC OF UPDATES, include it. If detected scopes are provided above, prefer using one of them. Otherwise, omit the scope.

@@ -979,6 +979,7 @@ function check_ai_available {
     return 0
 }
 function generate_ai_commit_message {
+    local detected_scopes="$1"
     local staged_files=$(git diff --name-only --cached)
     if [ -z "$staged_files" ]; then
         echo -e "${RED}No staged files found${ENDCOLOR}" >&2
@@ -990,8 +991,8 @@ function generate_ai_commit_message {
     local prompt="Analyze the following git changes and generate a conventional commit message in the format 'type(scope): subject'.
 Available types:
 - feat: new feature, logic change or performance improvement
-- fix: small changes, bug fix
-- refactor: code change that neither fixes a bug nor adds a feature, style changes
+- fix: small changes, bug fix, fnixes of features
+- refactor: code change that neither fixes a bug nor adds a feature, style changes, NO NEW BEAVIOUR
 - test: adding missing tests or changing existing tests
 - build: changes that affect the build system or external dependencies
 - ci: changes to CI configuration files and scripts
@@ -1002,21 +1003,29 @@ $recent_commits
 Staged files:
 $staged_files
 File changes summary:
-$diff_content
+$diff_content"
+    if [ -n "$detected_scopes" ]; then
+        prompt="$prompt
+Detected scopes from file paths (use one of these if relevant):
+$detected_scopes"
+    fi
+    prompt="$prompt
 Code changes (partial):
 $diff_details
 Generate ONLY the commit message in the format 'type(scope): subject'. The subject should:
-- Use imperative mood (e.g., 'add', 'fix', 'update')
-- Be lowercase
-- Not end with a period
+- Explain the idea of the change in details
+- Don't be very general, so do NOT write 'improve existing feature' or 'fix bug', write more details
+- Be lowercase and not end with a period
 - Be concise and descriptive
 - Follow the style and patterns from the recent commits shown above
-If you can determine a meaningful scope from the file paths, include it. Otherwise, omit the scope.
-Write ONLY the commit header in the format 'type(scope): subject', do not write body or foote after a new line!
+If you can determine a meaningful scope from the file paths and LOGIC OF UPDATES, include it. If detected scopes are provided above, prefer using one of them. Otherwise, omit the scope.
+Write ONLY the commit header in the format 'type(scope): subject', do not write body or footer after a new line!
 Respond with only the commit message, nothing else."
     call_gemini_api "$prompt"
 }
 function generate_ai_commit_message_subject {
+    local commit_prefix="$1"
+    local detected_scopes="$2"
     local staged_files=$(git diff --name-only --cached)
     if [ -z "$staged_files" ]; then
         echo -e "${RED}No staged files found${ENDCOLOR}" >&2
@@ -1025,7 +1034,7 @@ function generate_ai_commit_message_subject {
     local diff_content=$(git diff --cached --stat)
     local diff_details=$(get_limited_diff_for_ai)
     local recent_commits=$(get_recent_commit_messages_for_ai)
-    local prompt="Analyze the following git changes and generate a conventional commit message that will be after appended to $1.
+    local prompt="Analyze the following git changes and generate a conventional commit message that will be appended to $commit_prefix.
 Recent commit messages from this repository (for style reference):
 $recent_commits
 Staged files:
@@ -1035,9 +1044,9 @@ $diff_content
 Code changes (partial):
 $diff_details
 Generate ONLY the commit message. The message should:
-- Use imperative mood (e.g., 'add', 'fix', 'update')
-- Be lowercase
-- Not end with a period
+- Explain the idea of the change in details
+- Don't be very general, so do NOT write 'improve existing feature' or 'fix bug', write more details
+- Be lowercase and not end with a period
 - Be concise and descriptive
 - Follow the style and patterns from the recent commits shown above
 Write ONLY the commit message, do not write body or footer.
@@ -1045,6 +1054,7 @@ Respond with only the commit message without any other text, nothing else."
     call_gemini_api "$prompt"
 }
 function generate_ai_commit_message_full {
+    local detected_scopes="$1"
     local staged_files=$(git diff --name-only --cached)
     if [ -z "$staged_files" ]; then
         echo -e "${RED}No staged files found${ENDCOLOR}" >&2
@@ -1057,8 +1067,8 @@ function generate_ai_commit_message_full {
 Write a body for the commit message, where you can explain why you are making the change. The length of the body should be 1-2 sentences, not more.
 Available types:
 - feat: new feature, logic change or performance improvement
-- fix: small changes, bug fix
-- refactor: code change that neither fixes a bug nor adds a feature, style changes
+- fix: small changes, bug fix, fixes of features
+- refactor: code change that neither fixes a bug nor adds a feature, style changes, NO NEW BEAVIOUR
 - test: adding missing tests or changing existing tests
 - build: changes that affect the build system or external dependencies
 - ci: changes to CI configuration files and scripts
@@ -1069,16 +1079,22 @@ $recent_commits
 Staged files:
 $staged_files
 File changes summary:
-$diff_content
+$diff_content"
+    if [ -n "$detected_scopes" ]; then
+        prompt="$prompt
+Detected scopes from file paths (use one of these if relevant):
+$detected_scopes"
+    fi
+    prompt="$prompt
 Code changes (partial):
 $diff_details
 Generate ONLY the commit message in the format 'type(scope): subject' with body. The subject should:
-- Use imperative mood (e.g., 'add', 'fix', 'update')
-- Be lowercase
-- Not end with a period
+- Explain the idea of the change in details
+- Don't be very general, so do NOT write 'improve existing feature' or 'fix bug', write more details
+- Be lowercase and not end with a period
 - Be concise and descriptive
 - Follow the style and patterns from the recent commits shown above
-If you can determine a meaningful scope from the file paths, include it. Otherwise, omit the scope.
+If you can determine a meaningful scope from the file paths and LOGIC OF UPDATES, include it. If detected scopes are provided above, prefer using one of them. Otherwise, omit the scope.
 The body should explain why you are making the change. The length of the body should be 1-2 sentences, not more.
 Respond with only the full commit message, nothing else."
     call_gemini_api "$prompt"
@@ -2634,6 +2650,94 @@ function cleanup_on_exit {
         git restore --staged $1
     fi
 }
+function detect_scopes_from_staged_files {
+    detected_scopes=""
+    local staged_files=$(git diff --name-only --cached)
+    if [ -n "$staged_files" ]; then
+        declare -A scope_counts
+        declare -A scope_depths
+        while IFS= read -r file; do
+            if [ -n "$file" ]; then
+                IFS='/' read -r -a path_components <<< "$file"
+                for i in "${!path_components[@]}"; do
+                    component="${path_components[$i]}"
+                    if [ -n "$component" ]; then
+                        if [ $i -eq $((${#path_components[@]} - 1)) ]; then
+                            component_no_ext="${component%.*}"
+                            component_no_ext_lower="${component_no_ext,,}"
+                            scope_counts["$component_no_ext_lower"]=$((${scope_counts["$component_no_ext_lower"]:-0} + 1))
+                            current_depth=$((i + 1))
+                            if [ -z "${scope_depths["$component_no_ext_lower"]}" ] || [ $current_depth -lt ${scope_depths["$component_no_ext_lower"]} ]; then
+                                scope_depths["$component_no_ext_lower"]=$current_depth
+                            fi
+                        else
+                            component_lower="${component,,}"
+                            if [[ ! "$component_lower" =~ ^(src|lib|test|tests|spec|specs|build|dist|node_modules|vendor|tmp|temp|cache|logs|log)$ ]]; then
+                                scope_counts["$component_lower"]=$((${scope_counts["$component_lower"]:-0} + 1))
+                                current_depth=$((i + 1))
+                                if [ -z "${scope_depths["$component_lower"]}" ] || [ $current_depth -lt ${scope_depths["$component_lower"]} ]; then
+                                    scope_depths["$component_lower"]=$current_depth
+                                fi
+                            fi
+                        fi
+                    fi
+                done
+            fi
+        done <<< "$staged_files"
+        max_count=0
+        for token in "${!scope_counts[@]}"; do
+            if [ ${scope_counts["$token"]} -gt $max_count ]; then
+                max_count=${scope_counts["$token"]}
+            fi
+        done
+        total_unique_tokens=${#scope_counts[@]}
+        detected_scopes_array=()
+        for token in "${!scope_counts[@]}"; do
+            count=${scope_counts["$token"]}
+            depth=${scope_depths["$token"]}
+            if [ $total_unique_tokens -le 7 ]; then
+                detected_scopes_array+=("$count:$depth:$token")
+            elif [ $max_count -gt 1 ]; then
+                if [ $count -gt 1 ]; then
+                    detected_scopes_array+=("$count:$depth:$token")
+                fi
+            else
+                detected_scopes_array+=("$count:$depth:$token")
+            fi
+        done
+        if [ ${#detected_scopes_array[@]} -gt 0 ]; then
+            filename_entries=()
+            directory_entries=()
+            for entry in "${detected_scopes_array[@]}"; do
+                count="${entry%%:*}"  # Extract count (first field)
+                rest="${entry#*:}"    # Remove count
+                depth="${rest%%:*}"   # Extract depth (second field)
+                token="${rest#*:}"    # Extract token (third field)
+                if [ $depth -ge 4 ]; then  # Assume depth 4+ are likely filenames
+                    filename_entries+=("$entry")
+                else
+                    directory_entries+=("$entry")
+                fi
+            done
+            IFS=$'\n' filename_sorted=($(printf '%s\n' "${filename_entries[@]}" | sort -t':' -k1,1nr -k2,2n -k3,3))
+            unset IFS
+            IFS=$'\n' directory_sorted=($(printf '%s\n' "${directory_entries[@]}" | sort -t':' -k1,1nr -k2,2n -k3,3))
+            unset IFS
+            detected_scopes_sorted=("${filename_sorted[@]}" "${directory_sorted[@]}")
+            final_scopes=()
+            count=0
+            for entry in "${detected_scopes_sorted[@]}"; do
+                if [ $count -ge 9 ]; then
+                    break
+                fi
+                token="${entry##*:}"  # Extract token after last colon
+                final_scopes+=("$token")
+                count=$((count + 1))
+            done
+            detected_scopes="${final_scopes[*]}"
+        fi
+    fi
+}
 function handle_ai_commit_generation {
     local step="$1"
     local ai_mode="$2"
@@ -2650,13 +2754,14 @@ function handle_ai_commit_generation {
         cleanup_on_exit "$git_add"
         exit 1
     fi
+    detect_scopes_from_staged_files
     local ai_commit_message
     if [ "$ai_mode" = "full" ]; then
-        ai_commit_message=$(generate_ai_commit_message_full)
+        ai_commit_message=$(generate_ai_commit_message_full "$detected_scopes")
     elif [ "$ai_mode" = "subject" ]; then
-        ai_commit_message=$(generate_ai_commit_message_subject "$commit_prefix")
+        ai_commit_message=$(generate_ai_commit_message_subject "$commit_prefix" "$detected_scopes")
     else
-        ai_commit_message=$(generate_ai_commit_message)
+        ai_commit_message=$(generate_ai_commit_message "$detected_scopes")
     fi
     if [ $? -ne 0 ] || [ -z "$ai_commit_message" ]; then
         echo
@@ -3117,89 +3222,7 @@ function commit_script {
         echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Enter a ${YELLOW}scope${ENDCOLOR} of changes to provide some additional context"
         echo -e "Final meesage will be ${BLUE}${commit_type}${ENDCOLOR}(${YELLOW}<scope>${ENDCOLOR}): ${BLUE}<summary>${ENDCOLOR}"
         echo -e "Press Enter to continue without scope or enter 0 to exit without changes"
-        detected_scopes=""
-        staged_files=$(git diff --name-only --cached)
-        if [ -n "$staged_files" ]; then
-            declare -A scope_counts
-            declare -A scope_depths
-            while IFS= read -r file; do
-                if [ -n "$file" ]; then
-                    IFS='/' read -r -a path_components <<< "$file"
-                    for i in "${!path_components[@]}"; do
-                        component="${path_components[$i]}"
-                        if [ -n "$component" ]; then
-                            if [ $i -eq $((${#path_components[@]} - 1)) ]; then
-                                component_no_ext="${component%.*}"
-                                component_no_ext_lower="${component_no_ext,,}"
-                                scope_counts["$component_no_ext_lower"]=$((${scope_counts["$component_no_ext_lower"]:-0} + 1))
-                                current_depth=$((i + 1))
-                                if [ -z "${scope_depths["$component_no_ext_lower"]}" ] || [ $current_depth -lt ${scope_depths["$component_no_ext_lower"]} ]; then
-                                    scope_depths["$component_no_ext_lower"]=$current_depth
-                                fi
-                            else
-                                component_lower="${component,,}"
-                                if [[ ! "$component_lower" =~ ^(src|lib|test|tests|spec|specs|build|dist|node_modules|vendor|tmp|temp|cache|logs|log)$ ]]; then
-                                    scope_counts["$component_lower"]=$((${scope_counts["$component_lower"]:-0} + 1))
-                                    current_depth=$((i + 1))
-                                    if [ -z "${scope_depths["$component_lower"]}" ] || [ $current_depth -lt ${scope_depths["$component_lower"]} ]; then
-                                        scope_depths["$component_lower"]=$current_depth
-                                    fi
-                                fi
-                            fi
-                        fi
-                    done
-                fi
-            done <<< "$staged_files"
-            max_count=0
-            for token in "${!scope_counts[@]}"; do
-                if [ ${scope_counts["$token"]} -gt $max_count ]; then
-                    max_count=${scope_counts["$token"]}
-                fi
-            done
-             detected_scopes_array=()
-             for token in "${!scope_counts[@]}"; do
-                 count=${scope_counts["$token"]}
-                 depth=${scope_depths["$token"]}
-                 if [ $max_count -gt 1 ]; then
-                     if [ $count -gt 1 ]; then
-                         detected_scopes_array+=("$count:$depth:$token")
-                     fi
-                 else
-                     detected_scopes_array+=("$count:$depth:$token")
-                 fi
-             done
-             if [ ${#detected_scopes_array[@]} -gt 0 ]; then
-                 filename_entries=()
-                 directory_entries=()
-                 for entry in "${detected_scopes_array[@]}"; do
-                     count="${entry%%:*}"  # Extract count (first field)
-                     rest="${entry#*:}"    # Remove count
-                     depth="${rest%%:*}"   # Extract depth (second field)
-                     token="${rest#*:}"    # Extract token (third field)
-                     if [ $depth -ge 4 ]; then  # Assume depth 4+ are likely filenames
-                         filename_entries+=("$entry")
-                     else
-                         directory_entries+=("$entry")
-                     fi
-                 done
-                 IFS=$'\n' filename_sorted=($(printf '%s\n' "${filename_entries[@]}" | sort -t':' -k1,1nr -k2,2n -k3,3))
-                 unset IFS
-                 IFS=$'\n' directory_sorted=($(printf '%s\n' "${directory_entries[@]}" | sort -t':' -k1,1nr -k2,2n -k3,3))
-                 unset IFS
-                 detected_scopes_sorted=("${filename_sorted[@]}" "${directory_sorted[@]}")
-                 final_scopes=()
-                 count=0
-                 for entry in "${detected_scopes_sorted[@]}"; do
-                     if [ $count -ge 9 ]; then
-                         break
-                     fi
-                     token="${entry##*:}"  # Extract token after last colon
-                     final_scopes+=("$token")
-                     count=$((count + 1))
-                 done
-                 detected_scopes="${final_scopes[*]}"
-             fi
-        fi
+        detect_scopes_from_staged_files
         all_scopes=""
         if [ -n "$scopes" ]; then
             all_scopes="$scopes"

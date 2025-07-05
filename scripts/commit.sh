@@ -62,9 +62,9 @@ function handle_ai_commit_generation {
     echo -e "${BOLD}$ai_commit_message${ENDCOLOR}"
     echo
     
-    read -n 1 -p "Use this commit message? (y/n/e to edit) " -s choice
+    read -n 1 -p "Use this commit message? (y/n/e to edit/0 to exit) " -s choice
     echo
-    if [ "$ai_mode" != "subject" ]; then
+    if [ "$ai_mode" != "subject" ] && [ "$choice" != "0" ]; then
         echo
     fi
     
@@ -144,6 +144,10 @@ function handle_ai_commit_generation {
             echo
             push_script y
         fi
+        exit
+    
+    elif [ "$choice" = "0" ]; then
+        cleanup_on_exit "$git_add"
         exit
         
     else

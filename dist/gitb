@@ -2669,9 +2669,9 @@ function handle_ai_commit_generation {
     echo -e "${GREEN}AI generated commit message:${ENDCOLOR}"
     echo -e "${BOLD}$ai_commit_message${ENDCOLOR}"
     echo
-    read -n 1 -p "Use this commit message? (y/n/e to edit) " -s choice
+    read -n 1 -p "Use this commit message? (y/n/e to edit/0 to exit) " -s choice
     echo
-    if [ "$ai_mode" != "subject" ]; then
+    if [ "$ai_mode" != "subject" ] && [ "$choice" != "0" ]; then
         echo
     fi
     if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
@@ -2734,6 +2734,9 @@ function handle_ai_commit_generation {
             push_script y
         fi
         exit
+    elif [ "$choice" = "0" ]; then
+        cleanup_on_exit "$git_add"
+        exit
     else
         if [ "$ai_mode" = "subject" ]; then
             echo
@@ -2790,6 +2793,7 @@ function commit_script {
         llm|ai|i)           llm="true";;
         llmf|aif|if)        llm="true"; fast="true";;
         llmp|aip|ip)        llm="true"; push="true";;
+        llmst|aist|ist)     llm="true"; staged="true";;
         llmfp|aifp|ifp|ipf) llm="true"; fast="true"; push="true";;
         llms|ais|is)        llm="true"; scope="true";;
         llmsf|aisf|isf)     llm="true"; scope="true"; fast="true";;
@@ -2867,6 +2871,7 @@ function commit_script {
         echo -e "llmf|aif|if\tUse AI to generate commit message in the fast mode (git add .) without confirmation"
         echo -e "llmp|aip|ip\tUse AI to generate commit message and push changes"
         echo -e "llmfp|aifp|ifp\tUse AI to generate commit message in the fast mode and push changes"
+        echo -e "llmst|aist|ist\tUse AI to generate commit message in the staged mode"
         echo -e "llms|ais|is\tUse AI to generate commit summary with manual type and scope enter"
         echo -e "llmsf|aisf|isf\tUse AI to generate commit summary with manual type and scope enter in the fast mode (git add .)"
         echo -e "llmsfp|aisfp|isfp\tUse AI to generate commit summary with manual type and scope enter in the fast mode and push changes"
@@ -3021,11 +3026,7 @@ function commit_script {
         if [ -n "${msg}" ]; then
             type="full"
         fi
-        ignore_confirmation="true"
-        if [ -n "${push}" ]; then
-            ignore_confirmation="false"
-        fi
-        handle_ai_commit_generation "$step" "$type" "" "$ignore_confirmation"
+        handle_ai_commit_generation "$step" "$type" ""
     fi
     if [ -n "${fixup}" ]; then
         echo
@@ -3263,7 +3264,7 @@ function commit_script {
         step="4"
     fi
     if [ -n "${llm}" ] && [ -n "${scope}" ]; then
-        handle_ai_commit_generation "$step" "subject" "$commit" "false"
+        handle_ai_commit_generation "$step" "subject" "$commit"
     else
         echo
     fi

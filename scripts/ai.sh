@@ -439,9 +439,11 @@ function check_ai_available {
 }
 
 ### Function to generate commit message using AI
+# $1: detected scopes (optional, space-separated list)
 # Uses staged files and their diff to generate conventional commit message
 # Returns: Generated commit message in format "type(scope): subject"
 function generate_ai_commit_message {
+    local detected_scopes="$1"
     local staged_files=$(git diff --name-only --cached)
     
     if [ -z "$staged_files" ]; then
@@ -459,8 +461,8 @@ function generate_ai_commit_message {
 
 Available types:
 - feat: new feature, logic change or performance improvement
-- fix: small changes, bug fix
-- refactor: code change that neither fixes a bug nor adds a feature, style changes
+- fix: small changes, bug fix, fnixes of features
+- refactor: code change that neither fixes a bug nor adds a feature, style changes, NO NEW BEAVIOUR
 - test: adding missing tests or changing existing tests
 - build: changes that affect the build system or external dependencies
 - ci: changes to CI configuration files and scripts
@@ -474,7 +476,17 @@ Staged files:
 $staged_files
 
 File changes summary:
-$diff_content
+$diff_content"
+
+    # Add detected scopes to prompt if available
+    if [ -n "$detected_scopes" ]; then
+        prompt="$prompt
+
+Detected scopes from file paths (use one of these if relevant):
+$detected_scopes"
+    fi
+
+    prompt="$prompt
 
 Code changes (partial):
 $diff_details
@@ -486,9 +498,9 @@ Generate ONLY the commit message in the format 'type(scope): subject'. The subje
 - Be concise and descriptive
 - Follow the style and patterns from the recent commits shown above
 
-If you can determine a meaningful scope from the file paths, include it. Otherwise, omit the scope.
+If you can determine a meaningful scope from the file paths and LOGIC OF UPDATES, include it. If detected scopes are provided above, prefer using one of them. Otherwise, omit the scope.
 
-Write ONLY the commit header in the format 'type(scope): subject', do not write body or foote after a new line!
+Write ONLY the commit header in the format 'type(scope): subject', do not write body or footer after a new line!
 
 Respond with only the commit message, nothing else."
 
@@ -498,9 +510,12 @@ Respond with only the commit message, nothing else."
 
 ### Function to generate commit message using AI
 # $1: commit type and scope
+# $2: detected scopes (optional, space-separated list)
 # Uses staged files and their diff to generate conventional commit message
 # Returns: Generated commit message in format "type(scope): subject"
 function generate_ai_commit_message_subject {
+    local commit_prefix="$1"
+    local detected_scopes="$2"
     local staged_files=$(git diff --name-only --cached)
     
     if [ -z "$staged_files" ]; then
@@ -514,7 +529,7 @@ function generate_ai_commit_message_subject {
     local recent_commits=$(get_recent_commit_messages_for_ai)
     
     # Create prompt for AI
-    local prompt="Analyze the following git changes and generate a conventional commit message that will be after appended to $1.
+    local prompt="Analyze the following git changes and generate a conventional commit message that will be appended to $commit_prefix.
 
 Recent commit messages from this repository (for style reference):
 $recent_commits
@@ -544,9 +559,11 @@ Respond with only the commit message without any other text, nothing else."
 
 
 ### Function to generate commit message using AI
+# $1: detected scopes (optional, space-separated list)
 # Uses staged files and their diff to generate conventional commit message
 # Returns: Generated commit message in format "type(scope): subject"
 function generate_ai_commit_message_full {
+    local detected_scopes="$1"
     local staged_files=$(git diff --name-only --cached)
     
     if [ -z "$staged_files" ]; then
@@ -566,8 +583,8 @@ Write a body for the commit message, where you can explain why you are making th
 
 Available types:
 - feat: new feature, logic change or performance improvement
-- fix: small changes, bug fix
-- refactor: code change that neither fixes a bug nor adds a feature, style changes
+- fix: small changes, bug fix, fixes of features
+- refactor: code change that neither fixes a bug nor adds a feature, style changes, NO NEW BEAVIOUR
 - test: adding missing tests or changing existing tests
 - build: changes that affect the build system or external dependencies
 - ci: changes to CI configuration files and scripts
@@ -581,7 +598,17 @@ Staged files:
 $staged_files
 
 File changes summary:
-$diff_content
+$diff_content"
+
+    # Add detected scopes to prompt if available
+    if [ -n "$detected_scopes" ]; then
+        prompt="$prompt
+
+Detected scopes from file paths (use one of these if relevant):
+$detected_scopes"
+    fi
+
+    prompt="$prompt
 
 Code changes (partial):
 $diff_details
@@ -593,7 +620,7 @@ Generate ONLY the commit message in the format 'type(scope): subject' with body.
 - Be concise and descriptive
 - Follow the style and patterns from the recent commits shown above
 
-If you can determine a meaningful scope from the file paths, include it. Otherwise, omit the scope.
+If you can determine a meaningful scope from the file paths and LOGIC OF UPDATES, include it. If detected scopes are provided above, prefer using one of them. Otherwise, omit the scope.
 
 The body should explain why you are making the change. The length of the body should be 1-2 sentences, not more.
 

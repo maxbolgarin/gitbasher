@@ -252,6 +252,8 @@ function branch_script {
 
         choose_branch "delete"
 
+        echo
+
         delete_output=$(git branch -d $branch_name 2>&1)
         delete_code=$?
 

@@ -3588,7 +3588,6 @@ function branch_script {
         fi
         echo -e "${YELLOW}Delete a local branch${ENDCOLOR}"
         choose_branch "delete"
-        echo
         delete_output=$(git branch -d $branch_name 2>&1)
         delete_code=$?
         if [ "$delete_code" == 0 ]; then

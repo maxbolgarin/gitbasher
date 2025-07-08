@@ -15,8 +15,8 @@ function rebase_script {
     case "$1" in
         main|master|m)           main="true";;
         interactive|i)           interactive="true";;
-        autosquash|a|s|ia|if)    autosquash="true";;
-        fastautosquash|fast|f)   fastautosquash="true";;
+        autosquash|a|s|ia)        autosquash="true";;
+        fastautosquash|fast|sf|f) fastautosquash="true";;
         help|h)                  help="true";;
         *)
             wrong_mode "rebase" $1
@@ -44,7 +44,7 @@ function rebase_script {
         echo -e "<empty>\t\t\tSelect base branch to rebase current changes"
         echo -e "main|master|m\t\tRebase current branch onto default branch"
         echo -e "interactive|i\t\tSelect base commit in current branch and rebase in an interactive mode"
-        echo -e "autosquash|a|s|ia|if\tRebase on the current local branch in an interactive mode with --autosquash"
+        echo -e "autosquash|a|s|ia\tRebase on the current local branch in an interactive mode with --autosquash"
         echo -e "fastautosquash|fast|f\tFast autosquash rebase - automatically merge fixup commits without interaction"
         echo -e "help|h\t\t\tShow this help"
         echo
@@ -53,7 +53,6 @@ function rebase_script {
         echo -e "Accept all current changes\tResolve all conflicts by keeping changes from your current branch"
         exit
     fi
-
 
 
     is_clean=$(git status | tail -n 1)
@@ -174,7 +173,24 @@ function rebase_branch {
         fi
         
         echo -e "${GREEN}Found fixup commits:${ENDCOLOR}"
-        echo "$fixup_commits" | sed 's/^/\t/'
+        # Show commits with relative dates
+        fixup_commits_with_dates=$(git log --format="${YELLOW}%h${ENDCOLOR} (${BLUE}%cr${ENDCOLOR}) ${BOLD}%s${ENDCOLOR}" --grep="^fixup!" $ref..HEAD 2>/dev/null || echo "")
+        echo -e "$fixup_commits_with_dates" | sed 's/^/\t/'
+        echo
+        
+        # Ask for confirmation before proceeding
+        echo -e "Proceed with fast autosquash rebase (y/n/0)?"
+        read -n 1 -s choice
+        if [ "$choice" == "0" ]; then
+            exit
+        fi
+        if [ "$choice" != "y" ]; then
+            echo
+            echo -e "${YELLOW}Rebase cancelled${ENDCOLOR}"
+            exit
+        fi
+        echo
+        echo -e "${YELLOW}Proceeding with fast autosquash rebase...${ENDCOLOR}"
         echo
         
         # Run fast autosquash with non-interactive editor

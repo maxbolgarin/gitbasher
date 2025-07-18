@@ -563,6 +563,7 @@ function list_branches {
     branch_to_check="${branches[0]}"
     if [[ "$1" == "remote" ]]; then
         branch_to_check="${branches[1]}"
+        branch_to_check="$(sed "s/remotes\///g" <<< ${branch_to_check})"
         branch_to_check="$(sed "s/${origin_name}\///g" <<< ${branch_to_check})"
     fi
     if [[ "$number_of_branches" == 1 ]] && [[ "${branch_to_check}" == "${current_branch}" ]]; then
@@ -601,6 +602,7 @@ function list_branches {
             fi
         fi
         if [[ "$1" == "remote" ]]; then
+            branch_to_check="$(sed "s/remotes\///g" <<< ${branch_to_check})"
             branch_to_check="$(sed "s/${origin_name}\///g" <<< ${branch_to_check})"
         fi
         if [[ "$branch_to_check" == "${main_branch}"* ]]; then
@@ -638,13 +640,24 @@ function choose_branch {
     choose "${branches_first_main[@]}"
     branch_name=$choice_result
     if [[ "$1" == "remote" ]]; then
+        branch_name=$(sed "s/remotes\///g" <<< ${branch_name})
         branch_name=$(sed "s/${origin_name}\///g" <<< ${branch_name})
     fi
     echo
 }
 function switch {
-    switch_output=$(git switch $1 2>&1)
-    switch_code=$?
+    if ! git show-ref --verify --quiet refs/heads/$1; then
+        if git show-ref --verify --quiet refs/remotes/${origin_name}/$1; then
+            switch_output=$(git switch -c $1 ${origin_name}/$1 2>&1)
+            switch_code=$?
+        else
+            switch_output=$(git switch $1 2>&1)
+            switch_code=$?
+        fi
+    else
+        switch_output=$(git switch $1 2>&1)
+        switch_code=$?
+    fi
     if [ "$switch_code" == 0 ]; then
         if [ "$current_branch" == "$1" ]; then
             echo -e "${GREEN}Already on '$1'${ENDCOLOR}"
@@ -677,7 +690,7 @@ function switch {
         exit
     fi
     if [ $switch_code -ne 0 ]; then
-        echo -e "${RED}Cannot switch to '$main_branch'! Error message:${ENDCOLOR}"
+        echo -e "${RED}Cannot switch to '$1'! Error message:${ENDCOLOR}"
         echo -e "$switch_output"
         exit $switch_code
     fi

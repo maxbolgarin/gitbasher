@@ -11,12 +11,14 @@
     # main: rebase current branch onto default branch
     # interactive: select base commit in current branch and rebase in an interactive mode
     # autosquash: rebase on current branch in an interactive mode with --autosquash
+    # pull: take all commits from selected branch and apply them to current branch
 function rebase_script {
     case "$1" in
         main|master|m)           main="true";;
         interactive|i)           interactive="true";;
         autosquash|a|s|ia)        autosquash="true";;
         fastautosquash|fast|sf|f) fastautosquash="true";;
+        pull|p)                  pull_commits="true";;
         help|h)                  help="true";;
         *)
             wrong_mode "rebase" $1
@@ -32,6 +34,8 @@ function rebase_script {
         header="$header FAST AUTOSQUASH"
     elif [ -n "${main}" ]; then
         header="$header MAIN"
+    elif [ -n "${pull_commits}" ]; then
+        header="$header PULL COMMITS"
     fi
     echo -e "${YELLOW}${header}${ENDCOLOR}"
     echo
@@ -46,6 +50,7 @@ function rebase_script {
         echo -e "interactive|i\t\tSelect base commit in current branch and rebase in an interactive mode"
         echo -e "autosquash|a|s|ia\tRebase on the current local branch in an interactive mode with --autosquash"
         echo -e "fastautosquash|fast|f\tFast autosquash rebase - automatically merge fixup commits without interaction"
+        echo -e "pull|p\t\t\tTake all commits from selected branch and apply them to current branch"
         echo -e "help|h\t\t\tShow this help"
         echo
         echo -e "${YELLOW}Conflict resolution options (available during rebase conflicts):${ENDCOLOR}"
@@ -108,6 +113,65 @@ function rebase_script {
         echo -e "${RED}Cannot rebase! There are uncommited changes:"
         git_status
         exit 1
+    fi
+
+
+    ### Handle pull commits mode - take all commits from another branch
+    if [ -n "$pull_commits" ]; then
+        echo -e "${YELLOW}Select branch to pull commits from into '${current_branch}'${ENDCOLOR}"
+        choose_branch "pull commits from"
+        source_branch=${branch_name}
+        echo
+
+        # Check if source branch exists
+        if ! git show-ref --verify --quiet refs/heads/$source_branch; then
+            echo -e "${RED}Source branch '${source_branch}' does not exist locally${ENDCOLOR}"
+            exit 1
+        fi
+
+        # Check if source branch is the same as current branch
+        if [ "$source_branch" == "$current_branch" ]; then
+            echo -e "${YELLOW}Source and target branches are the same${ENDCOLOR}"
+            exit
+        fi
+
+        # Find commits that are in source branch but not in current branch
+        commits_to_pull=$(git rev-list $current_branch..$source_branch --reverse 2>/dev/null)
+        
+        if [ -z "$commits_to_pull" ]; then
+            echo -e "${GREEN}No new commits to pull from '${source_branch}'${ENDCOLOR}"
+            exit
+        fi
+
+        # Show commits that will be pulled
+        commit_count=$(echo "$commits_to_pull" | wc -l | tr -d ' ')
+        echo -e "${YELLOW}Found ${commit_count} commits to pull from '${source_branch}':${ENDCOLOR}"
+        echo
+        
+        # Show commits with details
+        commits_to_pull_with_dates=$(git log -n 10 --oneline --format="${YELLOW}%h${ENDCOLOR} (${BLUE}%cr${ENDCOLOR}) ${BOLD}%s${ENDCOLOR}" $current_branch..$source_branch --reverse)
+        echo -e "$commits_to_pull_with_dates" | sed 's/^/\t/'
+        if [ "$commit_count" -gt 10 ]; then
+            echo -e "\t${YELLOW}... and $((commit_count - 10)) more commits${ENDCOLOR}"
+        fi
+        echo
+
+        # Ask for confirmation
+        echo -e "Proceed with pulling ${commit_count} commits from '${source_branch}' to '${current_branch}' (y/n/0)?"
+        read -n 1 -s choice
+        if [ "$choice" == "0" ]; then
+            exit
+        fi
+        if [ "$choice" != "y" ]; then
+            echo
+            echo -e "${YELLOW}Pull commits cancelled${ENDCOLOR}"
+            exit
+        fi
+        echo
+
+        # Cherry-pick all commits
+        pull_commits_from_branch "$source_branch" "$commits_to_pull"
+        exit
     fi
 
 
@@ -681,5 +745,401 @@ function rebase_conflicts {
             exit
         fi
     done
+}
+
+
+### Function to pull commits from another branch via cherry-pick
+# $1: source branch name
+# $2: commits to pull (newline separated commit hashes)
+function pull_commits_from_branch {
+    source_branch=$1
+    commits=$2
+    
+    echo -e "${YELLOW}Pulling commits from '${source_branch}' to '${current_branch}'...${ENDCOLOR}"
+    echo
+    
+    # Convert commits to array
+    commit_array=()
+    while IFS= read -r commit; do
+        if [ -n "$commit" ]; then
+            commit_array+=("$commit")
+        fi
+    done <<< "$commits"
+    
+    total_commits=${#commit_array[@]}
+    current_commit_index=0
+    
+    # Cherry-pick each commit
+    for commit_hash in "${commit_array[@]}"; do
+        current_commit_index=$((current_commit_index + 1))
+        
+        # Get commit info
+        commit_subject=$(git log --format="%s" -n 1 "$commit_hash" 2>/dev/null)
+        commit_author=$(git log --format="%an" -n 1 "$commit_hash" 2>/dev/null)
+        commit_date=$(git log --format="%cr" -n 1 "$commit_hash" 2>/dev/null)
+        
+        echo -e "${GREEN}Step $current_commit_index/$total_commits:${ENDCOLOR} ${BLUE}[${commit_hash::7}]${ENDCOLOR} $commit_subject"
+        echo -e "\t${YELLOW}by $commit_author ($commit_date)${ENDCOLOR}"
+        
+        # Cherry-pick the commit
+        cherry_pick_output=$(git cherry-pick "$commit_hash" 2>&1)
+        cherry_pick_code=$?
+        
+        if [ $cherry_pick_code -eq 0 ]; then
+            echo -e "\t${GREEN}✓ Applied successfully${ENDCOLOR}"
+            echo
+            continue
+        fi
+        
+        # Debug: Show cherry-pick output for troubleshooting
+        echo -e "\t${GRAY}[DEBUG] Cherry-pick exit code: $cherry_pick_code${ENDCOLOR}"
+        echo -e "\t${GRAY}[DEBUG] Cherry-pick output: '$cherry_pick_output'${ENDCOLOR}"
+        
+                # Handle cherry-pick conflicts - check for various conflict indicators
+        if [[ $cherry_pick_output == *"CONFLICT"* ]] || [[ $cherry_pick_output == *"Automatic merge failed"* ]] || [[ $cherry_pick_output == *"fix conflicts"* ]]; then
+            echo -e "\t${RED}✗ Conflicts detected${ENDCOLOR}"
+            echo
+            handle_cherry_pick_conflicts "$commit_hash" "$current_commit_index" "$total_commits" "$commit_subject"
+            # After handling conflicts, check if we should continue to next commit
+            echo
+            continue
+        fi
+
+        # Handle other cherry-pick errors with sophisticated error detection
+        handle_cherry_pick_error "$commit_hash" "$current_commit_index" "$total_commits" "$commit_subject" "$cherry_pick_output"
+        echo
+    done
+    
+    echo -e "${GREEN}Successfully pulled $total_commits commits from '${source_branch}' to '${current_branch}'!${ENDCOLOR}"
+    echo -e "${BLUE}[${source_branch}${ENDCOLOR} -> ${BLUE}${current_branch}]${ENDCOLOR}"
+}
+
+
+### Function to handle cherry-pick errors (non-conflict)
+# $1: commit hash
+# $2: current commit index  
+# $3: total commits
+# $4: commit subject
+# $5: cherry-pick output
+function handle_cherry_pick_error {
+    commit_hash=$1
+    current_index=$2
+    total_commits=$3
+    commit_subject=$4
+    cherry_pick_output=$5
+    
+    echo -e "\t${RED}✗ Cherry-pick failed${ENDCOLOR}"
+    echo
+    
+    # Analyze the error type and provide contextual information
+    if [[ $cherry_pick_output == *"is now empty"* ]]; then
+        echo -e "${YELLOW}Issue:${ENDCOLOR} The commit is now empty"
+        echo -e "${BLUE}[$current_index/$total_commits]${ENDCOLOR} ${BLUE}[${commit_hash::7}]${ENDCOLOR} $commit_subject"
+        echo
+        echo -e "${GRAY}This usually happens when:${ENDCOLOR}"
+        echo -e "\t• The changes in this commit already exist in your current branch"
+        echo -e "\t• Previous conflict resolutions have made this commit redundant"
+        echo -e "\t• The commit only contained changes that are no longer relevant"
+        echo
+        echo -e "${YELLOW}Git suggests using:${ENDCOLOR}"
+        echo -e "\t${GREEN}git commit --allow-empty${ENDCOLOR} to keep it anyway"
+        echo -e "\t${GREEN}git cherry-pick --skip${ENDCOLOR} to skip it"
+        
+    elif [[ $cherry_pick_output == *"would be overwritten"* ]]; then
+        echo -e "${YELLOW}Issue:${ENDCOLOR} Files would be overwritten"
+        echo -e "${BLUE}[$current_index/$total_commits]${ENDCOLOR} ${BLUE}[${commit_hash::7}]${ENDCOLOR} $commit_subject"
+        echo
+        echo -e "${GRAY}This happens when:${ENDCOLOR}"
+        echo -e "\t• You have uncommitted changes that conflict with this commit"
+        echo -e "\t• Some files are in an unexpected state"
+        echo
+        # Extract file names from error
+        overwritten_files=$(echo "$cherry_pick_output" | grep -E "^\s*[a-zA-Z0-9]" | grep -v "error:" | grep -v "hint:" | head -5)
+        if [ -n "$overwritten_files" ]; then
+            echo -e "${YELLOW}Affected files:${ENDCOLOR}"
+            echo "$overwritten_files" | sed 's/^/\t/'
+            echo
+        fi
+        
+    elif [[ $cherry_pick_output == *"bad object"* ]] || [[ $cherry_pick_output == *"invalid"* ]]; then
+        echo -e "${YELLOW}Issue:${ENDCOLOR} Invalid commit reference"
+        echo -e "${BLUE}[$current_index/$total_commits]${ENDCOLOR} ${BLUE}[${commit_hash::7}]${ENDCOLOR} $commit_subject"
+        echo
+        echo -e "${GRAY}This happens when:${ENDCOLOR}"
+        echo -e "\t• The commit hash is corrupted or doesn't exist"
+        echo -e "\t• The repository is in an inconsistent state"
+        echo -e "\t• There are issues with the git object database"
+        
+    else
+        echo -e "${YELLOW}Issue:${ENDCOLOR} Unknown cherry-pick error"
+        echo -e "${BLUE}[$current_index/$total_commits]${ENDCOLOR} ${BLUE}[${commit_hash::7}]${ENDCOLOR} $commit_subject"
+        echo
+        echo -e "${GRAY}Git error details:${ENDCOLOR}"
+        # Clean up the error message and format it nicely
+        cleaned_error=$(echo "$cherry_pick_output" | grep -v "hint:" | head -3)
+        echo "$cleaned_error" | sed 's/^/\t/' | sed "s/error:/\t${RED}error:${ENDCOLOR}/"
+    fi
+    
+    echo
+    echo -e "${YELLOW}What would you like to do?${ENDCOLOR}"
+    
+    if [[ $cherry_pick_output == *"is now empty"* ]]; then
+        echo -e "1. Keep empty commit: ${GREEN}git commit --allow-empty${ENDCOLOR}"
+        echo -e "2. Skip this commit: ${YELLOW}git cherry-pick --skip${ENDCOLOR}"
+        echo -e "3. Abort pull operation: ${RED}abort and reset${ENDCOLOR}"
+        echo -e "0. Exit script"
+    else
+        echo -e "1. Skip this commit and continue: ${YELLOW}git cherry-pick --skip${ENDCOLOR}"
+        echo -e "2. Abort pull operation: ${RED}abort and reset${ENDCOLOR}"
+        echo -e "3. Show full git error details"
+        echo -e "0. Exit script"
+    fi
+    
+    while [ true ]; do
+        read -n 1 -s choice
+        
+        if [[ $cherry_pick_output == *"is now empty"* ]]; then
+            case "$choice" in
+                1)
+                    echo
+                    echo -e "${YELLOW}Keeping empty commit...${ENDCOLOR}"
+                    
+                    # Get the original commit message to preserve it
+                    original_message=$(git log --format="%s" -n 1 "$commit_hash" 2>/dev/null)
+                    
+                    # For empty cherry-pick state, we use git commit --allow-empty with the original message
+                    commit_output=$(git commit --allow-empty -m "$original_message" 2>&1)
+                    commit_code=$?
+                    
+                    if [ $commit_code -eq 0 ]; then
+                        echo -e "\t${GREEN}✓ Empty commit preserved with original message${ENDCOLOR}"
+                        return
+                    else
+                        echo -e "${RED}Failed to keep empty commit:${ENDCOLOR}"
+                        echo "$commit_output" | sed 's/^/\t/'
+                        echo
+                        echo -e "${YELLOW}You may need to resolve this manually:${ENDCOLOR}"
+                        echo -e "\t${BLUE}git commit --allow-empty${ENDCOLOR} (provide message manually)"
+                        echo -e "\tOR ${BLUE}git cherry-pick --skip${ENDCOLOR} (to skip the commit)"
+                        echo
+                        continue
+                    fi
+                    ;;
+                2)
+                    echo
+                    echo -e "${YELLOW}Skipping empty commit ${commit_hash::7}...${ENDCOLOR}"
+                    git cherry-pick --skip 2>/dev/null
+                    echo -e "\t${GREEN}✓ Commit skipped${ENDCOLOR}"
+                    return
+                    ;;
+                3)
+                    echo
+                    echo -e "${YELLOW}Aborting pull commits operation...${ENDCOLOR}"
+                    git cherry-pick --abort 2>/dev/null
+                    git reset --hard HEAD~$((current_index - 1)) 2>/dev/null
+                    exit 1
+                    ;;
+                0)
+                    exit 1
+                    ;;
+            esac
+        else
+            case "$choice" in
+                1)
+                    echo
+                    echo -e "${YELLOW}Skipping commit ${commit_hash::7}...${ENDCOLOR}"
+                    git cherry-pick --abort 2>/dev/null
+                    echo -e "\t${GREEN}✓ Commit skipped${ENDCOLOR}"
+                    return
+                    ;;
+                2)
+                    echo
+                    echo -e "${YELLOW}Aborting pull commits operation...${ENDCOLOR}"
+                    git cherry-pick --abort 2>/dev/null
+                    git reset --hard HEAD~$((current_index - 1)) 2>/dev/null
+                    exit 1
+                    ;;
+                3)
+                    echo
+                    echo -e "${YELLOW}Full git error details:${ENDCOLOR}"
+                    echo "$cherry_pick_output" | sed 's/^/\t/'
+                    echo
+                    echo -e "Press any key to return to options..."
+                    read -n 1 -s
+                    echo
+                    echo -e "${YELLOW}What would you like to do?${ENDCOLOR}"
+                    echo -e "1. Skip this commit and continue: ${YELLOW}git cherry-pick --skip${ENDCOLOR}"
+                    echo -e "2. Abort pull operation: ${RED}abort and reset${ENDCOLOR}"
+                    echo -e "3. Show full git error details"
+                    echo -e "0. Exit script"
+                    ;;
+                0)
+                    exit 1
+                    ;;
+            esac
+        fi
+    done
+}
+
+
+### Function to handle cherry-pick conflicts
+# $1: commit hash
+# $2: current commit index  
+# $3: total commits
+# $4: commit subject
+function handle_cherry_pick_conflicts {
+    commit_hash=$1
+    current_index=$2
+    total_commits=$3
+    commit_subject=$4
+    
+    echo -e "\t${GRAY}[DEBUG] Entering conflict resolution for ${commit_hash::7}${ENDCOLOR}"
+    
+    print_menu="true"
+    
+    while [ true ]; do
+        if [ "$print_menu" == "true" ]; then
+            echo -e "${YELLOW}Resolve conflicts for commit ${commit_hash::7}${ENDCOLOR}"
+            echo -e "${BLUE}[$current_index/$total_commits]${ENDCOLOR} $commit_subject"
+            echo
+            
+            # Show conflicted files
+            conflicted_files=$(git --no-pager diff --name-only --diff-filter=U --relative 2>/dev/null)
+            if [ -n "$conflicted_files" ]; then
+                echo -e "${YELLOW}Conflicted files:${ENDCOLOR}"
+                echo "$conflicted_files" | sed 's/^/\t/'
+                echo
+            fi
+            
+            echo -e "After resolving conflicts, select an option:"
+            echo -e "1. Add changes and continue: ${GREEN}git cherry-pick --continue${ENDCOLOR}"
+            echo -e "2. Skip this commit: ${RED}git cherry-pick --skip${ENDCOLOR}"
+            echo -e "3. Accept all incoming changes: ${GREEN}git checkout --theirs .${ENDCOLOR}"
+            echo -e "4. Accept all current changes: ${GREEN}git checkout --ours .${ENDCOLOR}"
+            echo -e "5. Abort pull operation: ${YELLOW}abort and reset${ENDCOLOR}"
+            echo -e "0. Exit script"
+            
+            print_menu="false"
+        fi
+        
+        read -n 1 -s choice
+        
+        case "$choice" in
+            1)
+                # Check if conflicts are resolved
+                files_with_conflicts=$(git grep -l --name-only -E "[<=>]{7}" $(git --no-pager diff --name-only --diff-filter=U --relative) 2>/dev/null || echo "")
+                
+                if [ -n "$files_with_conflicts" ]; then
+                    echo
+                    echo -e "${YELLOW}There are still unresolved conflicts in:${ENDCOLOR}"
+                    echo "$files_with_conflicts" | sed 's/^/\t/'
+                    echo
+                    continue
+                fi
+                
+                git add .
+                
+                continue_output=$(git cherry-pick --continue 2>&1)
+                continue_code=$?
+                
+                if [ $continue_code -eq 0 ]; then
+                    echo
+                    echo -e "\t${GREEN}✓ Conflicts resolved and commit applied${ENDCOLOR}"
+                    echo -e "\t${GRAY}[DEBUG] Exiting conflict resolution successfully${ENDCOLOR}"
+                    return
+                else
+                    echo
+                    echo -e "${RED}Failed to continue cherry-pick:${ENDCOLOR}"
+                    echo "$continue_output"
+                    print_menu="true"
+                fi
+                ;;
+            2)
+                echo
+                echo -e "Are you sure you want to ${RED}skip${ENDCOLOR} this commit (y/n)?"
+                read -n 1 -s choice_yes
+                if [ "$choice_yes" == "y" ]; then
+                    echo
+                    echo -e "${YELLOW}Skipping commit ${commit_hash::7}${ENDCOLOR}"
+                    git cherry-pick --skip 2>/dev/null
+                    echo -e "\t${GRAY}[DEBUG] Exiting conflict resolution - commit skipped${ENDCOLOR}"
+                    return
+                else
+                    echo
+                    echo -e "${YELLOW}Continuing...${ENDCOLOR}"
+                fi
+                ;;
+            3)
+                echo
+                echo -e "Are you sure you want to ${GREEN}accept all incoming changes${ENDCOLOR} (y/n)?"
+                read -n 1 -s choice_yes
+                if [ "$choice_yes" == "y" ]; then
+                    echo
+                    echo -e "${YELLOW}Accepting all incoming changes...${ENDCOLOR}"
+                    git checkout --theirs . 2>/dev/null
+                    git add .
+                    
+                    continue_output=$(git cherry-pick --continue 2>&1)
+                    if [ $? -eq 0 ]; then
+                        echo -e "\t${GREEN}✓ Applied with incoming changes${ENDCOLOR}"
+                        echo -e "\t${GRAY}[DEBUG] Exiting conflict resolution - incoming changes accepted${ENDCOLOR}"
+                        return
+                    else
+                        echo -e "${RED}Failed to continue:${ENDCOLOR}"
+                        echo "$continue_output"
+                        print_menu="true"
+                    fi
+                else
+                    echo
+                    echo -e "${YELLOW}Continuing...${ENDCOLOR}"
+                fi
+                ;;
+            4)
+                echo
+                echo -e "Are you sure you want to ${GREEN}accept all current changes${ENDCOLOR} (y/n)?"
+                read -n 1 -s choice_yes
+                if [ "$choice_yes" == "y" ]; then
+                    echo
+                    echo -e "${YELLOW}Accepting all current changes...${ENDCOLOR}"
+                    git checkout --ours . 2>/dev/null
+                    git add .
+                    
+                    continue_output=$(git cherry-pick --continue 2>&1)
+                    if [ $? -eq 0 ]; then
+                        echo -e "\t${GREEN}✓ Applied with current changes${ENDCOLOR}"
+                        echo -e "\t${GRAY}[DEBUG] Exiting conflict resolution - current changes accepted${ENDCOLOR}"
+                        return
+                    else
+                        echo -e "${RED}Failed to continue:${ENDCOLOR}"
+                        echo "$continue_output"
+                        print_menu="true"
+                    fi
+                else
+                    echo
+                    echo -e "${YELLOW}Continuing...${ENDCOLOR}"
+                fi
+                ;;
+            5)
+                echo
+                echo -e "Are you sure you want to ${YELLOW}abort${ENDCOLOR} the pull operation (y/n)?"
+                read -n 1 -s choice_yes
+                if [ "$choice_yes" == "y" ]; then
+                    echo
+                    echo -e "${YELLOW}Aborting pull commits operation...${ENDCOLOR}"
+                    git cherry-pick --abort 2>/dev/null
+                    # Reset to state before any commits were applied
+                    git reset --hard HEAD~$((current_index - 1)) 2>/dev/null
+                    exit 1
+                else
+                    echo
+                    echo -e "${YELLOW}Continuing...${ENDCOLOR}"
+                fi
+                ;;
+            0)
+                exit 1
+                ;;
+        esac
+    done
+    return
 }
 

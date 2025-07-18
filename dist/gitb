@@ -646,18 +646,8 @@ function choose_branch {
     echo
 }
 function switch {
-    if ! git show-ref --verify --quiet refs/heads/$1; then
-        if git show-ref --verify --quiet refs/remotes/${origin_name}/$1; then
-            switch_output=$(git switch -c $1 ${origin_name}/$1 2>&1)
-            switch_code=$?
-        else
-            switch_output=$(git switch $1 2>&1)
-            switch_code=$?
-        fi
-    else
-        switch_output=$(git switch $1 2>&1)
-        switch_code=$?
-    fi
+    switch_output=$(git switch $1 2>&1)
+    switch_code=$?
     if [ "$switch_code" == 0 ]; then
         if [ "$current_branch" == "$1" ]; then
             echo -e "${GREEN}Already on '$1'${ENDCOLOR}"
@@ -1813,12 +1803,46 @@ function resolve_conflicts {
             if [ "$choice_yes" == "y" ]; then
                 echo
                 echo -e "${YELLOW}Accepting all incoming changes...${ENDCOLOR}"
+                deleted_files=$(git --no-pager diff --name-only --diff-filter=D --relative 2>/dev/null)
+                if [ -n "$deleted_files" ]; then
+                    echo -e "${YELLOW}Warning: Some files were deleted in the incoming branch:${ENDCOLOR}"
+                    echo "$deleted_files" | sed 's/^/\t/'
+                    echo
+                    echo -e "Do you want to continue and accept the deletions (y/n)?"
+                    read -n 1 -s choice_delete
+                    if [ "$choice_delete" != "y" ]; then
+                        echo -e "${YELLOW}Cancelled. Continuing...${ENDCOLOR}"
+                        continue
+                    fi
+                fi
                 checkout_output=$(git checkout --theirs . 2>&1)
                 checkout_code=$?
                 if [ $checkout_code -ne 0 ]; then
                     echo -e "${RED}Failed to accept incoming changes:${ENDCOLOR}"
                     echo "$checkout_output"
-                    continue
+                    echo
+                    echo -e "${YELLOW}This might be due to deleted files. You can:${ENDCOLOR}"
+                    echo -e "1. Manually resolve conflicts and stage files"
+                    echo -e "2. Try again (if you want to force accept)"
+                    echo -e "3. Abort merge"
+                    echo
+                    echo -e "What would you like to do (1/2/3)?"
+                    read -n 1 -s choice_resolve
+                    if [ "$choice_resolve" == "1" ]; then
+                        echo -e "${YELLOW}Please manually resolve conflicts and stage files, then return to this menu.${ENDCOLOR}"
+                        continue
+                    elif [ "$choice_resolve" == "2" ]; then
+                        echo -e "${YELLOW}Force accepting incoming changes...${ENDCOLOR}"
+                        git ls-files --deleted | xargs -r git rm 2>/dev/null
+                        git checkout --theirs . 2>/dev/null
+                        git add .
+                    elif [ "$choice_resolve" == "3" ]; then
+                        echo -e "${YELLOW}Aborting merge...${ENDCOLOR}"
+                        git merge --abort
+                        exit $?
+                    else
+                        continue
+                    fi
                 fi
                 git add .
                 echo -e "${YELLOW}Creating merge commit with accepted incoming changes...${ENDCOLOR}"
@@ -1844,12 +1868,46 @@ function resolve_conflicts {
             if [ "$choice_yes" == "y" ]; then
                 echo
                 echo -e "${YELLOW}Accepting all current changes...${ENDCOLOR}"
+                deleted_files=$(git --no-pager diff --name-only --diff-filter=D --relative 2>/dev/null)
+                if [ -n "$deleted_files" ]; then
+                    echo -e "${YELLOW}Warning: Some files were deleted in the current branch:${ENDCOLOR}"
+                    echo "$deleted_files" | sed 's/^/\t/'
+                    echo
+                    echo -e "Do you want to continue and accept the deletions (y/n)?"
+                    read -n 1 -s choice_delete
+                    if [ "$choice_delete" != "y" ]; then
+                        echo -e "${YELLOW}Cancelled. Continuing...${ENDCOLOR}"
+                        continue
+                    fi
+                fi
                 checkout_output=$(git checkout --ours . 2>&1)
                 checkout_code=$?
                 if [ $checkout_code -ne 0 ]; then
                     echo -e "${RED}Failed to accept current changes:${ENDCOLOR}"
                     echo "$checkout_output"
-                    continue
+                    echo
+                    echo -e "${YELLOW}This might be due to deleted files. You can:${ENDCOLOR}"
+                    echo -e "1. Manually resolve conflicts and stage files"
+                    echo -e "2. Try again (if you want to force accept)"
+                    echo -e "3. Abort merge"
+                    echo
+                    echo -e "What would you like to do (1/2/3)?"
+                    read -n 1 -s choice_resolve
+                    if [ "$choice_resolve" == "1" ]; then
+                        echo -e "${YELLOW}Please manually resolve conflicts and stage files, then return to this menu.${ENDCOLOR}"
+                        continue
+                    elif [ "$choice_resolve" == "2" ]; then
+                        echo -e "${YELLOW}Force accepting current changes...${ENDCOLOR}"
+                        git ls-files --deleted | xargs -r git rm 2>/dev/null
+                        git checkout --ours . 2>/dev/null
+                        git add .
+                    elif [ "$choice_resolve" == "3" ]; then
+                        echo -e "${YELLOW}Aborting merge...${ENDCOLOR}"
+                        git merge --abort
+                        exit $?
+                    else
+                        continue
+                    fi
                 fi
                 git add .
                 echo -e "${YELLOW}Creating merge commit with accepted current changes...${ENDCOLOR}"
@@ -2277,12 +2335,46 @@ function rebase_conflicts {
             if [ "$choice_yes" == "y" ]; then
                 echo
                 echo -e "${YELLOW}Accepting all incoming changes...${ENDCOLOR}"
+                deleted_files=$(git --no-pager diff --name-only --diff-filter=D --relative 2>/dev/null)
+                if [ -n "$deleted_files" ]; then
+                    echo -e "${YELLOW}Warning: Some files were deleted in the incoming branch:${ENDCOLOR}"
+                    echo "$deleted_files" | sed 's/^/\t/'
+                    echo
+                    echo -e "Do you want to continue and accept the deletions (y/n)?"
+                    read -n 1 -s choice_delete
+                    if [ "$choice_delete" != "y" ]; then
+                        echo -e "${YELLOW}Cancelled. Continuing...${ENDCOLOR}"
+                        continue
+                    fi
+                fi
                 checkout_output=$(git checkout --theirs . 2>&1)
                 checkout_code=$?
                 if [ $checkout_code -ne 0 ]; then
                     echo -e "${RED}Failed to accept incoming changes:${ENDCOLOR}"
                     echo "$checkout_output"
-                    continue
+                    echo
+                    echo -e "${YELLOW}This might be due to deleted files. You can:${ENDCOLOR}"
+                    echo -e "1. Manually resolve conflicts and stage files"
+                    echo -e "2. Try again (if you want to force accept)"
+                    echo -e "3. Abort rebase"
+                    echo
+                    echo -e "What would you like to do (1/2/3)?"
+                    read -n 1 -s choice_resolve
+                    if [ "$choice_resolve" == "1" ]; then
+                        echo -e "${YELLOW}Please manually resolve conflicts and stage files, then return to this menu.${ENDCOLOR}"
+                        continue
+                    elif [ "$choice_resolve" == "2" ]; then
+                        echo -e "${YELLOW}Force accepting incoming changes...${ENDCOLOR}"
+                        git ls-files --deleted | xargs -r git rm 2>/dev/null
+                        git checkout --theirs . 2>/dev/null
+                        git add .
+                    elif [ "$choice_resolve" == "3" ]; then
+                        echo -e "${YELLOW}Aborting rebase...${ENDCOLOR}"
+                        git rebase --abort
+                        exit $?
+                    else
+                        continue
+                    fi
                 fi
                 git add .
                 rebase_output=$(git -c core.editor=true rebase --continue 2>&1)
@@ -2310,6 +2402,18 @@ function rebase_conflicts {
             if [ "$choice_yes" == "y" ]; then
                 echo
                 echo -e "${YELLOW}Accepting all current changes...${ENDCOLOR}"
+                deleted_files=$(git --no-pager diff --name-only --diff-filter=D --relative 2>/dev/null)
+                if [ -n "$deleted_files" ]; then
+                    echo -e "${YELLOW}Warning: Some files were deleted in the current branch:${ENDCOLOR}"
+                    echo "$deleted_files" | sed 's/^/\t/'
+                    echo
+                    echo -e "Do you want to continue and accept the deletions (y/n)?"
+                    read -n 1 -s choice_delete
+                    if [ "$choice_delete" != "y" ]; then
+                        echo -e "${YELLOW}Cancelled. Continuing...${ENDCOLOR}"
+                        continue
+                    fi
+                fi
                 conflicted_files=$(git --no-pager diff --name-only --diff-filter=U --relative)
                 if [ -n "$conflicted_files" ]; then
                     checkout_failed_files=""

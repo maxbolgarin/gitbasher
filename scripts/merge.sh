@@ -264,14 +264,51 @@ function resolve_conflicts {
                 echo
                 echo -e "${YELLOW}Accepting all incoming changes...${ENDCOLOR}"
                 
-                # Accept all incoming changes (theirs)
+                # Check for deleted files in conflicts
+                deleted_files=$(git --no-pager diff --name-only --diff-filter=D --relative 2>/dev/null)
+                if [ -n "$deleted_files" ]; then
+                    echo -e "${YELLOW}Warning: Some files were deleted in the incoming branch:${ENDCOLOR}"
+                    echo "$deleted_files" | sed 's/^/\t/'
+                    echo
+                    echo -e "Do you want to continue and accept the deletions (y/n)?"
+                    read -n 1 -s choice_delete
+                    if [ "$choice_delete" != "y" ]; then
+                        echo -e "${YELLOW}Cancelled. Continuing...${ENDCOLOR}"
+                        continue
+                    fi
+                fi
+                
+                # Accept all incoming changes (theirs) with better error handling
                 checkout_output=$(git checkout --theirs . 2>&1)
                 checkout_code=$?
                 
                 if [ $checkout_code -ne 0 ]; then
                     echo -e "${RED}Failed to accept incoming changes:${ENDCOLOR}"
                     echo "$checkout_output"
-                    continue
+                    echo
+                    echo -e "${YELLOW}This might be due to deleted files. You can:${ENDCOLOR}"
+                    echo -e "1. Manually resolve conflicts and stage files"
+                    echo -e "2. Try again (if you want to force accept)"
+                    echo -e "3. Abort merge"
+                    echo
+                    echo -e "What would you like to do (1/2/3)?"
+                    read -n 1 -s choice_resolve
+                    if [ "$choice_resolve" == "1" ]; then
+                        echo -e "${YELLOW}Please manually resolve conflicts and stage files, then return to this menu.${ENDCOLOR}"
+                        continue
+                    elif [ "$choice_resolve" == "2" ]; then
+                        echo -e "${YELLOW}Force accepting incoming changes...${ENDCOLOR}"
+                        # Force remove files that don't exist in theirs
+                        git ls-files --deleted | xargs -r git rm 2>/dev/null
+                        git checkout --theirs . 2>/dev/null
+                        git add .
+                    elif [ "$choice_resolve" == "3" ]; then
+                        echo -e "${YELLOW}Aborting merge...${ENDCOLOR}"
+                        git merge --abort
+                        exit $?
+                    else
+                        continue
+                    fi
                 fi
                 
                 # Add all changes and create merge commit
@@ -303,14 +340,51 @@ function resolve_conflicts {
                 echo
                 echo -e "${YELLOW}Accepting all current changes...${ENDCOLOR}"
                 
-                # Accept all current changes (ours)
+                # Check for deleted files in conflicts
+                deleted_files=$(git --no-pager diff --name-only --diff-filter=D --relative 2>/dev/null)
+                if [ -n "$deleted_files" ]; then
+                    echo -e "${YELLOW}Warning: Some files were deleted in the current branch:${ENDCOLOR}"
+                    echo "$deleted_files" | sed 's/^/\t/'
+                    echo
+                    echo -e "Do you want to continue and accept the deletions (y/n)?"
+                    read -n 1 -s choice_delete
+                    if [ "$choice_delete" != "y" ]; then
+                        echo -e "${YELLOW}Cancelled. Continuing...${ENDCOLOR}"
+                        continue
+                    fi
+                fi
+                
+                # Accept all current changes (ours) with better error handling
                 checkout_output=$(git checkout --ours . 2>&1)
                 checkout_code=$?
                 
                 if [ $checkout_code -ne 0 ]; then
                     echo -e "${RED}Failed to accept current changes:${ENDCOLOR}"
                     echo "$checkout_output"
-                    continue
+                    echo
+                    echo -e "${YELLOW}This might be due to deleted files. You can:${ENDCOLOR}"
+                    echo -e "1. Manually resolve conflicts and stage files"
+                    echo -e "2. Try again (if you want to force accept)"
+                    echo -e "3. Abort merge"
+                    echo
+                    echo -e "What would you like to do (1/2/3)?"
+                    read -n 1 -s choice_resolve
+                    if [ "$choice_resolve" == "1" ]; then
+                        echo -e "${YELLOW}Please manually resolve conflicts and stage files, then return to this menu.${ENDCOLOR}"
+                        continue
+                    elif [ "$choice_resolve" == "2" ]; then
+                        echo -e "${YELLOW}Force accepting current changes...${ENDCOLOR}"
+                        # Force remove files that don't exist in ours
+                        git ls-files --deleted | xargs -r git rm 2>/dev/null
+                        git checkout --ours . 2>/dev/null
+                        git add .
+                    elif [ "$choice_resolve" == "3" ]; then
+                        echo -e "${YELLOW}Aborting merge...${ENDCOLOR}"
+                        git merge --abort
+                        exit $?
+                    else
+                        continue
+                    fi
                 fi
                 
                 # Add all changes and create merge commit

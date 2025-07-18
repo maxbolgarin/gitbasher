@@ -52,6 +52,54 @@ function merge_script {
     fi
 
 
+    ### Check current branch for remote changes (skip for to-main mode as we'll switch anyway)
+    if [ -z "$to_main" ]; then
+        echo -e "${YELLOW}Checking current branch for remote changes...${ENDCOLOR}"
+        
+        # Get the current local commit hash for current branch
+        current_local_commit=$(git rev-parse HEAD 2>/dev/null)
+        
+        # Get the remote commit hash for current branch
+        current_remote_commit=$(git ls-remote $origin_name refs/heads/$current_branch 2>/dev/null | cut -f1)
+        
+        if [ -z "$current_remote_commit" ]; then
+            echo -e "${YELLOW}Remote branch ${origin_name}/${current_branch} not found - proceeding with local merge${ENDCOLOR}"
+        elif [ "$current_local_commit" != "$current_remote_commit" ]; then
+            echo -e "${YELLOW}Remote changes detected in current branch ${current_branch}!${ENDCOLOR}"
+            echo
+            echo -e "Do you want to pull ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} first (y/n)?"
+            read -n 1 -s choice
+            if [ "$choice" == "y" ]; then
+                echo
+                echo -e "${YELLOW}Pulling ${origin_name}/${current_branch}...${ENDCOLOR}"
+                
+                pull_output=$(git pull $origin_name $current_branch 2>&1)
+                pull_code=$?
+                
+                if [ $pull_code -eq 0 ]; then
+                    echo -e "${GREEN}Successfully pulled current branch${ENDCOLOR}"
+                    if [[ $pull_output == *"file changed"* ]] || [[ $pull_output == *"files changed"* ]]; then
+                        # Extract only the file statistics (lines starting with space and containing |)
+                        # and the summary line (contains "file changed" or "files changed")
+                        changes=$(echo "$pull_output" | grep -E "^ .+\|.+|[0-9]+ files? changed")
+                        if [ -n "$changes" ]; then
+                            echo
+                            print_changes_stat "$changes"
+                        fi
+                    fi
+                else
+                    echo -e "${RED}Failed to pull current branch:${ENDCOLOR}"
+                    echo "$pull_output"
+                    exit $pull_code
+                fi
+            fi
+        else
+            echo -e "${GREEN}Current branch is up to date with remote${ENDCOLOR}"
+        fi
+        echo
+    fi
+
+
     ### Select branch which will be merged
     if [ -n "$main" ]; then
         if [ "$current_branch" == "${main_branch}" ]; then
@@ -94,14 +142,33 @@ function merge_script {
 
     ### Fetch before merge (skip if already fetched for remote mode)
     if [ -z "$remote" ]; then
-        echo -e "Do you want to fetch ${YELLOW}${origin_name}/${merge_branch}${ENDCOLOR} before merge (y/n)?"
-        read -n 1 -s choice
-        if [ "$choice" == "y" ]; then
+        echo -e "${YELLOW}Checking for remote changes...${ENDCOLOR}"
+        
+        # Get the current local commit hash for the branch
+        local_commit=""
+        if git show-ref --verify --quiet refs/heads/$merge_branch; then
+            local_commit=$(git rev-parse refs/heads/$merge_branch 2>/dev/null)
+        fi
+        
+        # Get the remote commit hash
+        remote_commit=$(git ls-remote $origin_name refs/heads/$merge_branch 2>/dev/null | cut -f1)
+        
+        if [ -z "$remote_commit" ]; then
+            echo -e "${YELLOW}Remote branch ${origin_name}/${merge_branch} not found - proceeding with local merge${ENDCOLOR}"
+        elif [ "$local_commit" != "$remote_commit" ]; then
+            echo -e "${YELLOW}Remote changes detected!${ENDCOLOR}"
             echo
-            echo -e "${YELLOW}Fetching ${origin_name}/${merge_branch}...${ENDCOLOR}"
+            echo -e "Do you want to fetch ${YELLOW}${origin_name}/${merge_branch}${ENDCOLOR} before merge (y/n)?"
+            read -n 1 -s choice
+            if [ "$choice" == "y" ]; then
+                echo
+                echo -e "${YELLOW}Fetching ${origin_name}/${merge_branch}...${ENDCOLOR}"
 
-            fetch $merge_branch $origin_name
-            merge_from_origin=true
+                fetch $merge_branch $origin_name
+                merge_from_origin=true
+            fi
+        else
+            echo -e "${GREEN}Local branch is up to date with remote${ENDCOLOR}"
         fi
         echo
     fi
@@ -136,10 +203,16 @@ function merge_script {
         echo -e "${GREEN}Successful fast-forward merge!${ENDCOLOR} ${BLUE}[$merge_branch${ENDCOLOR} -> ${BLUE}$current_branch]${ENDCOLOR}"
     fi
 
-    changes=$(echo "$merge_output" | tail -n +3)
-    if [[ $changes == *"conflict"* ]]; then
+    # Always get proper file statistics using git show for successful merges
+    if [[ "$commit_message_after_merge" != "$commit_message_before_merge" ]]; then
+        # New merge commit was created, show its changes
         commit_hash="$(git --no-pager log --pretty="%h" -1)"
         changes=$(git --no-pager show $commit_hash --stat --format="")
+    else
+        # Fast-forward merge, show changes between the old and new position
+        old_commit=$(git reflog --format="%H" -n 2 | tail -n 1)
+        new_commit=$(git rev-parse HEAD)
+        changes=$(git --no-pager diff --stat $old_commit..$new_commit)
     fi
 
     if [ -n "$changes" ]; then
@@ -412,6 +485,8 @@ function resolve_conflicts {
             exit
         fi
     done
+    
+    echo
 }
 
 

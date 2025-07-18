@@ -255,7 +255,6 @@ function pull {
     echo -e "${GREEN}Successfully pulled with $mode!${ENDCOLOR}"
 
     if [ "$mode" == "merge" ] || [ "$mode" == "fast-forward" ]; then 
-        echo
         ### Merge without conflicts
         if [ $merge_code == 0 ] ; then
             if [[ $merge_output == *"made by the"* ]]; then
@@ -264,6 +263,7 @@ function pull {
                 changes=$(echo "$merge_output" | tail -n +2)
             fi
             if [[ -n "$changes" ]]; then
+                echo
                 print_changes_stat "$changes"
             fi
 

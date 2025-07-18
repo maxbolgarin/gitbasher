@@ -55,6 +55,54 @@ function rebase_script {
     fi
 
 
+    ### Check current branch for remote changes (skip for autosquash modes as they work on local commits)
+    if [ -z "$autosquash" ] && [ -z "$fastautosquash" ]; then
+        echo -e "${YELLOW}Checking current branch for remote changes...${ENDCOLOR}"
+        
+        # Get the current local commit hash for current branch
+        current_local_commit=$(git rev-parse HEAD 2>/dev/null)
+        
+        # Get the remote commit hash for current branch
+        current_remote_commit=$(git ls-remote $origin_name refs/heads/$current_branch 2>/dev/null | cut -f1)
+        
+        if [ -z "$current_remote_commit" ]; then
+            echo -e "${YELLOW}Remote branch ${origin_name}/${current_branch} not found - proceeding with local rebase${ENDCOLOR}"
+        elif [ "$current_local_commit" != "$current_remote_commit" ]; then
+            echo -e "${YELLOW}Remote changes detected in current branch ${current_branch}!${ENDCOLOR}"
+            echo
+            echo -e "Do you want to pull ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} first (y/n)?"
+            read -n 1 -s choice
+            if [ "$choice" == "y" ]; then
+                echo
+                echo -e "${YELLOW}Pulling ${origin_name}/${current_branch}...${ENDCOLOR}"
+                
+                pull_output=$(git pull $origin_name $current_branch 2>&1)
+                pull_code=$?
+                
+                if [ $pull_code -eq 0 ]; then
+                    echo -e "${GREEN}Successfully pulled current branch${ENDCOLOR}"
+                    if [[ $pull_output == *"file changed"* ]] || [[ $pull_output == *"files changed"* ]]; then
+                        # Extract only the file statistics (lines starting with space and containing |)
+                        # and the summary line (contains "file changed" or "files changed")
+                        changes=$(echo "$pull_output" | grep -E "^ .+\|.+|[0-9]+ files? changed")
+                        if [ -n "$changes" ]; then
+                            echo
+                            print_changes_stat "$changes"
+                        fi
+                    fi
+                else
+                    echo -e "${RED}Failed to pull current branch:${ENDCOLOR}"
+                    echo "$pull_output"
+                    exit $pull_code
+                fi
+            fi
+        else
+            echo -e "${GREEN}Current branch is up to date with remote${ENDCOLOR}"
+        fi
+        echo
+    fi
+
+
     is_clean=$(git status | tail -n 1)
     if [ "$is_clean" != "nothing to commit, working tree clean" ]; then
         echo -e "${RED}Cannot rebase! There are uncommited changes:"
@@ -81,18 +129,37 @@ function rebase_script {
     fi
 
     if [ -z "$autosquash" ] && [ -z "$fastautosquash" ]; then
-        ### Fetch before rebase
-        echo -e "Fetch ${YELLOW}${origin_name}/${new_base_branch}${ENDCOLOR} before rebase (y/n/0)?"
-        read -n 1 -s choice
-        if [ "$choice" == "0" ]; then
-            exit
+        ### Check target branch for remote changes before rebase
+        echo -e "${YELLOW}Checking target branch for remote changes...${ENDCOLOR}"
+        
+        # Get the current local commit hash for the target branch
+        local_commit=""
+        if git show-ref --verify --quiet refs/heads/$new_base_branch; then
+            local_commit=$(git rev-parse refs/heads/$new_base_branch 2>/dev/null)
         fi
-        if [ "$choice" == "y" ]; then
+        
+        # Get the remote commit hash for target branch
+        remote_commit=$(git ls-remote $origin_name refs/heads/$new_base_branch 2>/dev/null | cut -f1)
+        
+        if [ -z "$remote_commit" ]; then
+            echo -e "${YELLOW}Remote branch ${origin_name}/${new_base_branch} not found - proceeding with local rebase${ENDCOLOR}"
+        elif [ "$local_commit" != "$remote_commit" ]; then
+            echo -e "${YELLOW}Remote changes detected in target branch!${ENDCOLOR}"
             echo
-            echo -e "${YELLOW}Fetching ${origin_name}/${new_base_branch}...${ENDCOLOR}"
+            echo -e "Do you want to fetch ${YELLOW}${origin_name}/${new_base_branch}${ENDCOLOR} before rebase (y/n/0)?"
+            read -n 1 -s choice
+            if [ "$choice" == "0" ]; then
+                exit
+            fi
+            if [ "$choice" == "y" ]; then
+                echo
+                echo -e "${YELLOW}Fetching ${origin_name}/${new_base_branch}...${ENDCOLOR}"
 
-            fetch $new_base_branch $origin_name
-            from_origin=true
+                fetch $new_base_branch $origin_name
+                from_origin=true
+            fi
+        else
+            echo -e "${GREEN}Target branch is up to date with remote${ENDCOLOR}"
         fi
         echo
     fi

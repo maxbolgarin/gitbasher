@@ -690,6 +690,7 @@ function list_branches {
     if [[ "$1" == "remote" ]]; then
         # Remove 'origin/'
         branch_to_check="${branches[1]}"
+        branch_to_check="$(sed "s/remotes\///g" <<< ${branch_to_check})"
         branch_to_check="$(sed "s/${origin_name}\///g" <<< ${branch_to_check})"
     fi
 
@@ -732,6 +733,7 @@ function list_branches {
             fi
         fi
         if [[ "$1" == "remote" ]]; then
+            branch_to_check="$(sed "s/remotes\///g" <<< ${branch_to_check})"
             branch_to_check="$(sed "s/${origin_name}\///g" <<< ${branch_to_check})"
         fi
 
@@ -790,7 +792,9 @@ function choose_branch {
     choose "${branches_first_main[@]}"
     branch_name=$choice_result
 
+    # For remote, ensure branch_name is just the branch part (no origin/ prefix for local creation)
     if [[ "$1" == "remote" ]]; then
+        branch_name=$(sed "s/remotes\///g" <<< ${branch_name})
         branch_name=$(sed "s/${origin_name}\///g" <<< ${branch_name})
     fi
 
@@ -842,7 +846,7 @@ function switch {
     fi
 
     if [ $switch_code -ne 0 ]; then
-        echo -e "${RED}Cannot switch to '$main_branch'! Error message:${ENDCOLOR}"
+        echo -e "${RED}Cannot switch to '$1'! Error message:${ENDCOLOR}"
         echo -e "$switch_output"
         exit $switch_code
     fi

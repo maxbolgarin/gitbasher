@@ -227,9 +227,10 @@ function pull {
             echo -e "1. ${BLUE}Merge.${ENDCOLOR} It saves commit's timeline, but creates a merge commit with message:"
             echo -e "\t\t${YELLOW}Merge remote-tracking branch '$origin_name/$current_branch' into $current_branch${ENDCOLOR}"
             echo -e "2. ${BLUE}Rebase.${ENDCOLOR} It takes all new local commits and places them on top of the remote branch"
+            echo -e "0. ${BLUE}Exit.${ENDCOLOR} No changes will be pulled and branch will be left as is"
 
             read -n 1 -s choice
-            re='^[12]+$'
+            re='^[120]+$'
             if ! [[ $choice =~ $re ]]; then
                 exit 0
             fi
@@ -243,19 +244,21 @@ function pull {
             if [ $merge_code != 0 ] ; then
                 echo
            fi
-        else 
+        elif [ "$choice" == "2" ]; then
            rebase_branch $1 $2 "true" $interactive $interactive
            mode="rebase"
            if [ $rebase_code != 0 ] ; then
                 echo
            fi
+        else
+            echo -e "${YELLOW}Exiting...${ENDCOLOR}"
+            exit 0
         fi
     fi
 
     echo -e "${GREEN}Successfully pulled with $mode!${ENDCOLOR}"
 
     if [ "$mode" == "merge" ] || [ "$mode" == "fast-forward" ]; then 
-        echo
         ### Merge without conflicts
         if [ $merge_code == 0 ] ; then
             if [[ $merge_output == *"made by the"* ]]; then
@@ -264,6 +267,7 @@ function pull {
                 changes=$(echo "$merge_output" | tail -n +2)
             fi
             if [[ -n "$changes" ]]; then
+                echo
                 print_changes_stat "$changes"
             fi
 

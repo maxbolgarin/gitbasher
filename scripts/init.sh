@@ -43,6 +43,7 @@ function set_config_value {
     else
         git config --global "$1" "$2"
     fi
+    echo -e "$2"
 }
 
 

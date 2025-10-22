@@ -26,20 +26,46 @@
     [
       "@semantic-release/release-notes-generator",
       {
-        "preset": "angular",
+        "preset": "conventionalcommits",
         "presetConfig": {
           "types": [
-            {"type": "feat", "section": "🚀 Features"},
-            {"type": "fix", "section": "🐛 Bug Fixes"},
-            {"type": "perf", "section": "⚡ Performance Improvements"},
-            {"type": "revert", "section": "⏪ Reverts"},
-            {"type": "docs", "section": "📚 Documentation"},
-            {"type": "style", "section": "💎 Styles"},
-            {"type": "refactor", "section": "📦 Code Refactoring"},
-            {"type": "test", "section": "🚨 Tests"},
-            {"type": "build", "section": "🛠 Build System"},
-            {"type": "ci", "section": "⚙️ Continuous Integration"}
+            {
+              "type": "feat",
+              "section": "🚀 Features"
+            },
+            {
+              "type": "fix",
+              "section": "🐛 Bug Fixes"
+            },
+            {
+              "type": "refactor",
+              "section": "📦 Code Refactoring"
+            },
+            {
+              "type": "build",
+              "section": "🛠 Build System"
+            },
+            {
+              "type": "docs",
+              "section": "📝 Docs"
+            }
           ]
+        },
+        "parserOpts": {
+          "noteKeywords": [
+            "BREAKING CHANGE",
+            "BREAKING CHANGES",
+            "BREAKING"
+          ]
+        },
+        "writerOpts": {
+          "commitsSort": [
+            "scope",
+            "subject"
+          ],
+          "noteGroupsSort": "title",
+          "notesSort": "text",
+          "headerPartial": "# Release {{#if @root.linkCompare}}[{{version}}]({{@root.host}}/{{@root.owner}}/{{@root.repository}}/compare/{{@root.previousTag}}...{{@root.currentTag}}){{else}}{{version}}{{/if}}\n\n"
         }
       }
     ],

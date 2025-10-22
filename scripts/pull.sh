@@ -57,18 +57,19 @@ function pull_script {
 
 
     if [ -n "$help" ]; then
-        echo -e "usage: ${YELLOW}gitb pull${ENDCOLOR}"
+        echo -e "usage: ${YELLOW}gitb pull <mode>${ENDCOLOR}"
         echo
-        echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\t\tFetch current branch, try to fast-forward or ask about strategy"
-        echo -e "fetch|fe\t\tFetch current branch without merge"    
-        echo -e "all|fa\t\t\tFetch all without merge"
-        echo -e "upd|u\t\t\tRun git remote update to fetch all branches"
-        echo -e "ffonly|ff\t\tFetch and then merge in fast forward only mode"
-        echo -e "merge|m\t\t\tFetch current branch and then merge it"
-        echo -e "rebase|r\t\tFetch current branch and then rebase"
-        echo -e "interactive|ri|rs\tFetch current branch and then rebase in interactive mode with --autosquash"
-        echo -e "help|h\t\t\tShow this help"
+        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Fetch current branch, try to fast-forward or ask about strategy"
+        msg="$msg\n${BOLD}fetch${ENDCOLOR}_fe_Fetch current branch without merge"
+        msg="$msg\n${BOLD}all${ENDCOLOR}_fa_Fetch all without merge"
+        msg="$msg\n${BOLD}upd${ENDCOLOR}_u_Run git remote update to fetch all branches"
+        msg="$msg\n${BOLD}ffonly${ENDCOLOR}_ff_Fetch and then merge in fast forward only mode"
+        msg="$msg\n${BOLD}merge${ENDCOLOR}_m_Fetch current branch and then merge it"
+        msg="$msg\n${BOLD}rebase${ENDCOLOR}_r_Fetch current branch and then rebase"
+        msg="$msg\n${BOLD}interactive${ENDCOLOR}_ri|rs_Fetch current branch and then rebase in interactive mode with --autosquash"
+        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
+        echo -e "$(echo -e "$msg" | column -ts'_')"
         exit
     fi
 

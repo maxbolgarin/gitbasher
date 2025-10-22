@@ -176,16 +176,17 @@ function stash_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb stash <mode>${ENDCOLOR}"
         echo
-        echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\tShow interactive menu"
-        echo -e "select|sel\tSelect files to stash"
-        echo -e "all\t\tStash all changes"
-        echo -e "list|l\t\tList all stashes"
-        echo -e "pop|p\t\tPop from selected stash"
-        echo -e "show|s\t\tShow stash contents"
-        echo -e "apply|a\t\tApply selected stash without removing it"
-        echo -e "drop|d\t\tDrop selected stash"
-        echo -e "help|h\t\tShow this help"
+        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Show interactive menu"
+        msg="$msg\n${BOLD}all${ENDCOLOR}_ _Stash all changes"
+        msg="$msg\n${BOLD}select${ENDCOLOR}_sel_Select files to stash"
+        msg="$msg\n${BOLD}list${ENDCOLOR}_l_List all stashes"
+        msg="$msg\n${BOLD}pop${ENDCOLOR}_p_Pop from selected stash"
+        msg="$msg\n${BOLD}show${ENDCOLOR}_s_Show stash contents"
+        msg="$msg\n${BOLD}apply${ENDCOLOR}_a_Apply selected stash without removing it"
+        msg="$msg\n${BOLD}drop${ENDCOLOR}_d_Drop selected stash"
+        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
+        echo -e "$(echo -e "$msg" | column -ts'_')"
         exit
     fi
 

@@ -152,18 +152,19 @@ function tag_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb tag <mode>${ENDCOLOR}"
         echo
-        echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\tCreate a new tag from the last commit"
-        echo -e "annotated|a|an\tCreate a new annotated tag from the last commit"
-        echo -e "commit|c|co|cm\tCreate a new tag from a selected commit"
-        echo -e "all|al\t\tCreate a new annotated tag from a selected commit"
-        echo -e "push|ps|ph|p\tSelect a local tag and push it to the remote repository"
-        echo -e "push-all|pa\tPush all tags to the remote repository"
-        echo -e "delete|del|d\tSelect a tag to delete"
-        echo -e "delete-all|da\tDelete all local tags"
-        echo -e "list|log|l\tPrint a list of local tags"
-        echo -e "remote|fetch|r\tFetch tags from the remote repository and print it"
-        echo -e "help|h\t\tShow this help"
+        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Create a new tag from the last commit"
+        msg="$msg\n${BOLD}annotated${ENDCOLOR}_a|an_Create a new annotated tag from the last commit"
+        msg="$msg\n${BOLD}commit${ENDCOLOR}_c|co|cm_Create a new tag from a selected commit"
+        msg="$msg\n${BOLD}all${ENDCOLOR}_al_Create a new annotated tag from a selected commit"
+        msg="$msg\n${BOLD}push${ENDCOLOR}_ps|ph|p_Select a local tag and push it to the remote repository"
+        msg="$msg\n${BOLD}push-all${ENDCOLOR}_pa_Push all tags to the remote repository"
+        msg="$msg\n${BOLD}delete${ENDCOLOR}_del|d_Select a tag to delete"
+        msg="$msg\n${BOLD}delete-all${ENDCOLOR}_da_Delete all local tags"
+        msg="$msg\n${BOLD}list${ENDCOLOR}_log|l_Print a list of local tags"
+        msg="$msg\n${BOLD}remote${ENDCOLOR}_fetch|r|re_Fetch tags from the remote repository and print it"
+        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
+        echo -e "$(echo -e "$msg" | column -ts'_')"
         exit
     fi
 

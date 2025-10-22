@@ -60,16 +60,17 @@ function branch_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb branch <mode>${ENDCOLOR}"
         echo
-        echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\tSelect a local branch to switch"
-        echo -e "list|l\t\tPrint a list of local branches"
-        echo -e "remote|re|r\tFetch $origin_name and select a remote branch to switch"
-        echo -e "main|def|m\tSwitch to $main_branch without additional confirmations"
-        echo -e "tag|t\t\tCheckout to a specific tag"
-        echo -e "new|n|c\t\tBuild a conventional name and create a new branch from $main_branch"
-        echo -e "newd|nd\t\tBuild a conventional name, switch to $main_branch, pull it and create new branch"
-        echo -e "delete|del|d\tSelect a local branch to delete"
-        echo -e "help|h\t\tShow this help"
+        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Select a local branch to switch"
+        msg="$msg\n${BOLD}list${ENDCOLOR}_l_Print a list of local branches"
+        msg="$msg\n${BOLD}remote${ENDCOLOR}_re|r_Fetch $origin_name and select a remote branch to switch"
+        msg="$msg\n${BOLD}main${ENDCOLOR}_def|m_Switch to $main_branch without additional confirmations"
+        msg="$msg\n${BOLD}tag${ENDCOLOR}_t_Checkout to a specific tag"
+        msg="$msg\n${BOLD}new${ENDCOLOR}_n|c_Build a conventional name and create a new branch from current branch"
+        msg="$msg\n${BOLD}newd${ENDCOLOR}_nd|cd_Build a conventional name, switch to $main_branch, pull it and create new branch"
+        msg="$msg\n${BOLD}delete${ENDCOLOR}_del|d_Select a local branch to delete"
+        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
+        echo -e "$(echo -e "$msg" | column -ts'_')"
         exit
     fi
         

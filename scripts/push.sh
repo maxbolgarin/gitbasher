@@ -93,12 +93,13 @@ function push_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb push <mode>${ENDCOLOR}"
         echo
-        echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\tPrint list of commits, push them to current branch or pull changes first"
-        echo -e "yes|y\t\tSame as <empty> but without pressing 'y'"
-        echo -e "force|f\t\tSame as <empty> but with --force"
-        echo -e "list|log|l\tPrint a list of unpushed local commits without actual pushing it"
-        echo -e "help|h\t\tShow this help"
+        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Print list of commits, push them to current branch or pull changes first"
+        msg="$msg\n${BOLD}yes${ENDCOLOR}_y_Same as <empty> but without pressing 'y'"
+        msg="$msg\n${BOLD}force${ENDCOLOR}_f_Same as <empty> but with --force"
+        msg="$msg\n${BOLD}list${ENDCOLOR}_log|l_Print a list of unpushed local commits without actual pushing it"
+        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
+        echo -e "$(echo -e "$msg" | column -ts'_')"
         exit
     fi
 

@@ -349,7 +349,7 @@ function call_openrouter_api {
         
         # Show full API response for debugging
         echo >&2
-        echo -e "${YELLOW}📋 Full API Response:${ENDCOLOR}" >&2
+        echo -e "${YELLOW}📋 Full API Response:${ENDCOLOR}"
         echo "$response" >&2
         echo >&2
         

@@ -3,10 +3,11 @@
 ### Function returns contents of the final gitb script
 # $1: original gitb script
 function build {
-    while read line; do
-        if [[ "$line" =~ (\.|source)\s+.+ ]]; then
-            file="$(echo $line | cut -d' ' -f2)"
-            echo "$(cat $file)"
+    while IFS= read -r line; do
+        # Match only lines that begin with optional whitespace then 'source' or '.' followed by a filepath
+        if [[ "$line" =~ ^[[:space:]]*(source|\.)[[:space:]]+([^[:space:]]+) ]]; then
+            file="${BASH_REMATCH[2]}"
+            echo "$(cat "$file")"
         else
             echo "$line"
         fi

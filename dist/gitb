@@ -1,22 +1,26 @@
 #!/usr/bin/env bash
 if [ "$1" == "init" ]; then
-git init
+    git init
 fi
 git_check=$(git branch --show-current 2>&1)
 if [[ "$git_check" == *"fatal: not a git repository"* ]]; then
-echo "You can use gitb only in a git repository"
-exit
+    echo "You can use gitb only in a git repository"
+    exit
 fi
-if ((BASH_VERSINFO[0] < 4)); then
-YELLOW=${YELLOW:-"e[33m"}
-GREEN=${GREEN:-"e[32m"}
-ENDCOLOR=${ENDCOLOR:-"e[0m"}
-printf "Sorry, you need at least ${YELLOW}bash-4.0${ENDCOLOR} to run gitbasher.n
-If your OS is debian-based, use:
-${GREEN}apt install --only-upgrade bash${ENDCOLOR}n
-If your OS is Mac, use:
-${GREEN}brew install bash${ENDCOLOR}nn"
-exit 1;
+if ((BASH_VERSINFO[0] < 4)); then 
+    if [ -x "/opt/homebrew/bin/bash" ]; then
+        exec /opt/homebrew/bin/bash "$0" "$@"
+    elif [ -x "/usr/local/bin/bash" ]; then
+        exec /usr/local/bin/bash "$0" "$@"
+    fi
+    YELLOW=${YELLOW:-"\e[33m"}
+    GREEN=${GREEN:-"\e[32m"}
+    ENDCOLOR=${ENDCOLOR:-"\e[0m"}
+    printf "Sorry, you need at least ${YELLOW}bash-4.0${ENDCOLOR} to run gitbasher.\n\n"
+    printf "Linux (Debian/Ubuntu):\n    ${GREEN}sudo apt update && sudo apt install --only-upgrade bash${ENDCOLOR}\n\n"
+    printf "macOS:\n    1) Install Homebrew (if missing):\n       ${GREEN}/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"${ENDCOLOR}\n    2) Install newer bash:\n       ${GREEN}brew install bash${ENDCOLOR}\n    3) Optional: make it your default shell (then restart Terminal):\n       ${GREEN}sudo sh -c 'echo /opt/homebrew/bin/bash >> /etc/shells' && chsh -s /opt/homebrew/bin/bash${ENDCOLOR}\n\n"
+    printf "Or run gitb explicitly with the newer bash when installed:\n    ${GREEN}/opt/homebrew/bin/bash $0 "$@"${ENDCOLOR}\n\n"
+    exit 1; 
 fi
 RED="\e[31m"
 GREEN="\e[32m"
@@ -2634,19 +2638,13 @@ function pull_commits_from_branch {
             echo
             continue
         fi
-        echo -e "\t${GRAY}[DEBUG] Cherry-pick exit code: $cherry_pick_code${ENDCOLOR}"
-        echo -e "\t${GRAY}[DEBUG] Cherry-pick output: '$cherry_pick_output'${ENDCOLOR}"
-        echo -e "\t${GRAY}[DEBUG] Checking for conflicts...${ENDCOLOR}"
         if [[ $cherry_pick_output == *"CONFLICT"* ]] || [[ $cherry_pick_output == *"Automatic merge failed"* ]] || [[ $cherry_pick_output == *"fix conflicts"* ]]; then
-            echo -e "\t${GRAY}[DEBUG] Conflict condition matched - calling conflict handler${ENDCOLOR}"
             echo -e "\t${RED}✗ Conflicts detected${ENDCOLOR}"
             echo
             handle_cherry_pick_conflicts "$commit_hash" "$current_commit_index" "$total_commits" "$commit_subject"
-            echo -e "\t${GRAY}[DEBUG] Returned from conflict handler - continuing to next commit${ENDCOLOR}"
             echo
             continue
         fi
-        echo -e "\t${GRAY}[DEBUG] No conflicts detected - calling error handler${ENDCOLOR}"
         handle_cherry_pick_error "$commit_hash" "$current_commit_index" "$total_commits" "$commit_subject" "$cherry_pick_output"
         echo
     done
@@ -2800,7 +2798,6 @@ function handle_cherry_pick_conflicts {
     current_index=$2
     total_commits=$3
     commit_subject=$4
-    echo -e "\t${GRAY}[DEBUG] Entering conflict resolution for ${commit_hash::7}${ENDCOLOR}"
     print_menu="true"
     while [ true ]; do
         if [ "$print_menu" == "true" ]; then
@@ -2838,8 +2835,6 @@ function handle_cherry_pick_conflicts {
                 continue_code=$?
                 if [ $continue_code -eq 0 ]; then
                     echo
-                    echo -e "\t${GREEN}✓ Conflicts resolved and commit applied${ENDCOLOR}"
-                    echo -e "\t${GRAY}[DEBUG] Exiting conflict resolution successfully${ENDCOLOR}"
                     return
                 else
                     echo
@@ -2856,7 +2851,6 @@ function handle_cherry_pick_conflicts {
                     echo
                     echo -e "${YELLOW}Skipping commit ${commit_hash::7}${ENDCOLOR}"
                     git cherry-pick --skip 2>/dev/null
-                    echo -e "\t${GRAY}[DEBUG] Exiting conflict resolution - commit skipped${ENDCOLOR}"
                     return
                 else
                     echo
@@ -2875,7 +2869,6 @@ function handle_cherry_pick_conflicts {
                     continue_output=$(git cherry-pick --continue 2>&1)
                     if [ $? -eq 0 ]; then
                         echo -e "\t${GREEN}✓ Applied with incoming changes${ENDCOLOR}"
-                        echo -e "\t${GRAY}[DEBUG] Exiting conflict resolution - incoming changes accepted${ENDCOLOR}"
                         return
                     else
                         echo -e "${RED}Failed to continue:${ENDCOLOR}"
@@ -2899,7 +2892,6 @@ function handle_cherry_pick_conflicts {
                     continue_output=$(git cherry-pick --continue 2>&1)
                     if [ $? -eq 0 ]; then
                         echo -e "\t${GREEN}✓ Applied with current changes${ENDCOLOR}"
-                        echo -e "\t${GRAY}[DEBUG] Exiting conflict resolution - current changes accepted${ENDCOLOR}"
                         return
                     else
                         echo -e "${RED}Failed to continue:${ENDCOLOR}"
@@ -2931,7 +2923,6 @@ function handle_cherry_pick_conflicts {
                 ;;
         esac
     done
-    echo -e "\t${GRAY}[DEBUG] Exiting conflict resolution function - unexpected end${ENDCOLOR}"
     return
 }
 function pull_script {

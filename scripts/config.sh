@@ -272,7 +272,7 @@ function configure_ai_model {
     
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet AI model globally" "true"
-    set_ai_model "$model_input"
+    set_config_value gitbasher.ai-model "$model_input" "true"
 }
 
 

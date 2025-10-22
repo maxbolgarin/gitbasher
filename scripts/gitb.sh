@@ -29,7 +29,7 @@ if ((BASH_VERSINFO[0] < 4)); then
     printf "Sorry, you need at least bash-4.0 to run gitbasher.\n\n"
     printf "Linux (Debian/Ubuntu):\n    sudo apt update && sudo apt install --only-upgrade bash\n\n"
     printf "macOS:\n    1) Install Homebrew (if missing):\n       /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"\n    2) Install newer bash:\n       brew install bash\n    3) Optional: make it your default shell (then restart Terminal):\n       sudo sh -c 'echo /opt/homebrew/bin/bash >> /etc/shells' && chsh -s /opt/homebrew/bin/bash\n\n"
-    printf "Or run gitb explicitly with the newer bash when installed:\n    /opt/homebrew/bin/bash $0 "$@"\n\n"
+    printf "Or run gitb explicitly with the newer bash when installed:\n    /opt/homebrew/bin/bash $0 \"\$@\"\n\n"
     exit 1; 
 fi
 

@@ -38,12 +38,13 @@ function merge_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb merge <mode>${ENDCOLOR}"
         echo
-        echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\t\tSelect a branch to merge into the current one and fix conflicts"
-        echo -e "main|master|m\t\tMerge $main_branch to the current branch and fix conflicts"
-        echo -e "to-main|to-master|tm\tSwitch to $main_branch and merge the current branch into $main_branch"
-        echo -e "remote|r\t\tFetch $origin_name and select a remote branch to merge into current"
-        echo -e "help|h\t\t\tShow this help"
+        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Select a branch to merge into the current one and fix conflicts"
+        msg="$msg\n${BOLD}main${ENDCOLOR}_master|m_Merge $main_branch to the current branch and fix conflicts"
+        msg="$msg\n${BOLD}to-main${ENDCOLOR}_to-master|tm_Switch to $main_branch and merge the current branch into $main_branch"
+        msg="$msg\n${BOLD}remote${ENDCOLOR}_r_Fetch $origin_name and select a remote branch to merge into current"
+        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
+        echo -e "$(echo -e "$msg" | column -ts'_')"
         echo
         echo -e "${YELLOW}Conflict resolution options (available during merge conflicts):${ENDCOLOR}"
         echo -e "Accept all incoming changes\tResolve all conflicts by accepting changes from the target branch"

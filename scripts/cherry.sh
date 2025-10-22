@@ -51,15 +51,15 @@ function cherry_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb cherry <mode> [args]${ENDCOLOR}"
         echo
-        echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\t\tInteractive mode: select commits from a branch to cherry-pick"
-        echo -e "\t\t\t(Use '=' to show all commits, space-separated numbers to select multiple)"
-        echo -e "hash|hs <hash>\t\tCherry-pick a specific commit by its hash"
-        echo -e "range|r <from>..<to>\tCherry-pick a range of commits (e.g., abc123..def456)"
-        echo -e "<commit-hash>\t\tShorthand for cherry-pick by hash"
-        echo -e "abort|a\t\t\tAbort current cherry-pick operation"
-        echo -e "continue|cont|c\t\tContinue cherry-pick after resolving conflicts"
-        echo -e "help|h\t\t\tShow this help"
+        msg="${YELLOW}Mode${ENDCOLOR}_\t${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Interactive mode: select commits from a branch to cherry-pick"
+        msg="$msg\n${BOLD}<commit-hash>${ENDCOLOR}_ _Shorthand for cherry-pick by hash"
+        msg="$msg\n${BOLD}hash${ENDCOLOR}_hs_Cherry-pick a specific commit by its hash"
+        msg="$msg\n${BOLD}range${ENDCOLOR}_r_Cherry-pick a range of commits"
+        msg="$msg\n${BOLD}abort${ENDCOLOR}_a_Abort current cherry-pick operation"
+        msg="$msg\n${BOLD}continue${ENDCOLOR}_cont|c_Continue cherry-pick after resolving conflicts"
+        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
+        echo -e "$(echo -e "$msg" | column -ts'_')"
         exit
     fi
 

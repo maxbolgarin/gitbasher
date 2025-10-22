@@ -44,14 +44,15 @@ function rebase_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb rebase <mode>${ENDCOLOR}"
         echo
-        echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\t\tSelect base branch to rebase current changes"
-        echo -e "main|master|m\t\tRebase current branch onto default branch"
-        echo -e "interactive|i\t\tSelect base commit in current branch and rebase in an interactive mode"
-        echo -e "autosquash|a|s|ia\tRebase on the current local branch in an interactive mode with --autosquash"
-        echo -e "fastautosquash|fast|f\tFast autosquash rebase - automatically merge fixup commits without interaction"
-        echo -e "pull|p\t\t\tTake all commits from selected branch and apply them to current branch"
-        echo -e "help|h\t\t\tShow this help"
+        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Select base branch to rebase current changes"
+        msg="$msg\n${BOLD}main${ENDCOLOR}_master|m_Rebase current branch onto default branch"
+        msg="$msg\n${BOLD}interactive${ENDCOLOR}_i_Select base commit in current branch and rebase in an interactive mode"
+        msg="$msg\n${BOLD}autosquash${ENDCOLOR}_a|s|ia_Rebase on the current local branch in an interactive mode with --autosquash"
+        msg="$msg\n${BOLD}fastautosquash${ENDCOLOR}_fast|sf|f_Fast autosquash rebase - automatically merge fixup commits without interaction"
+        msg="$msg\n${BOLD}pull${ENDCOLOR}_p_Take all commits from selected branch and apply them to current branch"
+        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
+        echo -e "$(echo -e "$msg" | column -ts'_')"
         echo
         echo -e "${YELLOW}Conflict resolution options (available during rebase conflicts):${ENDCOLOR}"
         echo -e "Accept all incoming changes\tResolve all conflicts by accepting changes from the target branch"

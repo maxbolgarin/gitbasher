@@ -46,13 +46,14 @@ function reset_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb reset <mode>${ENDCOLOR}"
         echo
-        echo -e "${YELLOW}Available modes${ENDCOLOR}"
-        echo -e "<empty>\t\tReset last commit (git reset HEAD^ --mixed)"
-        echo -e "soft|s\t\tReset last commit, but remain all fiels staged (git reset HEAD^ --soft)"
-        echo -e "undo|u\t\tUndo last commit reset (git reset HEAD@{1})"
-        echo -e "interactive|i\tSelect a commit to reset"
-        echo -e "ref|r\t\tSelect a HEAD reference to reset"
-        echo -e "help|h\t\tShow this help"
+        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Reset last commit (git reset HEAD^ --mixed)"
+        msg="$msg\n${BOLD}soft${ENDCOLOR}_s_Reset last commit, but remain all files staged (git reset HEAD^ --soft)"
+        msg="$msg\n${BOLD}undo${ENDCOLOR}_u_Undo last commit reset (git reset HEAD@{1})"
+        msg="$msg\n${BOLD}interactive${ENDCOLOR}_i_Select a commit to reset"
+        msg="$msg\n${BOLD}ref${ENDCOLOR}_r_Select a HEAD reference to reset"
+        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
+        echo -e "$(echo -e "$msg" | column -ts'_')"
         exit
     fi
 

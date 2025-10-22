@@ -10,16 +10,15 @@ fi
 if ((BASH_VERSINFO[0] < 4)); then 
     if [ -x "/opt/homebrew/bin/bash" ]; then
         exec /opt/homebrew/bin/bash "$0" "$@"
+        exit $?
     elif [ -x "/usr/local/bin/bash" ]; then
         exec /usr/local/bin/bash "$0" "$@"
+        exit $?
     fi
-    YELLOW=${YELLOW:-"\e[33m"}
-    GREEN=${GREEN:-"\e[32m"}
-    ENDCOLOR=${ENDCOLOR:-"\e[0m"}
-    printf "Sorry, you need at least ${YELLOW}bash-4.0${ENDCOLOR} to run gitbasher.\n\n"
-    printf "Linux (Debian/Ubuntu):\n    ${GREEN}sudo apt update && sudo apt install --only-upgrade bash${ENDCOLOR}\n\n"
-    printf "macOS:\n    1) Install Homebrew (if missing):\n       ${GREEN}/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"${ENDCOLOR}\n    2) Install newer bash:\n       ${GREEN}brew install bash${ENDCOLOR}\n    3) Optional: make it your default shell (then restart Terminal):\n       ${GREEN}sudo sh -c 'echo /opt/homebrew/bin/bash >> /etc/shells' && chsh -s /opt/homebrew/bin/bash${ENDCOLOR}\n\n"
-    printf "Or run gitb explicitly with the newer bash when installed:\n    ${GREEN}/opt/homebrew/bin/bash $0 "$@"${ENDCOLOR}\n\n"
+    printf "Sorry, you need at least bash-4.0 to run gitbasher.\n\n"
+    printf "Linux (Debian/Ubuntu):\n    sudo apt update && sudo apt install --only-upgrade bash\n\n"
+    printf "macOS:\n    1) Install Homebrew (if missing):\n       /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"\n    2) Install newer bash:\n       brew install bash\n    3) Optional: make it your default shell (then restart Terminal):\n       sudo sh -c 'echo /opt/homebrew/bin/bash >> /etc/shells' && chsh -s /opt/homebrew/bin/bash\n\n"
+    printf "Or run gitb explicitly with the newer bash when installed:\n    /opt/homebrew/bin/bash $0 "$@"\n\n"
     exit 1; 
 fi
 RED="\e[31m"
@@ -6618,6 +6617,9 @@ if [[ $is_first == "true" ]]; then
     print_configuration
     echo
     echo -e "You can change these settings by using ${YELLOW}gitb cfg <name>${ENDCOLOR}"
+    echo
+    echo -e "${CYAN}💡 Pro tip:${ENDCOLOR} If zsh tries to autocorrect 'gitb' to 'git', add this to your ~/.zshrc:"
+    echo -e "  ${GREEN}alias gitb='nocorrect gitb'${ENDCOLOR}"
     echo
 fi
 if [ -z $1 ] || [ "$1" == "--help" ] || [ "$1" == "help" ] || [ "$1" == "man" ]; then

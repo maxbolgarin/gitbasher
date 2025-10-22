@@ -567,7 +567,7 @@ git --version
 | **System** | **Bash** | **Git** | **Installation Method** |
 |------------|----------|---------|------------------------|
 | **Linux** | 4.0+ | 2.23+ | `apt install bash git` |
-| **macOS** | 4.0+ | 2.23+ | `brew install bash git` (install Homebrew first)
+| **macOS** | 4.0+ | 2.23+ | `brew install bash git` |
 | **Windows** | WSL | WSL | `wsl --install` then Linux steps |
 
 ### 💡 Pro Tips

@@ -18,7 +18,7 @@ if ((BASH_VERSINFO[0] < 4)); then
     printf "Sorry, you need at least bash-4.0 to run gitbasher.\n\n"
     printf "Linux (Debian/Ubuntu):\n    sudo apt update && sudo apt install --only-upgrade bash\n\n"
     printf "macOS:\n    1) Install Homebrew (if missing):\n       /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"\n    2) Install newer bash:\n       brew install bash\n    3) Optional: make it your default shell (then restart Terminal):\n       sudo sh -c 'echo /opt/homebrew/bin/bash >> /etc/shells' && chsh -s /opt/homebrew/bin/bash\n\n"
-    printf "Or run gitb explicitly with the newer bash when installed:\n    /opt/homebrew/bin/bash $0 "$@"\n\n"
+    printf "Or run gitb explicitly with the newer bash when installed:\n    /opt/homebrew/bin/bash $0 \"\$@\"\n\n"
     exit 1; 
 fi
 RED="\e[31m"
@@ -909,7 +909,7 @@ function call_openrouter_api {
             echo -e "${RED}Error Message: $error_message${ENDCOLOR}" >&2
         fi
         echo >&2
-        echo -e "${YELLOW}📋 Full API Response:${ENDCOLOR}" >&2
+        echo -e "${YELLOW}📋 Full API Response:${ENDCOLOR}"
         echo "$response" >&2
         echo >&2
         case "$error_code" in
@@ -1332,7 +1332,7 @@ function configure_ai_model {
     echo
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet AI model globally" "true"
-    set_ai_model "$model_input"
+    set_config_value gitbasher.ai-model "$model_input" "true"
 }
 function configure_ai_proxy {    
     echo -e "${YELLOW}Configure AI HTTP/SOCKS Proxy${ENDCOLOR}"

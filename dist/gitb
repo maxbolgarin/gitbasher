@@ -343,6 +343,8 @@ function print_configuration {
     else
         echo -e "\tAI key:\t\t${RED}not set${ENDCOLOR}"
     fi
+    local ai_model=$(get_ai_model)
+    echo -e "\tAI model:\t${GREEN}$ai_model${ENDCOLOR}"
     local ai_proxy=$(get_ai_proxy)
     if [ -n "$ai_proxy" ]; then
         echo -e "\tAI proxy:\t${GREEN}$ai_proxy${ENDCOLOR}"
@@ -689,12 +691,18 @@ function switch {
         exit $switch_code
     fi
 }
-readonly GOOGLE_API_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+readonly OPENROUTER_API_URL="https://openrouter.ai/api/v1/chat/completions"
 function get_ai_api_key {
     get_config_value gitbasher.ai-api-key ""
 }
 function set_ai_api_key {
     set_config_value gitbasher.ai-api-key "$1"
+}
+function get_ai_model {
+    get_config_value gitbasher.ai-model "openrouter/auto"
+}
+function set_ai_model {
+    set_config_value gitbasher.ai-model "$1"
 }
 function get_ai_proxy {
     get_config_value gitbasher.ai-proxy ""
@@ -781,40 +789,35 @@ function secure_curl_with_api_key {
             curl_cmd+=(--proxy "$proxy_url")
         fi
         curl_cmd+=(
-            "$GOOGLE_API_URL"
+            "$OPENROUTER_API_URL"
             -H "Content-Type: application/json"
-            -H "x-goog-api-key: $api_key"
+            -H "Authorization: Bearer $api_key"
+            -H "HTTP-Referer: https://github.com/maxbolgarin/gitbasher"
+            -H "X-Title: gitbasher"
             -d "$json_payload"
         )
         "${curl_cmd[@]}" 2>&1
     )
 }
-function call_gemini_api {
+function call_openrouter_api {
     trap 'clear_sensitive_vars' EXIT INT TERM
     local prompt="$1"
     local api_key=$(get_ai_api_key)
+    local max_retries=2
+    local retry_delay=2
     if [ -z "$api_key" ]; then
         echo -e "${RED}AI API key not configured. Set it with: gitb config${ENDCOLOR}" >&2
         clear_sensitive_vars
         return 1
     fi
     local escaped_prompt=$(echo "$prompt" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | tr '\n' ' ' | sed 's/  */ /g')
-    local json_payload="{
-        \"contents\": [{
-            \"parts\": [{
-                \"text\": \"$escaped_prompt\"
-            }]
-        }],
-        \"generationConfig\": {
-            \"temperature\": 0.1,
-            \"maxOutputTokens\": 100,
-            \"topP\": 0.8,
-            \"topK\": 10
-        }
-    }"
+    local model=$(get_ai_model)
+    local json_payload="{\"model\":\"$model\",\"messages\": [{\"role\": \"user\", \"content\": \"$escaped_prompt\"}]}"
     local proxy_url=$(get_ai_proxy)
     local safe_proxy_url=""
     local response=""
+    local curl_exit_code=0
+    local retry_count=0
     if [ -n "$proxy_url" ]; then
         if ! validate_proxy_url "$proxy_url"; then
             echo -e "${RED}Invalid proxy URL format: $proxy_url${ENDCOLOR}" >&2
@@ -824,11 +827,30 @@ function call_gemini_api {
             return 1
         fi
         safe_proxy_url="$validated_proxy_url"
-        response=$(secure_curl_with_api_key "$safe_proxy_url" "$api_key" "$json_payload")
-    else
-        response=$(secure_curl_with_api_key "" "$api_key" "$json_payload")
     fi
-    local curl_exit_code=$?
+    while [ $retry_count -le $max_retries ]; do
+        if [ -n "$safe_proxy_url" ]; then
+            response=$(secure_curl_with_api_key "$safe_proxy_url" "$api_key" "$json_payload")
+        else
+            response=$(secure_curl_with_api_key "" "$api_key" "$json_payload")
+        fi
+        curl_exit_code=$?
+        if [ $curl_exit_code -eq 0 ] && [ -n "$response" ]; then
+            local has_error=$(echo "$response" | grep -q '"error"' && echo "true" || echo "false")
+            if [ "$has_error" = "true" ]; then
+                local error_code=$(echo "$response" | grep -o '"code"[[:space:]]*:[[:space:]]*[0-9]*' | grep -o '[0-9]*')
+                if [[ "$error_code" =~ ^(500|502|503)$ ]]; then
+                    if [ $retry_count -lt $max_retries ]; then
+                        echo -e "${YELLOW}Server error $error_code, retrying in ${retry_delay}s... (attempt $((retry_count + 1))/$((max_retries + 1)))${ENDCOLOR}" >&2
+                        sleep $retry_delay
+                        retry_count=$((retry_count + 1))
+                        continue
+                    fi
+                fi
+            fi
+        fi
+        break
+    done
     if [ $curl_exit_code -ne 0 ] || [ -z "$response" ]; then
         echo
         echo -e "${RED}Failed to connect to AI service${ENDCOLOR}" >&2
@@ -854,14 +876,14 @@ function call_gemini_api {
         else
             echo -e "  • No proxy configured" >&2
             echo -e "${YELLOW}Direct connection troubleshooting:${ENDCOLOR}" >&2
-            echo -e "  • Test connection: ${BOLD}curl --connect-timeout 10 https://generativelanguage.googleapis.com${ENDCOLOR}" >&2
-            echo -e "${YELLOW}Testing direct connectivity to Google AI...${ENDCOLOR}" >&2
-            local direct_test=$(curl --connect-timeout 5 --max-time 10 -s -I https://generativelanguage.googleapis.com 2>&1)
+            echo -e "  • Test connection: ${BOLD}curl --connect-timeout 10 https://openrouter.ai${ENDCOLOR}" >&2
+            echo -e "${YELLOW}Testing direct connectivity to OpenRouter...${ENDCOLOR}" >&2
+            local direct_test=$(curl --connect-timeout 5 --max-time 10 -s -I https://openrouter.ai 2>&1)
             local direct_test_code=$?
             if [ $direct_test_code -eq 0 ]; then
-                echo -e "  ✅ Google AI endpoint: Reachable" >&2
+                echo -e "  ✅ OpenRouter endpoint: Reachable" >&2
             else
-                echo -e "  ❌ Google AI endpoint: Failed (exit code: $direct_test_code)" >&2
+                echo -e "  ❌ OpenRouter endpoint: Failed (exit code: $direct_test_code)" >&2
                 echo -e "  📝 Error: $(echo "$direct_test" | head -1)" >&2
                 echo -e "  💡 Consider configuring a proxy: gitb cfg proxy" >&2
             fi
@@ -877,7 +899,8 @@ function call_gemini_api {
     local has_error=$(echo "$response" | grep -q '"error"' && echo "true" || echo "false")
     if [ "$has_error" = "true" ]; then
         local error_code=$(echo "$response" | grep -o '"code"[[:space:]]*:[[:space:]]*[0-9]*' | grep -o '[0-9]*')
-        local error_message=$(echo "$response" | grep -o '"message"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/"message"[[:space:]]*:[[:space:]]*"\([^"]*\)"/\1/')
+        local error_message=$(echo "$response" | grep -o '"message"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/"message"[[:space:]]*:[[:space:]]*"\([^\"]*\)"/\1/')
+        echo >&2
         echo -e "${RED}AI API Error${ENDCOLOR}" >&2
         if [ -n "$error_code" ]; then
             echo -e "${RED}Error Code: $error_code${ENDCOLOR}" >&2
@@ -886,27 +909,22 @@ function call_gemini_api {
             echo -e "${RED}Error Message: $error_message${ENDCOLOR}" >&2
         fi
         echo >&2
+        echo -e "${YELLOW}📋 Full API Response:${ENDCOLOR}" >&2
+        echo "$response" >&2
+        echo >&2
         case "$error_code" in
             400)
-                if [[ "$error_message" == *"location is not supported"* ]]; then
-                    echo -e "${YELLOW}⚠️  Geographic restriction: Google's Gemini API is not available in your region.${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Configure proxy with: gitb cfg proxy${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Use a VPN to connect from a supported region${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Use manual commit messages for now${ENDCOLOR}" >&2
-                else
-                    echo -e "${YELLOW}⚠️  Bad request: Check your API configuration or prompt format.${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Verify your API key is correct${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Try again with a smaller commit diff${ENDCOLOR}" >&2
-                fi
+                echo -e "${YELLOW}⚠️  Bad request: Check your API configuration or prompt format.${ENDCOLOR}" >&2
+                echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
+                echo -e "${YELLOW}  • Verify your API key is correct${ENDCOLOR}" >&2
+                echo -e "${YELLOW}  • Try again with a smaller commit diff${ENDCOLOR}" >&2
                 ;;
             401|403)
                 echo -e "${YELLOW}🔐 Authentication error: Invalid or expired API key.${ENDCOLOR}" >&2
                 echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
                 echo -e "${YELLOW}  • Check your API key with: gitb cfg ai${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Generate a new API key at: https://makersuite.google.com/app/apikey${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Ensure your API key has proper permissions${ENDCOLOR}" >&2
+                echo -e "${YELLOW}  • Get an OpenRouter key at: https://openrouter.ai/keys${ENDCOLOR}" >&2
+                echo -e "${YELLOW}  • Ensure your key has proper permissions${ENDCOLOR}" >&2
                 ;;
             429)
                 echo -e "${YELLOW}⏱️  Rate limit exceeded: Too many requests.${ENDCOLOR}" >&2
@@ -915,13 +933,16 @@ function call_gemini_api {
                 echo -e "${YELLOW}  • Consider upgrading your API plan for higher limits${ENDCOLOR}" >&2
                 ;;
             500|502)
-                echo -e "${YELLOW}🔧 Server error: Google's service is experiencing issues.${ENDCOLOR}" >&2
+                echo -e "${YELLOW}🔧 Server error: AI service is experiencing issues.${ENDCOLOR}" >&2
                 echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
                 echo -e "${YELLOW}  • Try again in a few minutes${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Check Google's API status page${ENDCOLOR}" >&2
+                echo -e "${YELLOW}  • Check OpenRouter status: https://status.openrouter.ai${ENDCOLOR}" >&2
+                echo -e "${YELLOW}  • Use manual commit message for now: gitb c${ENDCOLOR}" >&2
+                echo -e "${YELLOW}  • Try a different model: gitb cfg model${ENDCOLOR}" >&2
+                echo -e "${YELLOW}  • Check your API key balance: https://openrouter.ai/keys${ENDCOLOR}" >&2
                 ;;
             503)
-                echo -e "${YELLOW}📊 Service overloaded: Google's servers are busy.${ENDCOLOR}" >&2
+                echo -e "${YELLOW}📊 Service overloaded: Provider servers are busy.${ENDCOLOR}" >&2
                 echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
                 echo -e "${YELLOW}  • Try again in a few minutes${ENDCOLOR}" >&2
                 echo -e "${YELLOW}  • Retry during off-peak hours${ENDCOLOR}" >&2
@@ -930,10 +951,9 @@ function call_gemini_api {
                 if [[ "$error_message" == *"suspended"* ]]; then
                     echo -e "${YELLOW}🚫 Account suspended: Your API access has been suspended.${ENDCOLOR}" >&2
                     echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Contact Google Support to resolve account issues${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Check your Google Cloud Console for notices${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}  • Contact OpenRouter Support to resolve account issues${ENDCOLOR}" >&2
                 elif [[ "$error_message" == *"location is not supported"* ]]; then
-                    echo -e "${YELLOW}⚠️  Geographic restriction: Google's Gemini API is not available in your region.${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}⚠️  Geographic restriction: Service may be unavailable in your region.${ENDCOLOR}" >&2
                     echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
                     echo -e "${YELLOW}  • Configure proxy with: gitb cfg proxy${ENDCOLOR}" >&2
                     echo -e "${YELLOW}  • Use a VPN to connect from a supported region${ENDCOLOR}" >&2
@@ -941,7 +961,7 @@ function call_gemini_api {
                 else
                     echo -e "${YELLOW}❓ Unknown error occurred.${ENDCOLOR}" >&2
                     echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Check Google's API documentation${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}  • Check OpenAI-compatible API documentation${ENDCOLOR}" >&2
                     echo -e "${YELLOW}  • Try again later${ENDCOLOR}" >&2
                 fi
                 ;;
@@ -950,13 +970,7 @@ function call_gemini_api {
         return 1
     fi
     local ai_response=""
-    ai_response=$(echo "$response" | sed -n 's/.*"text"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
-    if [ -z "$ai_response" ]; then
-        ai_response=$(echo "$response" | sed -n 's/.*"candidates".*"text"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
-    fi
-    if [ -z "$ai_response" ]; then
-        ai_response=$(echo "$response" | sed -n 's/.*"content".*"parts".*"text"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
-    fi
+    ai_response=$(echo "$response" | sed -n 's/.*\"choices\"[[:space:]]*:[[:space:]]*\[.*\"message\"[[:space:]]*:[[:space:]]*{[[:space:]]*\"role\"[[:space:]]*:[[:space:]]*\"assistant\"[[:space:]]*,[[:space:]]*\"content\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p' | head -1)
     if [ -n "$ai_response" ]; then
         ai_response=$(echo "$ai_response" | sed 's/\\n/\n/g' | sed 's/\\"/"/g' | sed 's/\\\\//g')
     fi
@@ -1028,7 +1042,7 @@ Generate ONLY the commit message in the format 'type(scope): subject'. The subje
 If you can determine a meaningful scope from the file paths and LOGIC OF UPDATES, include it. If detected scopes are provided above, prefer using one of them. Otherwise, omit the scope.
 Write ONLY the commit header in the format 'type(scope): subject', do not write body or footer after a new line!
 Respond with only the commit message, nothing else."
-    call_gemini_api "$prompt"
+    call_openrouter_api "$prompt"
 }
 function generate_ai_commit_message_subject {
     local commit_prefix="$1"
@@ -1058,7 +1072,7 @@ Generate ONLY the commit message. The message should:
 - Follow the style and patterns from the recent commits shown above
 Write ONLY the commit message, do not write body or footer.
 Respond with only the commit message without any other text, nothing else."
-    call_gemini_api "$prompt"
+    call_openrouter_api "$prompt"
 }
 function generate_ai_commit_message_full {
     local detected_scopes="$1"
@@ -1104,7 +1118,7 @@ Generate ONLY the commit message in the format 'type(scope): subject' with body.
 If you can determine a meaningful scope from the file paths and LOGIC OF UPDATES, include it. If detected scopes are provided above, prefer using one of them. Otherwise, omit the scope.
 The body should explain why you are making the change. The length of the body should be 1-2 sentences, not more.
 Respond with only the full commit message, nothing else."
-    call_gemini_api "$prompt"
+    call_openrouter_api "$prompt"
 }
 function clear_sensitive_vars {
     api_key=""
@@ -1113,7 +1127,7 @@ function clear_sensitive_vars {
     unset api_key 2>/dev/null
     unset ai_key_input 2>/dev/null
     unset AI_API_KEY 2>/dev/null
-    unset GEMINI_API_KEY 2>/dev/null
+    unset OPENROUTER_API_KEY 2>/dev/null
     if [ -n "$BASH_VERSION" ]; then
         hash -r 2>/dev/null
     fi
@@ -1251,8 +1265,8 @@ function configure_ai_key {
     else
         echo -e "AI API key is ${GREEN}configured${ENDCOLOR}: ${BLUE}$(mask_api_key "$ai_api_key")${ENDCOLOR}"
     fi
-    echo -e "Enter your ${YELLOW}Gemini API key${ENDCOLOR} to enable AI commit message generation"
-    echo -e "Get your API key from: ${BLUE}https://aistudio.google.com/app/apikey${ENDCOLOR}"
+    echo -e "Enter your ${YELLOW}OpenRouter API key${ENDCOLOR} to enable AI commit message generation"
+    echo -e "Get your API key from: ${BLUE}https://openrouter.ai/keys${ENDCOLOR}"
     echo -e "Press Enter to exit without changes or enter 0 to remove existing key"
     echo
     echo -e "${YELLOW}API key enters silently, so you can't see it, but it is entered${ENDCOLOR}"
@@ -1268,8 +1282,8 @@ function configure_ai_key {
         exit
     fi
     echo
-    if [[ ! "$ai_key_input" =~ ^AIza[A-Za-z0-9_-]{35}$ ]]; then
-        echo -e "${RED}Warning: API key format doesn't match expected Gemini format${ENDCOLOR}"
+    if [[ ! "$ai_key_input" =~ ^[a-zA-Z0-9._-]{20,}$ ]]; then
+        echo -e "${RED}Warning: API key format doesn't look like a valid OpenRouter key${ENDCOLOR}"
         read -n 1 -p "Continue anyway? (y/n) " -s choice
         echo
         if [ "$choice" != "y" ] && [ "$choice" != "Y" ]; then
@@ -1282,6 +1296,43 @@ function configure_ai_key {
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet AI API key globally" "true"
     ai_api_key=$(set_config_value gitbasher.ai-api-key "$ai_key_input" "true")
+}
+function configure_ai_model {
+    echo -e "${YELLOW}Configure AI Model${ENDCOLOR}"
+    echo
+    current_model=$(get_ai_model)
+    echo -e "Current model: ${GREEN}$current_model${ENDCOLOR}"
+    echo
+    echo -e "Enter the OpenRouter model ID you want to use for AI commit messages"
+    echo -e "Popular models:"
+    echo -e "  • ${BLUE}openrouter/auto${ENDCOLOR} - Auto-select best available model (default)"
+    echo -e "  • ${BLUE}openai/gpt-4o-mini${ENDCOLOR} - Fast openai model"
+    echo -e "  • ${BLUE}anthropic/claude-haiku-4.5${ENDCOLOR} - Fast anthropic model"
+    echo -e "  • ${BLUE}google/gemini-2.5-flash${ENDCOLOR} - Fast google model"
+    echo
+    echo -e "Press Enter to exit without changes or enter 0 to reset to default"
+    read -p "Model ID: " model_input
+    if [ "$model_input" == "" ]; then
+        exit
+    fi
+    if [ "$model_input" == "0" ]; then
+        set_ai_model "openrouter/auto"
+        echo
+        echo -e "${GREEN}AI model reset to default (openrouter/auto)${ENDCOLOR}"
+        exit
+    fi
+    echo
+    if [[ ! "$model_input" =~ ^[a-zA-Z0-9._/-]+$ ]]; then
+        echo -e "${RED}Invalid model ID format${ENDCOLOR}"
+        echo -e "${YELLOW}Model ID should contain only letters, numbers, dots, dashes, underscores, and slashes${ENDCOLOR}"
+        exit 1
+    fi
+    set_ai_model "$model_input"
+    echo -e "${GREEN}AI model set to '$model_input' for '${project_name}' repo${ENDCOLOR}"
+    echo
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+    yes_no_choice "\nSet AI model globally" "true"
+    set_ai_model "$model_input"
 }
 function configure_ai_proxy {    
     echo -e "${YELLOW}Configure AI HTTP/SOCKS Proxy${ENDCOLOR}"
@@ -1437,17 +1488,21 @@ function delete_global {
     if [ "$global_ai_key" != "" ]; then
         echo -e "6. AI API key: ${GREEN}configured${ENDCOLOR}"
     fi
+    global_ai_model=$(git config --global --get gitbasher.ai-model)
+    if [ "$global_ai_model" != "" ]; then
+        echo -e "7. AI model: ${GREEN}$global_ai_model${ENDCOLOR}"
+    fi
     global_ai_proxy=$(git config --global --get gitbasher.ai-proxy)
     if [ "$global_ai_proxy" != "" ]; then
-        echo -e "7. AI proxy: ${GREEN}$global_ai_proxy${ENDCOLOR}"
+        echo -e "8. AI proxy: ${GREEN}$global_ai_proxy${ENDCOLOR}"
     fi
     global_ai_history=$(git config --global --get gitbasher.ai-commit-history-limit)
     if [ "$global_ai_history" != "" ]; then
-        echo -e "8. AI commit history limit: ${GREEN}$global_ai_history${ENDCOLOR}"
+        echo -e "9. AI commit history limit: ${GREEN}$global_ai_history${ENDCOLOR}"
     fi
     echo -e "0. Exit"
     read -n 1 -s choice
-    re='^[012345678]+$'
+    re='^[0123456789]+$'
     if ! [[ $choice =~ $re ]]; then
         echo -e "${RED}Invalid choice${ENDCOLOR}"
         return 1
@@ -1482,10 +1537,14 @@ function delete_global {
             git config --global --unset gitbasher.ai-api-key
             ;;
         7)
+            echo -e "${GREEN}Unset AI model from global settings${ENDCOLOR}"
+            git config --global --unset gitbasher.ai-model
+            ;;
+        8)
             echo -e "${GREEN}Unset AI proxy from global settings${ENDCOLOR}"
             git config --global --unset gitbasher.ai-proxy
             ;;
-        8)
+        9)
             echo -e "${GREEN}Unset AI commit history limit from global settings${ENDCOLOR}"
             git config --global --unset gitbasher.ai-commit-history-limit
             ;;
@@ -1536,6 +1595,7 @@ function config_script {
         ticket|jira|ti|t)     set_ticket_cfg="true";;
         scopes|scope|sc|s)    set_scopes_cfg="true";;
         ai|llm|key)           set_ai_cfg="true";;
+        model|m)              set_ai_model_cfg="true";;
         proxy|prx|p)          set_proxy_cfg="true";;
         history|hist)         set_ai_history_cfg="true";;
         delete|unset|del)     delete_cfg="true";;
@@ -1556,6 +1616,8 @@ function config_script {
         header="$header SCOPES LIST"
     elif [ -n "${set_ai_cfg}" ]; then
         header="$header AI API KEY"
+    elif [ -n "${set_ai_model_cfg}" ]; then
+        header="$header AI MODEL"
     elif [ -n "${set_proxy_cfg}" ]; then
         header="$header AI PROXY"
     elif [ -n "${set_ai_history_cfg}" ]; then
@@ -1595,6 +1657,10 @@ function config_script {
         configure_ai_key
         exit
     fi
+    if [ "$set_ai_model_cfg" == "true" ]; then
+        configure_ai_model
+        exit
+    fi
     if [ "$set_proxy_cfg" == "true" ]; then
         configure_ai_proxy
         exit
@@ -1619,6 +1685,7 @@ function config_script {
         echo -e "ticket|ti|t|jira\tSet ticket prefix to help with commit/branch building"
         echo -e "scopes|sc|s\t\tSet a list of scopes to help with commit building"
         echo -e "ai|llm|key\t\tSet AI API key for commit message generation"
+        echo -e "model|m\t\t\tSet AI model for OpenRouter (e.g., openrouter/auto, anthropic/claude-3.5-sonnet)"
         echo -e "proxy|prx|p\t\tSet HTTP proxy for AI requests (bypass geo-restrictions)"
         echo -e "history|hist\t\tSet number of recent commits to include in AI prompts"
         echo -e "delete|unset|del\tUnset global configuration"

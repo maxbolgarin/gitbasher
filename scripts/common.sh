@@ -353,6 +353,8 @@ function print_configuration {
     else
         echo -e "\tAI key:\t\t${RED}not set${ENDCOLOR}"
     fi
+    local ai_model=$(get_ai_model)
+    echo -e "\tAI model:\t${GREEN}$ai_model${ENDCOLOR}"
     local ai_proxy=$(get_ai_proxy)
     if [ -n "$ai_proxy" ]; then
         echo -e "\tAI proxy:\t${GREEN}$ai_proxy${ENDCOLOR}"

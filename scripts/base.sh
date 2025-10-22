@@ -43,6 +43,9 @@ if [[ $is_first == "true" ]]; then
     echo
     echo -e "You can change these settings by using ${YELLOW}gitb cfg <name>${ENDCOLOR}"
     echo
+    echo -e "${CYAN}💡 Pro tip:${ENDCOLOR} If zsh tries to autocorrect 'gitb' to 'git', add this to your ~/.zshrc:"
+    echo -e "  ${GREEN}alias gitb='nocorrect gitb'${ENDCOLOR}"
+    echo
 fi
 
 if [ -z $1 ] || [ "$1" == "--help" ] || [ "$1" == "help" ] || [ "$1" == "man" ]; then

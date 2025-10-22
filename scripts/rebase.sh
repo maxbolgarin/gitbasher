@@ -791,11 +791,7 @@ function pull_commits_from_branch {
             continue
         fi
         
-        # Debug: Show cherry-pick output for troubleshooting
-        echo -e "\t${GRAY}[DEBUG] Cherry-pick exit code: $cherry_pick_code${ENDCOLOR}"
-        echo -e "\t${GRAY}[DEBUG] Cherry-pick output: '$cherry_pick_output'${ENDCOLOR}"
-        
-                # Handle cherry-pick conflicts - check for various conflict indicators
+        # Handle cherry-pick conflicts - check for various conflict indicators
         if [[ $cherry_pick_output == *"CONFLICT"* ]] || [[ $cherry_pick_output == *"Automatic merge failed"* ]] || [[ $cherry_pick_output == *"fix conflicts"* ]]; then
             echo -e "\t${RED}✗ Conflicts detected${ENDCOLOR}"
             echo
@@ -992,9 +988,6 @@ function handle_cherry_pick_conflicts {
     current_index=$2
     total_commits=$3
     commit_subject=$4
-    
-    echo -e "\t${GRAY}[DEBUG] Entering conflict resolution for ${commit_hash::7}${ENDCOLOR}"
-    
     print_menu="true"
     
     while [ true ]; do
@@ -1044,8 +1037,6 @@ function handle_cherry_pick_conflicts {
                 
                 if [ $continue_code -eq 0 ]; then
                     echo
-                    echo -e "\t${GREEN}✓ Conflicts resolved and commit applied${ENDCOLOR}"
-                    echo -e "\t${GRAY}[DEBUG] Exiting conflict resolution successfully${ENDCOLOR}"
                     return
                 else
                     echo
@@ -1062,7 +1053,6 @@ function handle_cherry_pick_conflicts {
                     echo
                     echo -e "${YELLOW}Skipping commit ${commit_hash::7}${ENDCOLOR}"
                     git cherry-pick --skip 2>/dev/null
-                    echo -e "\t${GRAY}[DEBUG] Exiting conflict resolution - commit skipped${ENDCOLOR}"
                     return
                 else
                     echo
@@ -1082,7 +1072,6 @@ function handle_cherry_pick_conflicts {
                     continue_output=$(git cherry-pick --continue 2>&1)
                     if [ $? -eq 0 ]; then
                         echo -e "\t${GREEN}✓ Applied with incoming changes${ENDCOLOR}"
-                        echo -e "\t${GRAY}[DEBUG] Exiting conflict resolution - incoming changes accepted${ENDCOLOR}"
                         return
                     else
                         echo -e "${RED}Failed to continue:${ENDCOLOR}"
@@ -1107,7 +1096,6 @@ function handle_cherry_pick_conflicts {
                     continue_output=$(git cherry-pick --continue 2>&1)
                     if [ $? -eq 0 ]; then
                         echo -e "\t${GREEN}✓ Applied with current changes${ENDCOLOR}"
-                        echo -e "\t${GRAY}[DEBUG] Exiting conflict resolution - current changes accepted${ENDCOLOR}"
                         return
                     else
                         echo -e "${RED}Failed to continue:${ENDCOLOR}"

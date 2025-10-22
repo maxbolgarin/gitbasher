@@ -539,10 +539,15 @@ gitb cfg proxy
 # Check bash version (needs 4.0+)
 bash --version
 
-# On macOS, install newer bash
+# macOS: Install newer bash (and Homebrew if needed)
+# 1) Install Homebrew (if missing):
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+# 2) Install bash:
 brew install bash
+# 3) Optional: make it your default shell (restart Terminal after):
+sudo sh -c 'echo /opt/homebrew/bin/bash >> /etc/shells' && chsh -s /opt/homebrew/bin/bash
 
-# On Ubuntu/Debian
+# Ubuntu/Debian: upgrade bash
 sudo apt update && sudo apt install --only-upgrade bash
 ```
 
@@ -562,7 +567,7 @@ git --version
 | **System** | **Bash** | **Git** | **Installation Method** |
 |------------|----------|---------|------------------------|
 | **Linux** | 4.0+ | 2.23+ | `apt install bash git` |
-| **macOS** | 4.0+ | 2.23+ | `brew install bash git` |
+| **macOS** | 4.0+ | 2.23+ | `brew install bash git` (install Homebrew first)
 | **Windows** | WSL | WSL | `wsl --install` then Linux steps |
 
 ### 💡 Pro Tips

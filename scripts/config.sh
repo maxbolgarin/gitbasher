@@ -183,8 +183,8 @@ function configure_ai_key {
     else
         echo -e "AI API key is ${GREEN}configured${ENDCOLOR}: ${BLUE}$(mask_api_key "$ai_api_key")${ENDCOLOR}"
     fi
-    echo -e "Enter your ${YELLOW}Gemini API key${ENDCOLOR} to enable AI commit message generation"
-    echo -e "Get your API key from: ${BLUE}https://aistudio.google.com/app/apikey${ENDCOLOR}"
+    echo -e "Enter your ${YELLOW}OpenRouter API key${ENDCOLOR} to enable AI commit message generation"
+    echo -e "Get your API key from: ${BLUE}https://openrouter.ai/keys${ENDCOLOR}"
     echo -e "Press Enter to exit without changes or enter 0 to remove existing key"
 
     echo
@@ -206,9 +206,9 @@ function configure_ai_key {
 
     echo
 
-    # Validate API key format (basic check)
-    if [[ ! "$ai_key_input" =~ ^AIza[A-Za-z0-9_-]{35}$ ]]; then
-        echo -e "${RED}Warning: API key format doesn't match expected Gemini format${ENDCOLOR}"
+    # Basic validation - check for reasonable API key format
+    if [[ ! "$ai_key_input" =~ ^[a-zA-Z0-9._-]{20,}$ ]]; then
+        echo -e "${RED}Warning: API key format doesn't look like a valid OpenRouter key${ENDCOLOR}"
         read -n 1 -p "Continue anyway? (y/n) " -s choice
         echo
         if [ "$choice" != "y" ] && [ "$choice" != "Y" ]; then
@@ -223,6 +223,56 @@ function configure_ai_key {
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet AI API key globally" "true"
     ai_api_key=$(set_config_value gitbasher.ai-api-key "$ai_key_input" "true")
+}
+
+
+### Function asks user to configure AI model
+function configure_ai_model {
+    echo -e "${YELLOW}Configure AI Model${ENDCOLOR}"
+    echo
+    
+    current_model=$(get_ai_model)
+    echo -e "Current model: ${GREEN}$current_model${ENDCOLOR}"
+    echo
+    echo -e "Enter the OpenRouter model ID you want to use for AI commit messages"
+    echo -e "Popular models:"
+    echo -e "  • ${BLUE}openrouter/auto${ENDCOLOR} - Auto-select best available model (default)"
+    echo -e "  • ${BLUE}openai/gpt-4o-mini${ENDCOLOR} - Fast openai model"
+    echo -e "  • ${BLUE}anthropic/claude-haiku-4.5${ENDCOLOR} - Fast anthropic model"
+    echo -e "  • ${BLUE}google/gemini-2.5-flash${ENDCOLOR} - Fast google model"
+    echo
+    echo -e "Press Enter to exit without changes or enter 0 to reset to default"
+    
+    read -p "Model ID: " model_input
+    
+    if [ "$model_input" == "" ]; then
+        exit
+    fi
+    
+    if [ "$model_input" == "0" ]; then
+        set_ai_model "openrouter/auto"
+        echo
+        echo -e "${GREEN}AI model reset to default (openrouter/auto)${ENDCOLOR}"
+        exit
+    fi
+    
+    echo
+    
+    # Basic validation - check for reasonable model ID format
+    if [[ ! "$model_input" =~ ^[a-zA-Z0-9._/-]+$ ]]; then
+        echo -e "${RED}Invalid model ID format${ENDCOLOR}"
+        echo -e "${YELLOW}Model ID should contain only letters, numbers, dots, dashes, underscores, and slashes${ENDCOLOR}"
+        exit 1
+    fi
+    
+    # Set the model
+    set_ai_model "$model_input"
+    echo -e "${GREEN}AI model set to '$model_input' for '${project_name}' repo${ENDCOLOR}"
+    echo
+    
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+    yes_no_choice "\nSet AI model globally" "true"
+    set_ai_model "$model_input"
 }
 
 
@@ -431,20 +481,25 @@ function delete_global {
         echo -e "6. AI API key: ${GREEN}configured${ENDCOLOR}"
     fi
 
+    global_ai_model=$(git config --global --get gitbasher.ai-model)
+    if [ "$global_ai_model" != "" ]; then
+        echo -e "7. AI model: ${GREEN}$global_ai_model${ENDCOLOR}"
+    fi
+
     global_ai_proxy=$(git config --global --get gitbasher.ai-proxy)
     if [ "$global_ai_proxy" != "" ]; then
-        echo -e "7. AI proxy: ${GREEN}$global_ai_proxy${ENDCOLOR}"
+        echo -e "8. AI proxy: ${GREEN}$global_ai_proxy${ENDCOLOR}"
     fi
 
     global_ai_history=$(git config --global --get gitbasher.ai-commit-history-limit)
     if [ "$global_ai_history" != "" ]; then
-        echo -e "8. AI commit history limit: ${GREEN}$global_ai_history${ENDCOLOR}"
+        echo -e "9. AI commit history limit: ${GREEN}$global_ai_history${ENDCOLOR}"
     fi
 
     echo -e "0. Exit"
 
     read -n 1 -s choice
-    re='^[012345678]+$'
+    re='^[0123456789]+$'
     if ! [[ $choice =~ $re ]]; then
         echo -e "${RED}Invalid choice${ENDCOLOR}"
         return 1
@@ -482,10 +537,14 @@ function delete_global {
             git config --global --unset gitbasher.ai-api-key
             ;;
         7)
+            echo -e "${GREEN}Unset AI model from global settings${ENDCOLOR}"
+            git config --global --unset gitbasher.ai-model
+            ;;
+        8)
             echo -e "${GREEN}Unset AI proxy from global settings${ENDCOLOR}"
             git config --global --unset gitbasher.ai-proxy
             ;;
-        8)
+        9)
             echo -e "${GREEN}Unset AI commit history limit from global settings${ENDCOLOR}"
             git config --global --unset gitbasher.ai-commit-history-limit
             ;;
@@ -557,6 +616,7 @@ function config_script {
         ticket|jira|ti|t)     set_ticket_cfg="true";;
         scopes|scope|sc|s)    set_scopes_cfg="true";;
         ai|llm|key)           set_ai_cfg="true";;
+        model|m)              set_ai_model_cfg="true";;
         proxy|prx|p)          set_proxy_cfg="true";;
         history|hist)         set_ai_history_cfg="true";;
         delete|unset|del)     delete_cfg="true";;
@@ -579,6 +639,8 @@ function config_script {
         header="$header SCOPES LIST"
     elif [ -n "${set_ai_cfg}" ]; then
         header="$header AI API KEY"
+    elif [ -n "${set_ai_model_cfg}" ]; then
+        header="$header AI MODEL"
     elif [ -n "${set_proxy_cfg}" ]; then
         header="$header AI PROXY"
     elif [ -n "${set_ai_history_cfg}" ]; then
@@ -627,6 +689,11 @@ function config_script {
         exit
     fi
 
+    if [ "$set_ai_model_cfg" == "true" ]; then
+        configure_ai_model
+        exit
+    fi
+
     if [ "$set_proxy_cfg" == "true" ]; then
         configure_ai_proxy
         exit
@@ -654,6 +721,7 @@ function config_script {
         echo -e "ticket|ti|t|jira\tSet ticket prefix to help with commit/branch building"
         echo -e "scopes|sc|s\t\tSet a list of scopes to help with commit building"
         echo -e "ai|llm|key\t\tSet AI API key for commit message generation"
+        echo -e "model|m\t\t\tSet AI model for OpenRouter (e.g., openrouter/auto, anthropic/claude-3.5-sonnet)"
         echo -e "proxy|prx|p\t\tSet HTTP proxy for AI requests (bypass geo-restrictions)"
         echo -e "history|hist\t\tSet number of recent commits to include in AI prompts"
         echo -e "delete|unset|del\tUnset global configuration"

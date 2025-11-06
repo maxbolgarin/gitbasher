@@ -16,5 +16,15 @@ jobs:
       - name: Build
         run: ./dist/build.sh ./scripts/gitb.sh ./dist/gitb
 
-      - name: Test
+      - name: Install BATS
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bats
+
+      - name: Run BATS Tests
+        run: |
+          cd tests
+          bats *.bats
+
+      - name: Smoke Test
         run: ./dist/gitb; if [ $? -ne 0 ]; then exit 1; fi

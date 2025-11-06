@@ -12,3 +12,15 @@ install: build
 release: install
 	@git add ./dist/gitb
 	@git commit -m "chore: build new script"
+
+.PHONY: test
+test:
+	@cd tests && ./run_tests.sh
+
+.PHONY: test-file
+test-file:
+	@if [ -z "$(FILE)" ]; then \
+		echo "Usage: make test-file FILE=test_sanitization.bats"; \
+		exit 1; \
+	fi
+	@cd tests && ./run_tests.sh $(FILE)

@@ -122,52 +122,59 @@ fi
 ### Remote
 origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')
 if [ "$origin_name" == "" ]; then 
-    echo -e "${YELLOW}There is no configured remote in this repo!${ENDCOLOR}"
-    echo
-    echo -e "Use ${BLUE}git remote add origin <url>${ENDCOLOR} to add it manually"
-    echo -e "Press '${BOLD}y${ENDCOLOR}' to add it now or an any key to exit"
-
-    read -n 1 -s choice
-    if [ "$choice" != "y" ]; then
-        exit
-    fi
-
-    echo
-    
-    read -p "Remote repo URL: " -e remote_url
-
-    if [ "$remote_url" == "" ]; then
-        exit
-    fi
-
-    # Validate remote URL format
-    if ! validate_git_url "$remote_url"; then
+    # Skip interactive prompt if in test mode or stdin is not a TTY (e.g., in tests or scripts)
+    if [ -z "$GITBASHER_TEST_MODE" ] && [ -t 0 ]; then
+        # Interactive mode: prompt user for remote setup
+        echo -e "${YELLOW}There is no configured remote in this repo!${ENDCOLOR}"
         echo
-        echo -e "${RED}Invalid git URL format!${ENDCOLOR}"
-        echo -e "${YELLOW}Expected formats:${ENDCOLOR}"
-        echo -e "  • https://github.com/user/repo.git"
-        echo -e "  • git@github.com:user/repo.git"
-        echo -e "  • ssh://git@server.com/repo.git"
-        exit 1
-    fi
-    remote_url="$validated_url"
+        echo -e "Use ${BLUE}git remote add origin <url>${ENDCOLOR} to add it manually"
+        echo -e "Press '${BOLD}y${ENDCOLOR}' to add it now or an any key to exit"
 
-    remote_check=$(git ls-remote "$remote_url" 2>&1)
-    if [[ "$remote_check" == *"does not appear to be a git"* ]]; then
+        read -n 1 -s choice
+        if [ "$choice" != "y" ]; then
+            exit
+        fi
+
         echo
-        echo -e "${RED}'$remote_url' is not a git repository!${ENDCOLOR}"
-        echo "Please make sure you have the correct access rights and the repository exists."
-        exit
-    fi
+        
+        read -p "Remote repo URL: " -e remote_url
 
-    git remote add origin "$remote_url"
-    echo -e "${GREEN}Remote successfully added!${ENDCOLOR}"
-    if [ "$remote_check" == "" ]; then
-        echo -e "${YELLOW}Repository '$remote_url' is probably empty${ENDCOLOR}"
+        if [ "$remote_url" == "" ]; then
+            exit
+        fi
+
+        # Validate remote URL format
+        if ! validate_git_url "$remote_url"; then
+            echo
+            echo -e "${RED}Invalid git URL format!${ENDCOLOR}"
+            echo -e "${YELLOW}Expected formats:${ENDCOLOR}"
+            echo -e "  • https://github.com/user/repo.git"
+            echo -e "  • git@github.com:user/repo.git"
+            echo -e "  • ssh://git@server.com/repo.git"
+            exit 1
+        fi
+        remote_url="$validated_url"
+
+        remote_check=$(git ls-remote "$remote_url" 2>&1)
+        if [[ "$remote_check" == *"does not appear to be a git"* ]]; then
+            echo
+            echo -e "${RED}'$remote_url' is not a git repository!${ENDCOLOR}"
+            echo "Please make sure you have the correct access rights and the repository exists."
+            exit
+        fi
+
+        git remote add origin "$remote_url"
+        echo -e "${GREEN}Remote successfully added!${ENDCOLOR}"
+        if [ "$remote_check" == "" ]; then
+            echo -e "${YELLOW}Repository '$remote_url' is probably empty${ENDCOLOR}"
+        fi
+        echo
+        
+        origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')
+    else
+        # Non-interactive mode: skip remote setup, leave origin_name empty
+        origin_name=""
     fi
-    echo
-    
-    origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')
 fi
 
 

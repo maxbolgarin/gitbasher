@@ -605,9 +605,47 @@ rm -rf ~/.gitbasher
 3. Add better error messages and settings for verbosity
 4. Add more AI APIs providers
 
+## Testing
+
+**gitbasher** includes a comprehensive test suite using [BATS (Bash Automated Testing System)](https://github.com/bats-core/bats-core) to ensure code quality and prevent regressions during refactoring.
+
+### Running Tests
+
+```bash
+# Run all tests
+make test
+
+# Run a specific test file
+make test-file FILE=test_sanitization.bats
+
+# Or use the test runner directly
+cd tests
+./run_tests.sh
+```
+
+### Test Coverage
+
+- **115+ tests** across multiple test files
+- Input sanitization (security-critical)
+- Git operations (commit, push, pull, merge, rebase)
+- Branch management
+- Common utilities
+
+See [tests/README.md](tests/README.md) for detailed testing documentation.
+
 ## Contributing
 
 If you'd like to contribute to **gitbasher**, make a fork and submit a pull request. You also can open an issue or text me on Telegram: https://t.me/maxbolgarin
+
+### Development Workflow
+
+1. Fork the repository
+2. Create a feature branch
+3. **Write tests first** for new functionality
+4. Implement your changes
+5. Run tests: `make test`
+6. Ensure all tests pass
+7. Submit a pull request
 
 #### Maintainers
 

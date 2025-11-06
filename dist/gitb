@@ -93,43 +93,47 @@ if [ "$(get_config_value gitbasher.branch "")" == "" ]; then
 fi
 origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')
 if [ "$origin_name" == "" ]; then 
-    echo -e "${YELLOW}There is no configured remote in this repo!${ENDCOLOR}"
-    echo
-    echo -e "Use ${BLUE}git remote add origin <url>${ENDCOLOR} to add it manually"
-    echo -e "Press '${BOLD}y${ENDCOLOR}' to add it now or an any key to exit"
-    read -n 1 -s choice
-    if [ "$choice" != "y" ]; then
-        exit
-    fi
-    echo
-    read -p "Remote repo URL: " -e remote_url
-    if [ "$remote_url" == "" ]; then
-        exit
-    fi
-    if ! validate_git_url "$remote_url"; then
+    if [ -z "$GITBASHER_TEST_MODE" ] && [ -t 0 ]; then
+        echo -e "${YELLOW}There is no configured remote in this repo!${ENDCOLOR}"
         echo
-        echo -e "${RED}Invalid git URL format!${ENDCOLOR}"
-        echo -e "${YELLOW}Expected formats:${ENDCOLOR}"
-        echo -e "  • https://github.com/user/repo.git"
-        echo -e "  • git@github.com:user/repo.git"
-        echo -e "  • ssh://git@server.com/repo.git"
-        exit 1
-    fi
-    remote_url="$validated_url"
-    remote_check=$(git ls-remote "$remote_url" 2>&1)
-    if [[ "$remote_check" == *"does not appear to be a git"* ]]; then
+        echo -e "Use ${BLUE}git remote add origin <url>${ENDCOLOR} to add it manually"
+        echo -e "Press '${BOLD}y${ENDCOLOR}' to add it now or an any key to exit"
+        read -n 1 -s choice
+        if [ "$choice" != "y" ]; then
+            exit
+        fi
         echo
-        echo -e "${RED}'$remote_url' is not a git repository!${ENDCOLOR}"
-        echo "Please make sure you have the correct access rights and the repository exists."
-        exit
+        read -p "Remote repo URL: " -e remote_url
+        if [ "$remote_url" == "" ]; then
+            exit
+        fi
+        if ! validate_git_url "$remote_url"; then
+            echo
+            echo -e "${RED}Invalid git URL format!${ENDCOLOR}"
+            echo -e "${YELLOW}Expected formats:${ENDCOLOR}"
+            echo -e "  • https://github.com/user/repo.git"
+            echo -e "  • git@github.com:user/repo.git"
+            echo -e "  • ssh://git@server.com/repo.git"
+            exit 1
+        fi
+        remote_url="$validated_url"
+        remote_check=$(git ls-remote "$remote_url" 2>&1)
+        if [[ "$remote_check" == *"does not appear to be a git"* ]]; then
+            echo
+            echo -e "${RED}'$remote_url' is not a git repository!${ENDCOLOR}"
+            echo "Please make sure you have the correct access rights and the repository exists."
+            exit
+        fi
+        git remote add origin "$remote_url"
+        echo -e "${GREEN}Remote successfully added!${ENDCOLOR}"
+        if [ "$remote_check" == "" ]; then
+            echo -e "${YELLOW}Repository '$remote_url' is probably empty${ENDCOLOR}"
+        fi
+        echo
+        origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')
+    else
+        origin_name=""
     fi
-    git remote add origin "$remote_url"
-    echo -e "${GREEN}Remote successfully added!${ENDCOLOR}"
-    if [ "$remote_check" == "" ]; then
-        echo -e "${YELLOW}Repository '$remote_url' is probably empty${ENDCOLOR}"
-    fi
-    echo
-    origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')
 fi
 sep=$(get_config_value gitbasher.sep "-")
 editor=$(get_config_value core.editor "vi")
@@ -171,9 +175,12 @@ function sanitize_file_path {
     fi
     local cleaned=$(echo "$input" | tr -d '\000-\010\013\014\016-\037\177')
     cleaned=$(echo "$cleaned" | sed 's/\.\.\///g')  # Remove ../
-    cleaned=$(echo "$cleaned" | sed 's/;\s*rm\s/; /g')  # Remove rm commands
-    cleaned=$(echo "$cleaned" | sed 's/&&\s*rm\s/\&\& /g')  # Remove rm commands
-    cleaned=$(echo "$cleaned" | sed 's/|\s*rm\s/| /g')  # Remove rm commands
+    cleaned=$(echo "$cleaned" | sed 's/;[[:space:]]*rm[[:space:]]*/; /g')  # Remove rm commands after semicolon
+    cleaned=$(echo "$cleaned" | sed 's/&&[[:space:]]*rm[[:space:]]*/&& /g')  # Remove rm commands after &&
+    cleaned=$(echo "$cleaned" | sed 's/|[[:space:]]*rm[[:space:]]*/| /g')  # Remove rm commands after pipe
+    cleaned=$(echo "$cleaned" | sed 's/[[:space:]]rm[[:space:]]*/ /g')  # Remove rm commands with spaces around
+    cleaned=$(echo "$cleaned" | sed 's/^rm[[:space:]]*//g')  # Remove rm at start
+    cleaned=$(echo "$cleaned" | sed 's/[[:space:]]rm$//g')  # Remove rm at end
     if [ ${#cleaned} -gt 1000 ]; then
         return 1
     fi
@@ -200,11 +207,11 @@ function sanitize_command {
     if [ -z "$input" ]; then
         return 1
     fi
-    local cleaned=$(echo "$input" | sed 's/[^a-zA-Z0-9._/-]//g')
-    if [[ "$cleaned" =~ \.\. ]] || [[ "$cleaned" == *";"* ]] || [[ "$cleaned" == *"|"* ]] || \
-       [[ "$cleaned" == *"&"* ]] || [[ "$cleaned" == *"$"* ]] || [[ "$cleaned" == *"\`"* ]]; then
+    if [[ "$input" =~ \.\. ]] || [[ "$input" == *";"* ]] || [[ "$input" == *"|"* ]] || \
+       [[ "$input" == *"&"* ]] || [[ "$input" == *"\$"* ]] || [[ "$input" == *"\`"* ]]; then
         return 1
     fi
+    local cleaned=$(echo "$input" | sed 's/[^a-zA-Z0-9._/-]//g')
     if [ ${#cleaned} -lt 1 ] || [ ${#cleaned} -gt 100 ] || [[ "$cleaned" =~ ^- ]]; then
         return 1
     fi
@@ -457,8 +464,8 @@ function commit_list {
         fi
     fi
     IFS=$'\n' 
-    read -rd '' -a commits_info <<<"$(git --no-pager log -n $1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} | %s | ${BLUE_ES}%an${ENDCOLOR_ES} | ${GREEN_ES}%cr${ENDCOLOR_ES}" $ref | column -ts'|')"
-    read -rd '' -a commits_hash <<<"$(git --no-pager log -n $1 --pretty="%h" $ref)"
+    read -rd '' -a commits_info <<<"$(git --no-pager log -n $1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} | %s | ${BLUE_ES}%an${ENDCOLOR_ES} | ${GREEN_ES}%cr${ENDCOLOR_ES}" $ref | column -ts'|')" || true
+    read -rd '' -a commits_hash <<<"$(git --no-pager log -n $1 --pretty="%h" $ref)" || true
     for index in "${!commits_info[@]}"
     do
         line=${commits_info[index]}
@@ -472,8 +479,8 @@ function commit_list {
 }
 function ref_list {
     IFS=$'\n' 
-    read -rd '' -a refs_info <<<"$(git --no-pager reflog -n $1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} | ${BLUE_ES}%gd${ENDCOLOR_ES} | %gs | ${GREEN_ES}%cr${ENDCOLOR_ES}" | column -ts'|')"
-    read -rd '' -a refs_hash <<<"$(git --no-pager reflog -n $1 --pretty="%gd")"
+    read -rd '' -a refs_info <<<"$(git --no-pager reflog -n $1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} | ${BLUE_ES}%gd${ENDCOLOR_ES} | %gs | ${GREEN_ES}%cr${ENDCOLOR_ES}" | column -ts'|')" || true
+    read -rd '' -a refs_hash <<<"$(git --no-pager reflog -n $1 --pretty="%gd")" || true
     refs_info=("${refs_info[@]:1}")
     refs_hash=("${refs_hash[@]:1}")
     for index in "${!refs_info[@]}"
@@ -504,7 +511,7 @@ function choose_commit {
     echo
 }
 function print_changes_stat {
-    IFS=$'\n' read -rd '' -a stats <<< "$1"
+    IFS=$'\n' read -rd '' -a stats <<< "$1" || true
     result_stat=""
     bottom_line=""
     number_of_stats=${#stats[@]}
@@ -524,16 +531,24 @@ function print_changes_stat {
     echo -e "$bottom_line"
 }
 function get_push_list {
-    push_list_check=$(git --no-pager log $3/$1..HEAD 2>&1)
-    if [[ $push_list_check != *"unknown revision or path not in the working tree"* ]]; then
-        push_list=$(commit_list 999 "tab" $3/$1..HEAD)
-        history_from="$3/$1"
+    local origin="${3:-}"
+    origin="${origin#"${origin%%[![:space:]]*}"}"
+    origin="${origin%"${origin##*[![:space:]]}"}"
+    if [ -z "$origin" ]; then
+        push_list=""
+        history_from=""
         return
     fi
-    if [[ $push_list_check == *"unknown revision or path not in the working tree"* ]]; then
+    push_list_check=$(git --no-pager log $origin/$1..HEAD 2>&1)
+    if [[ $push_list_check != *"unknown revision or path not in the working tree"* ]] && [[ $push_list_check != *"fatal:"* ]]; then
+        push_list=$(commit_list 999 "tab" $origin/$1..HEAD)
+        history_from="$origin/$1"
+        return
+    fi
+    if [[ $push_list_check == *"unknown revision or path not in the working tree"* ]] || [[ $push_list_check == *"fatal:"* ]]; then
         if [[ $1 == $2 ]]; then
             push_list=$(commit_list 999 "tab")
-            history_from="$3/$1"
+            history_from="HEAD"
             return
         fi
     fi
@@ -542,8 +557,13 @@ function get_push_list {
         push_list=$(commit_list 999 "tab" $base_commit..HEAD)
         history_from="${base_commit::7}"
     else
-        push_list=$(commit_list 999 "tab" $3/$2..HEAD)
-        history_from="$3/$2"
+        if [ -z "$origin" ]; then
+            push_list=""
+            history_from=""
+        else
+            push_list=$(commit_list 999 "tab" $origin/$2..HEAD)
+            history_from="$origin/$2"
+        fi
     fi
 }
 function list_branches {
@@ -554,8 +574,8 @@ function list_branches {
     branches_str=$(git --no-pager branch $args --format="%(refname:short)")
     branches_info_str=$(git --no-pager branch $args --format="${BLUE_ES}%(refname:short)${ENDCOLOR_ES} | %(contents:subject) | ${YELLOW_ES}%(objectname:short)${ENDCOLOR_ES}  | ${GREEN_ES}%(committerdate:relative)${ENDCOLOR_ES}" | column -ts'|' )
     IFS=$'\n' 
-    read -rd '' -a branches <<< "$branches_str"
-    read -rd '' -a branches_info <<< "$branches_info_str"
+    read -rd '' -a branches <<< "$branches_str" || true
+    read -rd '' -a branches_info <<< "$branches_info_str" || true
     number_of_branches=${#branches[@]}
     if [[ "$1" == "remote" ]]; then
         ((number_of_branches=number_of_branches-1))
@@ -667,17 +687,22 @@ function switch {
             fi
         fi
         if [ -z $2 ]; then
-            get_push_list $1 ${main_branch} ${origin_name}
-            if [ -n "$push_list" ]; then
-                echo
-                count=$(echo -e "$push_list" | wc -l | sed 's/^ *//;s/ *$//')
-                echo -e "Your branch ${YELLOW}$1${ENDCOLOR} is ahead ${YELLOW}${history_from}${ENDCOLOR} by ${BOLD}$count${ENDCOLOR} commits"
-                echo -e "$push_list"
+            local check_origin="${origin_name:-}"
+            check_origin="${check_origin#"${check_origin%%[![:space:]]*}"}"
+            check_origin="${check_origin%"${check_origin##*[![:space:]]}"}"
+            if [ -n "$check_origin" ]; then
+                get_push_list $1 ${main_branch} "$check_origin"
+                if [ -n "$push_list" ]; then
+                    echo
+                    count=$(echo -e "$push_list" | wc -l | sed 's/^ *//;s/ *$//')
+                    echo -e "Your branch ${YELLOW}$1${ENDCOLOR} is ahead ${YELLOW}${history_from}${ENDCOLOR} by ${BOLD}$count${ENDCOLOR} commits"
+                    echo -e "$push_list"
+                fi
             fi
         fi
         return
     fi
-    if [[ $switch_output == *"Your local changes to the following files would be overwritten"* ]]; then
+    if [[ $switch_output == *"would be overwritten"* ]] || [[ $switch_output == *"overwritten by"* ]]; then
         conflicts="$(echo "$switch_output" | tail -r | tail -n +3 | tail -r | tail -n +2)"
         echo -e "${RED}Changes would be overwritten by switch to '$1':${ENDCOLOR}"       
         echo -e "${conflicts//[[:blank:]]/}"

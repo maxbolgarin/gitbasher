@@ -228,7 +228,7 @@ function handle_ai_commit_generation {
             echo -e "${YELLOW}Edit the AI generated message:${ENDCOLOR}"
             # Create temp file with AI message
             commitmsg_file=$(mktemp "/tmp/commitmsg.XXXXXX")
-            trap "rm -f '$commitmsg_file'" EXIT INT TERM
+            trap 'rm -f "$commitmsg_file"' EXIT INT TERM
             echo "$ai_commit_message" > $commitmsg_file
 
             while [ true ]; do

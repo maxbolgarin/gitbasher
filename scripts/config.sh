@@ -114,8 +114,8 @@ function set_editor {
 
     which_output=$(which "$choice")
     if [[ "${which_output}" == *"not found"* ]] || [[ "${which_output}" == "" ]]; then
-        echo -e "${RED}Binary '${choice}' not found!${ENDCOLOR}"
-        exit
+        echo -e "${RED}Binary '${choice}' not found!${ENDCOLOR}" >&2
+        exit 1
     fi
 
     editor=$(set_config_value core.editor $choice)
@@ -185,6 +185,11 @@ function configure_ai_key {
     fi
     echo -e "Enter your ${YELLOW}OpenRouter API key${ENDCOLOR} to enable AI commit message generation"
     echo -e "Get your API key from: ${BLUE}https://openrouter.ai/keys${ENDCOLOR}"
+    echo
+    echo -e "${YELLOW}Security Note:${ENDCOLOR} For better security, consider using environment variable:"
+    echo -e "  ${BLUE}export GITB_AI_API_KEY='your-api-key'${ENDCOLOR}"
+    echo -e "  Add this to your ~/.bashrc or ~/.zshrc to make it permanent"
+    echo
     echo -e "Press Enter to exit without changes or enter 0 to remove existing key"
 
     echo
@@ -208,11 +213,11 @@ function configure_ai_key {
 
     # Basic validation - check for reasonable API key format
     if [[ ! "$ai_key_input" =~ ^[a-zA-Z0-9._-]{20,}$ ]]; then
-        echo -e "${RED}Warning: API key format doesn't look like a valid OpenRouter key${ENDCOLOR}"
+        echo -e "${RED}Warning: API key format doesn't look like a valid OpenRouter key${ENDCOLOR}" >&2
         read -n 1 -p "Continue anyway? (y/n) " -s choice
         echo
         if [ "$choice" != "y" ] && [ "$choice" != "Y" ]; then
-            exit
+            exit 1
         fi
     fi
 
@@ -221,6 +226,8 @@ function configure_ai_key {
     echo
 
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+    echo -e "${YELLOW}⚠️  Security Warning:${ENDCOLOR} Global API keys are stored in plaintext in ~/.gitconfig"
+    echo -e "${YELLOW}   Consider using environment variable GITB_AI_API_KEY instead for better security${ENDCOLOR}"
     yes_no_choice "\nSet AI API key globally" "true"
     ai_api_key=$(set_config_value gitbasher.ai-api-key "$ai_key_input" "true")
 }
@@ -260,8 +267,8 @@ function configure_ai_model {
     
     # Basic validation - check for reasonable model ID format
     if [[ ! "$model_input" =~ ^[a-zA-Z0-9._/-]+$ ]]; then
-        echo -e "${RED}Invalid model ID format${ENDCOLOR}"
-        echo -e "${YELLOW}Model ID should contain only letters, numbers, dots, dashes, underscores, and slashes${ENDCOLOR}"
+        echo -e "${RED}Invalid model ID format${ENDCOLOR}" >&2
+        echo -e "${YELLOW}Model ID should contain only letters, numbers, dots, dashes, underscores, and slashes${ENDCOLOR}" >&2
         exit 1
     fi
     
@@ -314,10 +321,10 @@ function configure_ai_proxy {
 
     # Validate and sanitize proxy URL to prevent command injection
     if ! validate_proxy_url "$ai_proxy_input"; then
-        echo -e "${RED}Invalid proxy URL format: $ai_proxy_input${ENDCOLOR}"
-        echo -e "${YELLOW}Expected format: protocol://host:port (e.g., http://proxy.example.com:8080)${ENDCOLOR}"
-        echo -e "${YELLOW}Or: host:port (e.g., proxy.example.com:8080)${ENDCOLOR}"
-        echo -e "${YELLOW}Supported protocols: http, https, socks5${ENDCOLOR}"
+        echo -e "${RED}Invalid proxy URL format: $ai_proxy_input${ENDCOLOR}" >&2
+        echo -e "${YELLOW}Expected format: protocol://host:port (e.g., http://proxy.example.com:8080)${ENDCOLOR}" >&2
+        echo -e "${YELLOW}Or: host:port (e.g., proxy.example.com:8080)${ENDCOLOR}" >&2
+        echo -e "${YELLOW}Supported protocols: http, https, socks5${ENDCOLOR}" >&2
         exit 1
     fi
     
@@ -501,7 +508,7 @@ function delete_global {
     read -n 1 -s choice
     re='^[0123456789]+$'
     if ! [[ $choice =~ $re ]]; then
-        echo -e "${RED}Invalid choice${ENDCOLOR}"
+        echo -e "${RED}Invalid choice${ENDCOLOR}" >&2
         return 1
     fi
 

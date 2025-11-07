@@ -228,6 +228,7 @@ function handle_ai_commit_generation {
             echo -e "${YELLOW}Edit the AI generated message:${ENDCOLOR}"
             # Create temp file with AI message
             commitmsg_file=$(mktemp "/tmp/commitmsg.XXXXXX")
+            trap "rm -f '$commitmsg_file'" EXIT INT TERM
             echo "$ai_commit_message" > $commitmsg_file
 
             while [ true ]; do
@@ -887,6 +888,7 @@ function commit_script {
     # Use an editor and commitmsg file
     if [ -n "$msg" ]; then
         commitmsg_file=$(mktemp "/tmp/commitmsg.XXXXXX")
+        trap "rm -f '$commitmsg_file'" EXIT INT TERM
         staged_with_tab="$(sed 's/^/####\t/' <<< "${staged}")"
 
         echo """

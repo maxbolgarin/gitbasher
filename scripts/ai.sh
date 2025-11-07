@@ -5,9 +5,17 @@
 # OpenRouter API endpoint (OpenAI-compatible)
 readonly OPENROUTER_API_URL="https://openrouter.ai/api/v1/chat/completions"
 
-### Function to get AI API key from git config
+### Function to get AI API key from environment variable or git config
+# Checks environment variable GITB_AI_API_KEY first, then falls back to git config
 # Returns: AI API key or empty if not set
 function get_ai_api_key {
+    # First check environment variable (more secure)
+    if [ -n "$GITB_AI_API_KEY" ]; then
+        echo "$GITB_AI_API_KEY"
+        return
+    fi
+
+    # Fall back to git config
     get_config_value gitbasher.ai-api-key ""
 }
 

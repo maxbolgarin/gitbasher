@@ -540,7 +540,7 @@ function merge_commit {
     else
         staged_with_tab="$(sed 's/^/####\t/' <<< "$2")"
         commitmsg_file=$(mktemp "/tmp/commitmsg.XXXXXX")
-        trap "rm -f '$commitmsg_file'" EXIT INT TERM
+        trap 'rm -f "$commitmsg_file"' EXIT INT TERM
         echo """
 ####
 #### Write a message about merge from '$5/$4' into '$4'. Lines starting with '#' will be ignored. 

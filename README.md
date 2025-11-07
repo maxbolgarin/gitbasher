@@ -35,6 +35,12 @@ In Windows use `wsl` (enter `wsl` in terminal, [read more](https://learn.microso
 - [Troubleshooting & FAQ](#troubleshooting--faq)
 - [Contributing](#contributing)
 
+## 📚 Additional Documentation
+- **[Advanced Workflows](docs/ADVANCED_WORKFLOWS.md)** - Monorepo workflows, team collaboration, CI/CD integration, and advanced git operations
+- **[Contributing Guide](CONTRIBUTING.md)** - How to contribute, development setup, and code standards
+- **[Architecture Documentation](ARCHITECTURE.md)** - Technical architecture and implementation details
+- **[Security Policy](SECURITY.md)** - Security best practices and vulnerability reporting
+
 
 ## Quick Start Guide
 
@@ -635,9 +641,13 @@ See [tests/README.md](tests/README.md) for detailed testing documentation.
 
 ## Contributing
 
-If you'd like to contribute to **gitbasher**, make a fork and submit a pull request. You also can open an issue or text me on Telegram: https://t.me/maxbolgarin
+We welcome contributions! See our **[Contributing Guide](CONTRIBUTING.md)** for detailed instructions on:
+- Development setup and workflow
+- Code standards and best practices
+- Testing requirements
+- Pull request process
 
-### Development Workflow
+### Quick Start for Contributors
 
 1. Fork the repository
 2. Create a feature branch
@@ -646,6 +656,8 @@ If you'd like to contribute to **gitbasher**, make a fork and submit a pull requ
 5. Run tests: `make test`
 6. Ensure all tests pass
 7. Submit a pull request
+
+For questions, open an issue or contact [@maxbolgarin](https://t.me/maxbolgarin) on Telegram.
 
 #### Maintainers
 

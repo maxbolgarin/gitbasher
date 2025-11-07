@@ -84,11 +84,18 @@ setup_remote_repo() {
     export REMOTE_REPO
 
     cd "$REMOTE_REPO"
-    git init --bare
+    git init --bare --initial-branch=main
 
     cd "$TEST_REPO"
     git remote add origin "$REMOTE_REPO"
     git push -u origin main
+    
+    # Set HEAD in bare repository to point to main branch
+    cd "$REMOTE_REPO"
+    git symbolic-ref HEAD refs/heads/main
+    
+    # Return to test repository directory
+    cd "$TEST_REPO"
 }
 
 # Cleanup remote repository

@@ -90,7 +90,7 @@ teardown() {
 
     # Verify commit is in remote
     cd "$REMOTE_REPO"
-    log=$(git log --oneline)
+    log=$(git log --oneline main)
     [[ "$log" =~ "New commit" ]]
 }
 
@@ -101,7 +101,7 @@ teardown() {
 
     # Simulate remote change
     TEMP_CLONE=$(mktemp -d)
-    git clone "$REMOTE_REPO" "$TEMP_CLONE"
+    git clone -b main "$REMOTE_REPO" "$TEMP_CLONE"
     cd "$TEMP_CLONE"
     git config user.name "Test User"
     git config user.email "test@example.com"

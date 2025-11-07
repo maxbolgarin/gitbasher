@@ -718,6 +718,10 @@ function switch {
 }
 readonly OPENROUTER_API_URL="https://openrouter.ai/api/v1/chat/completions"
 function get_ai_api_key {
+    if [ -n "$GITB_AI_API_KEY" ]; then
+        echo "$GITB_AI_API_KEY"
+        return
+    fi
     get_config_value gitbasher.ai-api-key ""
 }
 function set_ai_api_key {
@@ -1239,8 +1243,8 @@ function set_editor {
     echo
     which_output=$(which "$choice")
     if [[ "${which_output}" == *"not found"* ]] || [[ "${which_output}" == "" ]]; then
-        echo -e "${RED}Binary '${choice}' not found!${ENDCOLOR}"
-        exit
+        echo -e "${RED}Binary '${choice}' not found!${ENDCOLOR}" >&2
+        exit 1
     fi
     editor=$(set_config_value core.editor $choice)
     echo -e "${GREEN}Use editor '$editor' located at '$which_output'${ENDCOLOR}"
@@ -1292,6 +1296,11 @@ function configure_ai_key {
     fi
     echo -e "Enter your ${YELLOW}OpenRouter API key${ENDCOLOR} to enable AI commit message generation"
     echo -e "Get your API key from: ${BLUE}https://openrouter.ai/keys${ENDCOLOR}"
+    echo
+    echo -e "${YELLOW}Security Note:${ENDCOLOR} For better security, consider using environment variable:"
+    echo -e "  ${BLUE}export GITB_AI_API_KEY='your-api-key'${ENDCOLOR}"
+    echo -e "  Add this to your ~/.bashrc or ~/.zshrc to make it permanent"
+    echo
     echo -e "Press Enter to exit without changes or enter 0 to remove existing key"
     echo
     echo -e "${YELLOW}API key enters silently, so you can't see it, but it is entered${ENDCOLOR}"
@@ -1308,17 +1317,19 @@ function configure_ai_key {
     fi
     echo
     if [[ ! "$ai_key_input" =~ ^[a-zA-Z0-9._-]{20,}$ ]]; then
-        echo -e "${RED}Warning: API key format doesn't look like a valid OpenRouter key${ENDCOLOR}"
+        echo -e "${RED}Warning: API key format doesn't look like a valid OpenRouter key${ENDCOLOR}" >&2
         read -n 1 -p "Continue anyway? (y/n) " -s choice
         echo
         if [ "$choice" != "y" ] && [ "$choice" != "Y" ]; then
-            exit
+            exit 1
         fi
     fi
     ai_api_key=$(set_config_value gitbasher.ai-api-key "$ai_key_input")
     echo -e "${GREEN}AI API key configured for '${project_name}' repo${ENDCOLOR}: ${BLUE}$(mask_api_key "$ai_api_key")${ENDCOLOR}"
     echo
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+    echo -e "${YELLOW}⚠️  Security Warning:${ENDCOLOR} Global API keys are stored in plaintext in ~/.gitconfig"
+    echo -e "${YELLOW}   Consider using environment variable GITB_AI_API_KEY instead for better security${ENDCOLOR}"
     yes_no_choice "\nSet AI API key globally" "true"
     ai_api_key=$(set_config_value gitbasher.ai-api-key "$ai_key_input" "true")
 }
@@ -1348,8 +1359,8 @@ function configure_ai_model {
     fi
     echo
     if [[ ! "$model_input" =~ ^[a-zA-Z0-9._/-]+$ ]]; then
-        echo -e "${RED}Invalid model ID format${ENDCOLOR}"
-        echo -e "${YELLOW}Model ID should contain only letters, numbers, dots, dashes, underscores, and slashes${ENDCOLOR}"
+        echo -e "${RED}Invalid model ID format${ENDCOLOR}" >&2
+        echo -e "${YELLOW}Model ID should contain only letters, numbers, dots, dashes, underscores, and slashes${ENDCOLOR}" >&2
         exit 1
     fi
     set_ai_model "$model_input"
@@ -1388,10 +1399,10 @@ function configure_ai_proxy {
     fi
     echo
     if ! validate_proxy_url "$ai_proxy_input"; then
-        echo -e "${RED}Invalid proxy URL format: $ai_proxy_input${ENDCOLOR}"
-        echo -e "${YELLOW}Expected format: protocol://host:port (e.g., http://proxy.example.com:8080)${ENDCOLOR}"
-        echo -e "${YELLOW}Or: host:port (e.g., proxy.example.com:8080)${ENDCOLOR}"
-        echo -e "${YELLOW}Supported protocols: http, https, socks5${ENDCOLOR}"
+        echo -e "${RED}Invalid proxy URL format: $ai_proxy_input${ENDCOLOR}" >&2
+        echo -e "${YELLOW}Expected format: protocol://host:port (e.g., http://proxy.example.com:8080)${ENDCOLOR}" >&2
+        echo -e "${YELLOW}Or: host:port (e.g., proxy.example.com:8080)${ENDCOLOR}" >&2
+        echo -e "${YELLOW}Supported protocols: http, https, socks5${ENDCOLOR}" >&2
         exit 1
     fi
     ai_proxy_input="$validated_proxy_url"
@@ -1529,7 +1540,7 @@ function delete_global {
     read -n 1 -s choice
     re='^[0123456789]+$'
     if ! [[ $choice =~ $re ]]; then
-        echo -e "${RED}Invalid choice${ENDCOLOR}"
+        echo -e "${RED}Invalid choice${ENDCOLOR}" >&2
         return 1
     fi
     if [ "$choice" == "0" ]; then
@@ -2110,6 +2121,7 @@ function merge_commit {
     else
         staged_with_tab="$(sed 's/^/####\t/' <<< "$2")"
         commitmsg_file=$(mktemp "/tmp/commitmsg.XXXXXX")
+        trap 'rm -f "$commitmsg_file"' EXIT INT TERM
         echo """
 ####
 #### Write a message about merge from '$5/$4' into '$4'. Lines starting with '#' will be ignored. 
@@ -3497,6 +3509,7 @@ function handle_ai_commit_generation {
         if [ "$ai_mode" = "full" ]; then
             echo -e "${YELLOW}Edit the AI generated message:${ENDCOLOR}"
             commitmsg_file=$(mktemp "/tmp/commitmsg.XXXXXX")
+            trap 'rm -f "$commitmsg_file"' EXIT INT TERM
             echo "$ai_commit_message" > $commitmsg_file
             while [ true ]; do
                 $editor $commitmsg_file
@@ -4003,6 +4016,7 @@ function commit_script {
     echo -e "Press Enter if you want to exit"
     if [ -n "$msg" ]; then
         commitmsg_file=$(mktemp "/tmp/commitmsg.XXXXXX")
+        trap "rm -f '$commitmsg_file'" EXIT INT TERM
         staged_with_tab="$(sed 's/^/####\t/' <<< "${staged}")"
         echo """
 ####

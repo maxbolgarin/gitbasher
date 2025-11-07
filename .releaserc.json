@@ -1,6 +1,6 @@
 {
   "branches": [
-    "v2"
+    "main"
   ],
   "plugins": [
     [
@@ -39,7 +39,7 @@
             {"type": "test", "section": "🚨 Tests", "hidden": false},
             {"type": "build", "section": "🛠 Build System", "hidden": false},
             {"type": "ci", "section": "⚙️ Continuous Integration", "hidden": false},
-            {"type": "chore", "section": "🔧 Chores", "hidden": false}
+            {"type": "chore", "section": "🔧 Chores", "hidden": true}
           ]
         },
         "writerOpts": {

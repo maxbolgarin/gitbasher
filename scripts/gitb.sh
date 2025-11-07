@@ -8,10 +8,13 @@ if [ "$1" == "init" ]; then
     git init
 fi
 
-git_check=$(git branch --show-current 2>&1)
-if [[ "$git_check" == *"fatal: not a git repository"* ]]; then
-    echo "You can use gitb only in a git repository"
-    exit
+# Allow certain commands to run outside of git repositories
+if [ "$1" != "doctor" ] && [ "$1" != "doc" ] && [ "$1" != "dr" ] && [ "$1" != "--version" ] && [ "$1" != "-v" ]; then
+    git_check=$(git branch --show-current 2>&1)
+    if [[ "$git_check" == *"fatal: not a git repository"* ]]; then
+        echo "You can use gitb only in a git repository"
+        exit
+    fi
 fi
 
 
@@ -54,5 +57,6 @@ source scripts/stash.sh
 source scripts/cherry.sh
 source scripts/gitlog.sh
 source scripts/hooks.sh
+source scripts/doctor.sh
 
 source scripts/base.sh

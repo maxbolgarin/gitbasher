@@ -14,15 +14,71 @@
 With **gitbasher** usage of `git` becomes more simple and intuitive. It helps speeding up the development process, making it more consistent reducing mistakes. This is a wrapper around the most used git commands with a cleaner interface. It uses `bash` `git` `sed` `grep`, `curl` and some built-in utilities.
 
 
-### Quick Installation
+### Installation
+
+Choose the method that works best for you:
+
+#### 📦 Homebrew (macOS/Linux) - Recommended
 
 ```bash
-GITB_PATH=/usr/local/bin/gitb && \
-curl -SL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/dist/gitb -o $GITB_PATH && \
-chmod +x $GITB_PATH
+brew install maxbolgarin/tap/gitbasher
 ```
 
-In Windows use `wsl` (enter `wsl` in terminal, [read more](https://learn.microsoft.com/en-us/windows/wsl/setup/environment)) to enable Linux environment. Directory `/usr/local/bin/` is not mandatory. If you get `Permission denied`, use `sudo` or put it to `~/.local/bin` with adding it to `PATH` ([how](https://discussions.apple.com/thread/254226896)).
+Or add the tap first:
+```bash
+brew tap maxbolgarin/tap
+brew install gitbasher
+```
+
+#### 🐧 APT (Debian/Ubuntu)
+
+```bash
+# Add repository (one-time setup)
+echo "deb [trusted=yes] https://apt.fury.io/maxbolgarin/ /" | sudo tee /etc/apt/sources.list.d/gitbasher.list
+sudo apt update
+
+# Install
+sudo apt install gitbasher
+```
+
+#### 🚀 Install Script (Universal)
+
+Automatically detects your system and installs to the best location:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash
+```
+
+Or with a specific version:
+```bash
+GITB_VERSION=v3.0.0 curl -sSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash
+```
+
+#### 📥 Manual Installation
+
+```bash
+# Download and install
+VERSION=v3.0.0  # or 'main' for latest
+curl -SL https://github.com/maxbolgarin/gitbasher/releases/download/$VERSION/gitb -o gitb
+chmod +x gitb
+sudo mv gitb /usr/local/bin/gitb
+
+# Or to ~/.local/bin (doesn't require sudo)
+mkdir -p ~/.local/bin
+mv gitb ~/.local/bin/gitb
+export PATH="$HOME/.local/bin:$PATH"  # Add to ~/.bashrc or ~/.zshrc
+```
+
+#### 🪟 Windows (WSL)
+
+Use WSL ([setup guide](https://learn.microsoft.com/en-us/windows/wsl/setup/environment)) and follow any of the above methods.
+
+#### ✅ Verify Installation
+
+```bash
+gitb --version
+gitb doctor  # Check dependencies and environment
+```
 
 
 ## Table of Contents

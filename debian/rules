@@ -1,0 +1,18 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	$(MAKE) build
+
+override_dh_auto_install:
+	install -D -m 0755 dist/gitb $(CURDIR)/debian/gitbasher/usr/bin/gitb
+
+override_dh_auto_clean:
+	dh_auto_clean
+	rm -f dist/gitb
+
+override_dh_auto_test:
+	# Skip tests during package build
+	# Tests can be run separately with: make test

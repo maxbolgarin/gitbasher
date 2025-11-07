@@ -26,16 +26,27 @@ function print_help {
     msg="$msg\nreflog_rl|rlg_Open git reflog in a pretty format"
     msg="$msg\nlast-commit_lc|lastc_Show info about the last commit"
     msg="$msg\nlast-ref_lr|lastr_Show info about the last reference"
+    msg="$msg\ndoctor_doc|dr_Check dependencies and environment"
     echo -e "$(echo -e "$msg" | column -ts '_')"
 
     exit
 }
 
+if [ -z $1 ] || [ "$1" == "--help" ] || [ "$1" == "help" ] || [ "$1" == "man" ]; then
+    print_help
+fi
+
+if [ "$1" == "--version" ] || [ "$1" == "-v" ] || [ "$1" == "version" ]; then
+    echo "gitbasher version 3.0.0"
+    echo "https://github.com/maxbolgarin/gitbasher"
+    exit 0
+fi
+
 project_name="$(get_repo_name)"
 repo_url="$(get_repo)"
 
 ### Print settings f this is first run
-if [[ $is_first == "true" ]]; then 
+if [[ $is_first == "true" ]]; then
     git config --local gitbasher.scopes ""
 
     echo -e "${GREEN}Thanks for using gitbasher in project '$project_name'${ENDCOLOR}"
@@ -46,10 +57,6 @@ if [[ $is_first == "true" ]]; then
     echo -e "${CYAN}💡 Pro tip:${ENDCOLOR} If zsh tries to autocorrect 'gitb' to 'git', add this to your ~/.zshrc:"
     echo -e "  ${GREEN}alias gitb='nocorrect gitb'${ENDCOLOR}"
     echo
-fi
-
-if [ -z $1 ] || [ "$1" == "--help" ] || [ "$1" == "help" ] || [ "$1" == "man" ]; then
-    print_help
 fi
 
 
@@ -105,6 +112,9 @@ case "$1" in
     ;;
     status|st)
         project_status
+    ;;
+    doctor|doc|dr)
+        doctor_script
     ;;
 
     *)

@@ -1,0 +1,29 @@
+Source: gitbasher
+Section: vcs
+Priority: optional
+Maintainer: Max Bolgarin <max.bolgarin@gmail.com>
+Build-Depends: debhelper-compat (= 13), bash (>= 4.0)
+Standards-Version: 4.6.0
+Homepage: https://github.com/maxbolgarin/gitbasher
+Vcs-Browser: https://github.com/maxbolgarin/gitbasher
+Vcs-Git: https://github.com/maxbolgarin/gitbasher.git
+Rules-Requires-Root: no
+
+Package: gitbasher
+Architecture: all
+Depends: ${misc:Depends}, bash (>= 4.0), git (>= 2.23), sed, grep, coreutils
+Recommends: curl
+Description: Simple bash utility that makes git easy to use
+ gitbasher is a wrapper around the most used git commands with a cleaner
+ interface. It helps speed up the development process, making it more
+ consistent and reducing mistakes.
+ .
+ Features:
+  - Intuitive command interface
+  - AI-powered commit messages
+  - Branch management
+  - Interactive rebasing and merging
+  - Commit message templates
+  - Tag management
+  - Stash management
+  - Git hooks

@@ -1,0 +1,9 @@
+gitbasher (3.0.0) unstable; urgency=medium
+
+  * Initial release with improved installation
+  * Added gitb doctor command for dependency checking
+  * Improved installation script with version pinning
+  * Added Homebrew formula
+  * Added APT packaging
+
+ -- Max Bolgarin <max.bolgarin@gmail.com>  Thu, 07 Nov 2025 00:00:00 +0000

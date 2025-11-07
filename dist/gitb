@@ -2,10 +2,12 @@
 if [ "$1" == "init" ]; then
     git init
 fi
-git_check=$(git branch --show-current 2>&1)
-if [[ "$git_check" == *"fatal: not a git repository"* ]]; then
-    echo "You can use gitb only in a git repository"
-    exit
+if [ "$1" != "doctor" ] && [ "$1" != "doc" ] && [ "$1" != "dr" ] && [ "$1" != "--version" ] && [ "$1" != "-v" ]; then
+    git_check=$(git branch --show-current 2>&1)
+    if [[ "$git_check" == *"fatal: not a git repository"* ]]; then
+        echo "You can use gitb only in a git repository"
+        exit
+    fi
 fi
 if ((BASH_VERSINFO[0] < 4)); then 
     if [ -x "/opt/homebrew/bin/bash" ]; then
@@ -6687,6 +6689,171 @@ function hooks_script {
         ;;
     esac
 } 
+function check_command {
+    local cmd=$1
+    local min_version=$2
+    local version_pattern=${3:-'[0-9]+\.[0-9]+\.[0-9]+'}
+    if ! command -v $cmd >/dev/null 2>&1; then
+        echo -e "  ${RED}✗${ENDCOLOR} $cmd ${RED}not found${ENDCOLOR}"
+        return 1
+    fi
+    local version_output=$($cmd --version 2>&1 | head -n1)
+    local version=$(echo "$version_output" | grep -oE "$version_pattern" | head -n1)
+    if [ -z "$version" ]; then
+        echo -e "  ${GREEN}✓${ENDCOLOR} $cmd ${GREEN}installed${ENDCOLOR} (version: ${GRAY}unknown${ENDCOLOR})"
+        return 0
+    fi
+    if [ -n "$min_version" ]; then
+        local current_major=$(echo "$version" | cut -d. -f1)
+        local current_minor=$(echo "$version" | cut -d. -f2 || echo "0")
+        local min_major=$(echo "$min_version" | cut -d. -f1)
+        local min_minor=$(echo "$min_version" | cut -d. -f2 || echo "0")
+        if [ "$current_major" -lt "$min_major" ] || \
+           ([ "$current_major" -eq "$min_major" ] && [ "$current_minor" -lt "$min_minor" ]); then
+            echo -e "  ${YELLOW}⚠${ENDCOLOR} $cmd ${YELLOW}$version${ENDCOLOR} (>= ${min_version} required)"
+            return 2
+        fi
+    fi
+    echo -e "  ${GREEN}✓${ENDCOLOR} $cmd ${GREEN}$version${ENDCOLOR}"
+    return 0
+}
+function check_git_config {
+    echo
+    echo -e "${BOLD}Git Configuration:${ENDCOLOR}"
+    local git_name=$(git config user.name 2>/dev/null)
+    if [ -z "$git_name" ]; then
+        echo -e "  ${RED}✗${ENDCOLOR} user.name ${RED}not set${ENDCOLOR}"
+        echo -e "    ${GRAY}Fix: git config --global user.name \"Your Name\"${ENDCOLOR}"
+    else
+        echo -e "  ${GREEN}✓${ENDCOLOR} user.name: ${CYAN}$git_name${ENDCOLOR}"
+    fi
+    local git_email=$(git config user.email 2>/dev/null)
+    if [ -z "$git_email" ]; then
+        echo -e "  ${RED}✗${ENDCOLOR} user.email ${RED}not set${ENDCOLOR}"
+        echo -e "    ${GRAY}Fix: git config --global user.email \"your@email.com\"${ENDCOLOR}"
+    else
+        echo -e "  ${GREEN}✓${ENDCOLOR} user.email: ${CYAN}$git_email${ENDCOLOR}"
+    fi
+    local main_branch=$(git config --local gitbasher.branch 2>/dev/null)
+    if [ -n "$main_branch" ]; then
+        echo -e "  ${GREEN}✓${ENDCOLOR} gitbasher.branch: ${CYAN}$main_branch${ENDCOLOR}"
+    fi
+    local scopes=$(git config --local gitbasher.scopes 2>/dev/null)
+    if [ -n "$scopes" ]; then
+        echo -e "  ${GREEN}✓${ENDCOLOR} gitbasher.scopes: ${CYAN}$scopes${ENDCOLOR}"
+    fi
+}
+function check_repo_status {
+    echo
+    echo -e "${BOLD}Repository Status:${ENDCOLOR}"
+    if ! git rev-parse --git-dir >/dev/null 2>&1; then
+        echo -e "  ${RED}✗${ENDCOLOR} ${RED}Not in a git repository${ENDCOLOR}"
+        return 1
+    fi
+    echo -e "  ${GREEN}✓${ENDCOLOR} In git repository"
+    local current_branch=$(git branch --show-current 2>/dev/null)
+    if [ -n "$current_branch" ]; then
+        echo -e "  ${GREEN}✓${ENDCOLOR} Current branch: ${CYAN}$current_branch${ENDCOLOR}"
+    fi
+    local remote_url=$(git config --get remote.origin.url 2>/dev/null)
+    if [ -z "$remote_url" ]; then
+        echo -e "  ${YELLOW}⚠${ENDCOLOR} No remote configured"
+    else
+        echo -e "  ${GREEN}✓${ENDCOLOR} Remote: ${CYAN}$remote_url${ENDCOLOR}"
+        if git ls-remote --exit-code origin >/dev/null 2>&1; then
+            echo -e "  ${GREEN}✓${ENDCOLOR} Remote accessible"
+        else
+            echo -e "  ${YELLOW}⚠${ENDCOLOR} Cannot reach remote (check network/credentials)"
+        fi
+    fi
+    if ! git diff-index --quiet HEAD -- 2>/dev/null; then
+        echo -e "  ${YELLOW}⚠${ENDCOLOR} Uncommitted changes detected"
+    else
+        echo -e "  ${GREEN}✓${ENDCOLOR} Working directory clean"
+    fi
+}
+function check_optional_features {
+    echo
+    echo -e "${BOLD}Optional Features:${ENDCOLOR}"
+    if command -v curl >/dev/null 2>&1; then
+        local ai_key=$(git config --get gitbasher.ai.key 2>/dev/null)
+        local ai_url=$(git config --get gitbasher.ai.url 2>/dev/null)
+        if [ -n "$ai_key" ] || [ -n "$ai_url" ]; then
+            echo -e "  ${GREEN}✓${ENDCOLOR} AI features configured"
+            if [ -n "$ai_url" ]; then
+                echo -e "    ${GRAY}AI URL: $ai_url${ENDCOLOR}"
+            fi
+        else
+            echo -e "  ${GRAY}○${ENDCOLOR} AI features not configured (optional)"
+            echo -e "    ${GRAY}See: gitb config ai${ENDCOLOR}"
+        fi
+    else
+        echo -e "  ${GRAY}○${ENDCOLOR} curl not found (needed for AI features)"
+    fi
+    if command -v shellcheck >/dev/null 2>&1; then
+        local sc_version=$(shellcheck --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)
+        echo -e "  ${GREEN}✓${ENDCOLOR} shellcheck ${GREEN}$sc_version${ENDCOLOR} (for development)"
+    else
+        echo -e "  ${GRAY}○${ENDCOLOR} shellcheck not found (optional, for development)"
+    fi
+    if command -v bats >/dev/null 2>&1; then
+        echo -e "  ${GREEN}✓${ENDCOLOR} bats installed (for testing)"
+    else
+        echo -e "  ${GRAY}○${ENDCOLOR} bats not found (optional, for running tests)"
+    fi
+}
+function check_system {
+    echo
+    echo -e "${BOLD}System Information:${ENDCOLOR}"
+    local os_name=$(uname -s)
+    local os_version=$(uname -r)
+    echo -e "  ${GREEN}✓${ENDCOLOR} OS: ${CYAN}$os_name $os_version${ENDCOLOR}"
+    local arch=$(uname -m)
+    echo -e "  ${GREEN}✓${ENDCOLOR} Architecture: ${CYAN}$arch${ENDCOLOR}"
+    echo -e "  ${GREEN}✓${ENDCOLOR} Shell: ${CYAN}$SHELL${ENDCOLOR}"
+    echo -e "  ${GREEN}✓${ENDCOLOR} Bash: ${CYAN}${BASH_VERSION}${ENDCOLOR}"
+}
+function print_summary {
+    echo
+    echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${ENDCOLOR}"
+    if [ $errors -gt 0 ]; then
+        echo -e "${RED}✗ Found $errors error(s)${ENDCOLOR}"
+        echo -e "Please fix the errors above before using gitbasher"
+        return 1
+    elif [ $warnings -gt 0 ]; then
+        echo -e "${YELLOW}⚠ Found $warnings warning(s)${ENDCOLOR}"
+        echo -e "gitbasher should work, but some features may be limited"
+        return 0
+    else
+        echo -e "${GREEN}✓ All checks passed!${ENDCOLOR}"
+        echo -e "gitbasher is ready to use 🎉"
+        return 0
+    fi
+}
+function doctor_script {
+    local errors=0
+    local warnings=0
+    echo -e "${BOLD}gitbasher doctor${ENDCOLOR} - System diagnostics"
+    echo -e "${GRAY}Checking your setup...${ENDCOLOR}"
+    check_system
+    echo
+    echo -e "${BOLD}Required Dependencies:${ENDCOLOR}"
+    check_command "bash" "4.0"
+    [ $? -eq 1 ] && errors=$((errors + 1))
+    [ $? -eq 2 ] && warnings=$((warnings + 1))
+    check_command "git" "2.23"
+    [ $? -eq 1 ] && errors=$((errors + 1))
+    [ $? -eq 2 ] && warnings=$((warnings + 1))
+    check_command "sed"
+    [ $? -eq 1 ] && errors=$((errors + 1))
+    check_command "grep"
+    [ $? -eq 1 ] && errors=$((errors + 1))
+    check_git_config
+    check_repo_status
+    check_optional_features
+    print_summary
+    return $?
+}
 function print_help {
     echo -e "usage: ${YELLOW}gitb <command> <mode>${ENDCOLOR}"
     echo
@@ -6710,12 +6877,21 @@ function print_help {
     msg="$msg\nreflog_rl|rlg_Open git reflog in a pretty format"
     msg="$msg\nlast-commit_lc|lastc_Show info about the last commit"
     msg="$msg\nlast-ref_lr|lastr_Show info about the last reference"
+    msg="$msg\ndoctor_doc|dr_Check dependencies and environment"
     echo -e "$(echo -e "$msg" | column -ts '_')"
     exit
 }
+if [ -z $1 ] || [ "$1" == "--help" ] || [ "$1" == "help" ] || [ "$1" == "man" ]; then
+    print_help
+fi
+if [ "$1" == "--version" ] || [ "$1" == "-v" ] || [ "$1" == "version" ]; then
+    echo "gitbasher version 3.0.0"
+    echo "https://github.com/maxbolgarin/gitbasher"
+    exit 0
+fi
 project_name="$(get_repo_name)"
 repo_url="$(get_repo)"
-if [[ $is_first == "true" ]]; then 
+if [[ $is_first == "true" ]]; then
     git config --local gitbasher.scopes ""
     echo -e "${GREEN}Thanks for using gitbasher in project '$project_name'${ENDCOLOR}"
     print_configuration
@@ -6725,9 +6901,6 @@ if [[ $is_first == "true" ]]; then
     echo -e "${CYAN}💡 Pro tip:${ENDCOLOR} If zsh tries to autocorrect 'gitb' to 'git', add this to your ~/.zshrc:"
     echo -e "  ${GREEN}alias gitb='nocorrect gitb'${ENDCOLOR}"
     echo
-fi
-if [ -z $1 ] || [ "$1" == "--help" ] || [ "$1" == "help" ] || [ "$1" == "man" ]; then
-    print_help
 fi
 case "$1" in
     commit|c|co|com)         
@@ -6780,6 +6953,9 @@ case "$1" in
     ;;
     status|st)
         project_status
+    ;;
+    doctor|doc|dr)
+        doctor_script
     ;;
     *)
         print_help

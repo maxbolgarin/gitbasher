@@ -491,6 +491,24 @@ function commit_script {
             # Clean up cached git add when working tree is clean
             git config --unset gitbasher.cached-git-add 2>/dev/null
             echo -e "${GREEN}Nothing to commit, working tree clean${ENDCOLOR}"
+
+            # If in push mode, check for unpushed commits
+            if [ -n "${push}" ]; then
+                echo
+                get_push_list ${current_branch} ${main_branch} ${origin_name}
+
+                if [ -n "$push_list" ]; then
+                    echo -e "${YELLOW}But there are unpushed commits:${ENDCOLOR}"
+                    echo
+                    count=$(echo -e "$push_list" | wc -l | sed 's/^ *//;s/ *$//')
+                    echo -e "Your branch is ahead ${YELLOW}${history_from}${ENDCOLOR} by ${BOLD}$count${ENDCOLOR} commits"
+                    echo -e "$push_list"
+                    echo
+                    echo -e "Do you want to push these commits to ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} (y/n)?"
+                    yes_no_choice "Pushing..."
+                    push_script y
+                fi
+            fi
             exit
         fi
     elif [ -n "${revert}" ]; then

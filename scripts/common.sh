@@ -868,7 +868,7 @@ function switch {
     ## There are uncommited files with conflicts
     if [[ $switch_output == *"would be overwritten"* ]] || [[ $switch_output == *"overwritten by"* ]]; then
         # Platform-specific reverse command: tac (Linux) or tail -r (BSD/macOS)
-        if command -v tac &> /dev/null; then
+        if which tac >/dev/null 2>&1; then
             conflicts="$(echo "$switch_output" | tac | tail -n +3 | tac | tail -n +2)"
         else
             conflicts="$(echo "$switch_output" | tail -r | tail -n +3 | tail -r | tail -n +2)"

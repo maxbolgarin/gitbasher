@@ -703,7 +703,7 @@ function switch {
         return
     fi
     if [[ $switch_output == *"would be overwritten"* ]] || [[ $switch_output == *"overwritten by"* ]]; then
-        if command -v tac &> /dev/null; then
+        if which tac >/dev/null 2>&1; then
             conflicts="$(echo "$switch_output" | tac | tail -n +3 | tac | tail -n +2)"
         else
             conflicts="$(echo "$switch_output" | tail -r | tail -n +3 | tail -r | tail -n +2)"
@@ -1911,7 +1911,7 @@ function merge {
     fi
     if [[ $merge_output == *"Please commit your changes or stash them before you merge"* ]]; then
         echo -e "${RED}Cannot $operation! There are uncommited changes that will be overwritten by $operation${ENDCOLOR}"
-        if command -v tac &> /dev/null; then
+        if which tac >/dev/null 2>&1; then
             files_to_commit=$(echo "$merge_output" | tail -n +2 | tac | tail -n +4 | tac)
         else
             files_to_commit=$(echo "$merge_output" | tail -n +2 | tail -r | tail -n +4 | tail -r)

@@ -24,8 +24,8 @@ Applied fixes for **15 issues** identified during comprehensive code review, inc
 # Before (macOS only)
 conflicts="$(echo "$switch_output" | tail -r | tail -n +3 | tail -r | tail -n +2)"
 
-# After (cross-platform)
-if command -v tac &> /dev/null; then
+# After (cross-platform with which-based detection)
+if which tac >/dev/null 2>&1; then
     conflicts="$(echo "$switch_output" | tac | tail -n +3 | tac | tail -n +2)"
 else
     conflicts="$(echo "$switch_output" | tail -r | tail -n +3 | tail -r | tail -n +2)"

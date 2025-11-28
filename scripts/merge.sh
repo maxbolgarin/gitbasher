@@ -258,7 +258,7 @@ function merge {
     if [[ $merge_output == *"Please commit your changes or stash them before you merge"* ]]; then
         echo -e "${RED}Cannot $operation! There are uncommited changes that will be overwritten by $operation${ENDCOLOR}"
         # Platform-specific reverse command: tac (Linux) or tail -r (BSD/macOS)
-        if command -v tac &> /dev/null; then
+        if which tac >/dev/null 2>&1; then
             files_to_commit=$(echo "$merge_output" | tail -n +2 | tac | tail -n +4 | tac)
         else
             files_to_commit=$(echo "$merge_output" | tail -n +2 | tail -r | tail -n +4 | tail -r)

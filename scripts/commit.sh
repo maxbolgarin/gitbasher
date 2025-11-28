@@ -21,8 +21,8 @@ function detect_scopes_from_staged_files {
     
     if [ -n "$staged_files" ]; then
         # Count occurrences of each path token with depth tracking
-        declare -A scope_counts
-        declare -A scope_depths
+        local -A scope_counts
+        local -A scope_depths
         
         while IFS= read -r file; do
             if [ -n "$file" ]; then

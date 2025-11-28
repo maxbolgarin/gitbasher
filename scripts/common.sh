@@ -395,7 +395,7 @@ function check_code {
         echo -e "${RED}Error during $3!${ENDCOLOR}"
         echo -e "$2"
         if [ -n "$git_add" ]; then
-            git restore --staged $git_add
+            git restore --staged "$git_add"
         fi
         exit $1
     fi
@@ -406,12 +406,12 @@ function check_code {
 # $1: what to write in console on success
 # $2: flag no echo
 function yes_no_choice {
-    while [ true ]; do
+    while true; do
         read -n 1 -s choice
         if [ "$choice" == "y" ]; then
             if [ -n "$1" ]; then
                 echo -e "${YELLOW}$1${ENDCOLOR}"
-                if [ -z $2 ]; then
+                if [ -z "$2" ]; then
                     echo
                 fi
             fi
@@ -435,7 +435,7 @@ function choose {
     values=("$@")
     number_of_values=${#values[@]}
 
-    while [ true ]; do
+    while true; do
         if [ $number_of_values -gt 9 ]; then
             read -p "$read_prefix" -e -n 2 choice
         else
@@ -444,10 +444,10 @@ function choose {
 
         if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
             if [ -n "$git_add" ]; then
-                git restore --staged $git_add
+                git restore --staged "$git_add"
             fi
             if [ $number_of_values -le 9 ]; then
-                printf $choice
+                printf "%s" "$choice"
             fi
             exit
         fi
@@ -455,7 +455,7 @@ function choose {
         re='^[0-9=]+$'
         if ! [[ $choice =~ $re ]]; then
             if [ -n "$git_add" ]; then
-                git restore --staged $git_add
+                git restore --staged "$git_add"
             fi
             exit
         fi
@@ -469,13 +469,13 @@ function choose {
         choice_result=${values[index]}
         if [ -n "$choice_result" ]; then
             if [ $number_of_values -le 9 ]; then
-                printf $choice
+                printf "%s" "$choice"
             fi
             break
         else
             if [ $number_of_values -gt 9 ]; then
                 if [ -n "$git_add" ]; then
-                    git restore --staged $git_add
+                    git restore --staged "$git_add"
                 fi
                 exit
             fi
@@ -829,7 +829,7 @@ function choose_branch {
 # $1: name of the branch to switch
 # $2: pass it if you want to disable push log and moved changes
 function switch {
-    switch_output=$(git switch $1 2>&1)
+    switch_output=$(git switch "$1" 2>&1)
     switch_code=$?
 
     ## Switch is OK
@@ -839,21 +839,21 @@ function switch {
         else
             echo -e "${GREEN}Switched to branch '$1'${ENDCOLOR}"
             changes=$(git_status)
-            if [ -n "$changes" ] && [ -z $2 ]; then
+            if [ -n "$changes" ] && [ -z "$2" ]; then
                 echo
                 echo -e "${YELLOW}Moved changes:${ENDCOLOR}"
                 echo -e "$changes"
             fi
         fi
 
-        if [ -z $2 ]; then
+        if [ -z "$2" ]; then
             # Only call get_push_list if origin_name is not empty
             # Trim whitespace using parameter expansion
             local check_origin="${origin_name:-}"
             check_origin="${check_origin#"${check_origin%%[![:space:]]*}"}"
             check_origin="${check_origin%"${check_origin##*[![:space:]]}"}"
             if [ -n "$check_origin" ]; then
-                get_push_list $1 ${main_branch} "$check_origin"
+                get_push_list "$1" "${main_branch}" "$check_origin"
                 if [ -n "$push_list" ]; then
                     echo
                     count=$(echo -e "$push_list" | wc -l | sed 's/^ *//;s/ *$//')
@@ -867,8 +867,13 @@ function switch {
 
     ## There are uncommited files with conflicts
     if [[ $switch_output == *"would be overwritten"* ]] || [[ $switch_output == *"overwritten by"* ]]; then
-        conflicts="$(echo "$switch_output" | tail -r | tail -n +3 | tail -r | tail -n +2)"
-        echo -e "${RED}Changes would be overwritten by switch to '$1':${ENDCOLOR}"       
+        # Platform-specific reverse command: tac (Linux) or tail -r (BSD/macOS)
+        if which tac >/dev/null 2>&1; then
+            conflicts="$(echo "$switch_output" | tac | tail -n +3 | tac | tail -n +2)"
+        else
+            conflicts="$(echo "$switch_output" | tail -r | tail -n +3 | tail -r | tail -n +2)"
+        fi
+        echo -e "${RED}Changes would be overwritten by switch to '$1':${ENDCOLOR}"
         echo -e "${conflicts//[[:blank:]]/}"
         echo
         echo -e "${YELLOW}Commit these files and try to switch for one more time${ENDCOLOR}"

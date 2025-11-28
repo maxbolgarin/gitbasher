@@ -383,9 +383,9 @@ function rebase_branch {
 function rebase_todo_errors {
     rebase_output=$1
     output_to_print=$1
-    while [ true ]; do
+    while true; do
         echo -e "${RED}Cannot rebase! Your rebase plan has errors:${ENDCOLOR}"
-        echo "$(sed '$d' <<< $output_to_print)"
+        echo "$(sed '$d' <<< "$output_to_print")"
         echo
         echo -e "${YELLOW}You should fix errors${ENDCOLOR}"
         echo -e "1. Open editor to change rebase plan: ${BLUE}git rebase --edit-todo${ENDCOLOR}"

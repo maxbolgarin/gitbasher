@@ -133,13 +133,13 @@ function set_ticket {
     echo -e "${YELLOW}Enter a ticket prefix${ENDCOLOR}"
     echo
 
-    if [ -z $ticket_name ]; then
+    if [ -z "$ticket_name" ]; then
         echo -e "${YELLOW}Ticket prefix is not set in gitbasher${ENDCOLOR}"
     else
         echo -e "Current ticket prefix: ${YELLOW}$ticket_name${ENDCOLOR}"
         echo -e "Press Enter to exit without changes or enter 0 to remove existing ticket prefix"
     fi
-   
+
     read -p "Ticket prefix: " -e ticket_name
 
     if [ "$ticket_name" == "0" ]; then
@@ -149,7 +149,7 @@ function set_ticket {
         exit
     fi
 
-    if [ -z $ticket_name ]; then
+    if [ -z "$ticket_name" ]; then
         exit
     fi
 

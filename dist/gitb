@@ -374,18 +374,18 @@ function check_code {
         echo -e "${RED}Error during $3!${ENDCOLOR}"
         echo -e "$2"
         if [ -n "$git_add" ]; then
-            git restore --staged $git_add
+            git restore --staged "$git_add"
         fi
         exit $1
     fi
 }
 function yes_no_choice {
-    while [ true ]; do
+    while true; do
         read -n 1 -s choice
         if [ "$choice" == "y" ]; then
             if [ -n "$1" ]; then
                 echo -e "${YELLOW}$1${ENDCOLOR}"
-                if [ -z $2 ]; then
+                if [ -z "$2" ]; then
                     echo
                 fi
             fi
@@ -399,7 +399,7 @@ function yes_no_choice {
 function choose {
     values=("$@")
     number_of_values=${#values[@]}
-    while [ true ]; do
+    while true; do
         if [ $number_of_values -gt 9 ]; then
             read -p "$read_prefix" -e -n 2 choice
         else
@@ -407,17 +407,17 @@ function choose {
         fi
         if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
             if [ -n "$git_add" ]; then
-                git restore --staged $git_add
+                git restore --staged "$git_add"
             fi
             if [ $number_of_values -le 9 ]; then
-                printf $choice
+                printf "%s" "$choice"
             fi
             exit
         fi
         re='^[0-9=]+$'
         if ! [[ $choice =~ $re ]]; then
             if [ -n "$git_add" ]; then
-                git restore --staged $git_add
+                git restore --staged "$git_add"
             fi
             exit
         fi
@@ -429,13 +429,13 @@ function choose {
         choice_result=${values[index]}
         if [ -n "$choice_result" ]; then
             if [ $number_of_values -le 9 ]; then
-                printf $choice
+                printf "%s" "$choice"
             fi
             break
         else
             if [ $number_of_values -gt 9 ]; then
                 if [ -n "$git_add" ]; then
-                    git restore --staged $git_add
+                    git restore --staged "$git_add"
                 fi
                 exit
             fi
@@ -672,7 +672,7 @@ function choose_branch {
     echo
 }
 function switch {
-    switch_output=$(git switch $1 2>&1)
+    switch_output=$(git switch "$1" 2>&1)
     switch_code=$?
     if [ "$switch_code" == 0 ]; then
         if [ "$current_branch" == "$1" ]; then
@@ -680,18 +680,18 @@ function switch {
         else
             echo -e "${GREEN}Switched to branch '$1'${ENDCOLOR}"
             changes=$(git_status)
-            if [ -n "$changes" ] && [ -z $2 ]; then
+            if [ -n "$changes" ] && [ -z "$2" ]; then
                 echo
                 echo -e "${YELLOW}Moved changes:${ENDCOLOR}"
                 echo -e "$changes"
             fi
         fi
-        if [ -z $2 ]; then
+        if [ -z "$2" ]; then
             local check_origin="${origin_name:-}"
             check_origin="${check_origin#"${check_origin%%[![:space:]]*}"}"
             check_origin="${check_origin%"${check_origin##*[![:space:]]}"}"
             if [ -n "$check_origin" ]; then
-                get_push_list $1 ${main_branch} "$check_origin"
+                get_push_list "$1" "${main_branch}" "$check_origin"
                 if [ -n "$push_list" ]; then
                     echo
                     count=$(echo -e "$push_list" | wc -l | sed 's/^ *//;s/ *$//')
@@ -703,8 +703,8 @@ function switch {
         return
     fi
     if [[ $switch_output == *"would be overwritten"* ]] || [[ $switch_output == *"overwritten by"* ]]; then
-        conflicts="$(echo "$switch_output" | tail -r | tail -n +3 | tail -r | tail -n +2)"
-        echo -e "${RED}Changes would be overwritten by switch to '$1':${ENDCOLOR}"       
+        conflicts="$(echo "$switch_output" | tac | tail -n +3 | tac | tail -n +2)"
+        echo -e "${RED}Changes would be overwritten by switch to '$1':${ENDCOLOR}"
         echo -e "${conflicts//[[:blank:]]/}"
         echo
         echo -e "${YELLOW}Commit these files and try to switch for one more time${ENDCOLOR}"
@@ -1256,7 +1256,7 @@ function set_editor {
 function set_ticket {
     echo -e "${YELLOW}Enter a ticket prefix${ENDCOLOR}"
     echo
-    if [ -z $ticket_name ]; then
+    if [ -z "$ticket_name" ]; then
         echo -e "${YELLOW}Ticket prefix is not set in gitbasher${ENDCOLOR}"
     else
         echo -e "Current ticket prefix: ${YELLOW}$ticket_name${ENDCOLOR}"
@@ -1269,7 +1269,7 @@ function set_ticket {
         echo -e "${GREEN}Ticket prefix removed from '${project_name}' repo${ENDCOLOR}"
         exit
     fi
-    if [ -z $ticket_name ]; then
+    if [ -z "$ticket_name" ]; then
         exit
     fi
     if ! sanitize_text_input "$ticket_name" 50; then
@@ -1907,7 +1907,7 @@ function merge {
     fi
     if [[ $merge_output == *"Please commit your changes or stash them before you merge"* ]]; then
         echo -e "${RED}Cannot $operation! There are uncommited changes that will be overwritten by $operation${ENDCOLOR}"
-        files_to_commit=$(echo "$merge_output" | tail -n +2 | tail -r | tail -n +4 | tail -r)
+        files_to_commit=$(echo "$merge_output" | tail -n +2 | tac | tail -n +4 | tac)
         echo -e "${YELLOW}Files with changes${ENDCOLOR}"
         echo "$files_to_commit"
         exit $merge_code
@@ -2425,9 +2425,9 @@ function rebase_branch {
 function rebase_todo_errors {
     rebase_output=$1
     output_to_print=$1
-    while [ true ]; do
+    while true; do
         echo -e "${RED}Cannot rebase! Your rebase plan has errors:${ENDCOLOR}"
-        echo "$(sed '$d' <<< $output_to_print)"
+        echo "$(sed '$d' <<< "$output_to_print")"
         echo
         echo -e "${YELLOW}You should fix errors${ENDCOLOR}"
         echo -e "1. Open editor to change rebase plan: ${BLUE}git rebase --edit-todo${ENDCOLOR}"
@@ -5184,7 +5184,7 @@ function stash_script {
         else
             echo -e "${RED}Failed to stash files! Error:${ENDCOLOR}"
             echo "$stash_output"
-            git restore --staged $git_add 2>/dev/null
+            git restore --staged "$git_add" 2>/dev/null
             exit $stash_code
         fi
     fi

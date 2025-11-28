@@ -265,7 +265,7 @@ function stash_script {
             echo -e "${RED}Failed to stash files! Error:${ENDCOLOR}"
             echo "$stash_output"
             # Restore staged files on error
-            git restore --staged $git_add 2>/dev/null
+            git restore --staged "$git_add" 2>/dev/null
             exit $stash_code
         fi
     fi

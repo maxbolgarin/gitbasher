@@ -257,7 +257,8 @@ function merge {
     ### Cannot merge because there are uncommitted files that changed in origin
     if [[ $merge_output == *"Please commit your changes or stash them before you merge"* ]]; then
         echo -e "${RED}Cannot $operation! There are uncommited changes that will be overwritten by $operation${ENDCOLOR}"
-        files_to_commit=$(echo "$merge_output" | tail -n +2 | tail -r | tail -n +4 | tail -r)
+        # Use tac (reverse cat) for cross-platform compatibility instead of tail -r (BSD/macOS only)
+        files_to_commit=$(echo "$merge_output" | tail -n +2 | tac | tail -n +4 | tac)
         echo -e "${YELLOW}Files with changes${ENDCOLOR}"
         echo "$files_to_commit"
         exit $merge_code

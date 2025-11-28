@@ -11,22 +11,28 @@ Applied fixes for **15 issues** identified during comprehensive code review, inc
 
 ### Critical Fixes
 
-#### 1. Fixed `tail -r` portability issue
-**Files:** `scripts/common.sh:870`, `scripts/merge.sh:260`
+#### 1. Fixed cross-platform reverse command compatibility
+**Files:** `scripts/common.sh:870-875`, `scripts/merge.sh:260-265`
 
-**Problem:** `tail -r` is BSD/macOS specific and fails on Linux with "tail: invalid option -- 'r'"
+**Problem:**
+- `tail -r` is BSD/macOS specific and fails on Linux with "tail: invalid option -- 'r'"
+- `tac` is GNU coreutils specific and not available by default on macOS
 
-**Solution:** Replaced with `tac` (reverse cat) which is available on all Linux systems
+**Solution:** Detect which command is available at runtime and use the appropriate one
 
 ```bash
-# Before
+# Before (macOS only)
 conflicts="$(echo "$switch_output" | tail -r | tail -n +3 | tail -r | tail -n +2)"
 
-# After
-conflicts="$(echo "$switch_output" | tac | tail -n +3 | tac | tail -n +2)"
+# After (cross-platform)
+if command -v tac &> /dev/null; then
+    conflicts="$(echo "$switch_output" | tac | tail -n +3 | tac | tail -n +2)"
+else
+    conflicts="$(echo "$switch_output" | tail -r | tail -n +3 | tail -r | tail -n +2)"
+fi
 ```
 
-**Impact:** gitbasher now works correctly on Linux systems
+**Impact:** gitbasher now works correctly on both Linux and macOS systems
 
 ---
 

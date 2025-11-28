@@ -703,7 +703,11 @@ function switch {
         return
     fi
     if [[ $switch_output == *"would be overwritten"* ]] || [[ $switch_output == *"overwritten by"* ]]; then
-        conflicts="$(echo "$switch_output" | tac | tail -n +3 | tac | tail -n +2)"
+        if command -v tac &> /dev/null; then
+            conflicts="$(echo "$switch_output" | tac | tail -n +3 | tac | tail -n +2)"
+        else
+            conflicts="$(echo "$switch_output" | tail -r | tail -n +3 | tail -r | tail -n +2)"
+        fi
         echo -e "${RED}Changes would be overwritten by switch to '$1':${ENDCOLOR}"
         echo -e "${conflicts//[[:blank:]]/}"
         echo
@@ -1907,7 +1911,11 @@ function merge {
     fi
     if [[ $merge_output == *"Please commit your changes or stash them before you merge"* ]]; then
         echo -e "${RED}Cannot $operation! There are uncommited changes that will be overwritten by $operation${ENDCOLOR}"
-        files_to_commit=$(echo "$merge_output" | tail -n +2 | tac | tail -n +4 | tac)
+        if command -v tac &> /dev/null; then
+            files_to_commit=$(echo "$merge_output" | tail -n +2 | tac | tail -n +4 | tac)
+        else
+            files_to_commit=$(echo "$merge_output" | tail -n +2 | tail -r | tail -n +4 | tail -r)
+        fi
         echo -e "${YELLOW}Files with changes${ENDCOLOR}"
         echo "$files_to_commit"
         exit $merge_code

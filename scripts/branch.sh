@@ -68,7 +68,7 @@ function branch_script {
         msg="$msg\n${BOLD}tag${ENDCOLOR}_t_Checkout to a specific tag"
         msg="$msg\n${BOLD}new${ENDCOLOR}_n|c_Build a conventional name and create a new branch from current branch"
         msg="$msg\n${BOLD}newd${ENDCOLOR}_nd|cd_Build a conventional name, switch to $main_branch, pull it and create new branch"
-        msg="$msg\n${BOLD}delete${ENDCOLOR}_del|d_Select a local branch to delete"
+        msg="$msg\n${BOLD}delete${ENDCOLOR}_del|d_Delete branches (cleanup orphaned, merged, or select specific branch)"
         msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
         echo -e "$(echo -e "$msg" | column -ts'_')"
         exit
@@ -196,6 +196,83 @@ function branch_script {
     ### Run delete local logic
     elif [[ -z "$new" ]] && [[ -n "$delete" ]] && [[ -z "$tag" ]]; then
 
+        # Delete local branches that don't exist on remote
+        echo -e "${YELLOW}Do you want to delete local branches that don't exist on remote?${ENDCOLOR}"
+        echo -e "This will clean up branches that were deleted from the remote repository"
+        echo
+
+        printf "Answer (y/n): "
+
+        while [ true ]; do
+            read -n 1 -s choice
+            if [ "$choice" == "y" ]; then
+                printf "y\n\n"
+                echo -e "${YELLOW}Fetching remote and pruning...${ENDCOLOR}"
+                echo
+
+                fetch_output=$(git fetch --prune 2>&1)
+                check_code $? "$fetch_output" "fetch and prune remote"
+
+                # Get all local branches
+                IFS=$'\n' read -rd '' -a local_branches <<<"$(git branch --format='%(refname:short)' | cat 2>&1)"
+
+                branches_to_delete=()
+                for branch in "${local_branches[@]}"; do
+                    # Skip main branch and current branch
+                    if [[ "$branch" == "$main_branch" ]] || [[ "$branch" == "$current_branch" ]]; then
+                        continue
+                    fi
+
+                    # Check if remote tracking branch exists
+                    remote_exists=$(git rev-parse --verify --quiet $origin_name/$branch 2>&1)
+                    if [ $? -ne 0 ]; then
+                        branches_to_delete+=("$branch")
+                    fi
+                done
+
+                if [ ${#branches_to_delete[@]} -eq 0 ]; then
+                    echo -e "${GREEN}No orphaned local branches found!${ENDCOLOR}"
+                    echo -e "All local branches have corresponding remote branches"
+                    echo
+                else
+                    echo -e "${YELLOW}Found ${#branches_to_delete[@]} local branch(es) without remote:${ENDCOLOR}"
+                    for branch in "${branches_to_delete[@]}"; do
+                        printf "\t$branch\n"
+                    done
+                    echo
+
+                    echo -e "${YELLOW}Do you want to delete these branches?${ENDCOLOR}"
+                    printf "Answer (y/n): "
+
+                    while [ true ]; do
+                        read -n 1 -s delete_choice
+                        if [ "$delete_choice" == "y" ]; then
+                            printf "y\n\n"
+                            for branch in "${branches_to_delete[@]}"; do
+                                delete_output=$(git branch -D $branch 2>&1)
+                                delete_code=$?
+                                if [ $delete_code -eq 0 ]; then
+                                    echo -e "${GREEN}Branch '$branch' is deleted!${ENDCOLOR}"
+                                else
+                                    echo -e "${RED}Cannot delete branch '$branch'!${ENDCOLOR}"
+                                    echo -e "${delete_output}"
+                                fi
+                            done
+                            echo
+                            break
+                        elif [ "$delete_choice" == "n" ]; then
+                            printf "n\n\n"
+                            break
+                        fi
+                    done
+                fi
+                break
+            elif [ "$choice" == "n" ]; then
+                printf "n\n\n"
+                break
+            fi
+        done
+
         # Try to delete all merged branches
         IFS=$'\n' read -rd '' -a merged_branches <<<"$(git branch -v --sort=-committerdate --merged | cat 2>&1)"
 
@@ -311,11 +388,17 @@ function branch_script {
 
                     echo
                     if [ "$push_code" != 0 ]; then
-                        echo -e "${RED}Cannot delete branch '$branch_name'! Error message:${ENDCOLOR}"
-                        echo -e "${delete_output}"
-                        exit
+                        # Check if the error is because the branch doesn't exist on remote (which is OK)
+                        if [[ $push_output == *"remote ref does not exist"* ]] || [[ $push_output == *"unable to delete"*"does not exist"* ]]; then
+                            echo -e "${YELLOW}Branch '$branch_name' doesn't exist on remote (already deleted or never pushed)${ENDCOLOR}"
+                        else
+                            echo -e "${RED}Cannot delete branch '$branch_name'! Error message:${ENDCOLOR}"
+                            echo -e "${push_output}"
+                            exit
+                        fi
+                    else
+                        echo -e "${GREEN}Branch '$branch_name' is deleted in the remote!${ENDCOLOR}"
                     fi
-                    echo -e "${GREEN}Branch '$branch_name' is deleted in the remote!${ENDCOLOR}"
                     break
 
                 elif [ "$choice" == "n" ]; then

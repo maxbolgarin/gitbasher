@@ -3384,15 +3384,20 @@ function detect_scopes_from_staged_files {
                     if [ -n "$component" ]; then
                         if [ $i -eq $((${#path_components[@]} - 1)) ]; then
                             component_no_ext="${component%.*}"
+                            if [ -z "$component_no_ext" ]; then
+                                component_no_ext="$component"
+                            fi
                             component_no_ext_lower="${component_no_ext,,}"
-                            scope_counts["$component_no_ext_lower"]=$((${scope_counts["$component_no_ext_lower"]:-0} + 1))
-                            current_depth=$((i + 1))
-                            if [ -z "${scope_depths["$component_no_ext_lower"]}" ] || [ $current_depth -lt ${scope_depths["$component_no_ext_lower"]} ]; then
-                                scope_depths["$component_no_ext_lower"]=$current_depth
+                            if [ -n "$component_no_ext_lower" ]; then
+                                scope_counts["$component_no_ext_lower"]=$((${scope_counts["$component_no_ext_lower"]:-0} + 1))
+                                current_depth=$((i + 1))
+                                if [ -z "${scope_depths["$component_no_ext_lower"]}" ] || [ $current_depth -lt ${scope_depths["$component_no_ext_lower"]} ]; then
+                                    scope_depths["$component_no_ext_lower"]=$current_depth
+                                fi
                             fi
                         else
                             component_lower="${component,,}"
-                            if [[ ! "$component_lower" =~ ^(src|lib|test|tests|spec|specs|build|dist|node_modules|vendor|tmp|temp|cache|logs|log)$ ]]; then
+                            if [ -n "$component_lower" ] && [[ ! "$component_lower" =~ ^(src|lib|test|tests|spec|specs|build|dist|node_modules|vendor|tmp|temp|cache|logs|log)$ ]]; then
                                 scope_counts["$component_lower"]=$((${scope_counts["$component_lower"]:-0} + 1))
                                 current_depth=$((i + 1))
                                 if [ -z "${scope_depths["$component_lower"]}" ] || [ $current_depth -lt ${scope_depths["$component_lower"]} ]; then

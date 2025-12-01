@@ -38,17 +38,25 @@ function detect_scopes_from_staged_files {
                         # For the last component (filename), remove extension if present
                         if [ $i -eq $((${#path_components[@]} - 1)) ]; then
                             component_no_ext="${component%.*}"
+                            # Handle dotfiles (e.g., .gitignore) where extension removal results in empty string
+                            if [ -z "$component_no_ext" ]; then
+                                component_no_ext="$component"
+                            fi
                             component_no_ext_lower="${component_no_ext,,}"
-                            scope_counts["$component_no_ext_lower"]=$((${scope_counts["$component_no_ext_lower"]:-0} + 1))
-                            # Track minimum depth for this token
-                            current_depth=$((i + 1))
-                            if [ -z "${scope_depths["$component_no_ext_lower"]}" ] || [ $current_depth -lt ${scope_depths["$component_no_ext_lower"]} ]; then
-                                scope_depths["$component_no_ext_lower"]=$current_depth
+                            # Skip empty subscripts to avoid bash array errors
+                            if [ -n "$component_no_ext_lower" ]; then
+                                scope_counts["$component_no_ext_lower"]=$((${scope_counts["$component_no_ext_lower"]:-0} + 1))
+                                # Track minimum depth for this token
+                                current_depth=$((i + 1))
+                                if [ -z "${scope_depths["$component_no_ext_lower"]}" ] || [ $current_depth -lt ${scope_depths["$component_no_ext_lower"]} ]; then
+                                    scope_depths["$component_no_ext_lower"]=$current_depth
+                                fi
                             fi
                         else
                             # Directory component - filter out common non-meaningful directories
                             component_lower="${component,,}"
-                            if [[ ! "$component_lower" =~ ^(src|lib|test|tests|spec|specs|build|dist|node_modules|vendor|tmp|temp|cache|logs|log)$ ]]; then
+                            # Skip empty subscripts to avoid bash array errors
+                            if [ -n "$component_lower" ] && [[ ! "$component_lower" =~ ^(src|lib|test|tests|spec|specs|build|dist|node_modules|vendor|tmp|temp|cache|logs|log)$ ]]; then
                                 scope_counts["$component_lower"]=$((${scope_counts["$component_lower"]:-0} + 1))
                                 # Track minimum depth for this token
                                 current_depth=$((i + 1))

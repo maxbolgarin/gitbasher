@@ -47,6 +47,16 @@
         }
       }
     ],
-    "@semantic-release/github"
+    [
+      "@semantic-release/github",
+      {
+        "assets": [
+          {
+            "path": "dist/gitb",
+            "label": "gitb (single-file script)"
+          }
+        ]
+      }
+    ]
   ]
-} 
+}

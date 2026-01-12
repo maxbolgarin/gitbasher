@@ -14,13 +14,88 @@
 With **gitbasher** usage of `git` becomes more simple and intuitive. It helps speeding up the development process, making it more consistent reducing mistakes. This is a wrapper around the most used git commands with a cleaner interface. It uses `bash` `git` `sed` `grep`, `curl` and some built-in utilities.
 
 
-### Quick Installation
+### Quick Installation (recommended)
 
 ```bash
 GITB_PATH=/usr/local/bin/gitb && \
-curl -SL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/dist/gitb -o $GITB_PATH && \
+curl -SL https://github.com/maxbolgarin/gitbasher/releases/latest/download/gitb -o $GITB_PATH && \
 chmod +x $GITB_PATH
 ```
+
+### Package Managers (maintainer instructions)
+
+#### 1) Homebrew (tap)
+1. Create a tap repo, e.g. `maxbolgarin/homebrew-gitbasher`.
+2. Add a formula (file `Formula/gitbasher.rb`) that installs the GitHub release asset:
+   ```ruby
+   class Gitbasher < Formula
+     desc "Simple bash utility that makes git easy to use"
+     homepage "https://github.com/maxbolgarin/gitbasher"
+     url "https://github.com/maxbolgarin/gitbasher/releases/download/vX.Y.Z/gitb"
+     sha256 "<SHA256_OF_RELEASE_ASSET>"
+     version "X.Y.Z"
+
+     def install
+       bin.install "gitb"
+     end
+   end
+   ```
+3. Update the formula on every release:
+   - Replace `X.Y.Z` and `sha256`.
+   - Commit and push to the tap repo.
+4. User install:
+   ```bash
+   brew install maxbolgarin/gitbasher/gitbasher
+   ```
+
+#### 2) APT (Debian/Ubuntu)
+1. Build a `.deb` package in CI after the release asset is generated.
+   - Minimal package structure:
+     - `gitbasher_1.2.3_amd64/usr/bin/gitb`
+     - `gitbasher_1.2.3_amd64/DEBIAN/control`
+2. Example `DEBIAN/control`:
+   ```text
+   Package: gitbasher
+   Version: 1.2.3
+   Section: utils
+   Priority: optional
+   Architecture: amd64
+   Maintainer: <you@example.com>
+   Description: Simple bash utility that makes git easy to use
+   ```
+3. Build and sign the package:
+   ```bash
+   dpkg-deb --build gitbasher_1.2.3_amd64
+   ```
+4. Publish `.deb` to an APT repo (e.g. `aptly` + GitHub Pages).
+5. User install:
+   ```bash
+   curl -fsSL https://<your-domain>/repo.gpg | sudo gpg --dearmor -o /usr/share/keyrings/gitbasher.gpg
+   echo "deb [signed-by=/usr/share/keyrings/gitbasher.gpg] https://<your-domain>/apt stable main" | sudo tee /etc/apt/sources.list.d/gitbasher.list
+   sudo apt update
+   sudo apt install gitbasher
+   ```
+
+#### 3) npm (global CLI)
+1. Add a `package.json` with a `bin` entry pointing to the built script:
+   ```json
+   {
+     "name": "gitbasher",
+     "version": "X.Y.Z",
+     "bin": {
+       "gitb": "dist/gitb"
+     }
+   }
+   ```
+2. Ensure `dist/gitb` exists before publishing (e.g. build in CI).
+3. Publish (manual or CI):
+   ```bash
+   npm publish
+   ```
+4. User install:
+   ```bash
+   npm i -g gitbasher
+   ```
 
 In Windows use `wsl` (enter `wsl` in terminal, [read more](https://learn.microsoft.com/en-us/windows/wsl/setup/environment)) to enable Linux environment. Directory `/usr/local/bin/` is not mandatory. If you get `Permission denied`, use `sudo` or put it to `~/.local/bin` with adding it to `PATH` ([how](https://discussions.apple.com/thread/254226896)).
 
@@ -493,13 +568,13 @@ which gitb
 
 # If not found, reinstall
 GITB_PATH=/usr/local/bin/gitb && \
-curl -SL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/dist/gitb -o $GITB_PATH && \
+curl -SL https://github.com/maxbolgarin/gitbasher/releases/latest/download/gitb -o $GITB_PATH && \
 chmod +x $GITB_PATH
 
 # Alternative: Install to user directory
 mkdir -p ~/.local/bin
 GITB_PATH=~/.local/bin/gitb && \
-curl -SL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/dist/gitb -o $GITB_PATH && \
+curl -SL https://github.com/maxbolgarin/gitbasher/releases/latest/download/gitb -o $GITB_PATH && \
 chmod +x $GITB_PATH
 # Add to PATH: echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 ```
@@ -507,12 +582,12 @@ chmod +x $GITB_PATH
 #### ❓ "Permission denied" when installing
 ```bash
 # Use sudo for system-wide installation
-sudo curl -SL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/dist/gitb -o /usr/local/bin/gitb
+sudo curl -SL https://github.com/maxbolgarin/gitbasher/releases/latest/download/gitb -o /usr/local/bin/gitb
 sudo chmod +x /usr/local/bin/gitb
 
 # Or install to user directory (no sudo needed)
 mkdir -p ~/.local/bin
-curl -SL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/dist/gitb -o ~/.local/bin/gitb
+curl -SL https://github.com/maxbolgarin/gitbasher/releases/latest/download/gitb -o ~/.local/bin/gitb
 chmod +x ~/.local/bin/gitb
 ```
 

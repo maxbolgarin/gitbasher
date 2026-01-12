@@ -1,6 +1,6 @@
 {
     "name": "gitbasher",
-    "version": "3.8.0",
+    "version": "3.8.1",
     "description": "Simple bash utility that makes git easy to use",
     "keywords": ["git", "bash", "cli", "version-control"],
     "author": "maxbolgarin",

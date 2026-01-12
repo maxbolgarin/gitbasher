@@ -25,6 +25,15 @@ jobs:
       - name: Build release asset
         run: ./dist/build.sh ./scripts/gitb.sh ./dist/gitb
 
+      - name: Verify release asset exists
+        run: |
+          if [ ! -f "dist/gitb" ]; then
+            echo "Error: dist/gitb not found after build"
+            exit 1
+          fi
+          chmod +x dist/gitb
+          echo "Release asset verified: dist/gitb"
+
       - name: Install semantic-release
         run: |
           npm install -g semantic-release
@@ -35,4 +44,5 @@ jobs:
       - name: Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npx semantic-release

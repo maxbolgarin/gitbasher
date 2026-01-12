@@ -1,0 +1,28 @@
+{
+    "name": "gitbasher",
+    "version": "3.8.0",
+    "description": "Simple bash utility that makes git easy to use",
+    "keywords": ["git", "bash", "cli", "version-control"],
+    "author": "maxbolgarin",
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/maxbolgarin/gitbasher.git"
+    },
+    "homepage": "https://github.com/maxbolgarin/gitbasher#readme",
+    "bin": {
+      "gitb": "bin/gitb"
+    },
+    "files": [
+      "bin",
+      "download-release.js",
+      "README.md",
+      "LICENSE"
+    ],
+    "scripts": {
+      "postinstall": "node download-release.js"
+    },
+    "engines": {
+      "node": ">=14.0.0"
+    }
+}

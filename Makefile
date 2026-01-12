@@ -9,9 +9,9 @@ install: build
 	@chmod +x /usr/local/bin/gitb
 
 .PHONY: release
-release: install
-	@git add ./dist/gitb
-	@git commit -m "chore: build new script"
+release: build
+	@echo "Build complete. Use CI workflow to create releases."
+	@echo "The dist/gitb file is built locally but not committed to the repo."
 
 .PHONY: test
 test:

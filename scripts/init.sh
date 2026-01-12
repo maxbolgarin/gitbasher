@@ -38,7 +38,7 @@ function get_config_value {
 # $3: global flag
 # Returns: value
 function set_config_value {
-    if [ -z $3 ]; then
+    if [ -z "$3" ]; then
         git config --local "$1" "$2"
     else
         git config --global "$1" "$2"
@@ -188,4 +188,3 @@ scopes=$(get_config_value gitbasher.scopes "")
 ### Is this is a first run of gitbasher in this project?
 is_first=$(get_config_value gitbasher.isfirst "true")
 git config --local gitbasher.isfirst "false"
-

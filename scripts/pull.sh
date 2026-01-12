@@ -80,6 +80,12 @@ function pull_script {
         mode="merge"
     fi
 
+    if [ -z "$origin_name" ]; then
+        echo -e "${RED}No git remote configured.${ENDCOLOR}"
+        echo -e "Use ${BLUE}git remote add origin <url>${ENDCOLOR} to set it up first."
+        exit 1
+    fi
+
     if [ -n "$fetch" ]; then
         if [ -n "$all" ]; then
             echo -e "${YELLOW}Fetching all...${ENDCOLOR}"
@@ -207,6 +213,12 @@ function pull {
             echo -e "${RED}Cannot pull! Error message:${ENDCOLOR}"
             echo "$merge_output"
             exit $merge_code
+        fi
+
+        if [ -n "$5" ]; then
+            echo -e "${RED}Cannot fast-forward!${ENDCOLOR}"
+            echo -e "Fast-forward only mode is enabled, aborting pull."
+            exit 1
         fi
 
         commits=$(commit_list 999 "tab" HEAD..$origin_name/$current_branch)

@@ -42,7 +42,7 @@ function get_config_value {
     echo -e "$value"
 }
 function set_config_value {
-    if [ -z $3 ]; then
+    if [ -z "$3" ]; then
         git config --local "$1" "$2"
     else
         git config --global "$1" "$2"
@@ -3109,6 +3109,11 @@ function pull_script {
     elif [ -n "$merge" ]; then
         mode="merge"
     fi
+    if [ -z "$origin_name" ]; then
+        echo -e "${RED}No git remote configured.${ENDCOLOR}"
+        echo -e "Use ${BLUE}git remote add origin <url>${ENDCOLOR} to set it up first."
+        exit 1
+    fi
     if [ -n "$fetch" ]; then
         if [ -n "$all" ]; then
             echo -e "${YELLOW}Fetching all...${ENDCOLOR}"
@@ -3205,6 +3210,11 @@ function pull {
             echo -e "${RED}Cannot pull! Error message:${ENDCOLOR}"
             echo "$merge_output"
             exit $merge_code
+        fi
+        if [ -n "$5" ]; then
+            echo -e "${RED}Cannot fast-forward!${ENDCOLOR}"
+            echo -e "Fast-forward only mode is enabled, aborting pull."
+            exit 1
         fi
         commits=$(commit_list 999 "tab" HEAD..$origin_name/$current_branch)
         count=$(echo -e "$commits" | wc -l | sed 's/^ *//;s/ *$//')
@@ -6294,7 +6304,7 @@ exit 0"
                 echo -e "${RED}Template 'pre-commit-lint' is only for pre-commit hooks${ENDCOLOR}"
                 return 1
             fi
-            hook_content="#!/bin/sh
+            hook_content="#!/usr/bin/env bash
 #
 #
 echo \"Running pre-commit checks...\"
@@ -6302,8 +6312,8 @@ if git diff --cached --name-only --quiet; then
     echo \"No staged files to check\"
     exit 0
 fi
-staged_files=\$(git diff --cached --name-only)
-if echo \"\$staged_files\" | xargs grep -l \"TODO\\|FIXME\" 2>/dev/null; then
+staged_files=\$(git diff --cached --name-only -z)
+if echo \"\$staged_files\" | xargs -0 grep -l \"TODO\\|FIXME\" 2>/dev/null; then
     echo \"⚠️  Warning: Found TODO/FIXME comments in staged files\"
     echo \"Continue anyway? (y/n)\"
     read -n 1 answer
@@ -6313,7 +6323,7 @@ if echo \"\$staged_files\" | xargs grep -l \"TODO\\|FIXME\" 2>/dev/null; then
         exit 1
     fi
 fi
-for file in \$staged_files; do
+while IFS= read -r -d '' file; do
     if [ -f \"\$file\" ]; then
         size=\$(stat -c%s \"\$file\" 2>/dev/null || stat -f%z \"\$file\" 2>/dev/null)
         if [ \"\$size\" -gt 10485760 ]; then
@@ -6322,7 +6332,7 @@ for file in \$staged_files; do
             exit 1
         fi
     fi
-done
+done <<<\"\$staged_files\"
 echo \"Pre-commit checks passed\"
 exit 0"
         ;;

@@ -413,7 +413,7 @@ exit 0"
                 echo -e "${RED}Template 'pre-commit-lint' is only for pre-commit hooks${ENDCOLOR}"
                 return 1
             fi
-            hook_content="#!/bin/sh
+            hook_content="#!/usr/bin/env bash
 #
 # Pre-commit hook for code linting and formatting
 #
@@ -427,10 +427,10 @@ if git diff --cached --name-only --quiet; then
 fi
 
 # Example: Check for common issues
-staged_files=\$(git diff --cached --name-only)
+staged_files=\$(git diff --cached --name-only -z)
 
 # Check for TODO/FIXME comments in staged files
-if echo \"\$staged_files\" | xargs grep -l \"TODO\\|FIXME\" 2>/dev/null; then
+if echo \"\$staged_files\" | xargs -0 grep -l \"TODO\\|FIXME\" 2>/dev/null; then
     echo \"⚠️  Warning: Found TODO/FIXME comments in staged files\"
     echo \"Continue anyway? (y/n)\"
     read -n 1 answer
@@ -442,7 +442,7 @@ if echo \"\$staged_files\" | xargs grep -l \"TODO\\|FIXME\" 2>/dev/null; then
 fi
 
 # Check for large files (>10MB)
-for file in \$staged_files; do
+while IFS= read -r -d '' file; do
     if [ -f \"\$file\" ]; then
         size=\$(stat -c%s \"\$file\" 2>/dev/null || stat -f%z \"\$file\" 2>/dev/null)
         if [ \"\$size\" -gt 10485760 ]; then
@@ -451,7 +451,7 @@ for file in \$staged_files; do
             exit 1
         fi
     fi
-done
+done <<<\"\$staged_files\"
 
 echo \"Pre-commit checks passed\"
 exit 0"

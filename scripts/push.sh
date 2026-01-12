@@ -153,10 +153,15 @@ function push_script {
     ### Get push error - there is unpulled changes
     echo -e "${RED}Cannot push!${ENDCOLOR} There are unpulled changes in ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR}"
     echo
-    echo -e "Do you want to pull ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} (y/n)?"
-    yes_no_choice "Pulling..."
-
-    pull $current_branch $origin_name $editor
+    if [ -n "${fast}" ]; then
+        echo -e "${YELLOW}Pulling...${ENDCOLOR}"
+        echo
+        pull $current_branch $origin_name $editor "rebase"
+    else
+        echo -e "Do you want to pull ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} (y/n)?"
+        yes_no_choice "Pulling..."
+        pull $current_branch $origin_name $editor
+    fi
 
 
     ### Push after pull

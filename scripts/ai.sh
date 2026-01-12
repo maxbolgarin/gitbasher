@@ -470,10 +470,12 @@ function check_ai_available {
 
 ### Function to generate commit message using AI
 # $1: detected scopes (optional, space-separated list)
+# $2: provided scopes (optional, space-separated list)
 # Uses staged files and their diff to generate conventional commit message
 # Returns: Generated commit message in format "type(scope): subject"
 function generate_ai_commit_message {
     local detected_scopes="$1"
+    local provided_scopes="$2"
     local staged_files=$(git diff --name-only --cached)
     
     if [ -z "$staged_files" ]; then
@@ -508,6 +510,14 @@ $staged_files
 File changes summary:
 $diff_content"
 
+    # Add provided scopes to prompt if available
+    if [ -n "$provided_scopes" ]; then
+        prompt="$prompt
+
+Provided scopes list (choose the best related scope from this list when applicable):
+$provided_scopes"
+    fi
+
     # Add detected scopes to prompt if available
     if [ -n "$detected_scopes" ]; then
         prompt="$prompt
@@ -528,7 +538,7 @@ Generate ONLY the commit message in the format 'type(scope): subject'. The subje
 - Be lowercase and not end with a period
 - Follow the style and patterns from the recent commits shown above
 
-If you can determine a meaningful scope from the file paths and LOGIC OF UPDATES, include it. If detected scopes are provided above, prefer using one of them. Otherwise, omit the scope.
+If you can determine a meaningful scope from the file paths and LOGIC OF UPDATES, include it. Prefer using one of the provided scopes above when they exist. If none apply, use one of the detected scopes. Otherwise, omit the scope.
 
 Write ONLY the commit header in the format 'type(scope): subject', do not write body or footer after a new line!
 
@@ -590,10 +600,12 @@ Respond with only the commit message without any other text, nothing else."
 
 ### Function to generate commit message using AI
 # $1: detected scopes (optional, space-separated list)
+# $2: provided scopes (optional, space-separated list)
 # Uses staged files and their diff to generate conventional commit message
 # Returns: Generated commit message in format "type(scope): subject"
 function generate_ai_commit_message_full {
     local detected_scopes="$1"
+    local provided_scopes="$2"
     local staged_files=$(git diff --name-only --cached)
     
     if [ -z "$staged_files" ]; then
@@ -630,6 +642,14 @@ $staged_files
 File changes summary:
 $diff_content"
 
+    # Add provided scopes to prompt if available
+    if [ -n "$provided_scopes" ]; then
+        prompt="$prompt
+
+Provided scopes list (choose the best related scope from this list when applicable):
+$provided_scopes"
+    fi
+
     # Add detected scopes to prompt if available
     if [ -n "$detected_scopes" ]; then
         prompt="$prompt
@@ -650,7 +670,7 @@ Generate ONLY the commit message in the format 'type(scope): subject' with body.
 - Be lowercase and not end with a period
 - Follow the style and patterns from the recent commits shown above
 
-If you can determine a meaningful scope from the file paths and LOGIC OF UPDATES, include it. If detected scopes are provided above, prefer using one of them. Otherwise, omit the scope.
+If you can determine a meaningful scope from the file paths and LOGIC OF UPDATES, include it. Prefer using one of the provided scopes above when they exist. If none apply, use one of the detected scopes. Otherwise, omit the scope.
 
 The body should explain why you are making the change. The length of the body should be 1-2 sentences, not more.
 

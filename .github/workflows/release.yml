@@ -22,6 +22,9 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Build release asset
+        run: ./dist/build.sh ./scripts/gitb.sh ./dist/gitb
+
       - name: Install semantic-release
         run: |
           npm install -g semantic-release

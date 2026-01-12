@@ -23,7 +23,9 @@ jobs:
           node-version: '20'
 
       - name: Build release asset
-        run: ./dist/build.sh ./scripts/gitb.sh ./dist/gitb
+        run: |
+          ./dist/build.sh ./scripts/gitb.sh ./dist/gitb
+          chmod +x ./dist/gitb
 
       - name: Verify release asset exists
         run: |
@@ -31,7 +33,10 @@ jobs:
             echo "Error: dist/gitb not found after build"
             exit 1
           fi
-          chmod +x dist/gitb
+          if [ ! -x "dist/gitb" ]; then
+            echo "Error: dist/gitb is not executable"
+            exit 1
+          fi
           echo "Release asset verified: dist/gitb"
 
       - name: Install semantic-release

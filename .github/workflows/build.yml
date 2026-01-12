@@ -14,7 +14,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build
-        run: ./dist/build.sh ./scripts/gitb.sh ./dist/gitb
+        run: |
+          ./dist/build.sh ./scripts/gitb.sh ./dist/gitb
+          chmod +x ./dist/gitb
 
       - name: Install BATS
         run: |

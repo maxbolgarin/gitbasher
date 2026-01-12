@@ -1,0 +1,5 @@
+#!/bin/bash
+# Placeholder file - will be replaced during npm install by download-release.js
+# This file exists only to satisfy npm publish validation
+echo "Error: gitbasher binary not found. Please reinstall: npm install -g gitbasher" >&2
+exit 1

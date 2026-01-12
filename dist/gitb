@@ -567,13 +567,23 @@ function get_push_list {
     fi
 }
 function list_branches {
+    to_exit=""
+    local branches_per_page=20
     args="--sort=-committerdate"
     if [[ "$1" == "remote" ]]; then
         args="--sort=-committerdate -r"
     fi
     branches_str=$(git --no-pager branch $args --format="%(refname:short)")
-    branches_info_str=$(git --no-pager branch $args --format="${BLUE_ES}%(refname:short)${ENDCOLOR_ES} | %(contents:subject) | ${YELLOW_ES}%(objectname:short)${ENDCOLOR_ES}  | ${GREEN_ES}%(committerdate:relative)${ENDCOLOR_ES}" | column -ts'|' )
-    IFS=$'\n' 
+    branches_info_raw=$(git --no-pager branch $args --format="${BLUE_ES}%(refname:short)${ENDCOLOR_ES} | %(contents:subject) | ${YELLOW_ES}%(objectname:short)${ENDCOLOR_ES}  | ${GREEN_ES}%(committerdate:relative)${ENDCOLOR_ES}")
+    branches_info_str=$(echo "$branches_info_raw" | awk -v max=60 -F'\\|' '{
+        subject=$2
+        gsub(/^[ \t]+|[ \t]+$/,"",subject)
+        if (length(subject) > max) {
+            subject=substr(subject,1,max-3) "..."
+        }
+        print $1 " | " subject " | " $3 " | " $4
+    }' | column -ts'|' )
+    local IFS=$'\n'
     read -rd '' -a branches <<< "$branches_str" || true
     read -rd '' -a branches_info <<< "$branches_info_str" || true
     number_of_branches=${#branches[@]}
@@ -642,29 +652,108 @@ function list_branches {
         branches_info_first_main=("${branches_info_first_main[@]:1}")
         branches_first_main=("${branches_first_main[@]:1}")
     fi
-    for index in "${!branches_info_first_main[@]}"
-    do
-        branch=$(escape "${branches_first_main[index]}" "/")
-        if [[ "$1" == "remote" ]] && [[ "$branch" != "origin"* ]]; then
-            branch="$origin_name\/$branch"
+    list_total_branches=${#branches_info_first_main[@]}
+    list_total_pages=$(( (list_total_branches + branches_per_page - 1) / branches_per_page ))
+    if [ -z "$2" ]; then
+        list_current_page=1
+        while [ $list_current_page -le $list_total_pages ]; do
+            list_page_start=$(( (list_current_page - 1) * branches_per_page ))
+            list_page_end=$(( list_page_start + branches_per_page - 1 ))
+            if [ $list_page_end -ge $list_total_branches ]; then
+                list_page_end=$(( list_total_branches - 1 ))
+            fi
+            for ((index=list_page_start; index<=list_page_end; index++)); do
+                branch=$(escape "${branches_first_main[index]}" "/")
+                if [[ "$1" == "remote" ]] && [[ "$branch" != "origin"* ]]; then
+                    branch="$origin_name\/$branch"
+                fi
+                branch_line="${branches_info_first_main[index]}"
+                if [ "${branches_first_main[index]}" == "$current_branch" ]; then
+                    echo -e "$(($index+1)). * $branch_line"
+                else
+                    echo -e "$(($index+1)).   $branch_line"
+                fi
+            done
+            if [ $list_total_pages -gt 1 ] && [ $list_current_page -lt $list_total_pages ]; then
+                echo
+                printf "Page %s/%s. Press Enter for next page, or q to quit: " "$list_current_page" "$list_total_pages"
+                read -r -n 1 page_choice
+                echo
+                if [ "$page_choice" == "q" ]; then
+                    break
+                fi
+            fi
+            list_current_page=$((list_current_page + 1))
+        done
+    else
+        list_current_page="$2"
+        list_page_start=$(( (list_current_page - 1) * branches_per_page ))
+        list_page_end=$(( list_page_start + branches_per_page - 1 ))
+        if [ $list_page_end -ge $list_total_branches ]; then
+            list_page_end=$(( list_total_branches - 1 ))
         fi
-        branch_line="${branches_info_first_main[index]}"
-        if [ "${branches_first_main[index]}" == "$current_branch" ]; then
-            echo -e "$(($index+1)). * $branch_line"
-        else
-            echo -e "$(($index+1)).   $branch_line"
-        fi
-    done
+        for ((index=list_page_start; index<=list_page_end; index++)); do
+            branch=$(escape "${branches_first_main[index]}" "/")
+            if [[ "$1" == "remote" ]] && [[ "$branch" != "origin"* ]]; then
+                branch="$origin_name\/$branch"
+            fi
+            branch_line="${branches_info_first_main[index]}"
+            if [ "${branches_first_main[index]}" == "$current_branch" ]; then
+                echo -e "$(($index+1)). * $branch_line"
+            else
+                echo -e "$(($index+1)).   $branch_line"
+            fi
+        done
+    fi
 }
 function choose_branch {
-    list_branches $1
-    if [ -n "$to_exit" ]; then
-        exit
-    fi
-    echo
-    printf "Enter branch number: "
-    choose "${branches_first_main[@]}"
-    branch_name=$choice_result
+    local page=1
+    while true; do
+        list_branches "$1" "$page"
+        if [ -n "$to_exit" ]; then
+            exit
+        fi
+        echo
+        if [ "$list_total_pages" -gt 1 ]; then
+            printf "Enter branch number (page %s/%s, n/p to navigate): " "$page" "$list_total_pages"
+        else
+            printf "Enter branch number: "
+        fi
+        local choice=""
+        if [ ${#branches_first_main[@]} -gt 9 ]; then
+            read -r -n 2 choice
+        else
+            read -r -n 1 -s choice
+        fi
+        echo
+        if [ "$choice" == "n" ]; then
+            if [ $page -lt $list_total_pages ]; then
+                page=$((page + 1))
+            fi
+            continue
+        fi
+        if [ "$choice" == "p" ]; then
+            if [ $page -gt 1 ]; then
+                page=$((page - 1))
+            fi
+            continue
+        fi
+        if [ "$choice" == "q" ] || [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
+            exit
+        fi
+        re='^[0-9=]+$'
+        if ! [[ $choice =~ $re ]]; then
+            exit
+        fi
+        index=$(($choice-1))
+        branch_name=${branches_first_main[index]}
+        if [ -n "$branch_name" ]; then
+            break
+        fi
+        if [ ${#branches_first_main[@]} -gt 9 ]; then
+            exit
+        fi
+    done
     if [[ "$1" == "remote" ]]; then
         branch_name=$(sed "s/remotes\///g" <<< ${branch_name})
         branch_name=$(sed "s/${origin_name}\///g" <<< ${branch_name})

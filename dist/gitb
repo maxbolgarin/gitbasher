@@ -1034,6 +1034,7 @@ function check_ai_available {
 }
 function generate_ai_commit_message {
     local detected_scopes="$1"
+    local provided_scopes="$2"
     local staged_files=$(git diff --name-only --cached)
     if [ -z "$staged_files" ]; then
         echo -e "${RED}No staged files found${ENDCOLOR}" >&2
@@ -1058,6 +1059,11 @@ Staged files:
 $staged_files
 File changes summary:
 $diff_content"
+    if [ -n "$provided_scopes" ]; then
+        prompt="$prompt
+Provided scopes list (choose the best related scope from this list when applicable):
+$provided_scopes"
+    fi
     if [ -n "$detected_scopes" ]; then
         prompt="$prompt
 Detected scopes from file paths (use one of these if relevant):
@@ -1072,7 +1078,7 @@ Generate ONLY the commit message in the format 'type(scope): subject'. The subje
 - Be specific, don't be very general, so do NOT write 'improve existing feature' or 'fix bug'
 - Be lowercase and not end with a period
 - Follow the style and patterns from the recent commits shown above
-If you can determine a meaningful scope from the file paths and LOGIC OF UPDATES, include it. If detected scopes are provided above, prefer using one of them. Otherwise, omit the scope.
+If you can determine a meaningful scope from the file paths and LOGIC OF UPDATES, include it. Prefer using one of the provided scopes above when they exist. If none apply, use one of the detected scopes. Otherwise, omit the scope.
 Write ONLY the commit header in the format 'type(scope): subject', do not write body or footer after a new line!
 Respond with only the commit message, nothing else."
     call_openrouter_api "$prompt"
@@ -1109,6 +1115,7 @@ Respond with only the commit message without any other text, nothing else."
 }
 function generate_ai_commit_message_full {
     local detected_scopes="$1"
+    local provided_scopes="$2"
     local staged_files=$(git diff --name-only --cached)
     if [ -z "$staged_files" ]; then
         echo -e "${RED}No staged files found${ENDCOLOR}" >&2
@@ -1134,6 +1141,11 @@ Staged files:
 $staged_files
 File changes summary:
 $diff_content"
+    if [ -n "$provided_scopes" ]; then
+        prompt="$prompt
+Provided scopes list (choose the best related scope from this list when applicable):
+$provided_scopes"
+    fi
     if [ -n "$detected_scopes" ]; then
         prompt="$prompt
 Detected scopes from file paths (use one of these if relevant):
@@ -1148,7 +1160,7 @@ Generate ONLY the commit message in the format 'type(scope): subject' with body.
 - Be specific, don't be very general, so do NOT write 'improve existing feature' or 'fix bug'
 - Be lowercase and not end with a period
 - Follow the style and patterns from the recent commits shown above
-If you can determine a meaningful scope from the file paths and LOGIC OF UPDATES, include it. If detected scopes are provided above, prefer using one of them. Otherwise, omit the scope.
+If you can determine a meaningful scope from the file paths and LOGIC OF UPDATES, include it. Prefer using one of the provided scopes above when they exist. If none apply, use one of the detected scopes. Otherwise, omit the scope.
 The body should explain why you are making the change. The length of the body should be 1-2 sentences, not more.
 Respond with only the full commit message, nothing else."
     call_openrouter_api "$prompt"
@@ -3482,11 +3494,11 @@ function handle_ai_commit_generation {
     detect_scopes_from_staged_files
     local ai_commit_message
     if [ "$ai_mode" = "full" ]; then
-        ai_commit_message=$(generate_ai_commit_message_full "$detected_scopes")
+        ai_commit_message=$(generate_ai_commit_message_full "$detected_scopes" "$scopes")
     elif [ "$ai_mode" = "subject" ]; then
         ai_commit_message=$(generate_ai_commit_message_subject "$commit_prefix" "$detected_scopes")
     else
-        ai_commit_message=$(generate_ai_commit_message "$detected_scopes")
+        ai_commit_message=$(generate_ai_commit_message "$detected_scopes" "$scopes")
     fi
     if [ $? -ne 0 ] || [ -z "$ai_commit_message" ]; then
         echo

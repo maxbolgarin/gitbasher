@@ -183,11 +183,11 @@ function handle_ai_commit_generation {
     # Generate AI commit message based on mode
     local ai_commit_message
     if [ "$ai_mode" = "full" ]; then
-        ai_commit_message=$(generate_ai_commit_message_full "$detected_scopes")
+        ai_commit_message=$(generate_ai_commit_message_full "$detected_scopes" "$scopes")
     elif [ "$ai_mode" = "subject" ]; then
         ai_commit_message=$(generate_ai_commit_message_subject "$commit_prefix" "$detected_scopes")
     else
-        ai_commit_message=$(generate_ai_commit_message "$detected_scopes")
+        ai_commit_message=$(generate_ai_commit_message "$detected_scopes" "$scopes")
     fi
     
     if [ $? -ne 0 ] || [ -z "$ai_commit_message" ]; then

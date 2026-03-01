@@ -501,6 +501,20 @@ function git_status {
 }
 
 
+### Function prints staged files with color-coded status
+# Added: green, Modified: yellow, Deleted: red
+function print_staged_files {
+    while IFS=$'\t' read -r status file _; do
+        case "${status:0:1}" in
+            A) echo -e "\t${GREEN}${file}${ENDCOLOR}" ;;
+            M) echo -e "\t${YELLOW}${file}${ENDCOLOR}" ;;
+            D) echo -e "\t${RED}${file}${ENDCOLOR}" ;;
+            *) echo -e "\t${file}${ENDCOLOR}" ;;
+        esac
+    done <<< "$(git diff --name-status --cached)"
+}
+
+
 ### Function prints the list of commits
 # $1: number of last commits to show
 # $2: what to add before commit line

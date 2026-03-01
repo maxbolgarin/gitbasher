@@ -39,11 +39,17 @@ jobs:
           fi
           echo "Release asset verified: dist/gitb"
 
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
       - name: Install semantic-release
         run: |
           npm install -g semantic-release
           npm install -g @semantic-release/github
           npm install -g @semantic-release/npm
+          npm install -g @semantic-release/git
           npm install -g conventional-changelog-conventionalcommits
 
       - name: Release

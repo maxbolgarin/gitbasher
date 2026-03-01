@@ -18,7 +18,14 @@ function cleanup_on_exit {
 function detect_scopes_from_staged_files {
     detected_scopes=""
     local staged_files=$(git diff --name-only --cached)
-    
+
+    # Limit the number of files to process for scope detection (performance)
+    local max_files_for_scopes=100
+    local total_files=$(echo "$staged_files" | wc -l | tr -d ' ')
+    if [ "$total_files" -gt "$max_files_for_scopes" ]; then
+        staged_files=$(echo "$staged_files" | head -n "$max_files_for_scopes")
+    fi
+
     if [ -n "$staged_files" ]; then
         # Count occurrences of each path token with depth tracking
         local -A scope_counts

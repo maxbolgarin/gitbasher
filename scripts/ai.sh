@@ -110,6 +110,59 @@ function get_limited_diff_for_ai {
     echo "$diff_content"
 }
 
+### Function to get limited staged files list for AI prompts
+# Returns: Staged file names limited to prevent token overflow on large commits
+function get_limited_staged_files_for_ai {
+    local max_files=50
+    local max_chars=2000
+
+    local staged_files=$(git diff --name-only --cached)
+    local total_files=$(echo "$staged_files" | wc -l | tr -d ' ')
+
+    if [ "$total_files" -gt "$max_files" ]; then
+        staged_files=$(echo "$staged_files" | head -n "$max_files")
+        staged_files="${staged_files}
+... and $((total_files - max_files)) more files (${total_files} total)"
+    fi
+
+    # Further limit by character count
+    local char_count=${#staged_files}
+    if [ "$char_count" -gt "$max_chars" ]; then
+        staged_files=$(echo "$staged_files" | head -c "$max_chars")
+        staged_files="${staged_files}... [truncated, ${total_files} files total]"
+    fi
+
+    echo "$staged_files"
+}
+
+### Function to get limited diff stat for AI prompts
+# Returns: Diff stat output limited to prevent token overflow on large commits
+function get_limited_diff_stat_for_ai {
+    local max_lines=50
+    local max_chars=2000
+
+    local diff_stat=$(git diff --cached --stat)
+    local total_lines=$(echo "$diff_stat" | wc -l | tr -d ' ')
+
+    if [ "$total_lines" -gt "$max_lines" ]; then
+        # Keep the summary line (last line of --stat) and first N-1 file lines
+        local summary_line=$(echo "$diff_stat" | tail -n 1)
+        diff_stat=$(echo "$diff_stat" | head -n "$((max_lines - 1))")
+        diff_stat="${diff_stat}
+... ($((total_lines - max_lines)) more files not shown)
+${summary_line}"
+    fi
+
+    # Further limit by character count
+    local char_count=${#diff_stat}
+    if [ "$char_count" -gt "$max_chars" ]; then
+        diff_stat=$(echo "$diff_stat" | head -c "$max_chars")
+        diff_stat="${diff_stat}... [truncated]"
+    fi
+
+    echo "$diff_stat"
+}
+
 ### Function to get recent commit messages for AI context
 # Returns: Recent commit messages formatted for AI prompt
 function get_recent_commit_messages_for_ai {
@@ -364,10 +417,25 @@ function call_openrouter_api {
         # Provide helpful suggestions based on error type
         case "$error_code" in
             400)
-                echo -e "${YELLOW}⚠️  Bad request: Check your API configuration or prompt format.${ENDCOLOR}" >&2
+                if [[ "$error_message" == *"context"* ]] || [[ "$error_message" == *"token"* ]] || [[ "$error_message" == *"too long"* ]] || [[ "$error_message" == *"length"* ]]; then
+                    echo -e "${YELLOW}📏 Prompt too large: Too many staged files or changes for the AI model.${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}  • Reduce the diff limit: gitb cfg history${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}  • Try a model with larger context: gitb cfg model${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}  • Use manual commit message for now: gitb c${ENDCOLOR}" >&2
+                else
+                    echo -e "${YELLOW}⚠️  Bad request: Check your API configuration or prompt format.${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}  • Verify your API key is correct${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}  • Try again with a smaller commit diff${ENDCOLOR}" >&2
+                fi
+                ;;
+            413)
+                echo -e "${YELLOW}📏 Payload too large: Too many staged files or changes for the AI model.${ENDCOLOR}" >&2
                 echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Verify your API key is correct${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Try again with a smaller commit diff${ENDCOLOR}" >&2
+                echo -e "${YELLOW}  • Reduce the diff limit: gitb cfg history${ENDCOLOR}" >&2
+                echo -e "${YELLOW}  • Try a model with larger context: gitb cfg model${ENDCOLOR}" >&2
+                echo -e "${YELLOW}  • Use manual commit message for now: gitb c${ENDCOLOR}" >&2
                 ;;
             401|403)
                 echo -e "${YELLOW}🔐 Authentication error: Invalid or expired API key.${ENDCOLOR}" >&2
@@ -409,6 +477,12 @@ function call_openrouter_api {
                     echo -e "${YELLOW}  • Configure proxy with: gitb cfg proxy${ENDCOLOR}" >&2
                     echo -e "${YELLOW}  • Use a VPN to connect from a supported region${ENDCOLOR}" >&2
                     echo -e "${YELLOW}  • Use manual commit messages for now${ENDCOLOR}" >&2
+                elif [[ "$error_message" == *"context"* ]] || [[ "$error_message" == *"token"* ]] || [[ "$error_message" == *"too long"* ]] || [[ "$error_message" == *"length"* ]]; then
+                    echo -e "${YELLOW}📏 Prompt too large: Too many staged files or changes for the AI model.${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}  • Reduce the diff limit: gitb cfg history${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}  • Try a model with larger context: gitb cfg model${ENDCOLOR}" >&2
+                    echo -e "${YELLOW}  • Use manual commit message for now: gitb c${ENDCOLOR}" >&2
                 else
                     echo -e "${YELLOW}❓ Unknown error occurred.${ENDCOLOR}" >&2
                     echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
@@ -477,14 +551,15 @@ function generate_ai_commit_message {
     local detected_scopes="$1"
     local provided_scopes="$2"
     local staged_files=$(git diff --name-only --cached)
-    
+
     if [ -z "$staged_files" ]; then
         echo -e "${RED}No staged files found${ENDCOLOR}" >&2
         return 1
     fi
-    
+
     # Get the diff for staged files (limited to save tokens)
-    local diff_content=$(git diff --cached --stat)
+    local staged_files_limited=$(get_limited_staged_files_for_ai)
+    local diff_content=$(get_limited_diff_stat_for_ai)
     local diff_details=$(get_limited_diff_for_ai)
     local recent_commits=$(get_recent_commit_messages_for_ai)
     
@@ -505,7 +580,7 @@ Recent commit messages from this repository (for style reference):
 $recent_commits
 
 Staged files:
-$staged_files
+$staged_files_limited
 
 File changes summary:
 $diff_content"
@@ -557,17 +632,18 @@ function generate_ai_commit_message_subject {
     local commit_prefix="$1"
     local detected_scopes="$2"
     local staged_files=$(git diff --name-only --cached)
-    
+
     if [ -z "$staged_files" ]; then
         echo -e "${RED}No staged files found${ENDCOLOR}" >&2
         return 1
     fi
-    
+
     # Get the diff for staged files (limited to save tokens)
-    local diff_content=$(git diff --cached --stat)
+    local staged_files_limited=$(get_limited_staged_files_for_ai)
+    local diff_content=$(get_limited_diff_stat_for_ai)
     local diff_details=$(get_limited_diff_for_ai)
     local recent_commits=$(get_recent_commit_messages_for_ai)
-    
+
     # Create prompt for AI
     local prompt="Analyze the following git changes and generate a conventional commit message that will be appended to $commit_prefix.
 
@@ -575,7 +651,7 @@ Recent commit messages from this repository (for style reference):
 $recent_commits
 
 Staged files:
-$staged_files
+$staged_files_limited
 
 File changes summary:
 $diff_content
@@ -607,17 +683,18 @@ function generate_ai_commit_message_full {
     local detected_scopes="$1"
     local provided_scopes="$2"
     local staged_files=$(git diff --name-only --cached)
-    
+
     if [ -z "$staged_files" ]; then
         echo -e "${RED}No staged files found${ENDCOLOR}" >&2
         return 1
     fi
-    
+
     # Get the diff for staged files (limited to save tokens)
-    local diff_content=$(git diff --cached --stat)
+    local staged_files_limited=$(get_limited_staged_files_for_ai)
+    local diff_content=$(get_limited_diff_stat_for_ai)
     local diff_details=$(get_limited_diff_for_ai)
     local recent_commits=$(get_recent_commit_messages_for_ai)
-    
+
     # Create prompt for AI
     local prompt="Analyze the following git changes and generate a conventional commit message in the format 'type(scope): subject' with body.
 
@@ -637,7 +714,7 @@ Recent commit messages from this repository (for style reference):
 $recent_commits
 
 Staged files:
-$staged_files
+$staged_files_limited
 
 File changes summary:
 $diff_content"

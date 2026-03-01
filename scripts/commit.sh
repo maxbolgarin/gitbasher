@@ -533,8 +533,7 @@ function commit_script {
             exit 1
         fi
         echo -e "${YELLOW}Using already staged files:${ENDCOLOR}"
-        staged_display="$(sed 's/^/\t/' <<< "$staged_files_check")"
-        echo -e "${GREEN}${staged_display}${ENDCOLOR}"
+        print_staged_files
     fi
 
 
@@ -672,7 +671,7 @@ function commit_script {
     if [ -z "${staged}" ]; then
         echo -e "${YELLOW}Staged files:${ENDCOLOR}"
         staged="$(sed 's/^/\t/' <<< "$(git diff --name-only --cached)")"
-        echo -e "${GREEN}${staged}${ENDCOLOR}"
+        print_staged_files
     else
         # Still need to set the staged variable for later use
         staged="$(sed 's/^/\t/' <<< "$(git diff --name-only --cached)")"

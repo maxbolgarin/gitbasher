@@ -615,6 +615,12 @@ Generate ONLY the commit message in the format 'type(scope): subject'. The subje
 
 If you can determine a meaningful scope from the file paths and LOGIC OF UPDATES, include it. Prefer using one of the provided scopes above when they exist. If none apply, use one of the detected scopes. Otherwise, omit the scope.
 
+IMPORTANT rules for commits with multiple distinct changes:
+- If the commit contains 2-3 distinct features or changes, combine them using 'and' in the subject (e.g., 'feat: add auth module and user profile page')
+- If the commit contains 4+ distinct features or changes, summarize them with a count and list the most important ones (e.g., 'feat: add 5 features including auth, profiles, settings, dashboard, and notifications')
+- If the commit mixes different types of changes (e.g., features and fixes), use the dominant type and mention the mix (e.g., 'feat: add auth module and fix login validation')
+- Always be specific about WHAT the changes are, never write vague messages like 'multiple changes' or 'various updates'
+
 Write ONLY the commit header in the format 'type(scope): subject', do not write body or footer after a new line!
 
 Respond with only the commit message, nothing else."
@@ -665,6 +671,11 @@ Generate ONLY the commit message. The message should:
 - Be specific, don't be very general, so do NOT write 'improve existing feature' or 'fix bug'
 - Be lowercase and not end with a period
 - Follow the style and patterns from the recent commits shown above
+
+IMPORTANT rules for commits with multiple distinct changes:
+- If the commit contains 2-3 distinct changes, combine them using 'and' (e.g., 'add auth module and user profile page')
+- If the commit contains 4+ distinct changes, summarize with a count and list the most important ones (e.g., 'add 5 features including auth, profiles, and settings')
+- Always be specific about WHAT the changes are, never write vague messages like 'multiple changes' or 'various updates'
 
 Write ONLY the commit message, do not write body or footer.
 
@@ -749,7 +760,13 @@ Generate ONLY the commit message in the format 'type(scope): subject' with body.
 
 If you can determine a meaningful scope from the file paths and LOGIC OF UPDATES, include it. Prefer using one of the provided scopes above when they exist. If none apply, use one of the detected scopes. Otherwise, omit the scope.
 
-The body should explain why you are making the change. The length of the body should be 1-2 sentences, not more.
+IMPORTANT rules for commits with multiple distinct changes:
+- If the commit contains 2-3 distinct features or changes, combine them using 'and' in the subject (e.g., 'feat: add auth module and user profile page')
+- If the commit contains 4+ distinct features or changes, summarize them with a count in the subject and list them in the body (e.g., subject: 'feat: add 5 new features for user management', body: 'Add auth module, user profiles, settings page, dashboard, and notifications')
+- If the commit mixes different types of changes (e.g., features and fixes), use the dominant type and mention the mix (e.g., 'feat: add auth module and fix login validation')
+- Always be specific about WHAT the changes are, never write vague messages like 'multiple changes' or 'various updates'
+
+The body should explain why you are making the change. If there are multiple changes, use the body to list them. The length of the body should be 1-3 sentences, not more.
 
 Respond with only the full commit message, nothing else."
 

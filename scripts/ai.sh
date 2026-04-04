@@ -395,9 +395,16 @@ function call_openrouter_api {
     local has_error=$(echo "$response" | grep -q '"error"' && echo "true" || echo "false")
     
     if [ "$has_error" = "true" ]; then
-        # Extract error details using grep and more robust parsing
-        local error_code=$(echo "$response" | grep -o '"code"[[:space:]]*:[[:space:]]*[0-9]*' | grep -o '[0-9]*')
-        local error_message=$(echo "$response" | grep -o '"message"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/"message"[[:space:]]*:[[:space:]]*"\([^\"]*\)"/\1/')
+        # Extract error details
+        local error_code=""
+        local error_message=""
+        if command -v jq &>/dev/null; then
+            error_code=$(echo "$response" | jq -r '.error.code // empty' 2>/dev/null)
+            error_message=$(echo "$response" | jq -r '.error.message // empty' 2>/dev/null)
+        else
+            error_code=$(echo "$response" | LC_ALL=C grep -o '"code"[[:space:]]*:[[:space:]]*[0-9]*' | grep -o '[0-9]*')
+            error_message=$(echo "$response" | LC_ALL=C grep -o '"message"[[:space:]]*:[[:space:]]*"[^"]*"' | LC_ALL=C sed 's/"message"[[:space:]]*:[[:space:]]*"\([^"]*\)"/\1/')
+        fi
         
         echo >&2
         echo -e "${RED}AI API Error${ENDCOLOR}" >&2
@@ -498,11 +505,15 @@ function call_openrouter_api {
     
     # Parse OpenAI-style response from OpenRouter
     local ai_response=""
-    ai_response=$(echo "$response" | sed -n 's/.*\"choices\"[[:space:]]*:[[:space:]]*\[.*\"message\"[[:space:]]*:[[:space:]]*{[[:space:]]*\"role\"[[:space:]]*:[[:space:]]*\"assistant\"[[:space:]]*,[[:space:]]*\"content\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p' | head -1)
-    
-    # Clean up escaped characters
-    if [ -n "$ai_response" ]; then
-        ai_response=$(echo "$ai_response" | sed 's/\\n/\n/g' | sed 's/\\"/"/g' | sed 's/\\\\//g')
+    if command -v jq &>/dev/null; then
+        ai_response=$(echo "$response" | jq -r '.choices[0].message.content // empty' 2>/dev/null)
+    else
+        # Fallback: sed-based parsing with LC_ALL=C to avoid illegal byte sequence errors
+        ai_response=$(echo "$response" | LC_ALL=C sed -n 's/.*"choices"[[:space:]]*:[[:space:]]*\[.*"message"[[:space:]]*:[[:space:]]*{[[:space:]]*"role"[[:space:]]*:[[:space:]]*"assistant"[[:space:]]*,[[:space:]]*"content"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+        # Clean up escaped characters
+        if [ -n "$ai_response" ]; then
+            ai_response=$(echo "$ai_response" | sed 's/\\n/\n/g' | sed 's/\\"/"/g' | sed 's/\\\\/\\/g')
+        fi
     fi
     
     if [ -z "$ai_response" ]; then

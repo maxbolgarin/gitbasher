@@ -224,12 +224,15 @@ function handle_ai_commit_generation {
         if [ "$ai_mode" = "subject" ]; then
             echo
         fi
+        # Save commit message in case commit fails (e.g. pre-commit hook)
+        git config gitbasher.cached-commit-message "$commit"
         result=$(git commit -m """$commit""" 2>&1)
         check_code $? "$result" "commit"
-        
-        # Clean up cached git add on successful commit
+
+        # Clean up cached git add and commit message on successful commit
         git config --unset gitbasher.cached-git-add 2>/dev/null
-        
+        git config --unset gitbasher.cached-commit-message 2>/dev/null
+
         after_commit
 
         if [ -n "${push}" ]; then
@@ -283,12 +286,15 @@ function handle_ai_commit_generation {
         commit="$commit_message"
         # Skip to final commit step
         echo
+        # Save commit message in case commit fails (e.g. pre-commit hook)
+        git config gitbasher.cached-commit-message "$commit"
         result=$(git commit -m """$commit""" 2>&1)
         check_code $? "$result" "commit"
-        
-        # Clean up cached git add on successful commit
+
+        # Clean up cached git add and commit message on successful commit
         git config --unset gitbasher.cached-git-add 2>/dev/null
-        
+        git config --unset gitbasher.cached-commit-message 2>/dev/null
+
         after_commit
 
         if [ -n "${push}" ]; then
@@ -685,6 +691,62 @@ function commit_script {
     fi
 
 
+    ### Check for previously saved commit message (from a failed commit)
+    saved_commit_message=$(git config --get gitbasher.cached-commit-message 2>/dev/null)
+    if [ -n "$saved_commit_message" ] && [ -z "${fixup}" ] && [ -z "${amend}" ]; then
+        echo
+        echo -e "${YELLOW}Found previous commit message:${ENDCOLOR} ${BOLD}$saved_commit_message${ENDCOLOR}"
+        read -n 1 -p "Use it? (y/e to edit/n) " -s choice
+        echo
+        if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
+            commit="$saved_commit_message"
+            echo
+            result=$(git commit -m """$commit""" 2>&1)
+            check_code $? "$result" "commit"
+
+            # Clean up cached git add and commit message on successful commit
+            git config --unset gitbasher.cached-git-add 2>/dev/null
+            git config --unset gitbasher.cached-commit-message 2>/dev/null
+
+            after_commit
+
+            if [ -n "${push}" ]; then
+                echo
+                push_script y
+            fi
+            exit
+        elif [ "$choice" = "e" ] || [ "$choice" = "E" ]; then
+            echo
+            echo -e "${YELLOW}Edit the saved commit message:${ENDCOLOR}"
+            read -p "" -e -i "$saved_commit_message" edited_commit_message
+            if [ -n "$edited_commit_message" ]; then
+                commit="$edited_commit_message"
+                echo
+                # Save edited message in case this commit also fails
+                git config gitbasher.cached-commit-message "$commit"
+                result=$(git commit -m """$commit""" 2>&1)
+                check_code $? "$result" "commit"
+
+                # Clean up cached git add and commit message on successful commit
+                git config --unset gitbasher.cached-git-add 2>/dev/null
+                git config --unset gitbasher.cached-commit-message 2>/dev/null
+
+                after_commit
+
+                if [ -n "${push}" ]; then
+                    echo
+                    push_script y
+                fi
+                exit
+            else
+                git config --unset gitbasher.cached-commit-message 2>/dev/null
+            fi
+        else
+            git config --unset gitbasher.cached-commit-message 2>/dev/null
+        fi
+    fi
+
+
     ### AI Logic: Generate commit message using AI (before manual steps)
     if [ -n "${llm}" ] && [ -z "${scope}" ]; then
         if [ -n "${fast}" ] || [ -n "${staged}" ]; then
@@ -719,8 +781,9 @@ function commit_script {
         result=$(git commit --fixup $commit_hash 2>&1)
         check_code $? "$result" "fixup"
         
-        # Clean up cached git add on successful fixup
+        # Clean up cached git add and commit message on successful fixup
         git config --unset gitbasher.cached-git-add 2>/dev/null
+        git config --unset gitbasher.cached-commit-message 2>/dev/null
 
         after_commit "fixup"
 
@@ -738,8 +801,9 @@ function commit_script {
         result=$(git commit --amend --no-edit 2>&1)
         check_code $? "$result" "amend"
         
-        # Clean up cached git add on successful amend
+        # Clean up cached git add and commit message on successful amend
         git config --unset gitbasher.cached-git-add 2>/dev/null
+        git config --unset gitbasher.cached-commit-message 2>/dev/null
 
         echo
         after_commit "amend"
@@ -1037,12 +1101,15 @@ ${staged_with_tab}
     ### Finally
     echo
 
+    # Save commit message in case commit fails (e.g. pre-commit hook)
+    git config gitbasher.cached-commit-message "$commit"
     result=$(git commit -m """$commit""" 2>&1)
     check_code $? "$result" "commit"
-    
-    # Clean up cached git add on successful commit
+
+    # Clean up cached git add and commit message on successful commit
     git config --unset gitbasher.cached-git-add 2>/dev/null
-    
+    git config --unset gitbasher.cached-commit-message 2>/dev/null
+
     after_commit
 
     if [ -n "${push}" ]; then

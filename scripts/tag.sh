@@ -364,7 +364,7 @@ function tag_script {
             echo -e "${YELLOW}Tag message cannot be empty${ENDCOLOR}"
             echo
             read -n 1 -p "Do you want to try for one more time? (y/n) " -s -e choice
-            if [ "$choice" != "y" ]; then
+            if ! is_yes "$choice"; then
                 find . -name "$tag_file*" -delete
                 exit
             fi    

@@ -78,7 +78,7 @@ function rebase_script {
             echo
             echo -e "Do you want to pull ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} first (y/n)?"
             read -n 1 -s choice
-            if [ "$choice" == "y" ]; then
+            if is_yes "$choice"; then
                 echo
                 echo -e "${YELLOW}Pulling ${origin_name}/${current_branch}...${ENDCOLOR}"
                 
@@ -163,7 +163,7 @@ function rebase_script {
         if [ "$choice" == "0" ]; then
             exit
         fi
-        if [ "$choice" != "y" ]; then
+        if ! is_yes "$choice"; then
             echo
             echo -e "${YELLOW}Pull commits cancelled${ENDCOLOR}"
             exit
@@ -216,7 +216,7 @@ function rebase_script {
             if [ "$choice" == "0" ]; then
                 exit
             fi
-            if [ "$choice" == "y" ]; then
+            if is_yes "$choice"; then
                 echo
                 echo -e "${YELLOW}Fetching ${origin_name}/${new_base_branch}...${ENDCOLOR}"
 
@@ -316,7 +316,7 @@ function rebase_branch {
         if [ "$choice" == "0" ]; then
             exit
         fi
-        if [ "$choice" != "y" ]; then
+        if ! is_yes "$choice"; then
             echo
             echo -e "${YELLOW}Rebase cancelled${ENDCOLOR}"
             exit
@@ -547,7 +547,7 @@ function rebase_conflicts {
                 echo
                 echo -e "Are you sure you want to ${RED}skip${ENDCOLOR} commit and ${RED}throw it away${ENDCOLOR} (y/n)?"
                 read -n 1 -s choice_yes
-                if [ "$choice_yes" != "y" ]; then
+                if ! is_yes "$choice_yes"; then
                     echo -e "${YELLOW}Continuing...${ENDCOLOR}"
                     continue
                 fi
@@ -573,7 +573,7 @@ function rebase_conflicts {
             echo
             echo -e "Are you sure you want to ${YELLOW}abort rebase${ENDCOLOR} (y/n)?"
             read -n 1 -s choice_yes
-            if [ "$choice_yes" == "y" ]; then
+            if is_yes "$choice_yes"; then
                 echo
                 echo -e "${YELLOW}Aborting rebase...${ENDCOLOR}"
                 git rebase --abort
@@ -588,7 +588,7 @@ function rebase_conflicts {
             echo
             echo -e "Are you sure you want to ${GREEN}accept all incoming changes${ENDCOLOR} and discard current changes (y/n)?"
             read -n 1 -s choice_yes
-            if [ "$choice_yes" == "y" ]; then
+            if is_yes "$choice_yes"; then
                 echo
                 echo -e "${YELLOW}Accepting all incoming changes...${ENDCOLOR}"
                 
@@ -600,7 +600,7 @@ function rebase_conflicts {
                     echo
                     echo -e "Do you want to continue and accept the deletions (y/n)?"
                     read -n 1 -s choice_delete
-                    if [ "$choice_delete" != "y" ]; then
+                    if ! is_yes "$choice_delete"; then
                         echo -e "${YELLOW}Cancelled. Continuing...${ENDCOLOR}"
                         continue
                     fi
@@ -668,7 +668,7 @@ function rebase_conflicts {
             echo
             echo -e "Are you sure you want to ${GREEN}accept all current changes${ENDCOLOR} and discard incoming changes (y/n)?"
             read -n 1 -s choice_yes
-            if [ "$choice_yes" == "y" ]; then
+            if is_yes "$choice_yes"; then
                 echo
                 echo -e "${YELLOW}Accepting all current changes...${ENDCOLOR}"
                 
@@ -680,7 +680,7 @@ function rebase_conflicts {
                     echo
                     echo -e "Do you want to continue and accept the deletions (y/n)?"
                     read -n 1 -s choice_delete
-                    if [ "$choice_delete" != "y" ]; then
+                    if ! is_yes "$choice_delete"; then
                         echo -e "${YELLOW}Cancelled. Continuing...${ENDCOLOR}"
                         continue
                     fi
@@ -1050,7 +1050,7 @@ function handle_cherry_pick_conflicts {
                 echo
                 echo -e "Are you sure you want to ${RED}skip${ENDCOLOR} this commit (y/n)?"
                 read -n 1 -s choice_yes
-                if [ "$choice_yes" == "y" ]; then
+                if is_yes "$choice_yes"; then
                     echo
                     echo -e "${YELLOW}Skipping commit ${commit_hash::7}${ENDCOLOR}"
                     git cherry-pick --skip 2>/dev/null
@@ -1064,7 +1064,7 @@ function handle_cherry_pick_conflicts {
                 echo
                 echo -e "Are you sure you want to ${GREEN}accept all incoming changes${ENDCOLOR} (y/n)?"
                 read -n 1 -s choice_yes
-                if [ "$choice_yes" == "y" ]; then
+                if is_yes "$choice_yes"; then
                     echo
                     echo -e "${YELLOW}Accepting all incoming changes...${ENDCOLOR}"
                     git checkout --theirs . 2>/dev/null
@@ -1088,7 +1088,7 @@ function handle_cherry_pick_conflicts {
                 echo
                 echo -e "Are you sure you want to ${GREEN}accept all current changes${ENDCOLOR} (y/n)?"
                 read -n 1 -s choice_yes
-                if [ "$choice_yes" == "y" ]; then
+                if is_yes "$choice_yes"; then
                     echo
                     echo -e "${YELLOW}Accepting all current changes...${ENDCOLOR}"
                     git checkout --ours . 2>/dev/null
@@ -1112,7 +1112,7 @@ function handle_cherry_pick_conflicts {
                 echo
                 echo -e "Are you sure you want to ${YELLOW}abort${ENDCOLOR} the pull operation (y/n)?"
                 read -n 1 -s choice_yes
-                if [ "$choice_yes" == "y" ]; then
+                if is_yes "$choice_yes"; then
                     echo
                     echo -e "${YELLOW}Aborting pull commits operation...${ENDCOLOR}"
                     git cherry-pick --abort 2>/dev/null

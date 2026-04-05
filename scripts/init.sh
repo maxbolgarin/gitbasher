@@ -131,7 +131,7 @@ if [ "$origin_name" == "" ]; then
         echo -e "Press '${BOLD}y${ENDCOLOR}' to add it now or an any key to exit"
 
         read -n 1 -s choice
-        if [ "$choice" != "y" ]; then
+        if ! is_yes "$choice"; then
             exit
         fi
 

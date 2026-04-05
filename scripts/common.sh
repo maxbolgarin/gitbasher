@@ -1011,8 +1011,6 @@ function choose_branch {
         branch_name=$(sed "s/remotes\///g" <<< ${branch_name})
         branch_name=$(sed "s/${origin_name}\///g" <<< ${branch_name})
     fi
-
-    echo
 }
 
 

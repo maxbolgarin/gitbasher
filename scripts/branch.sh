@@ -205,7 +205,7 @@ function branch_script {
 
         while [ true ]; do
             read -n 1 -s choice
-            if [ "$choice" == "y" ]; then
+            if is_yes "$choice"; then
                 printf "y\n\n"
                 echo -e "${YELLOW}Fetching remote and pruning...${ENDCOLOR}"
                 echo
@@ -246,7 +246,7 @@ function branch_script {
 
                     while [ true ]; do
                         read -n 1 -s delete_choice
-                        if [ "$delete_choice" == "y" ]; then
+                        if is_yes "$delete_choice"; then
                             printf "y\n\n"
                             for branch in "${branches_to_delete[@]}"; do
                                 delete_output=$(git branch -D $branch 2>&1)
@@ -260,14 +260,14 @@ function branch_script {
                             done
                             echo
                             break
-                        elif [ "$delete_choice" == "n" ]; then
+                        elif is_no "$delete_choice"; then
                             printf "n\n\n"
                             break
                         fi
                     done
                 fi
                 break
-            elif [ "$choice" == "n" ]; then
+            elif is_no "$choice"; then
                 printf "n\n\n"
                 break
             fi
@@ -298,7 +298,7 @@ function branch_script {
             
             while [ true ]; do
                 read -n 1 -s choice
-                if [ "$choice" == "y" ]; then
+                if is_yes "$choice"; then
                     printf "y\n\n"
                     branches_to_delete="$(git branch --merged | egrep -v "(^\*|master|main|develop|${main_branch})" | xargs)"
                     IFS=$' ' read -rd '' -a branches <<<"$branches_to_delete"
@@ -346,7 +346,7 @@ function branch_script {
             
             while [ true ]; do
                 read -n 1 -s choice
-                if [ "$choice" == "y" ]; then
+                if is_yes "$choice"; then
                     printf "y\n\n"
                     delete_output=$(git branch -D $branch_name 2>&1)
                     delete_code=$?
@@ -358,7 +358,7 @@ function branch_script {
                     echo -e "${GREEN}Branch '$branch_name' is deleted!${ENDCOLOR}"
                     break
 
-                elif [ "$choice" == "n" ]; then
+                elif is_no "$choice"; then
                     printf "n\n"
                     exit
                 fi
@@ -379,7 +379,7 @@ function branch_script {
             
             while [ true ]; do
                 read -n 1 -s choice
-                if [ "$choice" == "y" ]; then
+                if is_yes "$choice"; then
                     printf "y\n\n"
                     echo -e "${YELLOW}Deleting...${YELLOW}"
 
@@ -401,13 +401,13 @@ function branch_script {
                     fi
                     break
 
-                elif [ "$choice" == "n" ]; then
+                elif is_no "$choice"; then
                     printf "n\n"
                     exit
                 fi
             done
         fi
-    
+
         exit
     fi
 

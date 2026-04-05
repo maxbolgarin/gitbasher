@@ -216,7 +216,7 @@ function configure_ai_key {
         echo -e "${RED}Warning: API key format doesn't look like a valid OpenRouter key${ENDCOLOR}" >&2
         read -n 1 -p "Continue anyway? (y/n) " -s choice
         echo
-        if [ "$choice" != "y" ] && [ "$choice" != "Y" ]; then
+        if ! is_yes "$choice"; then
             exit 1
         fi
     fi
@@ -386,7 +386,7 @@ function configure_ai_history {
         fi
         read -n 1 -p "Continue anyway? (y/n) " -s choice
         echo
-        if [ "$choice" != "y" ] && [ "$choice" != "Y" ]; then
+        if ! is_yes "$choice"; then
             exit
         fi
     fi

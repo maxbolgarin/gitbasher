@@ -70,7 +70,7 @@ function merge_script {
             echo
             echo -e "Do you want to pull ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} first (y/n)?"
             read -n 1 -s choice
-            if [ "$choice" == "y" ]; then
+            if is_yes "$choice"; then
                 echo
                 echo -e "${YELLOW}Pulling ${origin_name}/${current_branch}...${ENDCOLOR}"
                 
@@ -161,7 +161,7 @@ function merge_script {
             echo
             echo -e "Do you want to fetch ${YELLOW}${origin_name}/${merge_branch}${ENDCOLOR} before merge (y/n)?"
             read -n 1 -s choice
-            if [ "$choice" == "y" ]; then
+            if is_yes "$choice"; then
                 echo
                 echo -e "${YELLOW}Fetching ${origin_name}/${merge_branch}...${ENDCOLOR}"
 
@@ -339,7 +339,7 @@ function resolve_conflicts {
             echo
             echo -e "Are you sure you want to ${GREEN}accept all incoming changes${ENDCOLOR} and discard current changes (y/n)?"
             read -n 1 -s choice_yes
-            if [ "$choice_yes" == "y" ]; then
+            if is_yes "$choice_yes"; then
                 echo
                 echo -e "${YELLOW}Accepting all incoming changes...${ENDCOLOR}"
                 
@@ -351,7 +351,7 @@ function resolve_conflicts {
                     echo
                     echo -e "Do you want to continue and accept the deletions (y/n)?"
                     read -n 1 -s choice_delete
-                    if [ "$choice_delete" != "y" ]; then
+                    if ! is_yes "$choice_delete"; then
                         echo -e "${YELLOW}Cancelled. Continuing...${ENDCOLOR}"
                         continue
                     fi
@@ -415,7 +415,7 @@ function resolve_conflicts {
             echo
             echo -e "Are you sure you want to ${GREEN}accept all current changes${ENDCOLOR} and discard incoming changes (y/n)?"
             read -n 1 -s choice_yes
-            if [ "$choice_yes" == "y" ]; then
+            if is_yes "$choice_yes"; then
                 echo
                 echo -e "${YELLOW}Accepting all current changes...${ENDCOLOR}"
                 
@@ -427,7 +427,7 @@ function resolve_conflicts {
                     echo
                     echo -e "Do you want to continue and accept the deletions (y/n)?"
                     read -n 1 -s choice_delete
-                    if [ "$choice_delete" != "y" ]; then
+                    if ! is_yes "$choice_delete"; then
                         echo -e "${YELLOW}Cancelled. Continuing...${ENDCOLOR}"
                         continue
                     fi
@@ -566,7 +566,7 @@ ${staged_with_tab}
             echo -e "${YELLOW}Merge commit message cannot be empty${ENDCOLOR}"
             echo
             read -n 1 -p "Do you want to try for one more time? (y/n) " -s -e choice
-            if [ "$choice" != "y" ]; then
+            if ! is_yes "$choice"; then
                 git restore --staged $files_with_conflicts_one_line
                 rm -f "$commitmsg_file"
                 merge_error="true"

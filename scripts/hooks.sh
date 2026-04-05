@@ -386,7 +386,7 @@ function create_hook {
         echo -e "Do you want to ${RED}overwrite${ENDCOLOR} it? (y/n)"
         read -n 1 -s choice
         echo
-        if [ "$choice" != "y" ] && [ "$choice" != "Y" ]; then
+        if ! is_yes "$choice"; then
             echo -e "${YELLOW}Hook creation cancelled${ENDCOLOR}"
             return
         fi
@@ -537,7 +537,7 @@ exit 0"
     echo -e "Do you want to ${BLUE}edit${ENDCOLOR} the hook now? (y/n)"
     read -n 1 -s choice
     echo
-    if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
+    if is_yes "$choice"; then
         edit_hook "$hook_type"
     fi
 }
@@ -603,7 +603,7 @@ function remove_hook {
     read -n 1 -s choice
     echo
     
-    if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
+    if is_yes "$choice"; then
         rm "$hook_file"
         echo -e "${GREEN}Removed hook: $hook_type${ENDCOLOR}"
     else
@@ -658,11 +658,11 @@ function remove_all_hooks {
     echo
     echo
     
-    if [ "$choice" != "y" ] && [ "$choice" != "Y" ]; then
+    if ! is_yes "$choice"; then
         echo -e "${YELLOW}Hook removal cancelled${ENDCOLOR}"
         return
     fi
-    
+
     # Double confirmation for safety
     echo -e "${RED}FINAL CONFIRMATION${ENDCOLOR}"
     echo -e "${RED}Type 'DELETE' to confirm removal of all hooks:${ENDCOLOR}"
@@ -800,7 +800,7 @@ function install_samples {
     echo
     echo
     
-    if [ "$choice" != "y" ] && [ "$choice" != "Y" ]; then
+    if ! is_yes "$choice"; then
         echo -e "${YELLOW}Sample hook installation cancelled${ENDCOLOR}"
         return
     fi

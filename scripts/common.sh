@@ -264,20 +264,21 @@ function sanitize_choice_input {
     local input="$1"
     local pattern="${2:-^[yn0-9=]$}"
     sanitized_choice=""
-    
+
     if [ -z "$input" ]; then
         return 1
     fi
-    
-    # Convert to lowercase for consistency
-    local cleaned=$(echo "$input" | tr '[:upper:]' '[:lower:]')
-    
+
+    # Normalize key (handles uppercase and Russian keyboard layout)
+    normalize_key "$input"
+    local cleaned="$normalized_key"
+
     # Validate against pattern
     if [[ "$cleaned" =~ $pattern ]]; then
         sanitized_choice="$cleaned"
         return 0
     fi
-    
+
     return 1
 }
 
@@ -297,6 +298,89 @@ function show_sanitization_error {
 
 ### ===== END INPUT SANITIZATION FRAMEWORK =====
 
+
+### ===== KEYBOARD INPUT HELPERS =====
+### Handle case-insensitive input and alternative keyboard layouts (e.g. Russian)
+
+### Map of Russian keyboard layout to Latin equivalents (same physical keys)
+# Russian: й ц у к е н г ш щ з х ъ ф ы в а п р о л д ж э я ч с м и т ь б ю
+# Latin:   q w e r t y u i o p [ ] a s d f g h j k l ; ' z x c v b n m , .
+
+### Function to normalize a key press to its Latin lowercase equivalent
+# Handles: uppercase (caps lock), Russian keyboard layout
+# $1: the key pressed
+# Returns: sets normalized_key global variable
+function normalize_key {
+    local key="$1"
+    normalized_key="$key"
+
+    # Handle empty input (Enter key)
+    if [ -z "$key" ]; then
+        normalized_key=""
+        return
+    fi
+
+    # Convert to lowercase first
+    normalized_key=$(echo "$key" | tr '[:upper:]' '[:lower:]')
+
+    # Map Russian layout to Latin (same physical key positions)
+    case "$normalized_key" in
+        "й") normalized_key="q" ;;
+        "ц") normalized_key="w" ;;
+        "у") normalized_key="e" ;;
+        "к") normalized_key="r" ;;
+        "е") normalized_key="t" ;;
+        "н") normalized_key="y" ;;
+        "г") normalized_key="u" ;;
+        "ш") normalized_key="i" ;;
+        "щ") normalized_key="o" ;;
+        "з") normalized_key="p" ;;
+        "х") normalized_key="[" ;;
+        "ъ") normalized_key="]" ;;
+        "ф") normalized_key="a" ;;
+        "ы") normalized_key="s" ;;
+        "в") normalized_key="d" ;;
+        "а") normalized_key="f" ;;
+        "п") normalized_key="g" ;;
+        "р") normalized_key="h" ;;
+        "о") normalized_key="j" ;;
+        "л") normalized_key="k" ;;
+        "д") normalized_key="l" ;;
+        "я") normalized_key="z" ;;
+        "ч") normalized_key="x" ;;
+        "с") normalized_key="c" ;;
+        "м") normalized_key="v" ;;
+        "и") normalized_key="b" ;;
+        "т") normalized_key="n" ;;
+        "ь") normalized_key="m" ;;
+    esac
+}
+
+### Check if the key press means "yes"
+# Accepts: y, Y, Russian н/Н, Enter key
+# $1: the key pressed
+# Returns: 0 if yes, 1 if not
+function is_yes {
+    normalize_key "$1"
+    if [ "$normalized_key" == "y" ] || [ -z "$1" ]; then
+        return 0
+    fi
+    return 1
+}
+
+### Check if the key press means "no"
+# Accepts: n, N, Russian т/Т
+# $1: the key pressed
+# Returns: 0 if no, 1 if not
+function is_no {
+    normalize_key "$1"
+    if [ "$normalized_key" == "n" ]; then
+        return 0
+    fi
+    return 1
+}
+
+### ===== END KEYBOARD INPUT HELPERS =====
 
 
 ### Function should be used in default case in script mode selection
@@ -408,7 +492,7 @@ function check_code {
 function yes_no_choice {
     while true; do
         read -n 1 -s choice
-        if [ "$choice" == "y" ]; then
+        if is_yes "$choice"; then
             if [ -n "$1" ]; then
                 echo -e "${YELLOW}$1${ENDCOLOR}"
                 if [ -z "$2" ]; then
@@ -417,7 +501,7 @@ function yes_no_choice {
             fi
             return
         fi
-        if [ "$choice" == "n" ]; then
+        if is_no "$choice"; then
             exit
         fi
     done
@@ -824,7 +908,8 @@ function list_branches {
                 printf "Page %s/%s. Press Enter for next page, or q to quit: " "$list_current_page" "$list_total_pages"
                 read -r -n 1 page_choice
                 echo
-                if [ "$page_choice" == "q" ]; then
+                normalize_key "$page_choice"
+                if [ "$normalized_key" == "q" ]; then
                     break
                 fi
             fi
@@ -890,19 +975,20 @@ function choose_branch {
         fi
         echo
 
-        if [ "$choice" == "n" ]; then
+        normalize_key "$choice"
+        if [ "$normalized_key" == "n" ]; then
             if [ $page -lt $list_total_pages ]; then
                 page=$((page + 1))
             fi
             continue
         fi
-        if [ "$choice" == "p" ]; then
+        if [ "$normalized_key" == "p" ]; then
             if [ $page -gt 1 ]; then
                 page=$((page - 1))
             fi
             continue
         fi
-        if [ "$choice" == "q" ] || [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
+        if [ "$normalized_key" == "q" ] || [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
             exit
         fi
 

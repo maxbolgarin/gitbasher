@@ -218,7 +218,8 @@ function handle_ai_commit_generation {
         echo
     fi
     
-    if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
+    normalize_key "$choice"
+    if [ "$normalized_key" = "y" ] || [ -z "$choice" ]; then
         commit="$ai_commit_message"
         # Skip to final commit step
         if [ "$ai_mode" = "subject" ]; then
@@ -241,7 +242,7 @@ function handle_ai_commit_generation {
         fi
         exit
 
-    elif [ "$choice" = "e" ] || [ "$choice" = "E" ]; then
+    elif [ "$normalized_key" = "e" ]; then
         if [ "$ai_mode" = "full" ]; then
             echo -e "${YELLOW}Edit the AI generated message:${ENDCOLOR}"
             # Create temp file with AI message
@@ -260,11 +261,11 @@ function handle_ai_commit_generation {
                 echo -e "${YELLOW}Commit message cannot be empty${ENDCOLOR}"
                 echo
                 read -n 1 -p "Try for one more time? (y/n) " -s -e choice
-                if [ "$choice" != "y" ]; then
+                if ! is_yes "$choice"; then
                     cleanup_on_exit "$git_add"
                     rm -f "$commitmsg_file"
                     exit
-                fi    
+                fi
             done
 
             commit_message=$(cat $commitmsg_file)
@@ -580,7 +581,7 @@ function commit_script {
             echo -e "${YELLOW}Found previous git add arguments:${ENDCOLOR} ${BOLD}$saved_git_add${ENDCOLOR}"
             read -n 1 -p "Use them? (y/n) " -s choice
             echo
-            if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
+            if is_yes "$choice"; then
                 git add $saved_git_add
                 if [ $? -eq 0 ]; then
                     git_add="$saved_git_add"
@@ -1028,11 +1029,11 @@ ${staged_with_tab}
             echo -e "${YELLOW}Commit message cannot be empty${ENDCOLOR}"
             echo
             read -n 1 -p "Try for one more time? (y/n) " -s -e choice
-            if [ "$choice" != "y" ]; then
+            if ! is_yes "$choice"; then
                 cleanup_on_exit "$git_add"
                 rm -f "$commitmsg_file"
                 exit
-            fi    
+            fi
         done
 
         rm -f "$commitmsg_file"

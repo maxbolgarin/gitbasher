@@ -211,13 +211,17 @@ function handle_ai_commit_generation {
     echo -e "${GREEN}AI generated commit message:${ENDCOLOR}"
     echo -e "${BOLD}$ai_commit_message${ENDCOLOR}"
     echo
-    
-    read -n 1 -p "Use this commit message? (y/n/e to edit/0 to exit) " -s choice
+
+    # Save AI commit message so it can be reused if user exits
+    # It will be cleared only after a successful commit
+    git config gitbasher.cached-commit-message "$ai_commit_message"
+
+    read_key choice "Use this commit message? (y/n/e to edit/0 to exit) "
     echo
     if [ "$ai_mode" != "subject" ] && [ "$choice" != "0" ]; then
         echo
     fi
-    
+
     normalize_key "$choice"
     if [ "$normalized_key" = "y" ] || [ -z "$choice" ]; then
         commit="$ai_commit_message"
@@ -579,7 +583,7 @@ function commit_script {
         if [ -n "$saved_git_add" ]; then
             echo
             echo -e "${YELLOW}Found previous git add arguments:${ENDCOLOR} ${BOLD}$saved_git_add${ENDCOLOR}"
-            read -n 1 -p "Use them? (y/n) " -s choice
+            read_key choice "Use them? (y/n) "
             echo
             if is_yes "$choice"; then
                 git add $saved_git_add
@@ -697,9 +701,10 @@ function commit_script {
     if [ -n "$saved_commit_message" ] && [ -z "${fixup}" ] && [ -z "${amend}" ]; then
         echo
         echo -e "${YELLOW}Found previous commit message:${ENDCOLOR} ${BOLD}$saved_commit_message${ENDCOLOR}"
-        read -n 1 -p "Use it? (y/e to edit/n) " -s choice
+        read_key choice "Use it? (y/e to edit/n) "
         echo
-        if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
+        normalize_key "$choice"
+        if [ "$normalized_key" = "y" ] || [ -z "$choice" ]; then
             commit="$saved_commit_message"
             echo
             result=$(git commit -m """$commit""" 2>&1)
@@ -716,7 +721,7 @@ function commit_script {
                 push_script y
             fi
             exit
-        elif [ "$choice" = "e" ] || [ "$choice" = "E" ]; then
+        elif [ "$normalized_key" = "e" ]; then
             echo
             echo -e "${YELLOW}Edit the saved commit message:${ENDCOLOR}"
             read -p "" -e -i "$saved_commit_message" edited_commit_message

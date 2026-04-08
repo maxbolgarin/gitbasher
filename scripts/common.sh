@@ -380,6 +380,53 @@ function is_no {
     return 1
 }
 
+### Read a single key press, properly handling multi-byte UTF-8 characters
+# Works correctly in silent mode even with non-Latin keyboard layouts (e.g. Russian)
+# In silent mode (-s), read -n 1 may return a single byte instead of a full character.
+# This function detects UTF-8 leading bytes and reads the remaining bytes to get the complete character.
+# $1: variable name to store the key (default: REPLY)
+# $2: optional prompt text to display before reading
+function read_key {
+    local _var="${1:-REPLY}"
+    local _prompt="$2"
+    local _key=""
+
+    if [ -n "$_prompt" ]; then
+        printf '%s' "$_prompt"
+    fi
+
+    IFS= read -r -s -n 1 _key
+
+    if [ -n "$_key" ]; then
+        # Check if read gave us a single byte (possible partial UTF-8)
+        local _byte_len
+        _byte_len=$(printf '%s' "$_key" | wc -c | tr -d ' ')
+
+        if [ "$_byte_len" -eq 1 ]; then
+            # Got a single byte - check if it's a UTF-8 leading byte that needs more bytes
+            local _ord
+            _ord=$(LC_CTYPE=C printf '%d' "'$_key" 2>/dev/null) || _ord=0
+
+            local _extra=0
+            if (( _ord >= 192 && _ord < 224 )); then
+                _extra=1  # 2-byte char (Cyrillic, Latin Extended, etc.)
+            elif (( _ord >= 224 && _ord < 240 )); then
+                _extra=2  # 3-byte char (CJK, etc.)
+            elif (( _ord >= 240 )); then
+                _extra=3  # 4-byte char (emoji, etc.)
+            fi
+
+            if (( _extra > 0 )); then
+                local _rest
+                IFS= read -r -s -n "$_extra" _rest
+                _key="${_key}${_rest}"
+            fi
+        fi
+    fi
+
+    printf -v "$_var" '%s' "$_key"
+}
+
 ### ===== END KEYBOARD INPUT HELPERS =====
 
 

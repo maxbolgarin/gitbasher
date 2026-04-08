@@ -15,6 +15,8 @@ function print_help {
     msg="$msg\nrebase_r|re|base_Rebase current branch"
     msg="$msg\ncherry_ch|cp_Cherry-pick commits from other branches"
     msg="$msg\nsync_sy_Sync current branch with $main_branch (fetch + rebase/merge)"
+    msg="$msg\nwip_w_Quick WIP commit + push for saving work in progress"
+    msg="$msg\nunwip_uw_Undo a WIP commit and restore changes"
     msg="$msg\nundo_un_Quick undo for commit, amend, merge, rebase, or stash"
     msg="$msg\nreset_res_Easy to use git reset"
     msg="$msg\nstash_s|sta_Manage git stashes"
@@ -77,6 +79,12 @@ case "$1" in
     ;;
     sync|sy)
         sync_script $2
+    ;;
+    wip|w)
+        wip_script $2
+    ;;
+    unwip|uw)
+        unwip_script $2
     ;;
     branch|b|br|bran)         
         branch_script $2

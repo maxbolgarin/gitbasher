@@ -455,6 +455,90 @@ function branch_script {
             done
         fi
 
+        # Detect squash-merged branches
+        # These branches were squash-merged into main (not regular merge),
+        # so `git branch --merged` won't detect them
+        squash_merged_branches=()
+        IFS=$'\n' read -rd '' -a all_local <<<"$(git branch --format='%(refname:short)' | cat 2>&1)"
+
+        for branch in "${all_local[@]}"; do
+            # Skip main, current, and already-deleted branches
+            if [[ "$branch" == "$main_branch" ]] || [[ "$branch" == "$current_branch" ]] || [[ -z "$branch" ]]; then
+                continue
+            fi
+            # Skip if already detected as merged
+            already_merged="false"
+            for merged_entry in "${merged_branches_without_main[@]}"; do
+                merged_name=$(echo "$merged_entry" | awk '{print $1}')
+                if [[ "$merged_name" == "$branch" ]]; then
+                    already_merged="true"
+                    break
+                fi
+            done
+            if [ "$already_merged" == "true" ]; then
+                continue
+            fi
+
+            # Check if this branch was squash-merged into main
+            # by creating a temporary squash merge and comparing trees
+            merge_base=$(git merge-base "$main_branch" "$branch" 2>/dev/null)
+            if [ -n "$merge_base" ]; then
+                # Create a temporary tree that represents what a squash-merge would look like
+                tree=$(git commit-tree $(git merge-base --octopus "$main_branch" "$branch")^{tree} -p "$merge_base" -m "tmp" 2>/dev/null)
+                if [ -n "$tree" ]; then
+                    # Check if cherry says all commits are already applied
+                    cherry_output=$(git cherry "$main_branch" "$branch" "$merge_base" 2>/dev/null)
+                    if [ -n "$cherry_output" ]; then
+                        # If all commits show '-' (already applied), the branch was squash-merged
+                        has_unapplied="false"
+                        while IFS= read -r cherry_line; do
+                            if [[ "$cherry_line" == "+"* ]]; then
+                                has_unapplied="true"
+                                break
+                            fi
+                        done <<< "$cherry_output"
+                        if [ "$has_unapplied" == "false" ]; then
+                            squash_merged_branches+=("$branch")
+                        fi
+                    fi
+                fi
+            fi
+        done
+
+        if [ ${#squash_merged_branches[@]} -gt 0 ]; then
+            echo -e "${YELLOW}Found ${#squash_merged_branches[@]} squash-merged branch(es):${ENDCOLOR}"
+            echo -e "These branches appear to have been squash-merged into ${YELLOW}${main_branch}${ENDCOLOR}"
+            for branch in "${squash_merged_branches[@]}"; do
+                printf "\t$branch\n"
+            done
+            echo
+
+            echo -e "${YELLOW}Do you want to delete these squash-merged branches?${ENDCOLOR}"
+            printf "Answer (y/n): "
+
+            while [ true ]; do
+                read -n 1 -s choice
+                if is_yes "$choice"; then
+                    printf "y\n\n"
+                    for branch in "${squash_merged_branches[@]}"; do
+                        delete_output=$(git branch -D "$branch" 2>&1)
+                        delete_code=$?
+                        if [ $delete_code -eq 0 ]; then
+                            echo -e "${GREEN}Branch '$branch' is deleted!${ENDCOLOR}"
+                        else
+                            echo -e "${RED}Cannot delete branch '$branch'!${ENDCOLOR}"
+                            echo -e "${delete_output}"
+                        fi
+                    done
+                    echo
+                    break
+                elif is_no "$choice"; then
+                    printf "n\n\n"
+                    break
+                fi
+            done
+        fi
+
         # Delete in normal way
         echo -e "${YELLOW}Delete a local branch${ENDCOLOR}"
 

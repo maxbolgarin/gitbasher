@@ -102,7 +102,9 @@ function sync_script {
 
         if [[ $merge_output == *"Already up to date"* ]]; then
             echo -e "${GREEN}Already up to date with ${main_branch}${ENDCOLOR}"
-        elif [ $merge_code == 0 ]; then
+        else
+            # merge() exits on fatal errors, so if we reach here, merge succeeded
+            # (merge_code may be non-zero after conflict resolution, but that's ok)
             echo -e "${GREEN}Successfully synced with ${main_branch} using merge!${ENDCOLOR}"
             echo -e "${BLUE}[${origin_name}/${main_branch}${ENDCOLOR} -> ${BLUE}${current_branch}]${ENDCOLOR}"
         fi

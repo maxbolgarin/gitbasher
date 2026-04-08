@@ -297,8 +297,8 @@ function undo_rebase {
 
 ### Undo last stash pop/apply
 function undo_stash {
-    # Check if there are any changes from a recent stash pop
-    if git diff --quiet && git diff --cached --quiet; then
+    # Check if there are any changes from a recent stash pop (tracked or untracked)
+    if git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then
         echo -e "${YELLOW}No changes detected in working tree${ENDCOLOR}"
         echo -e "If stash pop had conflicts, resolve them first and then use this command"
         echo

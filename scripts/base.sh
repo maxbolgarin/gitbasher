@@ -24,6 +24,8 @@ function print_help {
     msg="$msg\nconfig_cf|cfg|conf_Configurate gitbasher"
 
     msg="$msg\n_ _ _"
+    msg="$msg\nprev_-_Switch to the previous branch (like cd -)"
+    msg="$msg\n_ _ _"
     msg="$msg\n${YELLOW}Command${ENDCOLOR}_\t${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description of ${BOLD}informational${NORMAL}${BLUE} commands${ENDCOLOR}"
     msg="$msg\nstatus_st_Info about repo and changed files"
     msg="$msg\nlog_l|lg_Git log with branch selection and comparison"
@@ -121,6 +123,9 @@ case "$1" in
     ;;
     status|st)
         project_status
+    ;;
+    prev|-)
+        branch_script prev
     ;;
 
     *)

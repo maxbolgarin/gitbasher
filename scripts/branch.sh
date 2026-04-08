@@ -28,6 +28,9 @@ function branch_script {
             new="true"
         ;;
         delete|del|d) delete="true";;
+        prev|p|-)     prev="true";;
+        recent|rc)    recent="true";;
+        gone|g)       gone="true";;
         tag|t)        tag="true";;
         help|h)       help="true";;
         *)
@@ -49,6 +52,12 @@ function branch_script {
         header="$header LIST"
     elif [ -n "${delete}" ]; then
         header="$header DELETE"
+    elif [ -n "${prev}" ]; then
+        header="$header PREVIOUS"
+    elif [ -n "${recent}" ]; then
+        header="$header RECENT"
+    elif [ -n "${gone}" ]; then
+        header="$header GONE"
     elif [ -n "${tag}" ]; then
         header="$header TAG"
     fi
@@ -69,12 +78,133 @@ function branch_script {
         msg="$msg\n${BOLD}new${ENDCOLOR}_n|c_Build a conventional name and create a new branch from current branch"
         msg="$msg\n${BOLD}newd${ENDCOLOR}_nd|cd_Build a conventional name, switch to $main_branch, pull it and create new branch"
         msg="$msg\n${BOLD}delete${ENDCOLOR}_del|d_Delete branches (cleanup orphaned, merged, or select specific branch)"
+        msg="$msg\n${BOLD}prev${ENDCOLOR}_p|-_Switch to the previous branch (like cd -)"
+        msg="$msg\n${BOLD}recent${ENDCOLOR}_rc_Show recently checked out branches and select one to switch"
+        msg="$msg\n${BOLD}gone${ENDCOLOR}_g_Delete local branches whose remote tracking branch is gone"
         msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
         echo -e "$(echo -e "$msg" | column -ts'_')"
         exit
     fi
         
    
+
+    ### Run switch to previous branch
+    if [[ -n "${prev}" ]]; then
+        prev_branch=$(git rev-parse --symbolic-full-name @{-1} 2>/dev/null | sed 's|refs/heads/||')
+
+        if [ -z "$prev_branch" ]; then
+            echo -e "${RED}No previous branch found${ENDCOLOR}"
+            exit 1
+        fi
+
+        echo -e "Switching to previous branch: ${YELLOW}${prev_branch}${ENDCOLOR}"
+        echo
+        switch "$prev_branch"
+        exit
+    fi
+
+
+    ### Run recent branches logic
+    if [[ -n "${recent}" ]]; then
+        echo -e "${YELLOW}Recently checked out branches:${ENDCOLOR}"
+        echo
+
+        # Extract unique branch names from reflog checkout entries
+        recent_branches=()
+        while IFS= read -r branch; do
+            # Skip current branch and empty lines
+            if [ -n "$branch" ] && [ "$branch" != "$current_branch" ]; then
+                # Check if this branch still exists locally
+                if git show-ref --verify --quiet "refs/heads/$branch" 2>/dev/null; then
+                    # Check if already in list
+                    is_dup="false"
+                    for existing in "${recent_branches[@]}"; do
+                        if [ "$existing" == "$branch" ]; then
+                            is_dup="true"
+                            break
+                        fi
+                    done
+                    if [ "$is_dup" == "false" ]; then
+                        recent_branches+=("$branch")
+                    fi
+                fi
+            fi
+            # Limit to 10 recent branches
+            if [ ${#recent_branches[@]} -ge 10 ]; then
+                break
+            fi
+        done < <(git reflog --pretty="%gs" | grep "^checkout: moving from" | sed 's/checkout: moving from .* to //')
+
+        if [ ${#recent_branches[@]} -eq 0 ]; then
+            echo -e "${GREEN}No recent branches found${ENDCOLOR}"
+            exit
+        fi
+
+        for index in "${!recent_branches[@]}"; do
+            branch="${recent_branches[$index]}"
+            # Get last commit on that branch
+            last_msg=$(git log -n 1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} %s (${GREEN_ES}%cr${ENDCOLOR_ES})" "refs/heads/$branch" 2>/dev/null)
+            echo -e "$(($index+1)). ${BLUE}${branch}${ENDCOLOR}\t$last_msg"
+        done
+        echo "0. Exit"
+        echo
+
+        read_prefix="Select branch number: "
+        choose "${recent_branches[@]}"
+        echo
+        echo
+
+        switch "$choice_result"
+        exit
+    fi
+
+
+    ### Run gone branches cleanup
+    if [[ -n "${gone}" ]]; then
+        echo -e "${YELLOW}Fetching and pruning remote references...${ENDCOLOR}"
+        echo
+
+        fetch_output=$(git fetch --prune 2>&1)
+        check_code $? "$fetch_output" "fetch and prune remote"
+
+        # Find local branches whose upstream is gone
+        gone_branches=()
+        while IFS= read -r line; do
+            branch=$(echo "$line" | sed 's/^[ *]*//' | awk '{print $1}')
+            if [ -n "$branch" ] && [ "$branch" != "$main_branch" ] && [ "$branch" != "$current_branch" ]; then
+                gone_branches+=("$branch")
+            fi
+        done < <(git branch -v | grep "\[gone\]")
+
+        if [ ${#gone_branches[@]} -eq 0 ]; then
+            echo -e "${GREEN}No branches with gone remote tracking found${ENDCOLOR}"
+            echo -e "All local branches have corresponding remote branches"
+            exit
+        fi
+
+        echo -e "${YELLOW}Found ${#gone_branches[@]} branch(es) with gone remote tracking:${ENDCOLOR}"
+        for branch in "${gone_branches[@]}"; do
+            printf "\t$branch\n"
+        done
+        echo
+
+        echo -e "${YELLOW}Do you want to delete these branches?${ENDCOLOR}"
+        echo -e "Do you want to continue (y/n)?"
+        yes_no_choice "Deleting gone branches..."
+
+        for branch in "${gone_branches[@]}"; do
+            delete_output=$(git branch -D "$branch" 2>&1)
+            delete_code=$?
+            if [ $delete_code -eq 0 ]; then
+                echo -e "${GREEN}Branch '$branch' deleted${ENDCOLOR}"
+            else
+                echo -e "${RED}Cannot delete branch '$branch'!${ENDCOLOR}"
+                echo -e "${delete_output}"
+            fi
+        done
+        exit
+    fi
+
 
     ### Run switch to main logic
     if [[ -n "${main}" ]]; then

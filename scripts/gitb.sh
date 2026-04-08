@@ -52,6 +52,7 @@ source scripts/tag.sh
 source scripts/reset.sh
 source scripts/stash.sh
 source scripts/cherry.sh
+source scripts/sync.sh
 source scripts/gitlog.sh
 source scripts/hooks.sh
 

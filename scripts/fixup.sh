@@ -148,7 +148,7 @@ function fixup_script {
     fi
 
 
-    ### Step 4: Autosquash rebase
+    ### Step 3: Autosquash rebase
     echo
     echo -e "${YELLOW}Step 3.${ENDCOLOR} Running autosquash rebase..."
     echo
@@ -187,7 +187,7 @@ function fixup_script {
     fi
 
 
-    ### Step 5: Force push if requested
+    ### Step 4: Force push if requested
     if [ -n "$fixup_push" ]; then
         echo
         echo -e "${YELLOW}Force pushing after autosquash...${ENDCOLOR}"

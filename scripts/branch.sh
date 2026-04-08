@@ -174,7 +174,7 @@ function branch_script {
             if [ -n "$branch" ] && [ "$branch" != "$main_branch" ] && [ "$branch" != "$current_branch" ]; then
                 gone_branches+=("$branch")
             fi
-        done < <(git branch -v | grep "\[gone\]")
+        done < <(git branch -vv | grep ': gone\]')
 
         if [ ${#gone_branches[@]} -eq 0 ]; then
             echo -e "${GREEN}No branches with gone remote tracking found${ENDCOLOR}"
@@ -480,26 +480,18 @@ function branch_script {
             fi
 
             # Check if this branch was squash-merged into main
-            # by creating a temporary squash merge and comparing trees
+            # Create a single commit representing all branch changes, then use
+            # git cherry to check if an equivalent patch exists in main
             merge_base=$(git merge-base "$main_branch" "$branch" 2>/dev/null)
             if [ -n "$merge_base" ]; then
-                # Create a temporary tree that represents what a squash-merge would look like
-                tree=$(git commit-tree $(git merge-base --octopus "$main_branch" "$branch")^{tree} -p "$merge_base" -m "tmp" 2>/dev/null)
-                if [ -n "$tree" ]; then
-                    # Check if cherry says all commits are already applied
-                    cherry_output=$(git cherry "$main_branch" "$branch" "$merge_base" 2>/dev/null)
-                    if [ -n "$cherry_output" ]; then
-                        # If all commits show '-' (already applied), the branch was squash-merged
-                        has_unapplied="false"
-                        while IFS= read -r cherry_line; do
-                            if [[ "$cherry_line" == "+"* ]]; then
-                                has_unapplied="true"
-                                break
-                            fi
-                        done <<< "$cherry_output"
-                        if [ "$has_unapplied" == "false" ]; then
-                            squash_merged_branches+=("$branch")
-                        fi
+                # Create a temporary commit with the branch's tree parented by merge-base
+                # This represents "all branch changes squashed into one commit"
+                squash_commit=$(git commit-tree "$branch^{tree}" -p "$merge_base" -m "tmp" 2>/dev/null)
+                if [ -n "$squash_commit" ]; then
+                    # Check if main already contains an equivalent change
+                    cherry_result=$(git cherry "$main_branch" "$squash_commit" 2>/dev/null)
+                    if [[ "$cherry_result" == "-"* ]]; then
+                        squash_merged_branches+=("$branch")
                     fi
                 fi
             fi

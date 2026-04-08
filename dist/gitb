@@ -360,6 +360,37 @@ function is_no {
     fi
     return 1
 }
+function read_key {
+    local _var="${1:-REPLY}"
+    local _prompt="$2"
+    local _key=""
+    if [ -n "$_prompt" ]; then
+        printf '%s' "$_prompt"
+    fi
+    IFS= read -r -s -n 1 _key
+    if [ -n "$_key" ]; then
+        local _byte_len
+        _byte_len=$(printf '%s' "$_key" | wc -c | tr -d ' ')
+        if [ "$_byte_len" -eq 1 ]; then
+            local _ord
+            _ord=$(LC_CTYPE=C printf '%d' "'$_key" 2>/dev/null) || _ord=0
+            local _extra=0
+            if (( _ord >= 192 && _ord < 224 )); then
+                _extra=1  # 2-byte char (Cyrillic, Latin Extended, etc.)
+            elif (( _ord >= 224 && _ord < 240 )); then
+                _extra=2  # 3-byte char (CJK, etc.)
+            elif (( _ord >= 240 )); then
+                _extra=3  # 4-byte char (emoji, etc.)
+            fi
+            if (( _extra > 0 )); then
+                local _rest
+                IFS= read -r -s -n "$_extra" _rest
+                _key="${_key}${_rest}"
+            fi
+        fi
+    fi
+    printf -v "$_var" '%s' "$_key"
+}
 function wrong_mode {
     if [ -n "$2" ]; then
         echo -e "Unknown mode ${YELLOW}$2${ENDCOLOR} for ${YELLOW}gitb $1${ENDCOLOR}"
@@ -3771,7 +3802,8 @@ function handle_ai_commit_generation {
     echo -e "${GREEN}AI generated commit message:${ENDCOLOR}"
     echo -e "${BOLD}$ai_commit_message${ENDCOLOR}"
     echo
-    read -n 1 -p "Use this commit message? (y/n/e to edit/0 to exit) " -s choice
+    git config gitbasher.cached-commit-message "$ai_commit_message"
+    read_key choice "Use this commit message? (y/n/e to edit/0 to exit) "
     echo
     if [ "$ai_mode" != "subject" ] && [ "$choice" != "0" ]; then
         echo
@@ -4049,7 +4081,7 @@ function commit_script {
         if [ -n "$saved_git_add" ]; then
             echo
             echo -e "${YELLOW}Found previous git add arguments:${ENDCOLOR} ${BOLD}$saved_git_add${ENDCOLOR}"
-            read -n 1 -p "Use them? (y/n) " -s choice
+            read_key choice "Use them? (y/n) "
             echo
             if is_yes "$choice"; then
                 git add $saved_git_add
@@ -4143,9 +4175,10 @@ function commit_script {
     if [ -n "$saved_commit_message" ] && [ -z "${fixup}" ] && [ -z "${amend}" ]; then
         echo
         echo -e "${YELLOW}Found previous commit message:${ENDCOLOR} ${BOLD}$saved_commit_message${ENDCOLOR}"
-        read -n 1 -p "Use it? (y/e to edit/n) " -s choice
+        read_key choice "Use it? (y/e to edit/n) "
         echo
-        if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
+        normalize_key "$choice"
+        if [ "$normalized_key" = "y" ] || [ -z "$choice" ]; then
             commit="$saved_commit_message"
             echo
             result=$(git commit -m """$commit""" 2>&1)
@@ -4158,7 +4191,7 @@ function commit_script {
                 push_script y
             fi
             exit
-        elif [ "$choice" = "e" ] || [ "$choice" = "E" ]; then
+        elif [ "$normalized_key" = "e" ]; then
             echo
             echo -e "${YELLOW}Edit the saved commit message:${ENDCOLOR}"
             read -p "" -e -i "$saved_commit_message" edited_commit_message
@@ -4487,6 +4520,9 @@ function branch_script {
             new="true"
         ;;
         delete|del|d) delete="true";;
+        prev|p|-)     prev="true";;
+        recent|rc)    recent="true";;
+        gone|g)       gone="true";;
         tag|t)        tag="true";;
         help|h)       help="true";;
         *)
@@ -4505,6 +4541,12 @@ function branch_script {
         header="$header LIST"
     elif [ -n "${delete}" ]; then
         header="$header DELETE"
+    elif [ -n "${prev}" ]; then
+        header="$header PREVIOUS"
+    elif [ -n "${recent}" ]; then
+        header="$header RECENT"
+    elif [ -n "${gone}" ]; then
+        header="$header GONE"
     elif [ -n "${tag}" ]; then
         header="$header TAG"
     fi
@@ -4522,8 +4564,100 @@ function branch_script {
         msg="$msg\n${BOLD}new${ENDCOLOR}_n|c_Build a conventional name and create a new branch from current branch"
         msg="$msg\n${BOLD}newd${ENDCOLOR}_nd|cd_Build a conventional name, switch to $main_branch, pull it and create new branch"
         msg="$msg\n${BOLD}delete${ENDCOLOR}_del|d_Delete branches (cleanup orphaned, merged, or select specific branch)"
+        msg="$msg\n${BOLD}prev${ENDCOLOR}_p|-_Switch to the previous branch (like cd -)"
+        msg="$msg\n${BOLD}recent${ENDCOLOR}_rc_Show recently checked out branches and select one to switch"
+        msg="$msg\n${BOLD}gone${ENDCOLOR}_g_Delete local branches whose remote tracking branch is gone"
         msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
         echo -e "$(echo -e "$msg" | column -ts'_')"
+        exit
+    fi
+    if [[ -n "${prev}" ]]; then
+        prev_branch=$(git rev-parse --symbolic-full-name @{-1} 2>/dev/null | sed 's|refs/heads/||')
+        if [ -z "$prev_branch" ]; then
+            echo -e "${RED}No previous branch found${ENDCOLOR}"
+            exit 1
+        fi
+        echo -e "Switching to previous branch: ${YELLOW}${prev_branch}${ENDCOLOR}"
+        echo
+        switch "$prev_branch"
+        exit
+    fi
+    if [[ -n "${recent}" ]]; then
+        echo -e "${YELLOW}Recently checked out branches:${ENDCOLOR}"
+        echo
+        recent_branches=()
+        while IFS= read -r branch; do
+            if [ -n "$branch" ] && [ "$branch" != "$current_branch" ]; then
+                if git show-ref --verify --quiet "refs/heads/$branch" 2>/dev/null; then
+                    is_dup="false"
+                    for existing in "${recent_branches[@]}"; do
+                        if [ "$existing" == "$branch" ]; then
+                            is_dup="true"
+                            break
+                        fi
+                    done
+                    if [ "$is_dup" == "false" ]; then
+                        recent_branches+=("$branch")
+                    fi
+                fi
+            fi
+            if [ ${#recent_branches[@]} -ge 10 ]; then
+                break
+            fi
+        done < <(git reflog --pretty="%gs" | grep "^checkout: moving from" | sed 's/checkout: moving from .* to //')
+        if [ ${#recent_branches[@]} -eq 0 ]; then
+            echo -e "${GREEN}No recent branches found${ENDCOLOR}"
+            exit
+        fi
+        for index in "${!recent_branches[@]}"; do
+            branch="${recent_branches[$index]}"
+            last_msg=$(git log -n 1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} %s (${GREEN_ES}%cr${ENDCOLOR_ES})" "refs/heads/$branch" 2>/dev/null)
+            echo -e "$(($index+1)). ${BLUE}${branch}${ENDCOLOR}\t$last_msg"
+        done
+        echo "0. Exit"
+        echo
+        read_prefix="Select branch number: "
+        choose "${recent_branches[@]}"
+        echo
+        echo
+        switch "$choice_result"
+        exit
+    fi
+    if [[ -n "${gone}" ]]; then
+        echo -e "${YELLOW}Fetching and pruning remote references...${ENDCOLOR}"
+        echo
+        fetch_output=$(git fetch --prune 2>&1)
+        check_code $? "$fetch_output" "fetch and prune remote"
+        gone_branches=()
+        while IFS= read -r line; do
+            branch=$(echo "$line" | sed 's/^[ *]*//' | awk '{print $1}')
+            if [ -n "$branch" ] && [ "$branch" != "$main_branch" ] && [ "$branch" != "$current_branch" ]; then
+                gone_branches+=("$branch")
+            fi
+        done < <(git branch -vv | grep ': gone\]')
+        if [ ${#gone_branches[@]} -eq 0 ]; then
+            echo -e "${GREEN}No branches with gone remote tracking found${ENDCOLOR}"
+            echo -e "All local branches have corresponding remote branches"
+            exit
+        fi
+        echo -e "${YELLOW}Found ${#gone_branches[@]} branch(es) with gone remote tracking:${ENDCOLOR}"
+        for branch in "${gone_branches[@]}"; do
+            printf "\t$branch\n"
+        done
+        echo
+        echo -e "${YELLOW}Do you want to delete these branches?${ENDCOLOR}"
+        echo -e "Do you want to continue (y/n)?"
+        yes_no_choice "Deleting gone branches..."
+        for branch in "${gone_branches[@]}"; do
+            delete_output=$(git branch -D "$branch" 2>&1)
+            delete_code=$?
+            if [ $delete_code -eq 0 ]; then
+                echo -e "${GREEN}Branch '$branch' deleted${ENDCOLOR}"
+            else
+                echo -e "${RED}Cannot delete branch '$branch'!${ENDCOLOR}"
+                echo -e "${delete_output}"
+            fi
+        done
         exit
     fi
     if [[ -n "${main}" ]]; then
@@ -4712,6 +4846,65 @@ function branch_script {
                     echo
                     break
                 else
+                    printf "n\n\n"
+                    break
+                fi
+            done
+        fi
+        squash_merged_branches=()
+        IFS=$'\n' read -rd '' -a all_local <<<"$(git branch --format='%(refname:short)' | cat 2>&1)"
+        for branch in "${all_local[@]}"; do
+            if [[ "$branch" == "$main_branch" ]] || [[ "$branch" == "$current_branch" ]] || [[ -z "$branch" ]]; then
+                continue
+            fi
+            already_merged="false"
+            for merged_entry in "${merged_branches_without_main[@]}"; do
+                merged_name=$(echo "$merged_entry" | awk '{print $1}')
+                if [[ "$merged_name" == "$branch" ]]; then
+                    already_merged="true"
+                    break
+                fi
+            done
+            if [ "$already_merged" == "true" ]; then
+                continue
+            fi
+            merge_base=$(git merge-base "$main_branch" "$branch" 2>/dev/null)
+            if [ -n "$merge_base" ]; then
+                squash_commit=$(git commit-tree "$branch^{tree}" -p "$merge_base" -m "tmp" 2>/dev/null)
+                if [ -n "$squash_commit" ]; then
+                    cherry_result=$(git cherry "$main_branch" "$squash_commit" 2>/dev/null)
+                    if [[ "$cherry_result" == "-"* ]]; then
+                        squash_merged_branches+=("$branch")
+                    fi
+                fi
+            fi
+        done
+        if [ ${#squash_merged_branches[@]} -gt 0 ]; then
+            echo -e "${YELLOW}Found ${#squash_merged_branches[@]} squash-merged branch(es):${ENDCOLOR}"
+            echo -e "These branches appear to have been squash-merged into ${YELLOW}${main_branch}${ENDCOLOR}"
+            for branch in "${squash_merged_branches[@]}"; do
+                printf "\t$branch\n"
+            done
+            echo
+            echo -e "${YELLOW}Do you want to delete these squash-merged branches?${ENDCOLOR}"
+            printf "Answer (y/n): "
+            while [ true ]; do
+                read -n 1 -s choice
+                if is_yes "$choice"; then
+                    printf "y\n\n"
+                    for branch in "${squash_merged_branches[@]}"; do
+                        delete_output=$(git branch -D "$branch" 2>&1)
+                        delete_code=$?
+                        if [ $delete_code -eq 0 ]; then
+                            echo -e "${GREEN}Branch '$branch' is deleted!${ENDCOLOR}"
+                        else
+                            echo -e "${RED}Cannot delete branch '$branch'!${ENDCOLOR}"
+                            echo -e "${delete_output}"
+                        fi
+                    done
+                    echo
+                    break
+                elif is_no "$choice"; then
                     printf "n\n\n"
                     break
                 fi
@@ -5928,6 +6121,572 @@ function choose_commits_interactive {
         after_cherry_pick
     fi
 } 
+function sync_script {
+    case "$1" in
+        push|p)         sync_push="true";;
+        merge|m)        sync_merge="true";;
+        mergep|mp|pm)   sync_merge="true"; sync_push="true";;
+        help|h)         help="true";;
+        *)
+            wrong_mode "sync" $1
+    esac
+    header_msg="GIT SYNC"
+    if [ -n "${sync_merge}" ]; then
+        if [ -n "${sync_push}" ]; then
+            header_msg="$header_msg MERGE & PUSH"
+        else
+            header_msg="$header_msg MERGE"
+        fi
+    elif [ -n "${sync_push}" ]; then
+        header_msg="$header_msg & PUSH"
+    fi
+    echo -e "${YELLOW}${header_msg}${ENDCOLOR}"
+    echo
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb sync <mode>${ENDCOLOR}"
+        echo
+        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Fetch $main_branch and rebase current branch onto it"
+        msg="$msg\n${BOLD}push${ENDCOLOR}_p_Fetch $main_branch, rebase current branch onto it, and force push"
+        msg="$msg\n${BOLD}merge${ENDCOLOR}_m_Fetch $main_branch and merge it into current branch"
+        msg="$msg\n${BOLD}mergep${ENDCOLOR}_mp|pm_Fetch $main_branch, merge it into current branch, and push"
+        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
+        echo -e "$(echo -e "$msg" | column -ts'_')"
+        exit
+    fi
+    if [ "$current_branch" == "$main_branch" ]; then
+        echo -e "${YELLOW}Already on ${main_branch}, use ${BOLD}gitb pull${NORMAL}${YELLOW} instead${ENDCOLOR}"
+        exit
+    fi
+    is_clean=$(git status | tail -n 1)
+    if [ "$is_clean" != "nothing to commit, working tree clean" ]; then
+        echo -e "${RED}Cannot sync! There are uncommitted changes:${ENDCOLOR}"
+        git_status
+        echo
+        echo -e "${YELLOW}Commit or stash your changes first${ENDCOLOR}"
+        exit 1
+    fi
+    if [ -z "$origin_name" ]; then
+        echo -e "${RED}No git remote configured.${ENDCOLOR}"
+        echo -e "Use ${BLUE}git remote add origin <url>${ENDCOLOR} to set it up first."
+        exit 1
+    fi
+    echo -e "${YELLOW}Fetching ${origin_name}/${main_branch}...${ENDCOLOR}"
+    fetch $main_branch $origin_name
+    if [ $fetch_code != 0 ]; then
+        echo -e "${RED}Cannot fetch ${main_branch}!${ENDCOLOR}"
+        exit 1
+    fi
+    echo -e "${GREEN}Fetched ${origin_name}/${main_branch}${ENDCOLOR}"
+    echo
+    if [ -n "$sync_merge" ]; then
+        echo -e "${YELLOW}Merging ${origin_name}/${main_branch} into ${current_branch}...${ENDCOLOR}"
+        echo
+        merge $main_branch $origin_name $editor "sync" "true"
+        if [[ $merge_output == *"Already up to date"* ]]; then
+            echo -e "${GREEN}Already up to date with ${main_branch}${ENDCOLOR}"
+        else
+            echo -e "${GREEN}Successfully synced with ${main_branch} using merge!${ENDCOLOR}"
+            echo -e "${BLUE}[${origin_name}/${main_branch}${ENDCOLOR} -> ${BLUE}${current_branch}]${ENDCOLOR}"
+        fi
+    else
+        echo -e "${YELLOW}Rebasing ${current_branch} onto ${origin_name}/${main_branch}...${ENDCOLOR}"
+        echo
+        rebase_branch "$main_branch" "$origin_name" "true"
+        if [[ $rebase_output == *"is up to date"* ]]; then
+            echo -e "${GREEN}Already up to date with ${main_branch}${ENDCOLOR}"
+        elif [ $rebase_code == 0 ]; then
+            echo -e "${GREEN}Successfully synced with ${main_branch} using rebase!${ENDCOLOR}"
+            echo -e "${BLUE}[${origin_name}/${main_branch}${ENDCOLOR} -> ${BLUE}${current_branch}]${ENDCOLOR}"
+        else
+            echo -e "${RED}Rebase failed! Resolve conflicts and try again.${ENDCOLOR}"
+            exit $rebase_code
+        fi
+    fi
+    if [ -n "$sync_push" ]; then
+        echo
+        if [ -n "$sync_merge" ]; then
+            echo -e "${YELLOW}Pushing ${current_branch}...${ENDCOLOR}"
+            echo
+            push_script y
+        else
+            echo -e "${YELLOW}Force pushing ${current_branch} after rebase...${ENDCOLOR}"
+            echo
+            push_script f
+        fi
+    fi
+}
+function undo_script {
+    case "$1" in
+        commit|c)       undo_mode="commit";;
+        amend|a)        undo_mode="amend";;
+        merge|m)        undo_mode="merge";;
+        rebase|r)       undo_mode="rebase";;
+        stash|s)        undo_mode="stash";;
+        help|h)         help="true";;
+        *)
+            if [ -n "$1" ]; then
+                wrong_mode "undo" "$1"
+            fi
+            undo_mode="commit"
+    esac
+    header_msg="GIT UNDO"
+    case "$undo_mode" in
+        commit) header_msg="$header_msg COMMIT";;
+        amend)  header_msg="$header_msg AMEND";;
+        merge)  header_msg="$header_msg MERGE";;
+        rebase) header_msg="$header_msg REBASE";;
+        stash)  header_msg="$header_msg STASH";;
+    esac
+    echo -e "${YELLOW}${header_msg}${ENDCOLOR}"
+    echo
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb undo <mode>${ENDCOLOR}"
+        echo
+        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_commit|c_Undo last commit (git reset --soft HEAD~1), keeps changes staged"
+        msg="$msg\n${BOLD}amend${ENDCOLOR}_a_Undo last amend, restoring the previous commit state via reflog"
+        msg="$msg\n${BOLD}merge${ENDCOLOR}_m_Undo last merge (git merge --abort or git reset --merge ORIG_HEAD)"
+        msg="$msg\n${BOLD}rebase${ENDCOLOR}_r_Undo last rebase (git rebase --abort or git reset --hard ORIG_HEAD)"
+        msg="$msg\n${BOLD}stash${ENDCOLOR}_s_Undo last stash pop by re-stashing the popped changes"
+        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
+        echo -e "$(echo -e "$msg" | column -ts'_')"
+        exit
+    fi
+    case "$undo_mode" in
+        commit) undo_commit;;
+        amend)  undo_amend;;
+        merge)  undo_merge;;
+        rebase) undo_rebase;;
+        stash)  undo_stash;;
+    esac
+}
+function undo_commit {
+    commit_count=$(git rev-list --count HEAD 2>/dev/null)
+    if [ -z "$commit_count" ] || [ "$commit_count" -eq 0 ]; then
+        echo -e "${RED}No commits to undo${ENDCOLOR}"
+        exit 1
+    fi
+    cancelled_commit=$(git log -n 1 --pretty="%s | ${YELLOW}%h${ENDCOLOR} | ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})")
+    echo -e "${YELLOW}Commit to undo:${ENDCOLOR}"
+    echo -e "\t$cancelled_commit"
+    echo
+    echo -e "This will undo the last commit but ${GREEN}keep all changes staged${ENDCOLOR}"
+    echo -e "Do you want to continue (y/n)?"
+    yes_no_choice "Undoing commit..."
+    reset_output=$(git reset --soft HEAD~1 2>&1)
+    reset_code=$?
+    if [ $reset_code -ne 0 ]; then
+        echo -e "${RED}Cannot undo commit! Error message:${ENDCOLOR}"
+        echo "$reset_output"
+        exit $reset_code
+    fi
+    new_commit=$(git log -n 1 --pretty="%s | ${YELLOW}%h${ENDCOLOR} | ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})" 2>/dev/null)
+    echo -e "${GREEN}Commit undone successfully!${ENDCOLOR}"
+    echo
+    echo -e "${RED}Undone commit:${ENDCOLOR}\t$cancelled_commit"
+    if [ -n "$new_commit" ]; then
+        echo -e "${GREEN}New HEAD:${ENDCOLOR}\t$new_commit"
+    fi
+    echo
+    echo -e "${YELLOW}Staged changes:${ENDCOLOR}"
+    git_status
+}
+function undo_amend {
+    last_action=$(git reflog -n 1 --pretty="%gs" 2>/dev/null)
+    if [[ "$last_action" != *"amend"* ]]; then
+        echo -e "${YELLOW}Last action was not an amend:${ENDCOLOR} $last_action"
+        echo
+        echo -e "Looking for the most recent amend in reflog..."
+        echo
+        amend_ref=$(git reflog --pretty="%gd %gs" | grep "amend" | head -n 1 | awk '{print $1}')
+        if [ -z "$amend_ref" ]; then
+            echo -e "${RED}No amend found in reflog${ENDCOLOR}"
+            exit 1
+        fi
+        amend_num=${amend_ref#*\{}
+        amend_num=${amend_num%\}}
+        pre_amend_num=$((amend_num + 1))
+        pre_amend_ref="HEAD@{$pre_amend_num}"
+        echo -e "${YELLOW}Found amend at ${amend_ref}${ENDCOLOR}"
+    else
+        pre_amend_ref="HEAD@{1}"
+    fi
+    current_commit=$(git log -n 1 --pretty="%s | ${YELLOW}%h${ENDCOLOR} | ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})")
+    pre_amend_commit=$(git log -n 1 --pretty="%s | ${YELLOW}%h${ENDCOLOR} | ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})" "$pre_amend_ref" 2>/dev/null)
+    if [ -z "$pre_amend_commit" ]; then
+        echo -e "${RED}Cannot find the pre-amend state in reflog${ENDCOLOR}"
+        exit 1
+    fi
+    echo -e "${YELLOW}Current (amended):${ENDCOLOR}\t$current_commit"
+    echo -e "${GREEN}Restore to:${ENDCOLOR}\t\t$pre_amend_commit"
+    echo
+    echo -e "Do you want to undo the amend (y/n)?"
+    yes_no_choice "Undoing amend..."
+    reset_output=$(git reset --soft "$pre_amend_ref" 2>&1)
+    reset_code=$?
+    if [ $reset_code -ne 0 ]; then
+        echo -e "${RED}Cannot undo amend! Error message:${ENDCOLOR}"
+        echo "$reset_output"
+        exit $reset_code
+    fi
+    echo -e "${GREEN}Amend undone successfully!${ENDCOLOR}"
+    echo
+    echo -e "${GREEN}Restored commit:${ENDCOLOR}"
+    echo -e "\t$(git log -n 1 --pretty="%s | ${YELLOW}%h${ENDCOLOR} | ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})")"
+    echo
+    echo -e "${YELLOW}Staged changes (from the amend):${ENDCOLOR}"
+    git_status
+}
+function undo_merge {
+    if [ -f "$(git rev-parse --git-dir)/MERGE_HEAD" ]; then
+        echo -e "${YELLOW}Merge in progress detected${ENDCOLOR}"
+        echo -e "Do you want to abort the ongoing merge (y/n)?"
+        yes_no_choice "Aborting merge..."
+        abort_output=$(git merge --abort 2>&1)
+        abort_code=$?
+        if [ $abort_code -ne 0 ]; then
+            echo -e "${RED}Cannot abort merge! Error message:${ENDCOLOR}"
+            echo "$abort_output"
+            exit $abort_code
+        fi
+        echo -e "${GREEN}Merge aborted successfully!${ENDCOLOR}"
+        exit
+    fi
+    last_action=$(git reflog -n 1 --pretty="%gs" 2>/dev/null)
+    if [[ "$last_action" != *"merge"* ]]; then
+        echo -e "${YELLOW}Last action was not a merge:${ENDCOLOR} $last_action"
+        echo
+    fi
+    orig_head=$(git rev-parse ORIG_HEAD 2>/dev/null)
+    if [ -z "$orig_head" ]; then
+        echo -e "${RED}No ORIG_HEAD found - cannot determine pre-merge state${ENDCOLOR}"
+        echo -e "${YELLOW}Try using ${BOLD}gitb reset ref${NORMAL}${YELLOW} to manually select a reflog entry${ENDCOLOR}"
+        exit 1
+    fi
+    current_commit=$(git log -n 1 --pretty="%s | ${YELLOW}%h${ENDCOLOR} | ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})")
+    orig_commit=$(git log -n 1 --pretty="%s | ${YELLOW}%h${ENDCOLOR} | ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})" ORIG_HEAD)
+    echo -e "${YELLOW}Current HEAD:${ENDCOLOR}\t$current_commit"
+    echo -e "${GREEN}Restore to:${ENDCOLOR}\t$orig_commit"
+    echo
+    echo -e "${RED}This will discard the merge commit and all merge changes${ENDCOLOR}"
+    echo -e "Do you want to undo the merge (y/n)?"
+    yes_no_choice "Undoing merge..."
+    reset_output=$(git reset --merge ORIG_HEAD 2>&1)
+    reset_code=$?
+    if [ $reset_code -ne 0 ]; then
+        echo -e "${RED}Cannot undo merge! Error message:${ENDCOLOR}"
+        echo "$reset_output"
+        exit $reset_code
+    fi
+    echo -e "${GREEN}Merge undone successfully!${ENDCOLOR}"
+    echo
+    echo -e "${GREEN}Restored to:${ENDCOLOR}"
+    echo -e "\t$(git log -n 1 --pretty="%s | ${YELLOW}%h${ENDCOLOR} | ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})")"
+}
+function undo_rebase {
+    if [ -d "$(git rev-parse --git-dir)/rebase-merge" ] || [ -d "$(git rev-parse --git-dir)/rebase-apply" ]; then
+        echo -e "${YELLOW}Rebase in progress detected${ENDCOLOR}"
+        echo -e "Do you want to abort the ongoing rebase (y/n)?"
+        yes_no_choice "Aborting rebase..."
+        abort_output=$(git rebase --abort 2>&1)
+        abort_code=$?
+        if [ $abort_code -ne 0 ]; then
+            echo -e "${RED}Cannot abort rebase! Error message:${ENDCOLOR}"
+            echo "$abort_output"
+            exit $abort_code
+        fi
+        echo -e "${GREEN}Rebase aborted successfully!${ENDCOLOR}"
+        exit
+    fi
+    orig_head=$(git rev-parse ORIG_HEAD 2>/dev/null)
+    if [ -z "$orig_head" ]; then
+        echo -e "${RED}No ORIG_HEAD found - cannot determine pre-rebase state${ENDCOLOR}"
+        echo -e "${YELLOW}Try using ${BOLD}gitb reset ref${NORMAL}${YELLOW} to manually select a reflog entry${ENDCOLOR}"
+        exit 1
+    fi
+    current_commit=$(git log -n 1 --pretty="%s | ${YELLOW}%h${ENDCOLOR} | ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})")
+    orig_commit=$(git log -n 1 --pretty="%s | ${YELLOW}%h${ENDCOLOR} | ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})" ORIG_HEAD)
+    echo -e "${YELLOW}Current HEAD:${ENDCOLOR}\t\t$current_commit"
+    echo -e "${GREEN}Pre-rebase state:${ENDCOLOR}\t$orig_commit"
+    echo
+    echo -e "${RED}This will discard all rebase changes and restore the original branch state${ENDCOLOR}"
+    echo -e "Do you want to undo the rebase (y/n)?"
+    yes_no_choice "Undoing rebase..."
+    reset_output=$(git reset --hard ORIG_HEAD 2>&1)
+    reset_code=$?
+    if [ $reset_code -ne 0 ]; then
+        echo -e "${RED}Cannot undo rebase! Error message:${ENDCOLOR}"
+        echo "$reset_output"
+        exit $reset_code
+    fi
+    echo -e "${GREEN}Rebase undone successfully!${ENDCOLOR}"
+    echo
+    echo -e "${GREEN}Restored to:${ENDCOLOR}"
+    echo -e "\t$(git log -n 1 --pretty="%s | ${YELLOW}%h${ENDCOLOR} | ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})")"
+}
+function undo_stash {
+    if git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then
+        echo -e "${YELLOW}No changes detected in working tree${ENDCOLOR}"
+        echo -e "If stash pop had conflicts, resolve them first and then use this command"
+        echo
+        echo -e "Nothing to undo"
+        exit
+    fi
+    echo -e "${YELLOW}Current changes that will be re-stashed:${ENDCOLOR}"
+    git_status
+    echo
+    echo -e "This will stash all current changes to undo the last stash pop/apply"
+    echo -e "Do you want to continue (y/n)?"
+    yes_no_choice "Re-stashing changes..."
+    stash_output=$(git stash push -m "undo: re-stashed changes" --include-untracked 2>&1)
+    stash_code=$?
+    if [ $stash_code -ne 0 ]; then
+        echo -e "${RED}Cannot re-stash changes! Error message:${ENDCOLOR}"
+        echo "$stash_output"
+        exit $stash_code
+    fi
+    echo -e "${GREEN}Changes re-stashed successfully!${ENDCOLOR}"
+    echo -e "${YELLOW}Your changes are saved in the stash. Use ${BOLD}gitb stash pop${NORMAL}${YELLOW} to restore them.${ENDCOLOR}"
+}
+function wip_script {
+    case "$1" in
+        nopush|np|n)    nopush="true";;
+        help|h)         help="true";;
+        *)
+            wrong_mode "wip" $1
+    esac
+    header_msg="GIT WIP"
+    if [ -n "${nopush}" ]; then
+        header_msg="$header_msg (NO PUSH)"
+    fi
+    echo -e "${YELLOW}${header_msg}${ENDCOLOR}"
+    echo
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb wip <mode>${ENDCOLOR}"
+        echo
+        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Stage all changes, create WIP commit, and push"
+        msg="$msg\n${BOLD}nopush${ENDCOLOR}_np|n_Stage all changes and create WIP commit without pushing"
+        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
+        echo -e "$(echo -e "$msg" | column -ts'_')"
+        echo
+        echo -e "Use ${YELLOW}gitb unwip${ENDCOLOR} to undo the WIP commit and restore your changes"
+        exit
+    fi
+    if git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then
+        echo -e "${GREEN}No changes to save${ENDCOLOR}"
+        exit
+    fi
+    echo -e "${YELLOW}Changes to save:${ENDCOLOR}"
+    git_status
+    echo
+    git add -A
+    wip_message="wip: ${current_branch} work in progress"
+    result=$(git commit -m "$wip_message" 2>&1)
+    commit_code=$?
+    if [ $commit_code -ne 0 ]; then
+        echo -e "${RED}Cannot create WIP commit! Error message:${ENDCOLOR}"
+        echo "$result"
+        git reset HEAD 2>/dev/null
+        exit $commit_code
+    fi
+    commit_hash=$(git rev-parse HEAD)
+    echo -e "${GREEN}WIP saved!${ENDCOLOR}"
+    echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR} $wip_message"
+    echo
+    if [ -z "$nopush" ] && [ -n "$origin_name" ]; then
+        echo -e "${YELLOW}Pushing WIP...${ENDCOLOR}"
+        echo
+        push_output=$(git push ${origin_name} ${current_branch} 2>&1)
+        push_code=$?
+        if [ $push_code -eq 0 ]; then
+            echo -e "${GREEN}WIP pushed to ${origin_name}/${current_branch}${ENDCOLOR}"
+        else
+            echo -e "${YELLOW}Could not push WIP (you can push manually later)${ENDCOLOR}"
+            echo "$push_output"
+        fi
+    elif [ -z "$nopush" ] && [ -z "$origin_name" ]; then
+        echo -e "${YELLOW}No remote configured, skipping push${ENDCOLOR}"
+    fi
+    echo
+    echo -e "Restore with: ${YELLOW}gitb unwip${ENDCOLOR}"
+}
+function unwip_script {
+    if [ "$1" == "help" ] || [ "$1" == "h" ]; then
+        echo -e "${YELLOW}GIT UNWIP${ENDCOLOR}"
+        echo
+        echo -e "usage: ${YELLOW}gitb unwip${ENDCOLOR}"
+        echo
+        echo -e "Undoes the last WIP commit, restoring your changes to the working tree."
+        echo -e "Changes will be unstaged so you can re-organize them before committing."
+        exit
+    fi
+    echo -e "${YELLOW}GIT UNWIP${ENDCOLOR}"
+    echo
+    last_message=$(git log -n 1 --pretty="%s" 2>/dev/null)
+    if [[ "$last_message" != wip:* ]]; then
+        echo -e "${RED}Last commit is not a WIP commit${ENDCOLOR}"
+        echo -e "Last commit: ${YELLOW}$last_message${ENDCOLOR}"
+        echo
+        echo -e "Use ${YELLOW}gitb undo${ENDCOLOR} to undo a regular commit"
+        exit 1
+    fi
+    wip_commit=$(git log -n 1 --pretty="%s | ${YELLOW}%h${ENDCOLOR} | ${GREEN}%cr${ENDCOLOR}")
+    echo -e "${YELLOW}WIP commit to undo:${ENDCOLOR}"
+    echo -e "\t$wip_commit"
+    echo
+    reset_output=$(git reset HEAD~1 2>&1)
+    reset_code=$?
+    if [ $reset_code -ne 0 ]; then
+        echo -e "${RED}Cannot undo WIP commit! Error message:${ENDCOLOR}"
+        echo "$reset_output"
+        exit $reset_code
+    fi
+    echo -e "${GREEN}WIP commit undone!${ENDCOLOR}"
+    echo
+    echo -e "${YELLOW}Restored changes:${ENDCOLOR}"
+    git_status
+}
+function fixup_script {
+    case "$1" in
+        fast|f)         fixup_fast="true";;
+        commit|c)       fixup_commit_only="true";;
+        push|p)         fixup_push="true";;
+        fastp|fp|pf)    fixup_fast="true"; fixup_push="true";;
+        help|h)         help="true";;
+        *)
+            wrong_mode "fixup" $1
+    esac
+    header_msg="GIT FIXUP"
+    if [ -n "${fixup_fast}" ]; then
+        if [ -n "${fixup_push}" ]; then
+            header_msg="$header_msg FAST & PUSH"
+        else
+            header_msg="$header_msg FAST"
+        fi
+    elif [ -n "${fixup_commit_only}" ]; then
+        header_msg="$header_msg COMMIT ONLY"
+    elif [ -n "${fixup_push}" ]; then
+        header_msg="$header_msg & PUSH"
+    fi
+    echo -e "${YELLOW}${header_msg}${ENDCOLOR}"
+    echo
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb fixup <mode>${ENDCOLOR}"
+        echo
+        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Select files, pick a commit to fixup, create fixup commit, then autosquash"
+        msg="$msg\n${BOLD}fast${ENDCOLOR}_f_Add all files, pick a commit to fixup, fixup commit, then autosquash"
+        msg="$msg\n${BOLD}commit${ENDCOLOR}_c_Only create a fixup commit without autosquash (same as gitb c x)"
+        msg="$msg\n${BOLD}push${ENDCOLOR}_p_Select files, fixup + autosquash + force push"
+        msg="$msg\n${BOLD}fastp${ENDCOLOR}_fp|pf_Add all files, fixup + autosquash + force push"
+        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
+        echo -e "$(echo -e "$msg" | column -ts'_')"
+        exit
+    fi
+    if [ -n "$fixup_fast" ]; then
+        if git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then
+            echo -e "${GREEN}No changes to commit${ENDCOLOR}"
+            exit
+        fi
+        echo -e "${YELLOW}Step 1.${ENDCOLOR} Adding all files"
+        git add -A
+        echo -e "${GREEN}All files staged${ENDCOLOR}"
+        echo -e "${YELLOW}Staged files:${ENDCOLOR}"
+        print_staged_files
+    else
+        changes=$(git_status)
+        if [ -z "$changes" ]; then
+            echo -e "${GREEN}No changes to commit${ENDCOLOR}"
+            exit
+        fi
+        echo -e "${YELLOW}Step 1.${ENDCOLOR} Select files to commit"
+        echo "$changes"
+        echo
+        echo "Enter file patterns to stage (like git add command)"
+        echo "Press Enter if you want to exit"
+        while [ true ]; do
+            read -p "$(echo -n -e "${BOLD}git add${ENDCOLOR} ")" -e git_add
+            if [ "$git_add" == "" ]; then
+                exit
+            fi
+            if ! sanitize_file_path "$git_add"; then
+                show_sanitization_error "file pattern" "Invalid file path or pattern."
+                continue
+            fi
+            git_add="$sanitized_file_path"
+            add_output=$(git add $git_add 2>&1)
+            add_code=$?
+            if [ $add_code -eq 0 ]; then
+                break
+            else
+                echo -e "${RED}$add_output${ENDCOLOR}"
+                echo
+            fi
+        done
+        echo
+        echo -e "${YELLOW}Staged files:${ENDCOLOR}"
+        print_staged_files
+    fi
+    echo
+    echo -e "${YELLOW}Step 2.${ENDCOLOR} Select a commit to ${YELLOW}--fixup${ENDCOLOR}:"
+    choose_commit 9
+    echo
+    echo -e "${YELLOW}Creating fixup commit...${ENDCOLOR}"
+    result=$(git commit --fixup $commit_hash 2>&1)
+    commit_code=$?
+    if [ $commit_code -ne 0 ]; then
+        echo -e "${RED}Cannot create fixup commit! Error message:${ENDCOLOR}"
+        echo "$result"
+        if [ -n "$git_add" ]; then
+            git restore --staged "$git_add"
+        fi
+        exit $commit_code
+    fi
+    after_commit "fixup"
+    if [ -n "$fixup_commit_only" ]; then
+        echo
+        echo -e "Run ${YELLOW}gitb rebase a${ENDCOLOR} to autosquash, or ${YELLOW}gitb fixup${ENDCOLOR} next time for auto-squash"
+        exit
+    fi
+    echo
+    echo -e "${YELLOW}Step 3.${ENDCOLOR} Running autosquash rebase..."
+    echo
+    merge_base=$(git merge-base HEAD ${main_branch} 2>/dev/null)
+    if [ -z "$merge_base" ] || [ "$merge_base" == "$(git rev-parse HEAD)" ]; then
+        local_commit_count=$(git rev-list --count HEAD 2>/dev/null || echo "0")
+        if [ "$local_commit_count" -gt 50 ]; then
+            merge_base="HEAD~50"
+        else
+            merge_base=$(git rev-list --max-parents=0 HEAD 2>/dev/null | tail -1)
+            if [ -z "$merge_base" ]; then
+                merge_base="HEAD~10"
+            fi
+        fi
+    fi
+    rebase_output=$(GIT_SEQUENCE_EDITOR=true git rebase -i --autosquash $merge_base 3>&2 2>&1 1>&3)
+    rebase_code=$?
+    if [ $rebase_code -eq 0 ]; then
+        echo -e "${GREEN}Autosquash rebase successful!${ENDCOLOR}"
+    else
+        if [[ $rebase_output == *"Resolve all conflicts"* ]]; then
+            echo -e "${RED}Rebase has conflicts! Resolve them manually:${ENDCOLOR}"
+            echo -e "  ${YELLOW}git rebase --continue${ENDCOLOR} after resolving"
+            echo -e "  ${YELLOW}git rebase --abort${ENDCOLOR} to cancel"
+        else
+            echo -e "${RED}Autosquash rebase failed:${ENDCOLOR}"
+            echo "$rebase_output"
+        fi
+        exit $rebase_code
+    fi
+    if [ -n "$fixup_push" ]; then
+        echo
+        echo -e "${YELLOW}Force pushing after autosquash...${ENDCOLOR}"
+        echo
+        push_script f
+    fi
+}
 function project_status {
     echo -e "${YELLOW}$project_name${ENDCOLOR} | ${CYAN}$repo_url${ENDCOLOR}"
     echo
@@ -7133,10 +7892,17 @@ function print_help {
     msg="$msg\nmerge_m|me_Merge changes to the current branch"
     msg="$msg\nrebase_r|re|base_Rebase current branch"
     msg="$msg\ncherry_ch|cp_Cherry-pick commits from other branches"
+    msg="$msg\nsync_sy_Sync current branch with $main_branch (fetch + rebase/merge)"
+    msg="$msg\nwip_w_Quick WIP commit + push for saving work in progress"
+    msg="$msg\nunwip_uw_Undo a WIP commit and restore changes"
+    msg="$msg\nfixup_fx_Create fixup commit + autosquash rebase in one step"
+    msg="$msg\nundo_un_Quick undo for commit, amend, merge, rebase, or stash"
     msg="$msg\nreset_res_Easy to use git reset"
     msg="$msg\nstash_s|sta_Manage git stashes"
     msg="$msg\nhook_ho|hk_Git hooks management"
     msg="$msg\nconfig_cf|cfg|conf_Configurate gitbasher"
+    msg="$msg\n_ _ _"
+    msg="$msg\nprev_-_Switch to the previous branch (like cd -)"
     msg="$msg\n_ _ _"
     msg="$msg\n${YELLOW}Command${ENDCOLOR}_\t${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description of ${BOLD}informational${NORMAL}${BLUE} commands${ENDCOLOR}"
     msg="$msg\nstatus_st_Info about repo and changed files"
@@ -7179,8 +7945,17 @@ case "$1" in
     rebase|r|re|base)         
         rebase_script $2
     ;;
-    cherry|ch|cp)         
+    cherry|ch|cp)
         cherry_script $2 $3
+    ;;
+    sync|sy)
+        sync_script $2
+    ;;
+    wip|w)
+        wip_script $2
+    ;;
+    unwip|uw)
+        unwip_script $2
     ;;
     branch|b|br|bran)         
         branch_script $2
@@ -7190,6 +7965,12 @@ case "$1" in
     ;;
     config|cf|cfg|conf)         
         config_script $2
+    ;;
+    fixup|fx)
+        fixup_script $2
+    ;;
+    undo|un)
+        undo_script $2
     ;;
     reset|res)
         reset_script $2
@@ -7214,6 +7995,9 @@ case "$1" in
     ;;
     status|st)
         project_status
+    ;;
+    prev|-)
+        branch_script prev
     ;;
     *)
         print_help

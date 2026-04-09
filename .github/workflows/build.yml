@@ -12,10 +12,16 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute version
+        id: version
+        run: echo "version=$(git describe --tags --always 2>/dev/null | sed 's/^v//' || echo 'dev')" >> $GITHUB_OUTPUT
 
       - name: Build
         run: |
-          ./dist/build.sh ./scripts/gitb.sh ./dist/gitb
+          ./dist/build.sh ./scripts/gitb.sh ./dist/gitb "${{ steps.version.outputs.version }}"
           chmod +x ./dist/gitb
 
       - name: Install BATS

@@ -3,6 +3,7 @@
 ### Here is main script for running gitbasher
 # https://github.com/maxbolgarin/gitbasher
 
+GITBASHER_VERSION="dev"
 
 if [ "$1" == "init" ]; then
     git init

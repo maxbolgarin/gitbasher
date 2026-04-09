@@ -48,6 +48,12 @@
       }
     ],
     [
+      "@semantic-release/exec",
+      {
+        "prepareCmd": "./dist/build.sh ./scripts/gitb.sh ./dist/gitb ${nextRelease.version} && chmod +x ./dist/gitb"
+      }
+    ],
+    [
       "@semantic-release/github",
       {
         "assets": [

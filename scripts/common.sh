@@ -673,9 +673,9 @@ function commit_list {
     for index in "${!commits_info[@]}"
     do
         line=${commits_info[index]}
-        if [ $2 == "number" ]; then
+        if [ "$2" == "number" ]; then
             line="$(($index+1)). ${line}"
-        elif [ $2 == "tab" ]; then
+        elif [ "$2" == "tab" ]; then
             line="\t${line}"
         fi
         echo -e "$line"

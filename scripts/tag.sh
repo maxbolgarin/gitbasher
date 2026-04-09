@@ -242,7 +242,8 @@ function tag_script {
     if [ -n "${delete}" ] && [ -z "$select" ]; then
         echo
         echo -e "${YELLOW}Do you really want to delete all local tags (y/n)?${ENDCOLOR}"
-        git tag | xargs git tag -d 
+        yes_no_choice "\nDeleting all local tags..."
+        git tag | xargs git tag -d
         exit
     fi
 

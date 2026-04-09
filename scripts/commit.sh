@@ -342,9 +342,9 @@ function after_commit {
     commit_hash=$(git rev-parse HEAD)
     echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR}"
     if [ -z "${commit}" ]; then
-        echo $(git log -1 --pretty=%B | cat)
+        echo "$(git log -1 --pretty=%B)"
     else
-        printf "$commit\n"
+        printf "%s\n" "$commit"
     fi
 
     echo

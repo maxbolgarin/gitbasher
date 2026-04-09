@@ -38,7 +38,7 @@ function push {
                 if [ "$is_new" != "" ]; then
                     echo -e "${YELLOW}New MR:${ENDCOLOR}\t${link}"
                 else
-                    if [ "$mr_link" != "" ]; then
+                    if [ "$link" != "" ]; then
                         echo -e "${YELLOW}MR:${ENDCOLOR}\t${link}"
                     else
                         echo -e "${YELLOW}MRs:${ENDCOLOR}\t${repo}/merge_requests"

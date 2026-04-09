@@ -231,7 +231,7 @@ function tag_script {
     ### Push all case
     if [ -n "$push" ] && [ -z "$select" ]; then
         echo
-        echo -e "${YELLOW}Pushing all tags..."${ENDCOLOR}
+        echo -e "${YELLOW}Pushing all tags...${ENDCOLOR}"
 
         push_tag
         exit
@@ -271,7 +271,7 @@ function tag_script {
 
         # Push case
         if [ -n "${push}" ]; then
-            echo -e "${YELLOW}Pushing..."${ENDCOLOR}
+            echo -e "${YELLOW}Pushing...${ENDCOLOR}"
             echo
             push_tag $tag_name
             exit

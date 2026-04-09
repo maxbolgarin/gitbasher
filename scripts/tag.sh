@@ -41,7 +41,7 @@ function push_tag {
         IFS=$'\n' read -rd '' -a lines_with_success <<< "$(sed -n '/\[new tag\]/p' <<< "$push_output")"
 
         number_of_tags=${#lines_with_success[@]}
-        if [ $number_of_tags != 0 ]; then
+        if [ "$number_of_tags" != 0 ]; then
             echo -e "${GREEN}Pushed successfully!${ENDCOLOR}"
             
             for index in "${!lines_with_success[@]}"
@@ -200,7 +200,7 @@ function tag_script {
    
     number_of_tags=${#tags_info[@]}
 
-    if [ $number_of_tags == 0 ]; then
+    if [ "$number_of_tags" == 0 ]; then
         echo -e "${YELLOW}There is no local tags${ENDCOLOR}"
         if [ -n "${delete}" ] || [ -n "${push}" ]; then
             exit

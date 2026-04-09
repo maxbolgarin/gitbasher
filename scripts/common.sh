@@ -520,7 +520,7 @@ function escape {
 # Using of global:
 #     * git_add
 function check_code {
-    if [ $1 != 0 ]; then
+    if [ "$1" != 0 ]; then
         echo
         echo
         echo -e "${RED}Error during $3!${ENDCOLOR}"
@@ -567,7 +567,7 @@ function choose {
     number_of_values=${#values[@]}
 
     while true; do
-        if [ $number_of_values -gt 9 ]; then
+        if [ "$number_of_values" -gt 9 ]; then
             read -p "$read_prefix" -e -n 2 choice
         else
             read -p "$read_prefix" -n 1 -s choice
@@ -577,7 +577,7 @@ function choose {
             if [ -n "$git_add" ]; then
                 git restore --staged "$git_add"
             fi
-            if [ $number_of_values -le 9 ]; then
+            if [ "$number_of_values" -le 9 ]; then
                 printf "%s" "$choice"
             fi
             exit
@@ -599,12 +599,12 @@ function choose {
         index=$(($choice-1))
         choice_result=${values[index]}
         if [ -n "$choice_result" ]; then
-            if [ $number_of_values -le 9 ]; then
+            if [ "$number_of_values" -le 9 ]; then
                 printf "%s" "$choice"
             fi
             break
         else
-            if [ $number_of_values -gt 9 ]; then
+            if [ "$number_of_values" -gt 9 ]; then
                 if [ -n "$git_add" ]; then
                     git restore --staged "$git_add"
                 fi
@@ -712,8 +712,8 @@ function ref_list {
 # Using of global:
 #     * git_add
 function choose_commit {
-    commit_list $1 "number"
-    if [ $1 -gt 9 ]; then
+    commit_list "$1" "number"
+    if [ "$1" -gt 9 ]; then
         echo "00. Exit"
     else
         echo "0. Exit"

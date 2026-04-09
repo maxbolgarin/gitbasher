@@ -55,7 +55,7 @@ if [[ $is_first == "true" ]]; then
     echo
 fi
 
-if [ -z $1 ] || [ "$1" == "--help" ] || [ "$1" == "help" ] || [ "$1" == "man" ]; then
+if [ -z "$1" ] || [ "$1" == "--help" ] || [ "$1" == "help" ] || [ "$1" == "man" ]; then
     print_help
 fi
 

@@ -1,6 +1,8 @@
+VERSION := $(shell git describe --tags --always 2>/dev/null | sed 's/^v//' || echo "dev")
+
 .PHONY: build
 build:
-	@./dist/build.sh ./scripts/gitb.sh ./dist/gitb
+	@./dist/build.sh ./scripts/gitb.sh ./dist/gitb "$(VERSION)"
 	@chmod +x ./dist/gitb
 
 .PHONY: install

@@ -16,3 +16,7 @@ function build {
 
 contents=$(echo "#!/usr/bin/env bash" && build $1 | sed '/^[[:space:]]*#\{1,3\}[ !].*$/d' | sed '/^[[:space:]]*$/d')
 echo "$contents" > $2
+
+if [ -n "$3" ]; then
+    sed -i "s/GITBASHER_VERSION=\"dev\"/GITBASHER_VERSION=\"$3\"/" "$2"
+fi

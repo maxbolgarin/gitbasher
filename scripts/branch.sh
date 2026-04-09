@@ -587,7 +587,7 @@ function branch_script {
                 read -n 1 -s choice
                 if is_yes "$choice"; then
                     printf "y\n\n"
-                    echo -e "${YELLOW}Deleting...${YELLOW}"
+                    echo -e "${YELLOW}Deleting...${ENDCOLOR}"
 
                     push_output=$(git push $origin_name -d $branch_name 2>&1)
                     push_code=$?

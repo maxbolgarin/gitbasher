@@ -3,6 +3,8 @@
 
 ### Print usage information
 function print_help {
+    echo -e "${BOLD}gitbasher${NORMAL} v${GITBASHER_VERSION}"
+    echo
     echo -e "usage: ${YELLOW}gitb <command> <mode>${ENDCOLOR}"
     echo
     msg="${YELLOW}Command${ENDCOLOR}_\t${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description of ${BOLD}workflow${NORMAL}${BLUE} commands${ENDCOLOR}"
@@ -53,6 +55,11 @@ if [[ $is_first == "true" ]]; then
     echo -e "${CYAN}💡 Pro tip:${ENDCOLOR} If zsh tries to autocorrect 'gitb' to 'git', add this to your ~/.zshrc:"
     echo -e "  ${GREEN}alias gitb='nocorrect gitb'${ENDCOLOR}"
     echo
+fi
+
+if [ "$1" == "--version" ] || [ "$1" == "-v" ] || [ "$1" == "version" ]; then
+    echo "gitbasher v${GITBASHER_VERSION}"
+    exit
 fi
 
 if [ -z "$1" ] || [ "$1" == "--help" ] || [ "$1" == "help" ] || [ "$1" == "man" ]; then

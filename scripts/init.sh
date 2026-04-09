@@ -108,7 +108,7 @@ function validate_git_url {
 current_branch=$(git branch --show-current)
 
 main_branch=$(get_config_value gitbasher.branch "main")
-if [[ "$( git branch | grep "^[\s\*]*\s*main\s*$" )" == "" ]] && [[ "$( git branch | grep "^[\s\*]*\s*master\s*$" )" != "" ]]; then
+if [[ "$( git branch | grep -E "^[[:space:]*]*main[[:space:]]*$" )" == "" ]] && [[ "$( git branch | grep -E "^[[:space:]*]*master[[:space:]]*$" )" != "" ]]; then
     main_branch="master"
 elif [[ "$(git branch | cat)" == "" ]]; then
     main_branch=$current_branch

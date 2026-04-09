@@ -27,7 +27,7 @@ function project_status {
 function gitlog {
     local branch="$1"
     if [ -n "$branch" ]; then
-        echo -e "${YELLOW}Git log for branch: ${BLUD}$branch${ENDCOLOR}"
+        echo -e "${YELLOW}Git log for branch: ${BLUE}$branch${ENDCOLOR}"
         git log "$branch" --pretty="%C(Yellow)%h%C(reset) | %C(Cyan)%ad%C(reset) | %C(Blue)%an%C(reset) | %s (%C(Green)%cr%C(reset))"
     else
         git log --pretty="%C(Yellow)%h%C(reset) | %C(Cyan)%ad%C(reset) | %C(Blue)%an%C(reset) | %s (%C(Green)%cr%C(reset))"
@@ -261,29 +261,29 @@ function gitlog_search {
                 return
             fi
             
-            local date_args=""
+            local date_args=()
             if [ -n "$since_date" ]; then
                 # Sanitize date input
                 if ! sanitize_text_input "$since_date" 50; then
                     show_sanitization_error "date" "Invalid date format."
                     return
                 fi
-                date_args="$date_args --since=\"$sanitized_text\""
+                date_args+=("--since=$sanitized_text")
             fi
-            
+
             if [ -n "$until_date" ]; then
                 # Sanitize date input
                 if ! sanitize_text_input "$until_date" 50; then
                     show_sanitization_error "date" "Invalid date format."
                     return
                 fi
-                date_args="$date_args --until=\"$sanitized_text\""
+                date_args+=("--until=$sanitized_text")
             fi
-            
+
             echo
             echo -e "${YELLOW}Commits in date range:${ENDCOLOR}"
             echo
-            eval "git log $date_args --pretty=\"%C(Yellow)%h%C(reset) | %C(Cyan)%ad%C(reset) | %C(Blue)%an%C(reset) | %s (%C(Green)%cr%C(reset))\""
+            git log "${date_args[@]}" --pretty="%C(Yellow)%h%C(reset) | %C(Cyan)%ad%C(reset) | %C(Blue)%an%C(reset) | %s (%C(Green)%cr%C(reset))"
         ;;
         "hash"|"commit"|"h")
             echo -e "${YELLOW}GIT LOG SEARCH BY COMMIT HASH${ENDCOLOR}"

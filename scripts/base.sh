@@ -62,7 +62,7 @@ if [ "$1" == "--version" ] || [ "$1" == "-v" ] || [ "$1" == "version" ]; then
     exit
 fi
 
-if [ -z $1 ] || [ "$1" == "--help" ] || [ "$1" == "help" ] || [ "$1" == "man" ]; then
+if [ -z "$1" ] || [ "$1" == "--help" ] || [ "$1" == "help" ] || [ "$1" == "man" ]; then
     print_help
 fi
 

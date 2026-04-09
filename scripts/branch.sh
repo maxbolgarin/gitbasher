@@ -416,7 +416,7 @@ function branch_script {
         done
         number_of_branches=${#merged_branches_without_main[@]}
 
-        if [ $number_of_branches != 0 ]; then
+        if [ "$number_of_branches" != 0 ]; then
             echo -e "${YELLOW}Do you want to delete merged local branches?${ENDCOLOR}"
             echo -e "These are branches without new changes regarding ${YELLOW}${main_branch}${ENDCOLOR}"
             for index in "${!merged_branches_without_main[@]}"
@@ -587,7 +587,7 @@ function branch_script {
                 read -n 1 -s choice
                 if is_yes "$choice"; then
                     printf "y\n\n"
-                    echo -e "${YELLOW}Deleting...${YELLOW}"
+                    echo -e "${YELLOW}Deleting...${ENDCOLOR}"
 
                     push_output=$(git push $origin_name -d $branch_name 2>&1)
                     push_code=$?

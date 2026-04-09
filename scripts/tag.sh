@@ -41,7 +41,7 @@ function push_tag {
         IFS=$'\n' read -rd '' -a lines_with_success <<< "$(sed -n '/\[new tag\]/p' <<< "$push_output")"
 
         number_of_tags=${#lines_with_success[@]}
-        if [ $number_of_tags != 0 ]; then
+        if [ "$number_of_tags" != 0 ]; then
             echo -e "${GREEN}Pushed successfully!${ENDCOLOR}"
             
             for index in "${!lines_with_success[@]}"
@@ -200,7 +200,7 @@ function tag_script {
    
     number_of_tags=${#tags_info[@]}
 
-    if [ $number_of_tags == 0 ]; then
+    if [ "$number_of_tags" == 0 ]; then
         echo -e "${YELLOW}There is no local tags${ENDCOLOR}"
         if [ -n "${delete}" ] || [ -n "${push}" ]; then
             exit
@@ -231,7 +231,7 @@ function tag_script {
     ### Push all case
     if [ -n "$push" ] && [ -z "$select" ]; then
         echo
-        echo -e "${YELLOW}Pushing all tags..."${ENDCOLOR}
+        echo -e "${YELLOW}Pushing all tags...${ENDCOLOR}"
 
         push_tag
         exit
@@ -242,7 +242,8 @@ function tag_script {
     if [ -n "${delete}" ] && [ -z "$select" ]; then
         echo
         echo -e "${YELLOW}Do you really want to delete all local tags (y/n)?${ENDCOLOR}"
-        git tag | xargs git tag -d 
+        yes_no_choice "\nDeleting all local tags..."
+        git tag | xargs git tag -d
         exit
     fi
 
@@ -270,7 +271,7 @@ function tag_script {
 
         # Push case
         if [ -n "${push}" ]; then
-            echo -e "${YELLOW}Pushing..."${ENDCOLOR}
+            echo -e "${YELLOW}Pushing...${ENDCOLOR}"
             echo
             push_tag $tag_name
             exit

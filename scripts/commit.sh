@@ -688,11 +688,11 @@ function commit_script {
     ### Print staged files that we add at step 1
     if [ -z "${staged}" ]; then
         echo -e "${YELLOW}Staged files:${ENDCOLOR}"
-        staged="$(sed 's/^/\t/' <<< "$(git diff --name-only --cached)")"
+        staged_files_list="$(sed 's/^/\t/' <<< "$(git diff --name-only --cached)")"
         print_staged_files
     else
-        # Still need to set the staged variable for later use
-        staged="$(sed 's/^/\t/' <<< "$(git diff --name-only --cached)")"
+        # Still need to set the staged files list for later use (editor template)
+        staged_files_list="$(sed 's/^/\t/' <<< "$(git diff --name-only --cached)")"
     fi
 
 
@@ -991,7 +991,7 @@ function commit_script {
     if [ -n "$msg" ]; then
         commitmsg_file=$(mktemp "/tmp/commitmsg.XXXXXX")
         trap "rm -f '$commitmsg_file'" EXIT INT TERM
-        staged_with_tab="$(sed 's/^/####\t/' <<< "${staged}")"
+        staged_with_tab="$(sed 's/^/####\t/' <<< "${staged_files_list}")"
 
         echo """
 ####

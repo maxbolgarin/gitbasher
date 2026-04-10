@@ -50,7 +50,7 @@
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "./dist/build.sh ./scripts/gitb.sh ./dist/gitb ${nextRelease.version} && chmod +x ./dist/gitb"
+        "prepareCmd": "./dist/build.sh ./scripts/gitb.sh ./dist/gitb ${nextRelease.version} && chmod +x ./dist/gitb && cp ./dist/gitb ./bin/gitb && chmod +x ./bin/gitb"
       }
     ],
     [

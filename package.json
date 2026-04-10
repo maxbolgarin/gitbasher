@@ -20,13 +20,9 @@
     },
     "files": [
         "bin",
-        "download-release.js",
         "README.md",
         "LICENSE"
     ],
-    "scripts": {
-        "postinstall": "node download-release.js"
-    },
     "engines": {
         "node": ">=14.0.0"
     }

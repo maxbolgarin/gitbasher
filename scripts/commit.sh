@@ -205,7 +205,8 @@ function handle_ai_commit_generation {
     fi
     
     # Clean up the AI response (remove quotes, trim)
-    ai_commit_message=$(echo "$ai_commit_message" | sed 's/^"//;s/"$//' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    # LC_ALL=C avoids "illegal byte sequence" errors from BSD sed when the AI response contains non-ASCII characters.
+    ai_commit_message=$(echo "$ai_commit_message" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
     
     echo
     echo -e "${GREEN}AI generated commit message:${ENDCOLOR}"

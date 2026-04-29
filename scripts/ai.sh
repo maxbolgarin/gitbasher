@@ -273,7 +273,9 @@ function call_openrouter_api {
     fi
     
     # Escape special characters in prompt for JSON
-    local escaped_prompt=$(echo "$prompt" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | tr '\n' ' ' | sed 's/  */ /g')
+    # LC_ALL=C avoids "illegal byte sequence" errors from BSD sed on macOS when the
+    # prompt contains non-UTF-8-validatable bytes (e.g. Russian or other non-ASCII content in diffs).
+    local escaped_prompt=$(echo "$prompt" | LC_ALL=C sed 's/\\/\\\\/g' | LC_ALL=C sed 's/"/\\"/g' | tr '\n' ' ' | LC_ALL=C sed 's/  */ /g')
 
     # Select OpenRouter model (OpenAI-compatible)
     local model=$(get_ai_model)
@@ -512,7 +514,7 @@ function call_openrouter_api {
         ai_response=$(echo "$response" | LC_ALL=C sed -n 's/.*"choices"[[:space:]]*:[[:space:]]*\[.*"message"[[:space:]]*:[[:space:]]*{[[:space:]]*"role"[[:space:]]*:[[:space:]]*"assistant"[[:space:]]*,[[:space:]]*"content"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
         # Clean up escaped characters
         if [ -n "$ai_response" ]; then
-            ai_response=$(echo "$ai_response" | sed 's/\\n/\n/g' | sed 's/\\"/"/g' | sed 's/\\\\/\\/g')
+            ai_response=$(echo "$ai_response" | LC_ALL=C sed 's/\\n/\n/g' | LC_ALL=C sed 's/\\"/"/g' | LC_ALL=C sed 's/\\\\/\\/g')
         fi
     fi
     

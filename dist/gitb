@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-GITBASHER_VERSION="3.10.1"
+GITBASHER_VERSION="3.10.2"
 if [ "$1" == "init" ]; then
     git init
 fi
@@ -1065,7 +1065,7 @@ function call_openrouter_api {
         clear_sensitive_vars
         return 1
     fi
-    local escaped_prompt=$(echo "$prompt" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | tr '\n' ' ' | sed 's/  */ /g')
+    local escaped_prompt=$(echo "$prompt" | LC_ALL=C sed 's/\\/\\\\/g' | LC_ALL=C sed 's/"/\\"/g' | tr '\n' ' ' | LC_ALL=C sed 's/  */ /g')
     local model=$(get_ai_model)
     local json_payload="{\"model\":\"$model\",\"messages\":[{\"role\": \"user\", \"content\": \"$escaped_prompt\"}]}"
     local proxy_url=$(get_ai_proxy)
@@ -1258,7 +1258,7 @@ function call_openrouter_api {
     else
         ai_response=$(echo "$response" | LC_ALL=C sed -n 's/.*"choices"[[:space:]]*:[[:space:]]*\[.*"message"[[:space:]]*:[[:space:]]*{[[:space:]]*"role"[[:space:]]*:[[:space:]]*"assistant"[[:space:]]*,[[:space:]]*"content"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
         if [ -n "$ai_response" ]; then
-            ai_response=$(echo "$ai_response" | sed 's/\\n/\n/g' | sed 's/\\"/"/g' | sed 's/\\\\/\\/g')
+            ai_response=$(echo "$ai_response" | LC_ALL=C sed 's/\\n/\n/g' | LC_ALL=C sed 's/\\"/"/g' | LC_ALL=C sed 's/\\\\/\\/g')
         fi
     fi
     if [ -z "$ai_response" ]; then
@@ -3798,7 +3798,7 @@ function handle_ai_commit_generation {
         cleanup_on_exit "$git_add"
         exit 1
     fi
-    ai_commit_message=$(echo "$ai_commit_message" | sed 's/^"//;s/"$//' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    ai_commit_message=$(echo "$ai_commit_message" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
     echo
     echo -e "${GREEN}AI generated commit message:${ENDCOLOR}"
     echo -e "${BOLD}$ai_commit_message${ENDCOLOR}"

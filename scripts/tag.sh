@@ -71,7 +71,7 @@ function push_tag {
             done
 
             echo
-            echo -e "${YELLOW}Repo:${ENDCOLOR} ${repo}"
+            print_link "Repo" "$repo"
             exit
         fi
 
@@ -89,28 +89,27 @@ function push_tag {
         echo -e "${GREEN}Successful push all local tags!${ENDCOLOR}"
     fi
 
-    echo -e "${YELLOW}Repo:${ENDCOLOR}\t${repo}"
+    print_link "Repo" "$repo"
 
     if [ -z "$all" ] && [ -n "$1" ]; then
         tag_url=$(get_tag_url "$1" "$repo")
         if [ -n "$tag_url" ]; then
-            echo -e "${YELLOW}Tag:${ENDCOLOR}\t${tag_url}"
+            print_link "Tag" "$tag_url"
         fi
 
         release_url=$(get_new_release_url "$1" "$repo")
         if [ -n "$release_url" ]; then
-            echo -e "${YELLOW}Release:${ENDCOLOR}\t${release_url}"
+            print_link "Release" "$release_url"
         fi
 
         ci_url=$(get_tag_ci_url "$1" "$repo")
         if [ -n "$ci_url" ]; then
-            ci_label=$(get_ci_label "$repo")
-            echo -e "${YELLOW}${ci_label}:${ENDCOLOR}\t${ci_url}"
+            print_link "$(get_ci_label "$repo")" "$ci_url"
         fi
     elif [ -n "$all" ]; then
         releases_url=$(get_releases_url "$repo")
         if [ -n "$releases_url" ]; then
-            echo -e "${YELLOW}Releases:${ENDCOLOR}\t${releases_url}"
+            print_link "Releases" "$releases_url"
         fi
     fi
 }

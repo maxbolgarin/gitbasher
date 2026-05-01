@@ -27,20 +27,20 @@ function push {
         host=$(get_repo_host "$repo")
         head_hash=$(git rev-parse HEAD 2>/dev/null)
 
-        echo -e "${YELLOW}Repo:${ENDCOLOR}\t${repo}"
+        print_link "Repo" "$repo"
 
         # Direct link to the just-pushed commit
         if [ -n "$head_hash" ]; then
             commit_url=$(get_commit_url "$head_hash" "$repo")
             if [ -n "$commit_url" ]; then
-                echo -e "${YELLOW}Commit:${ENDCOLOR}\t${commit_url}"
+                print_link "Commit" "$commit_url"
             fi
         fi
 
         if [[ ${current_branch} != ${main_branch} ]]; then
             branch_url=$(get_branch_url "${current_branch}" "$repo")
             if [ -n "$branch_url" ]; then
-                echo -e "${YELLOW}Branch:${ENDCOLOR}\t${branch_url}"
+                print_link "Branch" "$branch_url"
             fi
 
             # Some hosts include a PR/MR link in the push output (first push, etc.)
@@ -48,29 +48,29 @@ function push {
 
             if [ "$host" = "github" ]; then
                 if [ -n "$link" ]; then
-                    echo -e "${YELLOW}New PR:${ENDCOLOR}\t${link}"
+                    print_link "New PR" "$link"
                 else
                     new_pr_url=$(get_new_pr_url "${main_branch}" "${current_branch}" "$repo")
-                    echo -e "${YELLOW}New PR:${ENDCOLOR}\t${new_pr_url}"
+                    print_link "New PR" "$new_pr_url"
                 fi
             elif [ "$host" = "gitlab" ]; then
                 if [ -n "$link" ]; then
                     is_new=$(echo "$push_output" | grep -i "create a merge request")
                     if [ -n "$is_new" ]; then
-                        echo -e "${YELLOW}New MR:${ENDCOLOR}\t${link}"
+                        print_link "New MR" "$link"
                     else
-                        echo -e "${YELLOW}MR:${ENDCOLOR}\t${link}"
+                        print_link "MR" "$link"
                     fi
                 else
                     new_mr_url=$(get_new_pr_url "${main_branch}" "${current_branch}" "$repo")
-                    echo -e "${YELLOW}New MR:${ENDCOLOR}\t${new_mr_url}"
+                    print_link "New MR" "$new_mr_url"
                 fi
             elif [ "$host" = "bitbucket" ]; then
                 if [ -n "$link" ]; then
-                    echo -e "${YELLOW}New PR:${ENDCOLOR}\t${link}"
+                    print_link "New PR" "$link"
                 else
                     new_pr_url=$(get_new_pr_url "${main_branch}" "${current_branch}" "$repo")
-                    echo -e "${YELLOW}New PR:${ENDCOLOR}\t${new_pr_url}"
+                    print_link "New PR" "$new_pr_url"
                 fi
             fi
         fi
@@ -78,8 +78,7 @@ function push {
         # Link to CI runs for this branch
         ci_url=$(get_ci_url "${current_branch}" "$repo")
         if [ -n "$ci_url" ]; then
-            ci_label=$(get_ci_label "$repo")
-            echo -e "${YELLOW}${ci_label}:${ENDCOLOR}\t${ci_url}"
+            print_link "$(get_ci_label "$repo")" "$ci_url"
         fi
 
         exit

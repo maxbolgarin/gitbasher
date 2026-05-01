@@ -608,6 +608,19 @@ function get_releases_url {
 }
 
 
+### Print a "label: url" line with a fixed-width label so multiple lines align,
+### regardless of the label length (color escapes don't affect padding).
+# $1: label text (without trailing colon)
+# $2: url
+# $3: optional color (defaults to $YELLOW)
+function print_link {
+    local label="$1"
+    local url="$2"
+    local color="${3:-$YELLOW}"
+    printf "%b%-10s%b %s\n" "$color" "${label}:" "$ENDCOLOR" "$url"
+}
+
+
 ### URL to CI runs triggered by a tag
 # $1: tag name, $2: repo URL (optional)
 function get_tag_ci_url {

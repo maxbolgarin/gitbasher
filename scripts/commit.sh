@@ -160,6 +160,351 @@ function detect_scopes_from_staged_files {
     fi
 }
 
+### Function to map staged files to detected scopes (for atomic-split commits)
+# Each file is assigned to the FIRST detected scope that matches one of its path
+# components (top-level wins for changelog clarity). Files matching no detected
+# scope land in the "misc" group and will be committed without a scope.
+# Sets globals (declared with -gA so callers can iterate after the function returns):
+#   - split_groups:     associative array, scope -> newline-separated file list
+#   - split_group_keys: ordered array of scope names actually used
+# Returns 0 if 2+ groups were produced (split is meaningful), 1 otherwise.
+function build_split_groups_from_staged {
+    detect_scopes_from_staged_files
+
+    # Re-declare globals fresh on each call
+    unset split_groups split_group_keys
+    declare -gA split_groups=()
+    split_group_keys=()
+
+    if [ -z "$detected_scopes" ]; then
+        return 1
+    fi
+
+    local -a scopes_arr
+    IFS=' ' read -r -a scopes_arr <<< "$detected_scopes"
+
+    local staged_files
+    staged_files=$(git diff --name-only --cached)
+    [ -z "$staged_files" ] && return 1
+
+    local file scope comp comp_lower comp_no_ext_lower assigned
+    local -a comps
+
+    while IFS= read -r file; do
+        [ -z "$file" ] && continue
+
+        assigned=""
+        IFS='/' read -r -a comps <<< "$file"
+
+        # Walk detected scopes in priority order; first match wins.
+        for scope in "${scopes_arr[@]}"; do
+            for comp in "${comps[@]}"; do
+                [ -z "$comp" ] && continue
+                comp_lower="${comp,,}"
+                comp_no_ext_lower="${comp_lower%.*}"
+                [ -z "$comp_no_ext_lower" ] && comp_no_ext_lower="$comp_lower"
+                if [ "$comp_lower" = "$scope" ] || [ "$comp_no_ext_lower" = "$scope" ]; then
+                    assigned="$scope"
+                    break 2
+                fi
+            done
+        done
+
+        [ -z "$assigned" ] && assigned="misc"
+
+        if [ -z "${split_groups[$assigned]:-}" ]; then
+            split_group_keys+=("$assigned")
+            split_groups[$assigned]="$file"
+        else
+            split_groups[$assigned]+=$'\n'"$file"
+        fi
+    done <<< "$staged_files"
+
+    # A split is only meaningful with 2+ groups
+    if [ ${#split_group_keys[@]} -lt 2 ]; then
+        return 1
+    fi
+    return 0
+}
+
+### Restore the original staging snapshot (used when user aborts mid-split).
+# Best-effort: re-stages every file that was originally staged. Files that
+# were already committed earlier in the split loop are silently skipped by
+# `git add` (no diff vs HEAD). Already-made commits are preserved as-is —
+# the user can `git reset --soft HEAD~N` if they want to undo them.
+# $1: snapshot file path (one filename per line)
+function _restore_split_snapshot {
+    local snapshot="$1"
+    [ -f "$snapshot" ] || return
+
+    # First, unstage anything currently staged so we start from a clean slate
+    local currently_staged
+    currently_staged=$(git diff --name-only --cached)
+    if [ -n "$currently_staged" ]; then
+        while IFS= read -r f; do
+            [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
+        done <<< "$currently_staged"
+    fi
+
+    # Re-stage every file from the snapshot that still exists / has changes
+    while IFS= read -r f; do
+        [ -n "$f" ] && git add -- "$f" >/dev/null 2>&1
+    done < "$snapshot"
+
+    rm -f "$snapshot"
+}
+
+### Walk the split groups, generate a message per group (AI when available),
+### and create one commit per group. Restores staging on abort.
+# Globals consumed: split_groups, split_group_keys, push, current_branch
+# Exits the script on success (entire commit flow handled).
+# Returns 1 (and restores staging) on failure so caller can fall through.
+function perform_commit_split {
+    local original_staged
+    original_staged=$(git diff --name-only --cached)
+    if [ -z "$original_staged" ]; then
+        echo -e "${RED}No staged files to split${ENDCOLOR}"
+        return 1
+    fi
+
+    local snapshot_file
+    snapshot_file=$(mktemp "/tmp/gitb-split-snapshot.XXXXXX")
+    printf '%s\n' "$original_staged" > "$snapshot_file"
+    # Restore staging if the user kills the process mid-split
+    trap "_restore_split_snapshot '$snapshot_file'" INT TERM
+
+    local total=${#split_group_keys[@]}
+    local idx=0
+    local commit_count=0
+    local -a commit_hashes=()
+    local ai_ok="true"
+    if ! check_ai_available 2>/dev/null; then
+        ai_ok="false"
+    fi
+
+    local scope files_str msg ai_msg choice scope_for_msg prefix manual_input
+    local -a files_array
+
+    for scope in "${split_group_keys[@]}"; do
+        idx=$((idx + 1))
+        echo
+        echo -e "${YELLOW}── Split commit ${idx}/${total}: scope '${scope}' ──${ENDCOLOR}"
+
+        # Reset everything that's currently staged, then stage only this group
+        local currently_staged
+        currently_staged=$(git diff --name-only --cached)
+        if [ -n "$currently_staged" ]; then
+            while IFS= read -r f; do
+                [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
+            done <<< "$currently_staged"
+        fi
+
+        files_str="${split_groups[$scope]}"
+        files_array=()
+        while IFS= read -r f; do
+            [ -n "$f" ] && files_array+=("$f")
+        done <<< "$files_str"
+
+        if [ ${#files_array[@]} -eq 0 ]; then
+            echo -e "${YELLOW}No files in this group, skipping${ENDCOLOR}"
+            continue
+        fi
+
+        if ! git add -- "${files_array[@]}"; then
+            echo -e "${RED}Failed to stage files for scope '${scope}'${ENDCOLOR}"
+            _restore_split_snapshot "$snapshot_file"
+            trap - INT TERM
+            return 1
+        fi
+
+        echo -e "${YELLOW}Files in this commit:${ENDCOLOR}"
+        print_staged_files
+        echo
+
+        # "misc" is internal — never emit it as a real scope
+        scope_for_msg="$scope"
+        [ "$scope" = "misc" ] && scope_for_msg=""
+
+        msg=""
+
+        # Try AI if available; fall back to manual on any failure
+        if [ "$ai_ok" = "true" ]; then
+            echo -e "${YELLOW}Generating commit message with AI...${ENDCOLOR}"
+            ai_msg=$(generate_ai_commit_message "simple" "$scope_for_msg" "$scope_for_msg" "")
+            if [ $? -eq 0 ] && [ -n "$ai_msg" ]; then
+                ai_msg=$(echo "$ai_msg" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+                echo
+                echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
+                read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) "
+                echo
+                normalize_key "$choice"
+
+                while [ "$normalized_key" = "r" ]; do
+                    echo -e "${YELLOW}Regenerating...${ENDCOLOR}"
+                    ai_msg=$(generate_ai_commit_message "simple" "$scope_for_msg" "$scope_for_msg" "")
+                    if [ $? -ne 0 ] || [ -z "$ai_msg" ]; then
+                        ai_msg=""
+                        break
+                    fi
+                    ai_msg=$(echo "$ai_msg" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+                    echo
+                    echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
+                    read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) "
+                    echo
+                    normalize_key "$choice"
+                done
+
+                if [ "$normalized_key" = "y" ] || [ -z "$choice" ]; then
+                    msg="$ai_msg"
+                elif [ "$normalized_key" = "e" ]; then
+                    read -p "Edit: " -e -i "$ai_msg" manual_input
+                    msg="$manual_input"
+                elif [ "$normalized_key" = "s" ]; then
+                    echo -e "${YELLOW}Skipping scope '${scope}' (files left unstaged)${ENDCOLOR}"
+                    # Unstage so the file stays in the working copy for later
+                    while IFS= read -r f; do
+                        [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
+                    done <<< "$files_str"
+                    continue
+                elif [ "$choice" = "0" ]; then
+                    _restore_split_snapshot "$snapshot_file"
+                    trap - INT TERM
+                    echo
+                    echo -e "${YELLOW}Aborted. Created ${commit_count} commit(s); original staging restored.${ENDCOLOR}"
+                    exit 0
+                fi
+            fi
+        fi
+
+        # Manual fallback (no AI or AI failed)
+        if [ -z "$msg" ]; then
+            prefix=""
+            if [ -n "$scope_for_msg" ]; then
+                prefix="feat(${scope_for_msg}): "
+            else
+                prefix="feat: "
+            fi
+            echo -e "${YELLOW}Enter commit message (Enter to skip group, 0 to abort):${ENDCOLOR}"
+            read -p "" -e -i "$prefix" manual_input
+            if [ -z "$manual_input" ] || [ "$manual_input" = "$prefix" ]; then
+                echo -e "${YELLOW}Skipping scope '${scope}'${ENDCOLOR}"
+                while IFS= read -r f; do
+                    [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
+                done <<< "$files_str"
+                continue
+            fi
+            if [ "$manual_input" = "0" ]; then
+                _restore_split_snapshot "$snapshot_file"
+                trap - INT TERM
+                echo -e "${YELLOW}Aborted. Created ${commit_count} commit(s); original staging restored.${ENDCOLOR}"
+                exit 0
+            fi
+            if ! sanitize_commit_message "$manual_input"; then
+                show_sanitization_error "commit message" "Use printable characters only, 1-2000 characters."
+                _restore_split_snapshot "$snapshot_file"
+                trap - INT TERM
+                return 1
+            fi
+            msg="$sanitized_commit_message"
+        fi
+
+        # Make the commit
+        local result
+        result=$(git commit -m """$msg""" 2>&1)
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}Commit failed:${ENDCOLOR}"
+            echo "$result"
+            _restore_split_snapshot "$snapshot_file"
+            trap - INT TERM
+            return 1
+        fi
+
+        commit_count=$((commit_count + 1))
+        local last_hash
+        last_hash=$(git rev-parse --short HEAD)
+        commit_hashes+=("$last_hash")
+        echo -e "${GREEN}Committed ${last_hash} ${msg}${ENDCOLOR}"
+    done
+
+    rm -f "$snapshot_file"
+    trap - INT TERM
+
+    # Clean up cached state — split flow handled the entire commit
+    git config --unset gitbasher.cached-git-add 2>/dev/null
+    git config --unset gitbasher.cached-commit-message 2>/dev/null
+
+    echo
+    if [ $commit_count -eq 0 ]; then
+        echo -e "${YELLOW}No commits were created.${ENDCOLOR}"
+        exit 0
+    fi
+    echo -e "${GREEN}Created ${commit_count} atomic commit(s) on ${current_branch}:${ENDCOLOR}"
+    for h in "${commit_hashes[@]}"; do
+        echo -e "  ${BLUE}${h}${ENDCOLOR}"
+    done
+
+    if [ -n "${push}" ]; then
+        echo
+        push_script y
+    fi
+
+    exit 0
+}
+
+### Offer to split the staged changes into atomic per-scope commits.
+# Skipped silently when:
+#   - gitbasher.commit-auto-split = "never"
+#   - fewer than 2 distinct scopes are detected
+# Auto-accepts when gitbasher.commit-auto-split = "always".
+# Otherwise prompts the user. If accepted, performs the split and exits the
+# script. Returns to the caller (no exit) when the user declines or the split
+# isn't applicable, so the normal single-commit flow continues unchanged.
+# $1: "true" to force the split flow even when the config says "ask"/"never"
+function try_offer_commit_split {
+    local force_split="$1"
+
+    local auto_split
+    auto_split=$(get_config_value gitbasher.commit-auto-split "ask")
+
+    if [ "$auto_split" = "never" ] && [ -z "$force_split" ]; then
+        return 1
+    fi
+
+    if ! build_split_groups_from_staged; then
+        if [ -n "$force_split" ]; then
+            echo -e "${YELLOW}Cannot split: only one scope detected in staged files.${ENDCOLOR}"
+        fi
+        return 1
+    fi
+
+    echo
+    echo -e "${YELLOW}Detected changes across ${#split_group_keys[@]} scopes:${ENDCOLOR}"
+    local scope file_count
+    for scope in "${split_group_keys[@]}"; do
+        file_count=$(printf '%s\n' "${split_groups[$scope]}" | grep -c .)
+        echo -e "  ${BOLD}${scope}${ENDCOLOR} (${file_count} file(s)):"
+        while IFS= read -r f; do
+            [ -n "$f" ] && echo -e "    ${GRAY}${f}${ENDCOLOR}"
+        done <<< "${split_groups[$scope]}"
+    done
+    echo
+
+    local choice
+    if [ -n "$force_split" ] || [ "$auto_split" = "always" ]; then
+        choice="y"
+    else
+        read_key choice "Split into ${#split_group_keys[@]} atomic commits for a cleaner changelog? (y/N) "
+        echo
+    fi
+
+    if ! is_yes "$choice"; then
+        return 1
+    fi
+
+    perform_commit_split
+    return $?
+}
+
 ### Function to handle AI commit message generation
 # $1: step number to display
 # $2: ai generation mode ("full", "subject", or "simple")
@@ -385,6 +730,8 @@ function after_commit {
 function commit_script {
     case "$1" in
         scope|s)            ;; # general commit with scope
+        split|sp|sl)        split="true";; # force atomic-split flow
+        splitp|spp|slp)     split="true"; push="true";;
         msg|m)              msg="true";;
         ticket|jira|j|t)    ticket="true";;
         fast|f)             fast="true";;
@@ -426,7 +773,13 @@ function commit_script {
         header_msg="$header_msg AI"
     fi
 
-    if [ -n "${staged}" ]; then
+    if [ -n "${split}" ]; then
+        if [ -n "${push}" ]; then
+            header_msg="$header_msg SPLIT & PUSH"
+        else
+            header_msg="$header_msg SPLIT"
+        fi
+    elif [ -n "${staged}" ]; then
         header_msg="$header_msg STAGED"
     elif [ -n "${fast}" ]; then
         if [ -n "${push}" ]; then
@@ -474,6 +827,8 @@ function commit_script {
         msg="$msg\n${BOLD}push${ENDCOLOR}_pu|p_Create a commit and push changes at the end"
         msg="$msg\n${BOLD}fastp${ENDCOLOR}_fp|pf_Create a commit in the fast mode and push changes"
         msg="$msg\n${BOLD}fastsp${ENDCOLOR}_fsp|fps_Create a commit in the fast mode with scope and push changes"
+        msg="$msg\n${BOLD}split${ENDCOLOR}_sp|sl_Split staged changes into one atomic commit per detected scope (uses AI for messages when configured)"
+        msg="$msg\n${BOLD}splitp${ENDCOLOR}_spp|slp_Same as split, then push the resulting commits"
         msg="$msg\n${BOLD}fixup${ENDCOLOR}_fix|x_Select files and commit to make a --fixup commit (git commit --fixup <hash>)"
         msg="$msg\n${BOLD}fixupp${ENDCOLOR}_fixp|xp|px_Select files and commit to make a --fixup commit and push changes"
         msg="$msg\n${BOLD}fixupst${ENDCOLOR}_xst|stx_Use already staged files to make a --fixup commit (git commit --fixup <hash>)"
@@ -696,6 +1051,21 @@ function commit_script {
     else
         # Still need to set the staged files list for later use (editor template)
         staged_files_list="$(sed 's/^/\t/' <<< "$(git diff --name-only --cached)")"
+    fi
+
+
+    ### Offer atomic-split when staged changes span multiple scopes.
+    # Split runs the entire commit flow itself (one commit per scope) and exits
+    # the script on success. Skipped for modes where it doesn't make sense
+    # (amend, fixup, multi-line msg, ticket) or when forced off via config.
+    if [ -z "${amend}" ] && [ -z "${fixup}" ] && [ -z "${msg}" ] && [ -z "${ticket}" ]; then
+        try_offer_commit_split "$split"
+        # If the user explicitly asked for split mode but it wasn't applicable,
+        # don't silently fall through to the single-commit flow.
+        if [ -n "$split" ]; then
+            cleanup_on_exit "$git_add"
+            exit 0
+        fi
     fi
 
 

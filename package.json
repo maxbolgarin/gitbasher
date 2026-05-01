@@ -16,17 +16,13 @@
     },
     "homepage": "https://github.com/maxbolgarin/gitbasher#readme",
     "bin": {
-        "gitb": "bin/gitb"
+        "gitb": "dist/gitb"
     },
     "files": [
-        "bin",
-        "download-release.js",
+        "dist/gitb",
         "README.md",
         "LICENSE"
     ],
-    "scripts": {
-        "postinstall": "node download-release.js"
-    },
     "engines": {
         "node": ">=14.0.0"
     }

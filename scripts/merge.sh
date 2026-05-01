@@ -508,7 +508,13 @@ function resolve_conflicts {
 function merge_commit {
     merge_error="false"
 
-   
+    ### If merge was already committed externally, treat as success
+    if [ ! -f "$(git rev-parse --git-dir)/MERGE_HEAD" ]; then
+        echo
+        echo -e "${GREEN}Merge already committed${ENDCOLOR}"
+        return
+    fi
+
     ### Check if there are files with conflicts
     files_with_conflicts_one_line="$(echo "$2" | tr '\n' ' ' | sed 's/ $//')"
     files_with_conflicts_new="$(git --no-pager grep -l --name-only -E "[<=>]{7} HEAD" $files_with_conflicts_one_line)"
@@ -527,7 +533,7 @@ function merge_commit {
     ### Add all files that were in conflict to commit (they should be resolved now)
     echo
     echo -e "${YELLOW}Adding resolved files to commit...${ENDCOLOR}"
-    
+
     # Add all modified files (this includes the resolved conflict files)
     git add -u
 
@@ -536,10 +542,10 @@ function merge_commit {
         commit_message="$3"
         result=$(git commit -m "$commit_message" 2>&1)
         commit_status=$?
-        if [[ $result != *"not staged for commit"* ]]; then
+        if [[ $result != *"not staged for commit"* ]] && [[ $result != *"nothing to commit"* ]]; then
             check_code $commit_status "$result" "creating default merge commit"
-        fi  
-        
+        fi
+
 
     ### 2. Commit with entered message
     else
@@ -548,8 +554,8 @@ function merge_commit {
         trap 'rm -f "$commitmsg_file"' EXIT INT TERM
         echo """
 ####
-#### Write a message about merge from '$5/$4' into '$4'. Lines starting with '#' will be ignored. 
-#### 
+#### Write a message about merge from '$5/$4' into '$4'. Lines starting with '#' will be ignored.
+####
 #### On branch $4
 #### Changes to be commited:
 ${staged_with_tab}
@@ -571,15 +577,16 @@ ${staged_with_tab}
                 rm -f "$commitmsg_file"
                 merge_error="true"
                 exit
-            fi    
+            fi
         done
 
         rm -f "$commitmsg_file"
-        
-        result=$(git commit -m """$commit_message""" 2>&1)
 
-        if [[ $result != *"not staged for commit"* ]]; then
-            check_code $? "$result" "creating merge commit"
-        fi  
+        result=$(git commit -m """$commit_message""" 2>&1)
+        commit_status=$?
+
+        if [[ $result != *"not staged for commit"* ]] && [[ $result != *"nothing to commit"* ]]; then
+            check_code $commit_status "$result" "creating merge commit"
+        fi
     fi
 }

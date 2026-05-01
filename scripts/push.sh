@@ -20,32 +20,68 @@ function push {
     push_output=$(git push $1 ${origin_name} ${current_branch} 2>&1)
     push_code=$?
 
-    if [ $push_code -eq 0 ] ; then 
+    if [ $push_code -eq 0 ] ; then
         echo -e "${GREEN}Successful push!${ENDCOLOR}"
 
         repo=$(get_repo)
+        host=$(get_repo_host "$repo")
+        head_hash=$(git rev-parse HEAD 2>/dev/null)
+
         echo -e "${YELLOW}Repo:${ENDCOLOR}\t${repo}"
+
+        # Direct link to the just-pushed commit
+        if [ -n "$head_hash" ]; then
+            commit_url=$(get_commit_url "$head_hash" "$repo")
+            if [ -n "$commit_url" ]; then
+                echo -e "${YELLOW}Commit:${ENDCOLOR}\t${commit_url}"
+            fi
+        fi
+
         if [[ ${current_branch} != ${main_branch} ]]; then
-            link=$(echo "$push_output" | grep "https://" | sed 's|^remote:[[:space:]]*||')
-            if [[ $repo == *"github"* ]]; then
-                if [ "$link" != "" ]; then
+            branch_url=$(get_branch_url "${current_branch}" "$repo")
+            if [ -n "$branch_url" ]; then
+                echo -e "${YELLOW}Branch:${ENDCOLOR}\t${branch_url}"
+            fi
+
+            # Some hosts include a PR/MR link in the push output (first push, etc.)
+            link=$(echo "$push_output" | grep -Eo "https?://[^[:space:]]+" | head -n 1 | sed 's|^remote:[[:space:]]*||')
+
+            if [ "$host" = "github" ]; then
+                if [ -n "$link" ]; then
                     echo -e "${YELLOW}New PR:${ENDCOLOR}\t${link}"
                 else
-                    echo -e "${YELLOW}PRs:${ENDCOLOR}\t${repo}/pulls"
+                    new_pr_url=$(get_new_pr_url "${main_branch}" "${current_branch}" "$repo")
+                    echo -e "${YELLOW}New PR:${ENDCOLOR}\t${new_pr_url}"
                 fi
-            elif [[ $repo == *"gitlab"* ]]; then
-                is_new=$(echo "$push_output" | grep "create a merge request")
-                if [ "$is_new" != "" ]; then
-                    echo -e "${YELLOW}New MR:${ENDCOLOR}\t${link}"
-                else
-                    if [ "$link" != "" ]; then
-                        echo -e "${YELLOW}MR:${ENDCOLOR}\t${link}"
+            elif [ "$host" = "gitlab" ]; then
+                if [ -n "$link" ]; then
+                    is_new=$(echo "$push_output" | grep -i "create a merge request")
+                    if [ -n "$is_new" ]; then
+                        echo -e "${YELLOW}New MR:${ENDCOLOR}\t${link}"
                     else
-                        echo -e "${YELLOW}MRs:${ENDCOLOR}\t${repo}/merge_requests"
+                        echo -e "${YELLOW}MR:${ENDCOLOR}\t${link}"
                     fi
+                else
+                    new_mr_url=$(get_new_pr_url "${main_branch}" "${current_branch}" "$repo")
+                    echo -e "${YELLOW}New MR:${ENDCOLOR}\t${new_mr_url}"
+                fi
+            elif [ "$host" = "bitbucket" ]; then
+                if [ -n "$link" ]; then
+                    echo -e "${YELLOW}New PR:${ENDCOLOR}\t${link}"
+                else
+                    new_pr_url=$(get_new_pr_url "${main_branch}" "${current_branch}" "$repo")
+                    echo -e "${YELLOW}New PR:${ENDCOLOR}\t${new_pr_url}"
                 fi
             fi
         fi
+
+        # Link to CI runs for this branch
+        ci_url=$(get_ci_url "${current_branch}" "$repo")
+        if [ -n "$ci_url" ]; then
+            ci_label=$(get_ci_label "$repo")
+            echo -e "${YELLOW}${ci_label}:${ENDCOLOR}\t${ci_url}"
+        fi
+
         exit
     fi
 

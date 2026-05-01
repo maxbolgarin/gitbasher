@@ -15,28 +15,54 @@ The test suite provides:
 
 ### Current Test Files
 
-1. **test_sanitization.bats** (173 tests)
+1. **test_sanitization.bats**
    - Input sanitization for git names, file paths, commit messages
    - Email validation
    - Numeric input validation
    - Command sanitization
    - **Critical for security** - prevents command injection attacks
 
-2. **test_common_utils.bats**
+2. **test_additional_sanitization.bats**
+   - Edge cases for sanitize_text_input, validate_scope_list
+   - Boundary-length tests for git names, file paths, commit messages
+   - Additional validate_email and validate_numeric_input cases
+
+3. **test_common_utils.bats**
    - Repository URL handling
    - Git status formatting
    - Commit listing
    - Branch listing and filtering
    - Common utility functions
 
-3. **test_branch_operations.bats**
+4. **test_repository_helpers.bats**
+   - Extended get_repo URL transformation cases (TLDs, subgroups, ssh://)
+   - ref_list, get_push_list edge cases
+   - print_staged_files, switch error paths
+   - get_config_value / set_config_value
+
+5. **test_keyboard_input.bats**
+   - normalize_key (ASCII + Cyrillic, lower + upper case)
+   - is_yes / is_no
+   - sanitize_choice_input
+
+6. **test_url_validation.bats**
+   - validate_git_url (https, ssh, git@, edge cases)
+   - validate_proxy_url
+   - mask_api_key
+
+7. **test_ai_config.bats**
+   - AI API key, model, proxy getters/setters
+   - Per-task model resolution
+   - Diff and history limit defaults
+
+8. **test_branch_operations.bats**
    - Branch creation and deletion
    - Branch switching
    - Remote branch operations
    - Branch naming validation
    - Merge preparation
 
-4. **test_git_operations.bats**
+9. **test_git_operations.bats**
    - Commit operations
    - Push/pull operations
    - Merge and rebase

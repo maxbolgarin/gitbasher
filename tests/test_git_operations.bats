@@ -105,6 +105,7 @@ teardown() {
     cd "$TEMP_CLONE"
     git config user.name "Test User"
     git config user.email "test@example.com"
+    git config commit.gpgsign false
     make_test_commit "remote.txt" "Remote commit"
     git push origin main
 

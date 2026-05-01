@@ -168,7 +168,7 @@ function handle_ai_commit_generation {
     local step="$1"
     local ai_mode="$2"
     local commit_prefix="$3"
-    
+
     echo
     if [ "$ai_mode" = "full" ]; then
         echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Generating ${YELLOW}multiline commit message${ENDCOLOR} using AI..."
@@ -177,53 +177,55 @@ function handle_ai_commit_generation {
     else
         echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Generating ${YELLOW}commit message${ENDCOLOR} using AI..."
     fi
-    
+
     # Check if AI is available
     if ! check_ai_available; then
         cleanup_on_exit "$git_add"
         exit 1
     fi
-    
+
     # Detect scopes from staged files for AI context
     detect_scopes_from_staged_files
-    
-    # Generate AI commit message based on mode
-    local ai_commit_message
-    if [ "$ai_mode" = "full" ]; then
-        ai_commit_message=$(generate_ai_commit_message_full "$detected_scopes" "$scopes")
-    elif [ "$ai_mode" = "subject" ]; then
-        ai_commit_message=$(generate_ai_commit_message_subject "$commit_prefix" "$detected_scopes")
-    else
-        ai_commit_message=$(generate_ai_commit_message "$detected_scopes" "$scopes")
-    fi
-    
-    if [ $? -ne 0 ] || [ -z "$ai_commit_message" ]; then
+
+    # Generate / regenerate loop: user can press 'r' to ask the model again with the same context
+    local ai_commit_message choice
+    while true; do
+        ai_commit_message=$(generate_ai_commit_message "$ai_mode" "$detected_scopes" "$scopes" "$commit_prefix")
+
+        if [ $? -ne 0 ] || [ -z "$ai_commit_message" ]; then
+            echo
+            echo -e "${RED}Failed to generate AI commit message${ENDCOLOR}"
+            cleanup_on_exit "$git_add"
+            exit 1
+        fi
+
+        # Clean up the AI response (remove quotes, trim)
+        # LC_ALL=C avoids "illegal byte sequence" errors from BSD sed when the AI response contains non-ASCII characters.
+        ai_commit_message=$(echo "$ai_commit_message" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+
         echo
-        echo -e "${RED}Failed to generate AI commit message${ENDCOLOR}"
-        cleanup_on_exit "$git_add"
-        exit 1
-    fi
-    
-    # Clean up the AI response (remove quotes, trim)
-    # LC_ALL=C avoids "illegal byte sequence" errors from BSD sed when the AI response contains non-ASCII characters.
-    ai_commit_message=$(echo "$ai_commit_message" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-    
-    echo
-    echo -e "${GREEN}AI generated commit message:${ENDCOLOR}"
-    echo -e "${BOLD}$ai_commit_message${ENDCOLOR}"
-    echo
-
-    # Save AI commit message so it can be reused if user exits
-    # It will be cleared only after a successful commit
-    git config gitbasher.cached-commit-message "$ai_commit_message"
-
-    read_key choice "Use this commit message? (y/n/e to edit/0 to exit) "
-    echo
-    if [ "$ai_mode" != "subject" ] && [ "$choice" != "0" ]; then
+        echo -e "${GREEN}AI generated commit message:${ENDCOLOR}"
+        echo -e "${BOLD}$ai_commit_message${ENDCOLOR}"
         echo
-    fi
 
-    normalize_key "$choice"
+        # Save AI commit message so it can be reused if user exits.
+        # It will be cleared only after a successful commit.
+        git config gitbasher.cached-commit-message "$ai_commit_message"
+
+        read_key choice "Use this commit message? (y/n/r to regenerate/e to edit/0 to exit) "
+        echo
+        if [ "$ai_mode" != "subject" ] && [ "$choice" != "0" ]; then
+            echo
+        fi
+
+        normalize_key "$choice"
+        if [ "$normalized_key" = "r" ]; then
+            echo -e "${YELLOW}Regenerating...${ENDCOLOR}"
+            continue
+        fi
+        break
+    done
+
     if [ "$normalized_key" = "y" ] || [ -z "$choice" ]; then
         commit="$ai_commit_message"
         # Skip to final commit step

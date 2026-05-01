@@ -563,176 +563,46 @@ function check_ai_available {
     return 0
 }
 
-### Function to generate commit message using AI
-# $1: detected scopes (optional, space-separated list)
-# $2: provided scopes (optional, space-separated list)
-# Uses staged files and their diff to generate conventional commit message
-# Returns: Generated commit message in format "type(scope): subject"
-function generate_ai_commit_message {
-    local detected_scopes="$1"
-    local provided_scopes="$2"
-    local staged_files=$(git diff --name-only --cached)
-
-    if [ -z "$staged_files" ]; then
-        echo -e "${RED}No staged files found${ENDCOLOR}" >&2
-        return 1
-    fi
-
-    # Get the diff for staged files (limited to save tokens)
-    local staged_files_limited=$(get_limited_staged_files_for_ai)
-    local diff_content=$(get_limited_diff_stat_for_ai)
-    local diff_details=$(get_limited_diff_for_ai)
-    local recent_commits=$(get_recent_commit_messages_for_ai)
-    
-    # Create prompt for AI
-    local prompt="Analyze the following git changes and generate a conventional commit message in the format 'type(scope): subject'.
-
-Available types:
-- feat: new feature, logic change or performance improvement
-- fix: small changes, bug fix, fixes of features
-- refactor: code change that neither fixes a bug nor adds a feature, style changes, NO NEW BEHAVIOUR
-- test: adding missing tests or changing existing tests
-- build: changes that affect the build system or external dependencies
-- ci: changes to CI configuration files and scripts
-- chore: maintenance and housekeeping
-- docs: documentation changes
-
-Recent commit messages from this repository (for style reference):
-$recent_commits
-
-Staged files:
-$staged_files_limited
-
-File changes summary:
-$diff_content"
-
-    # Add provided scopes to prompt if available
-    if [ -n "$provided_scopes" ]; then
-        prompt="$prompt
-
-Provided scopes list (choose the best related scope from this list when applicable):
-$provided_scopes"
-    fi
-
-    # Add detected scopes to prompt if available
-    if [ -n "$detected_scopes" ]; then
-        prompt="$prompt
-
-Detected scopes from file paths (use one of these if relevant):
-$detected_scopes"
-    fi
-
-    prompt="$prompt
-
-Code changes (partial):
-$diff_details
-
-Generate ONLY the commit message in the format 'type(scope): subject'. The subject should:
-- Explain the idea of the change in details
-- Be short, it should not be more that 100 characters
-- Be specific, don't be very general, so do NOT write 'improve existing feature' or 'fix bug'
-- Be lowercase and not end with a period
-- Follow the style and patterns from the recent commits shown above
-
-If you can determine a meaningful scope from the file paths and LOGIC OF UPDATES, include it. Prefer using one of the provided scopes above when they exist. If none apply, use one of the detected scopes. Otherwise, omit the scope.
-
-IMPORTANT rules for commits with multiple distinct changes:
-- If the commit contains 2-3 distinct features or changes, combine them using 'and' in the subject (e.g., 'feat: add auth module and user profile page')
-- If the commit contains 4+ distinct features or changes, summarize them with a count and list the most important ones (e.g., 'feat: add 5 features including auth, profiles, settings, dashboard, and notifications')
-- If the commit mixes different types of changes (e.g., features and fixes), use the dominant type and mention the mix (e.g., 'feat: add auth module and fix login validation')
-- Always be specific about WHAT the changes are, never write vague messages like 'multiple changes' or 'various updates'
-
-Write ONLY the commit header in the format 'type(scope): subject', do not write body or footer after a new line!
-
-Respond with only the commit message, nothing else."
-
-    call_openrouter_api "$prompt"
-}
-
-
-### Function to generate commit message using AI
-# $1: commit type and scope
-# $2: detected scopes (optional, space-separated list)
-# Uses staged files and their diff to generate conventional commit message
-# Returns: Generated commit message in format "type(scope): subject"
-function generate_ai_commit_message_subject {
-    local commit_prefix="$1"
+### Build the AI prompt for commit-message generation
+# $1: mode ("simple" | "subject" | "full")
+# $2: detected scopes (optional, space-separated)
+# $3: provided scopes (optional, space-separated; ignored in "subject" mode)
+# $4: commit prefix (only used in "subject" mode, e.g. "feat(auth): ")
+# Echoes the assembled prompt
+function build_ai_commit_prompt {
+    local mode="$1"
     local detected_scopes="$2"
-    local staged_files=$(git diff --name-only --cached)
+    local provided_scopes="$3"
+    local commit_prefix="$4"
 
-    if [ -z "$staged_files" ]; then
-        echo -e "${RED}No staged files found${ENDCOLOR}" >&2
-        return 1
-    fi
-
-    # Get the diff for staged files (limited to save tokens)
     local staged_files_limited=$(get_limited_staged_files_for_ai)
-    local diff_content=$(get_limited_diff_stat_for_ai)
+    local diff_stat=$(get_limited_diff_stat_for_ai)
     local diff_details=$(get_limited_diff_for_ai)
     local recent_commits=$(get_recent_commit_messages_for_ai)
 
-    # Create prompt for AI
-    local prompt="Analyze the following git changes and generate a conventional commit message that will be appended to $commit_prefix.
+    # Mode-specific task statement
+    local task_line
+    case "$mode" in
+        subject)
+            task_line="Generate the SUBJECT TEXT only. The user has already chosen the prefix '${commit_prefix}'; do NOT include that prefix in your output — write only what comes after it."
+            ;;
+        full)
+            task_line="Generate a conventional commit in the format 'type(scope): subject', followed by a blank line, then a 1-3 sentence body explaining WHY."
+            ;;
+        *)
+            task_line="Generate a conventional commit message in the format 'type(scope): subject' (single line, no body)."
+            ;;
+    esac
 
-Recent commit messages from this repository (for style reference):
-$recent_commits
+    local prompt="You are a conventional commit message generator. Analyze the git change data inside the XML tags below and produce a commit message that matches this repository's style.
 
-Staged files:
-$staged_files_limited
+${task_line}"
 
-File changes summary:
-$diff_content
+    # Types are only relevant when the model picks the type itself
+    if [ "$mode" != "subject" ]; then
+        prompt+="
 
-Code changes (partial):
-$diff_details
-
-Generate ONLY the commit message. The message should:
-- Explain the idea of the change in details
-- Be short, it should not be more that 100 characters with prefix
-- Be specific, don't be very general, so do NOT write 'improve existing feature' or 'fix bug'
-- Be lowercase and not end with a period
-- Follow the style and patterns from the recent commits shown above
-
-IMPORTANT rules for commits with multiple distinct changes:
-- If the commit contains 2-3 distinct changes, combine them using 'and' (e.g., 'add auth module and user profile page')
-- If the commit contains 4+ distinct changes, summarize with a count and list the most important ones (e.g., 'add 5 features including auth, profiles, and settings')
-- Always be specific about WHAT the changes are, never write vague messages like 'multiple changes' or 'various updates'
-
-Write ONLY the commit message, do not write body or footer.
-
-Respond with only the commit message without any other text, nothing else."
-
-    call_openrouter_api "$prompt"
-}
-
-
-### Function to generate commit message using AI
-# $1: detected scopes (optional, space-separated list)
-# $2: provided scopes (optional, space-separated list)
-# Uses staged files and their diff to generate conventional commit message
-# Returns: Generated commit message in format "type(scope): subject"
-function generate_ai_commit_message_full {
-    local detected_scopes="$1"
-    local provided_scopes="$2"
-    local staged_files=$(git diff --name-only --cached)
-
-    if [ -z "$staged_files" ]; then
-        echo -e "${RED}No staged files found${ENDCOLOR}" >&2
-        return 1
-    fi
-
-    # Get the diff for staged files (limited to save tokens)
-    local staged_files_limited=$(get_limited_staged_files_for_ai)
-    local diff_content=$(get_limited_diff_stat_for_ai)
-    local diff_details=$(get_limited_diff_for_ai)
-    local recent_commits=$(get_recent_commit_messages_for_ai)
-
-    # Create prompt for AI
-    local prompt="Analyze the following git changes and generate a conventional commit message in the format 'type(scope): subject' with body.
-
-Write a body for the commit message, where you can explain why you are making the change. The length of the body should be 1-3 sentences, not more.
-
-Available types:
+<types>
 - feat: new feature, logic change or performance improvement
 - fix: small changes, bug fix, fixes of features
 - refactor: code change that neither fixes a bug nor adds a feature, style changes, NO NEW BEHAVIOUR
@@ -741,55 +611,94 @@ Available types:
 - ci: changes to CI configuration files and scripts
 - chore: maintenance and housekeeping
 - docs: documentation changes
-
-Recent commit messages from this repository (for style reference):
-$recent_commits
-
-Staged files:
-$staged_files_limited
-
-File changes summary:
-$diff_content"
-
-    # Add provided scopes to prompt if available
-    if [ -n "$provided_scopes" ]; then
-        prompt="$prompt
-
-Provided scopes list (choose the best related scope from this list when applicable):
-$provided_scopes"
+</types>"
     fi
 
-    # Add detected scopes to prompt if available
-    if [ -n "$detected_scopes" ]; then
-        prompt="$prompt
+    prompt+="
 
-Detected scopes from file paths (use one of these if relevant):
-$detected_scopes"
+<recent_commits>
+${recent_commits}
+</recent_commits>
+
+<staged_files>
+${staged_files_limited}
+</staged_files>
+
+<diff_summary>
+${diff_stat}
+</diff_summary>
+
+<diff>
+${diff_details}
+</diff>"
+
+    if [ "$mode" != "subject" ]; then
+        if [ -n "$provided_scopes" ]; then
+            prompt+="
+
+<provided_scopes>
+${provided_scopes}
+</provided_scopes>"
+        fi
+        if [ -n "$detected_scopes" ]; then
+            prompt+="
+
+<detected_scopes>
+${detected_scopes}
+</detected_scopes>"
+        fi
     fi
 
-    prompt="$prompt
+    prompt+="
 
-Code changes (partial):
-$diff_details
+<rules>
+- Subject must be lowercase and must not end with a period
+- Subject must be 100 characters or fewer
+- Be specific about WHAT changed; avoid vague phrases like 'improve existing feature' or 'fix bug'
+- Use <recent_commits> as style guidance, not as a template — do not copy them verbatim
+- For 2-3 distinct changes, combine them with 'and' (e.g., 'feat: add auth module and user profile page')
+- For 4+ distinct changes, summarize with a count and list the most important ones (e.g., 'feat: add 5 features including auth, profiles, settings, dashboard, and notifications')
+- For mixed change types, use the dominant type and mention the mix (e.g., 'feat: add auth module and fix login validation')
+- Never write vague messages like 'multiple changes' or 'various updates'"
 
-Generate ONLY the commit message in the format 'type(scope): subject' with body. The subject should:
-- Explain the idea of the change in details
-- Be short, it should not be more that 100 characters in title and 1-3 sentences in body
-- Be specific, don't be very general, so do NOT write 'improve existing feature' or 'fix bug'
-- Be lowercase and not end with a period
-- Follow the style and patterns from the recent commits shown above
+    if [ "$mode" != "subject" ]; then
+        prompt+="
+- If a meaningful scope is clear from the diff, include it. Prefer one from <provided_scopes> when present, otherwise pick from <detected_scopes>, otherwise omit the scope entirely"
+    fi
 
-If you can determine a meaningful scope from the file paths and LOGIC OF UPDATES, include it. Prefer using one of the provided scopes above when they exist. If none apply, use one of the detected scopes. Otherwise, omit the scope.
+    if [ "$mode" = "full" ]; then
+        prompt+="
+- Body length: 1-3 sentences explaining the WHY. If there are multiple distinct changes, list them in the body"
+    fi
 
-IMPORTANT rules for commits with multiple distinct changes:
-- If the commit contains 2-3 distinct features or changes, combine them using 'and' in the subject (e.g., 'feat: add auth module and user profile page')
-- If the commit contains 4+ distinct features or changes, summarize them with a count in the subject and list them in the body (e.g., subject: 'feat: add 5 new features for user management', body: 'Add auth module, user profiles, settings page, dashboard, and notifications')
-- If the commit mixes different types of changes (e.g., features and fixes), use the dominant type and mention the mix (e.g., 'feat: add auth module and fix login validation')
-- Always be specific about WHAT the changes are, never write vague messages like 'multiple changes' or 'various updates'
+    prompt+="
+</rules>
 
-The body should explain why you are making the change. If there are multiple changes, use the body to list them. The length of the body should be 1-3 sentences, not more.
+Output ONLY the commit message — no prose, no markdown fences, no surrounding quotes."
 
-Respond with only the full commit message, nothing else."
+    printf '%s' "$prompt"
+}
+
+### Generate a commit message using AI (unified entry point)
+# $1: mode ("simple" | "subject" | "full"); defaults to "simple"
+# $2: detected scopes (optional, space-separated)
+# $3: provided scopes (optional, space-separated; ignored in "subject" mode)
+# $4: commit prefix (only used in "subject" mode, e.g. "feat(auth): ")
+# Returns: AI-generated commit message text on stdout, non-zero on failure
+function generate_ai_commit_message {
+    local mode="${1:-simple}"
+    local detected_scopes="$2"
+    local provided_scopes="$3"
+    local commit_prefix="$4"
+
+    local staged_files=$(git diff --name-only --cached)
+    if [ -z "$staged_files" ]; then
+        echo -e "${RED}No staged files found${ENDCOLOR}" >&2
+        return 1
+    fi
+
+    local prompt
+    prompt=$(build_ai_commit_prompt "$mode" "$detected_scopes" "$provided_scopes" "$commit_prefix")
 
     call_openrouter_api "$prompt"
 }

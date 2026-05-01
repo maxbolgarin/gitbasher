@@ -5,6 +5,18 @@
 # OpenRouter API endpoint (OpenAI-compatible)
 readonly OPENROUTER_API_URL="https://openrouter.ai/api/v1/chat/completions"
 
+# Sampling temperature for commit-message generation. Low enough to keep the
+# conventional-commit format consistent, high enough that pressing 'r' to
+# regenerate produces a meaningfully different phrasing.
+readonly AI_TEMPERATURE="0.3"
+
+# Per-mode max_tokens caps. These cap the response size to control cost and
+# prevent runaway output if the model misinterprets the format. Values are
+# generous enough to fit the longest reasonable message in each mode.
+readonly AI_MAX_TOKENS_SUBJECT=100
+readonly AI_MAX_TOKENS_SIMPLE=150
+readonly AI_MAX_TOKENS_FULL=500
+
 ### Function to get AI API key from environment variable or git config
 # Checks environment variable GITB_AI_API_KEY first, then falls back to git config
 # Returns: AI API key or empty if not set
@@ -48,15 +60,29 @@ function set_ai_proxy {
 }
 
 ### Function to get AI diff limit from git config
-# Returns: Maximum number of diff lines to include in AI prompts (default: 50)
+# Returns: Maximum number of diff lines to include in AI prompts (default: 300)
 function get_ai_diff_limit {
-    get_config_value gitbasher.ai-diff-limit "50"
+    get_config_value gitbasher.ai-diff-limit "300"
 }
 
 ### Function to set AI diff limit in git config
-# $1: Maximum number of diff lines (recommended: 20-100)
+# $1: Maximum number of diff lines (recommended: 100-1000)
 function set_ai_diff_limit {
     set_config_value gitbasher.ai-diff-limit "$1"
+}
+
+### Function to get AI diff max chars from git config
+# Returns: Maximum diff payload size in characters; secondary cap that prevents
+# pathological single-line diffs from blowing up the prompt (default: 20000,
+# roughly 5000 tokens)
+function get_ai_diff_max_chars {
+    get_config_value gitbasher.ai-diff-max-chars "20000"
+}
+
+### Function to set AI diff max chars in git config
+# $1: Maximum diff payload size in characters (recommended: 8000-40000)
+function set_ai_diff_max_chars {
+    set_config_value gitbasher.ai-diff-max-chars "$1"
 }
 
 ### Function to get AI commit history limit from git config
@@ -92,21 +118,21 @@ function mask_api_key {
 }
 
 ### Function to get limited diff content for AI prompts
-# Returns: Diff content limited by lines and characters to save tokens
+# Returns: Diff content limited by configurable line and character caps
 function get_limited_diff_for_ai {
     local diff_limit=$(get_ai_diff_limit)
-    local max_chars=3000  # Approximate token limit (~750 tokens)
-    
+    local max_chars=$(get_ai_diff_max_chars)
+
     # Get diff limited by lines
     local diff_content=$(git diff --cached | head -n "$diff_limit")
-    
+
     # Further limit by character count to ensure we don't exceed token limits
     local char_count=${#diff_content}
     if [ "$char_count" -gt "$max_chars" ]; then
         diff_content=$(echo "$diff_content" | head -c "$max_chars")
         diff_content="${diff_content}... [truncated for token limit]"
     fi
-    
+
     echo "$diff_content"
 }
 
@@ -256,22 +282,24 @@ function secure_curl_with_api_key {
 
 ### Function to make request to OpenRouter API
 # $1: prompt text
+# $2: max_tokens cap on the response (default: AI_MAX_TOKENS_FULL)
 # Returns: AI response text
 function call_openrouter_api {
     # Set trap to clear sensitive variables on exit/interrupt
     trap 'clear_sensitive_vars' EXIT INT TERM
-    
+
     local prompt="$1"
+    local max_tokens="${2:-$AI_MAX_TOKENS_FULL}"
     local api_key=$(get_ai_api_key)
     local max_retries=2
     local retry_delay=2
-    
+
     if [ -z "$api_key" ]; then
         echo -e "${RED}AI API key not configured. Set it with: gitb config${ENDCOLOR}" >&2
         clear_sensitive_vars
         return 1
     fi
-    
+
     # Select OpenRouter model (OpenAI-compatible)
     local model=$(get_ai_model)
 
@@ -282,13 +310,17 @@ function call_openrouter_api {
     # prompt contains non-UTF-8-validatable bytes (e.g. Russian or other non-ASCII content in diffs).
     local json_payload
     if command -v jq &>/dev/null; then
-        json_payload=$(jq -nc --arg model "$model" --arg content "$prompt" \
-            '{model: $model, messages: [{role: "user", content: $content}]}')
+        json_payload=$(jq -nc \
+            --arg model "$model" \
+            --arg content "$prompt" \
+            --argjson temperature "$AI_TEMPERATURE" \
+            --argjson max_tokens "$max_tokens" \
+            '{model: $model, messages: [{role: "user", content: $content}], temperature: $temperature, max_tokens: $max_tokens}')
     else
         local escaped_prompt=$(printf '%s' "$prompt" \
             | LC_ALL=C sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e $'s/\t/\\\\t/g' -e $'s/\r/\\\\r/g' \
             | LC_ALL=C awk 'BEGIN{ORS=""} NR>1{print "\\n"} {print}')
-        json_payload="{\"model\":\"$model\",\"messages\":[{\"role\":\"user\",\"content\":\"$escaped_prompt\"}]}"
+        json_payload="{\"model\":\"$model\",\"messages\":[{\"role\":\"user\",\"content\":\"$escaped_prompt\"}],\"temperature\":$AI_TEMPERATURE,\"max_tokens\":$max_tokens}"
     fi
 
     # Make API request with optional proxy and retry logic
@@ -700,7 +732,14 @@ function generate_ai_commit_message {
     local prompt
     prompt=$(build_ai_commit_prompt "$mode" "$detected_scopes" "$provided_scopes" "$commit_prefix")
 
-    call_openrouter_api "$prompt"
+    local max_tokens
+    case "$mode" in
+        subject) max_tokens="$AI_MAX_TOKENS_SUBJECT" ;;
+        full)    max_tokens="$AI_MAX_TOKENS_FULL" ;;
+        *)       max_tokens="$AI_MAX_TOKENS_SIMPLE" ;;
+    esac
+
+    call_openrouter_api "$prompt" "$max_tokens"
 }
 
 ### Function to securely clear sensitive variables

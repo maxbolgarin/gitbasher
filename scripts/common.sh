@@ -497,6 +497,9 @@ function print_configuration {
     fi
     local ai_history_limit=$(get_ai_commit_history_limit)
     echo -e "\tAI history:\t${GREEN}$ai_history_limit commits${ENDCOLOR}"
+    local ai_diff_lines=$(get_ai_diff_limit)
+    local ai_diff_chars=$(get_ai_diff_max_chars)
+    echo -e "\tAI diff:\t${GREEN}${ai_diff_lines} lines / ${ai_diff_chars} chars max${ENDCOLOR}"
 }
 
 

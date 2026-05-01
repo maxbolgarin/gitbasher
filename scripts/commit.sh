@@ -982,8 +982,8 @@ function commit_script {
         scope|s)            ;; # general commit with scope
         split|sp|sl)        split="true";; # force atomic-split flow (heuristic + manual messages)
         splitp|spp|slp)     split="true"; push="true";;
-        aisplit|isplit)     split="true"; llm="true";; # AI-refined grouping + AI messages
-        aisplitp|isplitp)   split="true"; llm="true"; push="true";;
+        aisplit|isplit|aispl|ispl)        split="true"; llm="true";; # AI-refined grouping + AI messages
+        aisplitp|isplitp|aisplp|isplp)    split="true"; llm="true"; push="true";;
         msg|m)              msg="true";;
         ticket|jira|j|t)    ticket="true";;
         fast|f)             fast="true";;
@@ -1089,8 +1089,8 @@ function commit_script {
         msg="$msg\n${BOLD}fastsp${ENDCOLOR}_fsp|fps_Create a commit in the fast mode with scope and push changes"
         msg="$msg\n${BOLD}split${ENDCOLOR}_sp|sl_Split staged changes into one commit per detected scope (heuristic grouping, manual type+summary per group)"
         msg="$msg\n${BOLD}splitp${ENDCOLOR}_spp|slp_Same as split, then push the resulting commits"
-        msg="$msg\n${BOLD}aisplit${ENDCOLOR}_isplit_Same as split, but AI refines the grouping when heuristic is weak and writes each commit message"
-        msg="$msg\n${BOLD}aisplitp${ENDCOLOR}_isplitp_Same as aisplit, then push the resulting commits"
+        msg="$msg\n${BOLD}aisplit${ENDCOLOR}_isplit|aispl|ispl_Same as split, but AI refines the grouping when heuristic is weak and writes each commit message"
+        msg="$msg\n${BOLD}aisplitp${ENDCOLOR}_isplitp|aisplp|isplp_Same as aisplit, then push the resulting commits"
         msg="$msg\n${BOLD}ff${ENDCOLOR}_ _Ultrafast: git add ., AI-grouped split, AI messages, no prompts (requires AI configured)"
         msg="$msg\n${BOLD}ffp${ENDCOLOR}_ffpush_Same as ff, then push the resulting commits"
         msg="$msg\n${BOLD}fixup${ENDCOLOR}_fix|x_Select files and commit to make a --fixup commit (git commit --fixup <hash>)"

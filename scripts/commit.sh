@@ -479,9 +479,9 @@ function perform_commit_split {
 
         msg=""
 
-        # Try AI if available; fall back to manual on any failure.
-        # In auto_accept mode (ff), commit silently without prompting.
-        if [ "$ai_ok" = "true" ]; then
+        # AI path — only when the user explicitly asked for AI (llm flag set
+        # by ai/aisplit/aif/ff/etc). Without llm, we go straight to manual.
+        if [ -n "$llm" ] && [ "$ai_ok" = "true" ]; then
             echo -e "${YELLOW}Generating commit message with AI...${ENDCOLOR}"
             ai_msg=$(generate_ai_commit_message "simple" "$scope_for_msg" "$scope_for_msg" "")
             if [ $? -eq 0 ] && [ -n "$ai_msg" ]; then
@@ -534,7 +534,7 @@ function perform_commit_split {
             fi
         fi
 
-        # Auto-accept can't fall back to a manual prompt — fail loudly instead
+        # Auto-accept can't fall back to a prompt — fail loudly when AI didn't deliver
         if [ -z "$msg" ] && [ -n "$auto_accept" ]; then
             echo -e "${RED}AI message generation failed; auto-accept mode cannot prompt for a manual message.${ENDCOLOR}"
             echo -e "${YELLOW}Configure AI (gitb cfg ai) or use a non-ff mode.${ENDCOLOR}"
@@ -543,28 +543,62 @@ function perform_commit_split {
             return 1
         fi
 
-        # Manual fallback (no AI or AI failed)
+        # Manual path: type selection + summary, mirroring the regular commit flow.
+        # Reached when llm wasn't set, or when AI failed/declined in interactive mode.
         if [ -z "$msg" ]; then
+            local commit_type=""
+            local is_empty_msg=""
+            echo -e "${YELLOW}What type of changes for ${YELLOW}${scope}${ENDCOLOR}?${ENDCOLOR}"
+            echo -e "1. ${BOLD}feat${ENDCOLOR}    2. ${BOLD}fix${ENDCOLOR}     3. ${BOLD}refactor${ENDCOLOR}  4. ${BOLD}test${ENDCOLOR}    5. ${BOLD}build${ENDCOLOR}"
+            echo -e "6. ${BOLD}ci${ENDCOLOR}      7. ${BOLD}chore${ENDCOLOR}   8. ${BOLD}docs${ENDCOLOR}      9. plain (no type/scope)   s. skip group   0. abort split"
+
+            local tchoice
+            while true; do
+                read -n 1 -s tchoice
+                case "$tchoice" in
+                    1) commit_type="feat"; break ;;
+                    2) commit_type="fix"; break ;;
+                    3) commit_type="refactor"; break ;;
+                    4) commit_type="test"; break ;;
+                    5) commit_type="build"; break ;;
+                    6) commit_type="ci"; break ;;
+                    7) commit_type="chore"; break ;;
+                    8) commit_type="docs"; break ;;
+                    9) is_empty_msg="true"; break ;;
+                    s|S)
+                        echo -e "${YELLOW}Skipping scope '${scope}' (files left unstaged)${ENDCOLOR}"
+                        while IFS= read -r f; do
+                            [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
+                        done <<< "$files_str"
+                        continue 2
+                        ;;
+                    0)
+                        _restore_split_snapshot "$snapshot_file"
+                        trap - INT TERM
+                        echo
+                        echo -e "${YELLOW}Aborted. Created ${commit_count} commit(s); original staging restored.${ENDCOLOR}"
+                        exit 0
+                        ;;
+                esac
+            done
+
             prefix=""
-            if [ -n "$scope_for_msg" ]; then
-                prefix="feat(${scope_for_msg}): "
-            else
-                prefix="feat: "
+            if [ -z "$is_empty_msg" ]; then
+                if [ -n "$scope_for_msg" ]; then
+                    prefix="${commit_type}(${scope_for_msg}): "
+                else
+                    prefix="${commit_type}: "
+                fi
             fi
-            echo -e "${YELLOW}Enter commit message (Enter to skip group, 0 to abort):${ENDCOLOR}"
-            read -p "" -e -i "$prefix" manual_input
-            if [ -z "$manual_input" ] || [ "$manual_input" = "$prefix" ]; then
+
+            echo -e "${YELLOW}Write a summary (Enter to skip group):${ENDCOLOR}"
+            read -p "$prefix" -e manual_input
+            if [ -z "$manual_input" ]; then
                 echo -e "${YELLOW}Skipping scope '${scope}'${ENDCOLOR}"
                 while IFS= read -r f; do
                     [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
                 done <<< "$files_str"
                 continue
-            fi
-            if [ "$manual_input" = "0" ]; then
-                _restore_split_snapshot "$snapshot_file"
-                trap - INT TERM
-                echo -e "${YELLOW}Aborted. Created ${commit_count} commit(s); original staging restored.${ENDCOLOR}"
-                exit 0
             fi
             if ! sanitize_commit_message "$manual_input"; then
                 show_sanitization_error "commit message" "Use printable characters only, 1-2000 characters."
@@ -572,7 +606,7 @@ function perform_commit_split {
                 trap - INT TERM
                 return 1
             fi
-            msg="$sanitized_commit_message"
+            msg="${prefix}${sanitized_commit_message}"
         fi
 
         # Make the commit
@@ -661,6 +695,13 @@ function try_offer_commit_split {
                 fi
                 ;;
     esac
+
+    # AI usage is gated on the user's explicit AI intent (llm flag set by
+    # ai/aisplit/aif/ff/etc). Non-AI modes (regular commit, fast, split) never
+    # call the model — they keep the heuristic grouping as-is.
+    if [ -z "$llm" ]; then
+        should_refine="false"
+    fi
 
     if [ "$should_refine" = "true" ] && check_ai_available 2>/dev/null; then
         echo
@@ -939,8 +980,10 @@ function after_commit {
 function commit_script {
     case "$1" in
         scope|s)            ;; # general commit with scope
-        split|sp|sl)        split="true";; # force atomic-split flow
+        split|sp|sl)        split="true";; # force atomic-split flow (heuristic + manual messages)
         splitp|spp|slp)     split="true"; push="true";;
+        aisplit|isplit)     split="true"; llm="true";; # AI-refined grouping + AI messages
+        aisplitp|isplitp)   split="true"; llm="true"; push="true";;
         msg|m)              msg="true";;
         ticket|jira|j|t)    ticket="true";;
         fast|f)             fast="true";;
@@ -1044,8 +1087,10 @@ function commit_script {
         msg="$msg\n${BOLD}push${ENDCOLOR}_pu|p_Create a commit and push changes at the end"
         msg="$msg\n${BOLD}fastp${ENDCOLOR}_fp|pf_Create a commit in the fast mode and push changes"
         msg="$msg\n${BOLD}fastsp${ENDCOLOR}_fsp|fps_Create a commit in the fast mode with scope and push changes"
-        msg="$msg\n${BOLD}split${ENDCOLOR}_sp|sl_Split staged changes into one atomic commit per detected scope (AI-refined when heuristic is weak)"
+        msg="$msg\n${BOLD}split${ENDCOLOR}_sp|sl_Split staged changes into one commit per detected scope (heuristic grouping, manual type+summary per group)"
         msg="$msg\n${BOLD}splitp${ENDCOLOR}_spp|slp_Same as split, then push the resulting commits"
+        msg="$msg\n${BOLD}aisplit${ENDCOLOR}_isplit_Same as split, but AI refines the grouping when heuristic is weak and writes each commit message"
+        msg="$msg\n${BOLD}aisplitp${ENDCOLOR}_isplitp_Same as aisplit, then push the resulting commits"
         msg="$msg\n${BOLD}ff${ENDCOLOR}_ _Ultrafast: git add ., AI-grouped split, AI messages, no prompts (requires AI configured)"
         msg="$msg\n${BOLD}ffp${ENDCOLOR}_ffpush_Same as ff, then push the resulting commits"
         msg="$msg\n${BOLD}fixup${ENDCOLOR}_fix|x_Select files and commit to make a --fixup commit (git commit --fixup <hash>)"

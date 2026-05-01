@@ -618,17 +618,17 @@ function build_ai_commit_system_prompt {
     local task_text output_format_text length_rule
     case "$mode" in
         subject)
-            task_text="Generate the SUBJECT TEXT only. The user has already chosen the prefix '${commit_prefix}'. The final commit header will be the literal concatenation: '${commit_prefix}<your output>'. Write only the suffix that comes after the prefix — do NOT include the prefix, type, scope, colon, or leading space."
+            task_text="Generate the SUBJECT TEXT only. The user has already chosen the prefix '${commit_prefix}'. The final commit header will be the literal concatenation: '${commit_prefix}<your output>'. Write only the suffix that comes after the prefix — do NOT include the prefix, type, scope, colon, or leading space. The subject must summarize ALL distinct changes in the diff, not just the first one you read."
             output_format_text="Output ONLY the subject text. No prose before or after. No markdown fences. No surrounding quotes. No leading or trailing whitespace."
             length_rule="The complete header (the prefix '${commit_prefix}' concatenated with your output) must be 100 characters or fewer."
             ;;
         full)
-            task_text="Generate a conventional commit in the format 'type(scope): subject', followed by a blank line, then a 1-3 sentence body explaining WHY the change is being made."
+            task_text="Generate a conventional commit in the format 'type(scope): subject', followed by a blank line, then a 1-3 sentence body explaining WHY. The header must summarize ALL distinct changes in the diff (not just the first one); the body must list every distinct change when there are 2 or more."
             output_format_text="Output ONLY the commit message (header line, blank line, body). No prose before or after. No markdown fences. No surrounding quotes."
             length_rule="The header line (type + scope + colon + space + subject) must be 100 characters or fewer."
             ;;
         *)
-            task_text="Generate a single-line conventional commit message in the format 'type(scope): subject'. No body."
+            task_text="Generate a single-line conventional commit message in the format 'type(scope): subject'. No body. The subject must cover ALL distinct changes in the diff, not just the first one you read."
             output_format_text="Output ONLY the commit message on one line. No prose before or after. No markdown fences. No surrounding quotes."
             length_rule="The full message (type + scope + colon + space + subject) must be 100 characters or fewer."
             ;;
@@ -659,15 +659,16 @@ ${task_text}
     prompt+="
 
 <rules>
+- COVERAGE (most important): Your message MUST account for every distinct change visible across <staged_files>, <diff_summary>, and <diff>. Use <staged_files> as a checklist — if it lists 8 files spanning 4 different concerns, your message reflects all 4 concerns. Never describe only the first change you read. If the diff is truncated, infer the rest from <staged_files> and <diff_summary>
+- For 2-3 distinct changes, combine them with 'and' (e.g., 'add auth module and user profile page')
+- For 4+ distinct changes, summarize with a count and name the most important ones (e.g., 'add 5 endpoints including auth, profile, settings, dashboard, and notifications')
+- For mixed change types (e.g., a feature and a fix), use the dominant type and mention the mix (e.g., 'feat: add caching layer and fix the related cache-key bug')
+- Never use vague placeholders like 'multiple changes', 'various updates', or 'misc fixes'
 - ${length_rule}
 - Subject text must be lowercase and must not end with a period
 - Use the imperative mood (e.g. 'add', 'fix', 'remove') — NOT past tense ('added', 'fixed') or progressive ('adding', 'fixing')
 - Be specific about WHAT changed. Avoid vague phrases like 'improve existing feature', 'update code', or 'fix bug'
-- Match the typical length, level of detail, and verb style of <recent_commits>. Generate fresh content for the actual diff — do not copy a recent message verbatim
-- For 2-3 distinct changes, combine them with 'and' (e.g., 'add auth module and user profile page')
-- For 4+ distinct changes, summarize with a count and list the most important ones (e.g., 'add 5 endpoints including auth, profile, settings, dashboard, and notifications')
-- For mixed change types (e.g., a feature and a fix), use the dominant type and mention the mix
-- Never write vague messages like 'multiple changes' or 'various updates'"
+- Match the typical length, level of detail, and verb style of <recent_commits>. Generate fresh content for the actual diff — do not copy a recent message verbatim"
 
     if [ "$mode" != "subject" ]; then
         prompt+="
@@ -691,6 +692,7 @@ ${task_text}
 <example>handle null userData in user lookup</example>
 <example>extract diff truncation into shared helper</example>
 <example>bump axios to 1.7.4 to address CVE-2024-39338</example>
+<example>unify prompt builders and switch to XML-tagged sections</example>
 <example>add 4 endpoints including profile, settings, dashboard, and notifications</example>"
             ;;
         full)
@@ -706,9 +708,14 @@ fix(api): handle null userData in user lookup
 The upstream service started returning null for deleted users instead of a 404. Treat null as 'not found' to preserve the client-facing 404 contract.
 </example>
 <example>
-refactor(commit): extract diff truncation into shared helper
+feat(api): add rate limiting, structured request logs, and CORS preflight handling
 
-The same line/char-cap logic was duplicated across three prompt builders. Centralising it makes future limit changes a single-place edit.
+Three middleware additions for the public API release: token-bucket limiter (60 req/min/IP), structured request logs feeding the new audit pipeline, and explicit CORS preflight responses for the browser SDK.
+</example>
+<example>
+refactor(ai): unify prompt builders, switch to XML-tagged sections, and add regenerate option
+
+Three closely related changes to the AI commit flow: collapse the three near-duplicate generate_* functions into one mode-dispatched entry point, restructure prompts as XML-tagged sections so the model can separate instructions from data, and add an 'r' option so users can ask for a different message without re-running the whole command.
 </example>"
             ;;
         *)
@@ -718,6 +725,7 @@ The same line/char-cap logic was duplicated across three prompt builders. Centra
 <example>refactor(commit): extract diff truncation into shared helper</example>
 <example>docs: add v1 to v2 migration guide</example>
 <example>chore: bump axios to 1.7.4 to address CVE-2024-39338</example>
+<example>refactor(ai): unify prompt builders and switch to XML-tagged sections</example>
 <example>feat: add 4 endpoints including profile, settings, dashboard, and notifications</example>"
             ;;
     esac
@@ -782,7 +790,7 @@ ${detected_scopes}
 
     prompt+="
 
-Now generate the commit message based on the data above, following all rules and matching the example style."
+Before writing, scan <staged_files> and <diff_summary> end-to-end and identify every distinct change (group related files together). Then write a single commit message that covers them all, following every rule and matching the example style."
 
     printf '%s' "$prompt"
 }

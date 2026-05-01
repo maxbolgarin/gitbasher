@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-GITBASHER_VERSION="3.10.2"
-if [ "$1" == "init" ]; then
+GITBASHER_VERSION="dev"
+if [ "$1" == "init" ] || [ "$1" == "i" ]; then
     git init
 fi
 git_check=$(git branch --show-current 2>&1)
@@ -22,126 +22,6 @@ if ((BASH_VERSINFO[0] < 4)); then
     printf "Or run gitb explicitly with the newer bash when installed:\n    /opt/homebrew/bin/bash $0 \"\$@\"\n\n"
     exit 1; 
 fi
-RED="\e[31m"
-GREEN="\e[32m"
-YELLOW="\e[33m"
-BLUE="\e[34m"
-PURPLE="\e[35m"
-CYAN="\e[36m"
-GRAY="\e[37m"
-ENDCOLOR="\e[0m"
-BOLD="\033[1m"
-NORMAL="\033[0m"
-function get_config_value {
-    value=$(git config --local --get "$1")
-    if [ "$value" == "" ]; then
-        value=$(git config --global --get "$1")
-        if [ "$value" == "" ]; then
-            value=$2
-        fi
-    fi
-    echo -e "$value"
-}
-function set_config_value {
-    if [ -z "$3" ]; then
-        git config --local "$1" "$2"
-    else
-        git config --global "$1" "$2"
-    fi
-    echo -e "$2"
-}
-function unset_config_value {
-    git config --unset "$1"
-    local global_config=$(git config --global --get "$1" 2>/dev/null)
-    if [ -n "$global_config" ]; then
-        echo
-        echo -e "${YELLOW}Global $1 is also configured: ${BLUE}$global_config${ENDCOLOR}"
-        echo -e "Do you want to clear it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
-        yes_no_choice "\nClear AI proxy globally" "false"
-        if [ $? -eq 0 ]; then
-            git config --global --unset "$1" 2>/dev/null
-            echo -e "${GREEN}$1 cleared globally${ENDCOLOR}"
-        fi
-    fi
-}
-function validate_git_url {
-    local input="$1"
-    validated_url=""
-    if [ -z "$input" ]; then
-        return 1
-    fi
-    local cleaned=$(echo "$input" | tr -d '\000-\037\177')
-    if [[ "$cleaned" =~ ^https?://[a-zA-Z0-9.-]+/[a-zA-Z0-9._/-]+(.git)?$ ]] || \
-       [[ "$cleaned" =~ ^git@[a-zA-Z0-9.-]+:[a-zA-Z0-9._/-]+(.git)?$ ]] || \
-       [[ "$cleaned" =~ ^ssh://[a-zA-Z0-9@.-]+/[a-zA-Z0-9._/-]+(.git)?$ ]] || \
-       [[ "$cleaned" =~ ^[a-zA-Z0-9._/-]+(.git)?$ ]]; then
-        if [ ${#cleaned} -le 500 ]; then
-            validated_url="$cleaned"
-            return 0
-        fi
-    fi
-    return 1
-}
-current_branch=$(git branch --show-current)
-main_branch=$(get_config_value gitbasher.branch "main")
-if [[ "$( git branch | grep -E "^[[:space:]*]*main[[:space:]]*$" )" == "" ]] && [[ "$( git branch | grep -E "^[[:space:]*]*master[[:space:]]*$" )" != "" ]]; then
-    main_branch="master"
-elif [[ "$(git branch | cat)" == "" ]]; then
-    main_branch=$current_branch
-fi
-if [ "$(get_config_value gitbasher.branch "")" == "" ]; then
-    git config --local gitbasher.branch "$main_branch"
-fi
-origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')
-if [ "$origin_name" == "" ]; then 
-    if [ -z "$GITBASHER_TEST_MODE" ] && [ -t 0 ]; then
-        echo -e "${YELLOW}There is no configured remote in this repo!${ENDCOLOR}"
-        echo
-        echo -e "Use ${BLUE}git remote add origin <url>${ENDCOLOR} to add it manually"
-        echo -e "Press '${BOLD}y${ENDCOLOR}' to add it now or an any key to exit"
-        read -n 1 -s choice
-        if ! is_yes "$choice"; then
-            exit
-        fi
-        echo
-        read -p "Remote repo URL: " -e remote_url
-        if [ "$remote_url" == "" ]; then
-            exit
-        fi
-        if ! validate_git_url "$remote_url"; then
-            echo
-            echo -e "${RED}Invalid git URL format!${ENDCOLOR}"
-            echo -e "${YELLOW}Expected formats:${ENDCOLOR}"
-            echo -e "  • https://github.com/user/repo.git"
-            echo -e "  • git@github.com:user/repo.git"
-            echo -e "  • ssh://git@server.com/repo.git"
-            exit 1
-        fi
-        remote_url="$validated_url"
-        remote_check=$(git ls-remote "$remote_url" 2>&1)
-        if [[ "$remote_check" == *"does not appear to be a git"* ]]; then
-            echo
-            echo -e "${RED}'$remote_url' is not a git repository!${ENDCOLOR}"
-            echo "Please make sure you have the correct access rights and the repository exists."
-            exit
-        fi
-        git remote add origin "$remote_url"
-        echo -e "${GREEN}Remote successfully added!${ENDCOLOR}"
-        if [ "$remote_check" == "" ]; then
-            echo -e "${YELLOW}Repository '$remote_url' is probably empty${ENDCOLOR}"
-        fi
-        echo
-        origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')
-    else
-        origin_name=""
-    fi
-fi
-sep=$(get_config_value gitbasher.sep "-")
-editor=$(get_config_value core.editor "vi")
-ticket_name=$(get_config_value gitbasher.ticket "")
-scopes=$(get_config_value gitbasher.scopes "")
-is_first=$(get_config_value gitbasher.isfirst "true")
-git config --local gitbasher.isfirst "false"
 RED_ES="\x1b[31m"
 GREEN_ES="\x1b[32m"
 YELLOW_ES="\x1b[33m"
@@ -317,34 +197,34 @@ function normalize_key {
     fi
     normalized_key=$(echo "$key" | tr '[:upper:]' '[:lower:]')
     case "$normalized_key" in
-        "й") normalized_key="q" ;;
-        "ц") normalized_key="w" ;;
-        "у") normalized_key="e" ;;
-        "к") normalized_key="r" ;;
-        "е") normalized_key="t" ;;
-        "н") normalized_key="y" ;;
-        "г") normalized_key="u" ;;
-        "ш") normalized_key="i" ;;
-        "щ") normalized_key="o" ;;
-        "з") normalized_key="p" ;;
-        "х") normalized_key="[" ;;
-        "ъ") normalized_key="]" ;;
-        "ф") normalized_key="a" ;;
-        "ы") normalized_key="s" ;;
-        "в") normalized_key="d" ;;
-        "а") normalized_key="f" ;;
-        "п") normalized_key="g" ;;
-        "р") normalized_key="h" ;;
-        "о") normalized_key="j" ;;
-        "л") normalized_key="k" ;;
-        "д") normalized_key="l" ;;
-        "я") normalized_key="z" ;;
-        "ч") normalized_key="x" ;;
-        "с") normalized_key="c" ;;
-        "м") normalized_key="v" ;;
-        "и") normalized_key="b" ;;
-        "т") normalized_key="n" ;;
-        "ь") normalized_key="m" ;;
+        "й"|"Й") normalized_key="q" ;;
+        "ц"|"Ц") normalized_key="w" ;;
+        "у"|"У") normalized_key="e" ;;
+        "к"|"К") normalized_key="r" ;;
+        "е"|"Е") normalized_key="t" ;;
+        "н"|"Н") normalized_key="y" ;;
+        "г"|"Г") normalized_key="u" ;;
+        "ш"|"Ш") normalized_key="i" ;;
+        "щ"|"Щ") normalized_key="o" ;;
+        "з"|"З") normalized_key="p" ;;
+        "х"|"Х") normalized_key="[" ;;
+        "ъ"|"Ъ") normalized_key="]" ;;
+        "ф"|"Ф") normalized_key="a" ;;
+        "ы"|"Ы") normalized_key="s" ;;
+        "в"|"В") normalized_key="d" ;;
+        "а"|"А") normalized_key="f" ;;
+        "п"|"П") normalized_key="g" ;;
+        "р"|"Р") normalized_key="h" ;;
+        "о"|"О") normalized_key="j" ;;
+        "л"|"Л") normalized_key="k" ;;
+        "д"|"Д") normalized_key="l" ;;
+        "я"|"Я") normalized_key="z" ;;
+        "ч"|"Ч") normalized_key="x" ;;
+        "с"|"С") normalized_key="c" ;;
+        "м"|"М") normalized_key="v" ;;
+        "и"|"И") normalized_key="b" ;;
+        "т"|"Т") normalized_key="n" ;;
+        "ь"|"Ь") normalized_key="m" ;;
     esac
 }
 function is_yes {
@@ -401,20 +281,139 @@ function wrong_mode {
 }
 function get_repo {
     local remote_name=${origin_name:-origin}
+    local repo
     repo=$(git config --get "remote.${remote_name}.url")
-    repo="${repo/"com:"/"com/"}"
-    repo="${repo/"io:"/"io/"}"
-    repo="${repo/"org:"/"org/"}"
-    repo="${repo/"net:"/"net/"}"
-    repo="${repo/"dev:"/"dev/"}"
-    repo="${repo/"ru:"/"ru/"}"
-    repo="${repo/"git@"/"https://"}"
-    repo="${repo/".git"/""}" 
+    if [ -z "$repo" ]; then
+        echo ""
+        return
+    fi
+    if [[ "$repo" =~ ^git@([^:]+):(.*)$ ]]; then
+        repo="https://${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+    elif [[ "$repo" =~ ^ssh://git@([^/]+)/(.*)$ ]]; then
+        repo="https://${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+    fi
+    repo="${repo%.git}"
     echo "$repo"
 }
 function get_repo_name {
     repo=$(get_repo)
     echo "${repo##*/}"
+}
+function get_repo_host {
+    local repo=${1:-$(get_repo)}
+    if [[ "$repo" == *"github"* ]]; then
+        echo "github"
+    elif [[ "$repo" == *"gitlab"* ]]; then
+        echo "gitlab"
+    elif [[ "$repo" == *"bitbucket"* ]]; then
+        echo "bitbucket"
+    else
+        echo ""
+    fi
+}
+function get_branch_url {
+    local branch=$1
+    local repo=${2:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/tree/${branch}";;
+        gitlab)    echo "${repo}/-/tree/${branch}";;
+        bitbucket) echo "${repo}/branch/${branch}";;
+    esac
+}
+function get_commit_url {
+    local hash=$1
+    local repo=${2:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/commit/${hash}";;
+        gitlab)    echo "${repo}/-/commit/${hash}";;
+        bitbucket) echo "${repo}/commits/${hash}";;
+    esac
+}
+function get_new_pr_url {
+    local base=$1
+    local branch=$2
+    local repo=${3:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/compare/${base}...${branch}?expand=1";;
+        gitlab)    echo "${repo}/-/merge_requests/new?merge_request%5Bsource_branch%5D=${branch}&merge_request%5Btarget_branch%5D=${base}";;
+        bitbucket) echo "${repo}/pull-requests/new?source=${branch}&dest=${base}";;
+    esac
+}
+function get_prs_url {
+    local repo=${1:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/pulls";;
+        gitlab)    echo "${repo}/-/merge_requests";;
+        bitbucket) echo "${repo}/pull-requests";;
+    esac
+}
+function get_ci_url {
+    local branch=$1
+    local repo=${2:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)
+            if [ -n "$branch" ]; then
+                echo "${repo}/actions?query=branch%3A${branch}"
+            else
+                echo "${repo}/actions"
+            fi;;
+        gitlab)
+            if [ -n "$branch" ]; then
+                echo "${repo}/-/pipelines?ref=${branch}"
+            else
+                echo "${repo}/-/pipelines"
+            fi;;
+        bitbucket)
+            echo "${repo}/pipelines";;
+    esac
+}
+function get_ci_label {
+    case "$(get_repo_host "${1:-$(get_repo)}")" in
+        github)    echo "Actions";;
+        gitlab)    echo "Pipeline";;
+        bitbucket) echo "Pipelines";;
+        *)         echo "CI";;
+    esac
+}
+function get_tag_url {
+    local tag=$1
+    local repo=${2:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/releases/tag/${tag}";;
+        gitlab)    echo "${repo}/-/tags/${tag}";;
+        bitbucket) echo "${repo}/src/${tag}";;
+    esac
+}
+function get_new_release_url {
+    local tag=$1
+    local repo=${2:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/releases/new?tag=${tag}";;
+        gitlab)    echo "${repo}/-/releases/new?tag_name=${tag}";;
+    esac
+}
+function get_releases_url {
+    local repo=${1:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/releases";;
+        gitlab)    echo "${repo}/-/releases";;
+        bitbucket) echo "${repo}/downloads/?tab=tags";;
+    esac
+}
+function print_link {
+    local label="$1"
+    local url="$2"
+    local color="${3:-$YELLOW}"
+    printf "%b%-10s%b %s\n" "$color" "${label}:" "$ENDCOLOR" "$url"
+}
+function get_tag_ci_url {
+    local tag=$1
+    local repo=${2:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/actions?query=ref%3Arefs%2Ftags%2F${tag}";;
+        gitlab)    echo "${repo}/-/pipelines?ref=${tag}";;
+        bitbucket) echo "${repo}/pipelines";;
+    esac
 }
 function print_configuration {
     echo -e "${YELLOW}Current configuration:${ENDCOLOR}"
@@ -437,7 +436,13 @@ function print_configuration {
         echo -e "\tAI key:\t\t${RED}not set${ENDCOLOR}"
     fi
     local ai_model=$(get_ai_model)
-    echo -e "\tAI model:\t${GREEN}$ai_model${ENDCOLOR}"
+    if [ -n "$ai_model" ]; then
+        echo -e "\tAI model:\t${GREEN}$ai_model${ENDCOLOR} ${GRAY}(global override)${ENDCOLOR}"
+    else
+        echo -e "\tAI models:\t${GREEN}$(get_ai_model_for simple)${ENDCOLOR} ${GRAY}(simple/subject)${ENDCOLOR}"
+        echo -e "\t\t\t${GREEN}$(get_ai_model_for full)${ENDCOLOR} ${GRAY}(full)${ENDCOLOR}"
+        echo -e "\t\t\t${GREEN}$(get_ai_model_for grouping)${ENDCOLOR} ${GRAY}(grouping)${ENDCOLOR}"
+    fi
     local ai_proxy=$(get_ai_proxy)
     if [ -n "$ai_proxy" ]; then
         echo -e "\tAI proxy:\t${GREEN}$ai_proxy${ENDCOLOR}"
@@ -446,6 +451,9 @@ function print_configuration {
     fi
     local ai_history_limit=$(get_ai_commit_history_limit)
     echo -e "\tAI history:\t${GREEN}$ai_history_limit commits${ENDCOLOR}"
+    local ai_diff_lines=$(get_ai_diff_limit)
+    local ai_diff_chars=$(get_ai_diff_max_chars)
+    echo -e "\tAI diff:\t${GREEN}${ai_diff_lines} lines / ${ai_diff_chars} chars max${ENDCOLOR}"
 }
 function escape {
     string="$1"
@@ -541,14 +549,20 @@ function git_status {
     echo -e "$status_output"
 }
 function print_staged_files {
+    local staged_diff
+    staged_diff=$(git diff --name-status --cached)
+    if [ -z "$staged_diff" ]; then
+        return
+    fi
     while IFS=$'\t' read -r status file _; do
+        [ -z "$file" ] && continue
         case "${status:0:1}" in
             A) echo -e "\t${GREEN}${file}${ENDCOLOR}" ;;
             M) echo -e "\t${YELLOW}${file}${ENDCOLOR}" ;;
             D) echo -e "\t${RED}${file}${ENDCOLOR}" ;;
             *) echo -e "\t${file}${ENDCOLOR}" ;;
         esac
-    done <<< "$(git diff --name-status --cached)"
+    done <<< "$staged_diff"
 }
 function commit_list {
     ref=$3
@@ -635,7 +649,7 @@ function get_push_list {
         history_from=""
         return
     fi
-    push_list_check=$(git --no-pager log $origin/$1..HEAD 2>&1)
+    push_list_check=$(git --no-pager log $origin/$1..HEAD 2>&1 || true)
     if [[ $push_list_check != *"unknown revision or path not in the working tree"* ]] && [[ $push_list_check != *"fatal:"* ]]; then
         push_list=$(commit_list 999 "tab" $origin/$1..HEAD)
         history_from="$origin/$1"
@@ -648,7 +662,7 @@ function get_push_list {
             return
         fi
     fi
-    base_commit=$(diff -u <(git rev-list --first-parent $1) <(git rev-list --first-parent $2) | sed -ne 's/^ //p' | head -1)
+    base_commit=$(diff -u <(git rev-list --first-parent $1 2>/dev/null) <(git rev-list --first-parent $2 2>/dev/null) | sed -ne 's/^ //p' | head -1 || true)
     if [ -n "$base_commit" ]; then
         push_list=$(commit_list 999 "tab" $base_commit..HEAD)
         history_from="${base_commit::7}"
@@ -906,7 +920,131 @@ function switch {
         exit $switch_code
     fi
 }
+RED="\e[31m"
+GREEN="\e[32m"
+YELLOW="\e[33m"
+BLUE="\e[34m"
+PURPLE="\e[35m"
+CYAN="\e[36m"
+GRAY="\e[37m"
+ENDCOLOR="\e[0m"
+BOLD="\033[1m"
+NORMAL="\033[0m"
+function get_config_value {
+    value=$(git config --local --get "$1")
+    if [ "$value" == "" ]; then
+        value=$(git config --global --get "$1")
+        if [ "$value" == "" ]; then
+            value=$2
+        fi
+    fi
+    echo -e "$value"
+}
+function set_config_value {
+    if [ -z "$3" ]; then
+        git config --local "$1" "$2"
+    else
+        git config --global "$1" "$2"
+    fi
+    echo -e "$2"
+}
+function unset_config_value {
+    git config --unset "$1"
+    local global_config=$(git config --global --get "$1" 2>/dev/null)
+    if [ -n "$global_config" ]; then
+        echo
+        echo -e "${YELLOW}Global $1 is also configured: ${BLUE}$global_config${ENDCOLOR}"
+        echo -e "Do you want to clear it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+        yes_no_choice "\nClear AI proxy globally" "false"
+        if [ $? -eq 0 ]; then
+            git config --global --unset "$1" 2>/dev/null
+            echo -e "${GREEN}$1 cleared globally${ENDCOLOR}"
+        fi
+    fi
+}
+function validate_git_url {
+    local input="$1"
+    validated_url=""
+    if [ -z "$input" ]; then
+        return 1
+    fi
+    local cleaned=$(echo "$input" | tr -d '\000-\037\177')
+    if [[ "$cleaned" =~ ^https?://[a-zA-Z0-9.-]+/[a-zA-Z0-9._/-]+(\.git)?$ ]] || \
+       [[ "$cleaned" =~ ^git@[a-zA-Z0-9.-]+:[a-zA-Z0-9._/-]+(\.git)?$ ]] || \
+       [[ "$cleaned" =~ ^ssh://[a-zA-Z0-9@.-]+/[a-zA-Z0-9._/-]+(\.git)?$ ]] || \
+       [[ "$cleaned" =~ ^[a-zA-Z0-9._/-]+(\.git)?$ ]]; then
+        if [ ${#cleaned} -le 500 ]; then
+            validated_url="$cleaned"
+            return 0
+        fi
+    fi
+    return 1
+}
+current_branch=$(git branch --show-current)
+main_branch=$(get_config_value gitbasher.branch "main")
+if [[ "$( git branch | grep -E "^[[:space:]*]*main[[:space:]]*$" )" == "" ]] && [[ "$( git branch | grep -E "^[[:space:]*]*master[[:space:]]*$" )" != "" ]]; then
+    main_branch="master"
+elif [[ "$(git branch | cat)" == "" ]]; then
+    main_branch=$current_branch
+fi
+if [ "$(get_config_value gitbasher.branch "")" == "" ]; then
+    git config --local gitbasher.branch "$main_branch"
+fi
+origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')
+if [ "$origin_name" == "" ]; then 
+    if [ -z "$GITBASHER_TEST_MODE" ] && [ -t 0 ]; then
+        echo -e "${YELLOW}There is no configured remote in this repo!${ENDCOLOR}"
+        echo
+        echo -e "Use ${BLUE}git remote add origin <url>${ENDCOLOR} to add it manually"
+        echo -e "Press '${BOLD}y${ENDCOLOR}' to add it now or an any key to exit"
+        read -n 1 -s choice
+        if ! is_yes "$choice"; then
+            exit
+        fi
+        echo
+        read -p "Remote repo URL: " -e remote_url
+        if [ "$remote_url" == "" ]; then
+            exit
+        fi
+        if ! validate_git_url "$remote_url"; then
+            echo
+            echo -e "${RED}Invalid git URL format!${ENDCOLOR}"
+            echo -e "${YELLOW}Expected formats:${ENDCOLOR}"
+            echo -e "  • https://github.com/user/repo.git"
+            echo -e "  • git@github.com:user/repo.git"
+            echo -e "  • ssh://git@server.com/repo.git"
+            exit 1
+        fi
+        remote_url="$validated_url"
+        remote_check=$(git ls-remote "$remote_url" 2>&1)
+        if [[ "$remote_check" == *"does not appear to be a git"* ]]; then
+            echo
+            echo -e "${RED}'$remote_url' is not a git repository!${ENDCOLOR}"
+            echo "Please make sure you have the correct access rights and the repository exists."
+            exit
+        fi
+        git remote add origin "$remote_url"
+        echo -e "${GREEN}Remote successfully added!${ENDCOLOR}"
+        if [ "$remote_check" == "" ]; then
+            echo -e "${YELLOW}Repository '$remote_url' is probably empty${ENDCOLOR}"
+        fi
+        echo
+        origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')
+    else
+        origin_name=""
+    fi
+fi
+sep=$(get_config_value gitbasher.sep "-")
+editor=$(get_config_value core.editor "vi")
+ticket_name=$(get_config_value gitbasher.ticket "")
+scopes=$(get_config_value gitbasher.scopes "")
+is_first=$(get_config_value gitbasher.isfirst "true")
+git config --local gitbasher.isfirst "false"
 readonly OPENROUTER_API_URL="https://openrouter.ai/api/v1/chat/completions"
+readonly AI_TEMPERATURE="0.3"
+readonly AI_MAX_TOKENS_SUBJECT=256
+readonly AI_MAX_TOKENS_SIMPLE=512
+readonly AI_MAX_TOKENS_FULL=1024
 function get_ai_api_key {
     if [ -n "$GITB_AI_API_KEY" ]; then
         echo "$GITB_AI_API_KEY"
@@ -918,10 +1056,39 @@ function set_ai_api_key {
     set_config_value gitbasher.ai-api-key "$1"
 }
 function get_ai_model {
-    get_config_value gitbasher.ai-model "openrouter/auto"
+    get_config_value gitbasher.ai-model ""
 }
 function set_ai_model {
     set_config_value gitbasher.ai-model "$1"
+}
+readonly AI_DEFAULT_MODEL_SIMPLE="google/gemini-3.1-flash-lite-preview"
+readonly AI_DEFAULT_MODEL_SUBJECT="google/gemini-3.1-flash-lite-preview"
+readonly AI_DEFAULT_MODEL_FULL="google/gemini-3-flash-preview"
+readonly AI_DEFAULT_MODEL_GROUPING="anthropic/claude-haiku-4.5"
+function get_ai_model_for {
+    local task="$1"
+    local task_model
+    task_model=$(get_config_value "gitbasher.ai-model-$task" "")
+    if [ -n "$task_model" ]; then
+        echo "$task_model"
+        return
+    fi
+    local global_model
+    global_model=$(get_ai_model)
+    if [ -n "$global_model" ]; then
+        echo "$global_model"
+        return
+    fi
+    case "$task" in
+        simple)   echo "$AI_DEFAULT_MODEL_SIMPLE" ;;
+        subject)  echo "$AI_DEFAULT_MODEL_SUBJECT" ;;
+        full)     echo "$AI_DEFAULT_MODEL_FULL" ;;
+        grouping) echo "$AI_DEFAULT_MODEL_GROUPING" ;;
+        *)        echo "$AI_DEFAULT_MODEL_SIMPLE" ;;
+    esac
+}
+function set_ai_model_for {
+    set_config_value "gitbasher.ai-model-$1" "$2"
 }
 function get_ai_proxy {
     get_config_value gitbasher.ai-proxy ""
@@ -930,10 +1097,16 @@ function set_ai_proxy {
     set_config_value gitbasher.ai-proxy "$1"
 }
 function get_ai_diff_limit {
-    get_config_value gitbasher.ai-diff-limit "50"
+    get_config_value gitbasher.ai-diff-limit "300"
 }
 function set_ai_diff_limit {
     set_config_value gitbasher.ai-diff-limit "$1"
+}
+function get_ai_diff_max_chars {
+    get_config_value gitbasher.ai-diff-max-chars "20000"
+}
+function set_ai_diff_max_chars {
+    set_config_value gitbasher.ai-diff-max-chars "$1"
 }
 function get_ai_commit_history_limit {
     get_config_value gitbasher.ai-commit-history-limit "10"
@@ -957,7 +1130,7 @@ function mask_api_key {
 }
 function get_limited_diff_for_ai {
     local diff_limit=$(get_ai_diff_limit)
-    local max_chars=3000  # Approximate token limit (~750 tokens)
+    local max_chars=$(get_ai_diff_max_chars)
     local diff_content=$(git diff --cached | head -n "$diff_limit")
     local char_count=${#diff_content}
     if [ "$char_count" -gt "$max_chars" ]; then
@@ -967,21 +1140,42 @@ function get_limited_diff_for_ai {
     echo "$diff_content"
 }
 function get_limited_staged_files_for_ai {
-    local max_files=50
-    local max_chars=2000
-    local staged_files=$(git diff --name-only --cached)
-    local total_files=$(echo "$staged_files" | wc -l | tr -d ' ')
+    local max_files=1000
+    local max_chars=50000
+    local raw=$(git diff --cached --name-status)
+    if [ -z "$raw" ]; then
+        echo ""
+        return
+    fi
+    local formatted=$(echo "$raw" | LC_ALL=C awk -F'\t' '
+        {
+            code = substr($1, 1, 1)
+            label = code
+            if      (code == "A") label = "added"
+            else if (code == "M") label = "modified"
+            else if (code == "D") label = "deleted"
+            else if (code == "R") label = "renamed"
+            else if (code == "C") label = "copied"
+            else if (code == "T") label = "type changed"
+            if ((code == "R" || code == "C") && NF >= 3) {
+                printf "%-13s %s -> %s\n", label ":", $2, $3
+            } else {
+                printf "%-13s %s\n", label ":", $2
+            }
+        }
+    ')
+    local total_files=$(echo "$formatted" | wc -l | tr -d ' ')
     if [ "$total_files" -gt "$max_files" ]; then
-        staged_files=$(echo "$staged_files" | head -n "$max_files")
-        staged_files="${staged_files}
+        formatted=$(echo "$formatted" | head -n "$max_files")
+        formatted="${formatted}
 ... and $((total_files - max_files)) more files (${total_files} total)"
     fi
-    local char_count=${#staged_files}
+    local char_count=${#formatted}
     if [ "$char_count" -gt "$max_chars" ]; then
-        staged_files=$(echo "$staged_files" | head -c "$max_chars")
-        staged_files="${staged_files}... [truncated, ${total_files} files total]"
+        formatted=$(echo "$formatted" | head -c "$max_chars")
+        formatted="${formatted}... [truncated, ${total_files} files total]"
     fi
-    echo "$staged_files"
+    echo "$formatted"
 }
 function get_limited_diff_stat_for_ai {
     local max_lines=50
@@ -1054,9 +1248,17 @@ function secure_curl_with_api_key {
         "${curl_cmd[@]}" 2>&1
     )
 }
+function _json_escape_for_payload {
+    printf '%s' "$1" \
+        | LC_ALL=C sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e $'s/\t/\\\\t/g' -e $'s/\r/\\\\r/g' \
+        | LC_ALL=C awk 'BEGIN{ORS=""} NR>1{print "\\n"} {print}'
+}
 function call_openrouter_api {
     trap 'clear_sensitive_vars' EXIT INT TERM
-    local prompt="$1"
+    local system_prompt="$1"
+    local user_prompt="$2"
+    local max_tokens="${3:-$AI_MAX_TOKENS_FULL}"
+    local model="${4:-$(get_ai_model_for simple)}"
     local api_key=$(get_ai_api_key)
     local max_retries=2
     local retry_delay=2
@@ -1065,9 +1267,20 @@ function call_openrouter_api {
         clear_sensitive_vars
         return 1
     fi
-    local escaped_prompt=$(echo "$prompt" | LC_ALL=C sed 's/\\/\\\\/g' | LC_ALL=C sed 's/"/\\"/g' | tr '\n' ' ' | LC_ALL=C sed 's/  */ /g')
-    local model=$(get_ai_model)
-    local json_payload="{\"model\":\"$model\",\"messages\":[{\"role\": \"user\", \"content\": \"$escaped_prompt\"}]}"
+    local json_payload
+    if command -v jq &>/dev/null; then
+        json_payload=$(jq -nc \
+            --arg model "$model" \
+            --arg system "$system_prompt" \
+            --arg user "$user_prompt" \
+            --argjson temperature "$AI_TEMPERATURE" \
+            --argjson max_tokens "$max_tokens" \
+            '{model: $model, messages: [{role: "system", content: $system}, {role: "user", content: $user}], temperature: $temperature, max_tokens: $max_tokens}')
+    else
+        local system_escaped=$(_json_escape_for_payload "$system_prompt")
+        local user_escaped=$(_json_escape_for_payload "$user_prompt")
+        json_payload="{\"model\":\"$model\",\"messages\":[{\"role\":\"system\",\"content\":\"$system_escaped\"},{\"role\":\"user\",\"content\":\"$user_escaped\"}],\"temperature\":$AI_TEMPERATURE,\"max_tokens\":$max_tokens}"
+    fi
     local proxy_url=$(get_ai_proxy)
     local safe_proxy_url=""
     local response=""
@@ -1286,155 +1499,179 @@ function check_ai_available {
     fi
     return 0
 }
-function generate_ai_commit_message {
-    local detected_scopes="$1"
-    local provided_scopes="$2"
-    local staged_files=$(git diff --name-only --cached)
-    if [ -z "$staged_files" ]; then
-        echo -e "${RED}No staged files found${ENDCOLOR}" >&2
-        return 1
-    fi
-    local staged_files_limited=$(get_limited_staged_files_for_ai)
-    local diff_content=$(get_limited_diff_stat_for_ai)
-    local diff_details=$(get_limited_diff_for_ai)
-    local recent_commits=$(get_recent_commit_messages_for_ai)
-    local prompt="Analyze the following git changes and generate a conventional commit message in the format 'type(scope): subject'.
-Available types:
-- feat: new feature, logic change or performance improvement
-- fix: small changes, bug fix, fnixes of features
-- refactor: code change that neither fixes a bug nor adds a feature, style changes, NO NEW BEAVIOUR
+function build_ai_commit_system_prompt {
+    local mode="$1"
+    local commit_prefix="$2"
+    local task_text output_format_text length_rule
+    case "$mode" in
+        subject)
+            task_text="Generate the SUBJECT TEXT only. The user has already chosen the prefix '${commit_prefix}'. The final commit header will be the literal concatenation: '${commit_prefix}<your output>'. Write only the suffix that comes after the prefix — do NOT include the prefix, type, scope, colon, or leading space. The subject must summarize ALL distinct changes in the diff, not just the first one you read."
+            output_format_text="Output ONLY the subject text. No prose before or after. No markdown fences. No surrounding quotes. No leading or trailing whitespace."
+            length_rule="The complete header (the prefix '${commit_prefix}' concatenated with your output) must be 100 characters or fewer."
+            ;;
+        full)
+            task_text="Generate a conventional commit in the format 'type(scope): subject', followed by a blank line, then a 1-3 sentence body explaining WHY. The header must summarize ALL distinct changes in the diff (not just the first one); the body must list every distinct change when there are 2 or more."
+            output_format_text="Output ONLY the commit message (header line, blank line, body). No prose before or after. No markdown fences. No surrounding quotes."
+            length_rule="The header line (type + scope + colon + space + subject) must be 100 characters or fewer."
+            ;;
+        *)
+            task_text="Generate a single-line conventional commit message in the format 'type(scope): subject'. No body. The subject must cover ALL distinct changes in the diff, not just the first one you read."
+            output_format_text="Output ONLY the commit message on one line. No prose before or after. No markdown fences. No surrounding quotes."
+            length_rule="The full message (type + scope + colon + space + subject) must be 100 characters or fewer."
+            ;;
+    esac
+    local prompt="You are a conventional commit message generator. You will receive git change data from the user wrapped in XML tags. Produce a commit message that follows the rules below and matches the style of <recent_commits>.
+These commit messages feed an automatically generated CHANGELOG. A reader skimming the changelog later should understand what changed (and in full mode, why) without opening the diff. Be specific, name the affected areas, and never hide multiple changes behind a vague summary.
+<task>
+${task_text}
+</task>"
+    if [ "$mode" != "subject" ]; then
+        prompt+="
+<types>
+- feat: new feature, logic change, or performance improvement
+- fix: bug fix or small correction to existing behaviour
+- refactor: code change that neither fixes a bug nor adds a feature; style changes; NO NEW BEHAVIOUR
 - test: adding missing tests or changing existing tests
 - build: changes that affect the build system or external dependencies
 - ci: changes to CI configuration files and scripts
 - chore: maintenance and housekeeping
 - docs: documentation changes
-Recent commit messages from this repository (for style reference):
-$recent_commits
-Staged files:
-$staged_files_limited
-File changes summary:
-$diff_content"
-    if [ -n "$provided_scopes" ]; then
-        prompt="$prompt
-Provided scopes list (choose the best related scope from this list when applicable):
-$provided_scopes"
+</types>"
     fi
-    if [ -n "$detected_scopes" ]; then
-        prompt="$prompt
-Detected scopes from file paths (use one of these if relevant):
-$detected_scopes"
+    prompt+="
+<rules>
+- COVERAGE (most important): Your message MUST account for every distinct change visible across <staged_files>, <diff_summary>, and <diff>. <staged_files> is your authoritative checklist — every file is listed with its action (added/modified/deleted/renamed/copied) and this section is preserved in full even when <diff> gets truncated. If <diff> is truncated, infer the missing changes from <staged_files> and <diff_summary>. Never describe only the first change you read. The mix of actions also hints at the type: many 'added' files often signal feat, mostly 'modified' files signal fix or refactor, 'renamed'/'deleted' often signal refactor or chore
+- For 2-3 distinct changes, combine them with 'and' (e.g., 'add auth module and user profile page')
+- For 4+ distinct changes, summarize with a count and name the most important ones (e.g., 'add 5 endpoints including auth, profile, settings, dashboard, and notifications')
+- For mixed change types (e.g., a feature and a fix), use the dominant type and mention the mix (e.g., 'feat: add caching layer and fix the related cache-key bug')
+- Never use vague placeholders like 'multiple changes', 'various updates', or 'misc fixes'
+- ${length_rule}
+- Subject text must be lowercase and must not end with a period
+- Use the imperative mood (e.g. 'add', 'fix', 'remove') — NOT past tense ('added', 'fixed') or progressive ('adding', 'fixing')
+- Be specific about WHAT changed. Avoid vague phrases like 'improve existing feature', 'update code', or 'fix bug'
+- Match the typical length, level of detail, and verb style of <recent_commits>. Generate fresh content for the actual diff — do not copy a recent message verbatim"
+    if [ "$mode" != "subject" ]; then
+        prompt+="
+- SCOPE: Use exactly ONE scope per commit, or omit the scope entirely (plain 'type: subject') when the changes don't fit a single scope. Never put multiple scopes in the parens (e.g. 'feat(auth,api):' is forbidden). When one scope clearly dominates the diff (most files / most logical weight), use that scope; when no single scope dominates, omit it and name the affected areas in the subject text instead. Prefer scope names from <provided_scopes> over <detected_scopes>; treat <staged_files> as the source of truth when both are silent"
     fi
-    prompt="$prompt
-Code changes (partial):
-$diff_details
-Generate ONLY the commit message in the format 'type(scope): subject'. The subject should:
-- Explain the idea of the change in details
-- Be short, it should not be more that 100 characters
-- Be specific, don't be very general, so do NOT write 'improve existing feature' or 'fix bug'
-- Be lowercase and not end with a period
-- Follow the style and patterns from the recent commits shown above
-If you can determine a meaningful scope from the file paths and LOGIC OF UPDATES, include it. Prefer using one of the provided scopes above when they exist. If none apply, use one of the detected scopes. Otherwise, omit the scope.
-IMPORTANT rules for commits with multiple distinct changes:
-- If the commit contains 2-3 distinct features or changes, combine them using 'and' in the subject (e.g., 'feat: add auth module and user profile page')
-- If the commit contains 4+ distinct features or changes, summarize them with a count and list the most important ones (e.g., 'feat: add 5 features including auth, profiles, settings, dashboard, and notifications')
-- If the commit mixes different types of changes (e.g., features and fixes), use the dominant type and mention the mix (e.g., 'feat: add auth module and fix login validation')
-- Always be specific about WHAT the changes are, never write vague messages like 'multiple changes' or 'various updates'
-Write ONLY the commit header in the format 'type(scope): subject', do not write body or footer after a new line!
-Respond with only the commit message, nothing else."
-    call_openrouter_api "$prompt"
+    if [ "$mode" = "full" ]; then
+        prompt+="
+- Body length: 1-3 sentences explaining WHY the change is being made (motivation, context, trade-off). If there are multiple distinct changes, list them in the body"
+    fi
+    prompt+="
+</rules>
+<examples>"
+    case "$mode" in
+        subject)
+            prompt+="
+<example>add backup codes for MFA recovery</example>
+<example>handle null userData in user lookup</example>
+<example>extract diff truncation into shared helper</example>
+<example>bump axios to 1.7.4 to address CVE-2024-39338</example>
+<example>unify prompt builders and switch to XML-tagged sections</example>
+<example>add 4 endpoints including profile, settings, dashboard, and notifications</example>"
+            ;;
+        full)
+            prompt+="
+<example>
+feat(auth): add backup codes for MFA recovery
+Required for SOC2 compliance — users need a recovery path when their TOTP device is unavailable. Replaces the old email-only fallback flow.
+</example>
+<example>
+fix(api): handle null userData in user lookup
+The upstream service started returning null for deleted users instead of a 404. Treat null as 'not found' to preserve the client-facing 404 contract.
+</example>
+<example>
+feat(api): add rate limiting, structured request logs, and CORS preflight handling
+Three middleware additions for the public API release: token-bucket limiter (60 req/min/IP), structured request logs feeding the new audit pipeline, and explicit CORS preflight responses for the browser SDK.
+</example>
+<example>
+feat: add SSO login and metered usage reporting
+Two product-level additions for the Q3 release that span unrelated areas: SAML/OIDC SSO replacing the legacy email-link auth flow, and per-tenant metered usage events emitted from the billing service to feed the new invoicing pipeline.
+</example>
+<example>
+refactor(commit): unify prompt builders, switch to XML-tagged sections, and add regenerate option
+Three closely related changes: collapse the three near-duplicate generate_* functions into one mode-dispatched entry point, restructure prompts as XML-tagged sections so the model can separate instructions from data, and add an 'r' option so users can ask for a different message without re-running the whole command.
+</example>"
+            ;;
+        *)
+            prompt+="
+<example>feat(auth): add backup codes for MFA recovery</example>
+<example>fix(api): handle null userData in user lookup</example>
+<example>refactor(commit): extract diff truncation into shared helper</example>
+<example>feat(auth): add login endpoints and matching auth middleware</example>
+<example>fix(parser): handle nested generics and trailing commas in the AST builder</example>
+<example>docs: add v1 to v2 migration guide</example>
+<example>chore: bump axios to 1.7.4 to address CVE-2024-39338</example>
+<example>refactor: unify prompt builders across commit and ai modules and switch to XML-tagged sections</example>
+<example>feat: add 4 endpoints including profile, settings, dashboard, and notifications</example>"
+            ;;
+    esac
+    prompt+="
+</examples>
+<output_format>
+${output_format_text}
+</output_format>"
+    printf '%s' "$prompt"
 }
-function generate_ai_commit_message_subject {
-    local commit_prefix="$1"
+function build_ai_commit_user_prompt {
+    local mode="$1"
     local detected_scopes="$2"
-    local staged_files=$(git diff --name-only --cached)
-    if [ -z "$staged_files" ]; then
-        echo -e "${RED}No staged files found${ENDCOLOR}" >&2
-        return 1
-    fi
+    local provided_scopes="$3"
     local staged_files_limited=$(get_limited_staged_files_for_ai)
-    local diff_content=$(get_limited_diff_stat_for_ai)
+    local diff_stat=$(get_limited_diff_stat_for_ai)
     local diff_details=$(get_limited_diff_for_ai)
     local recent_commits=$(get_recent_commit_messages_for_ai)
-    local prompt="Analyze the following git changes and generate a conventional commit message that will be appended to $commit_prefix.
-Recent commit messages from this repository (for style reference):
-$recent_commits
-Staged files:
-$staged_files_limited
-File changes summary:
-$diff_content
-Code changes (partial):
-$diff_details
-Generate ONLY the commit message. The message should:
-- Explain the idea of the change in details
-- Be short, it should not be more that 100 characters with prefix
-- Be specific, don't be very general, so do NOT write 'improve existing feature' or 'fix bug'
-- Be lowercase and not end with a period
-- Follow the style and patterns from the recent commits shown above
-IMPORTANT rules for commits with multiple distinct changes:
-- If the commit contains 2-3 distinct changes, combine them using 'and' (e.g., 'add auth module and user profile page')
-- If the commit contains 4+ distinct changes, summarize with a count and list the most important ones (e.g., 'add 5 features including auth, profiles, and settings')
-- Always be specific about WHAT the changes are, never write vague messages like 'multiple changes' or 'various updates'
-Write ONLY the commit message, do not write body or footer.
-Respond with only the commit message without any other text, nothing else."
-    call_openrouter_api "$prompt"
+    local prompt="<recent_commits>
+${recent_commits}
+</recent_commits>
+<staged_files>
+${staged_files_limited}
+</staged_files>
+<diff_summary>
+${diff_stat}
+</diff_summary>
+<diff>
+${diff_details}
+</diff>"
+    if [ "$mode" != "subject" ]; then
+        if [ -n "$provided_scopes" ]; then
+            prompt+="
+<provided_scopes>
+${provided_scopes}
+</provided_scopes>"
+        fi
+        if [ -n "$detected_scopes" ]; then
+            prompt+="
+<detected_scopes>
+${detected_scopes}
+</detected_scopes>"
+        fi
+    fi
+    prompt+="
+Before writing, scan <staged_files> and <diff_summary> end-to-end and identify every distinct change (group related files together). Then write a single commit message that covers them all, following every rule and matching the example style."
+    printf '%s' "$prompt"
 }
-function generate_ai_commit_message_full {
-    local detected_scopes="$1"
-    local provided_scopes="$2"
+function generate_ai_commit_message {
+    local mode="${1:-simple}"
+    local detected_scopes="$2"
+    local provided_scopes="$3"
+    local commit_prefix="$4"
     local staged_files=$(git diff --name-only --cached)
     if [ -z "$staged_files" ]; then
         echo -e "${RED}No staged files found${ENDCOLOR}" >&2
         return 1
     fi
-    local staged_files_limited=$(get_limited_staged_files_for_ai)
-    local diff_content=$(get_limited_diff_stat_for_ai)
-    local diff_details=$(get_limited_diff_for_ai)
-    local recent_commits=$(get_recent_commit_messages_for_ai)
-    local prompt="Analyze the following git changes and generate a conventional commit message in the format 'type(scope): subject' with body.
-Write a body for the commit message, where you can explain why you are making the change. The length of the body should be 1-2 sentences, not more.
-Available types:
-- feat: new feature, logic change or performance improvement
-- fix: small changes, bug fix, fixes of features
-- refactor: code change that neither fixes a bug nor adds a feature, style changes, NO NEW BEAVIOUR
-- test: adding missing tests or changing existing tests
-- build: changes that affect the build system or external dependencies
-- ci: changes to CI configuration files and scripts
-- chore: maintenance and housekeeping
-- docs: documentation changes
-Recent commit messages from this repository (for style reference):
-$recent_commits
-Staged files:
-$staged_files_limited
-File changes summary:
-$diff_content"
-    if [ -n "$provided_scopes" ]; then
-        prompt="$prompt
-Provided scopes list (choose the best related scope from this list when applicable):
-$provided_scopes"
-    fi
-    if [ -n "$detected_scopes" ]; then
-        prompt="$prompt
-Detected scopes from file paths (use one of these if relevant):
-$detected_scopes"
-    fi
-    prompt="$prompt
-Code changes (partial):
-$diff_details
-Generate ONLY the commit message in the format 'type(scope): subject' with body. The subject should:
-- Explain the idea of the change in details
-- Be short, it should not be more that 100 characters in title and 1-2 sentences in body
-- Be specific, don't be very general, so do NOT write 'improve existing feature' or 'fix bug'
-- Be lowercase and not end with a period
-- Follow the style and patterns from the recent commits shown above
-If you can determine a meaningful scope from the file paths and LOGIC OF UPDATES, include it. Prefer using one of the provided scopes above when they exist. If none apply, use one of the detected scopes. Otherwise, omit the scope.
-IMPORTANT rules for commits with multiple distinct changes:
-- If the commit contains 2-3 distinct features or changes, combine them using 'and' in the subject (e.g., 'feat: add auth module and user profile page')
-- If the commit contains 4+ distinct features or changes, summarize them with a count in the subject and list them in the body (e.g., subject: 'feat: add 5 new features for user management', body: 'Add auth module, user profiles, settings page, dashboard, and notifications')
-- If the commit mixes different types of changes (e.g., features and fixes), use the dominant type and mention the mix (e.g., 'feat: add auth module and fix login validation')
-- Always be specific about WHAT the changes are, never write vague messages like 'multiple changes' or 'various updates'
-The body should explain why you are making the change. If there are multiple changes, use the body to list them. The length of the body should be 1-3 sentences, not more.
-Respond with only the full commit message, nothing else."
-    call_openrouter_api "$prompt"
+    local system_prompt user_prompt
+    system_prompt=$(build_ai_commit_system_prompt "$mode" "$commit_prefix")
+    user_prompt=$(build_ai_commit_user_prompt "$mode" "$detected_scopes" "$provided_scopes")
+    local max_tokens model
+    case "$mode" in
+        subject) max_tokens="$AI_MAX_TOKENS_SUBJECT"; model=$(get_ai_model_for subject) ;;
+        full)    max_tokens="$AI_MAX_TOKENS_FULL";    model=$(get_ai_model_for full) ;;
+        *)       max_tokens="$AI_MAX_TOKENS_SIMPLE";  model=$(get_ai_model_for simple) ;;
+    esac
+    call_openrouter_api "$system_prompt" "$user_prompt" "$max_tokens" "$model"
 }
 function clear_sensitive_vars {
     api_key=""
@@ -1624,24 +1861,37 @@ function configure_ai_model {
     echo -e "${YELLOW}Configure AI Model${ENDCOLOR}"
     echo
     current_model=$(get_ai_model)
-    echo -e "Current model: ${GREEN}$current_model${ENDCOLOR}"
+    if [ -n "$current_model" ]; then
+        echo -e "Current global override: ${GREEN}$current_model${ENDCOLOR}"
+    else
+        echo -e "No global override set — each task uses its per-task default:"
+        echo -e "  • simple   → ${GREEN}$(get_ai_model_for simple)${ENDCOLOR}"
+        echo -e "  • subject  → ${GREEN}$(get_ai_model_for subject)${ENDCOLOR}"
+        echo -e "  • full     → ${GREEN}$(get_ai_model_for full)${ENDCOLOR}"
+        echo -e "  • grouping → ${GREEN}$(get_ai_model_for grouping)${ENDCOLOR}"
+    fi
     echo
-    echo -e "Enter the OpenRouter model ID you want to use for AI commit messages"
+    echo -e "Set a single model for all tasks (a global override), or leave empty to keep using the per-task defaults."
+    echo -e "Per-task overrides can be set directly with git config:"
+    echo -e "  ${BLUE}git config gitbasher.ai-model-simple <model_id>${ENDCOLOR}    (and -subject / -full / -grouping)"
+    echo
     echo -e "Popular models:"
-    echo -e "  • ${BLUE}openrouter/auto${ENDCOLOR} - Auto-select best available model (default)"
-    echo -e "  • ${BLUE}openai/gpt-4o-mini${ENDCOLOR} - Fast openai model"
-    echo -e "  • ${BLUE}anthropic/claude-haiku-4.5${ENDCOLOR} - Fast anthropic model"
-    echo -e "  • ${BLUE}google/gemini-2.5-flash${ENDCOLOR} - Fast google model"
+    echo -e "  • ${BLUE}openrouter/auto${ENDCOLOR} - Auto-select best available model"
+    echo -e "  • ${BLUE}google/gemini-3.1-flash-lite-preview${ENDCOLOR} - Fastest, cheapest"
+    echo -e "  • ${BLUE}google/gemini-3-flash-preview${ENDCOLOR} - Better body prose"
+    echo -e "  • ${BLUE}anthropic/claude-haiku-4.5${ENDCOLOR} - Strict instruction following"
+    echo -e "  • ${BLUE}openai/gpt-5-mini${ENDCOLOR} - Strong reasoning, low cost"
     echo
-    echo -e "Press Enter to exit without changes or enter 0 to reset to default"
+    echo -e "Press Enter to exit without changes or enter 0 to clear the override (back to per-task defaults)"
     read -p "Model ID: " model_input
     if [ "$model_input" == "" ]; then
         exit
     fi
     if [ "$model_input" == "0" ]; then
-        set_ai_model "openrouter/auto"
+        git config --unset gitbasher.ai-model 2>/dev/null
+        git config --global --unset gitbasher.ai-model 2>/dev/null
         echo
-        echo -e "${GREEN}AI model reset to default (openrouter/auto)${ENDCOLOR}"
+        echo -e "${GREEN}Global model override cleared. Each task now uses its per-task default.${ENDCOLOR}"
         exit
     fi
     echo
@@ -1747,6 +1997,72 @@ function configure_ai_history {
     yes_no_choice "\nSet AI commit history limit globally" "true"
     git config --global gitbasher.ai-commit-history-limit "$limit_input"
 }
+function configure_ai_diff {
+    echo -e "${YELLOW}Configure AI Diff Payload Size${ENDCOLOR}"
+    echo
+    current_lines=$(get_ai_diff_limit)
+    current_chars=$(get_ai_diff_max_chars)
+    echo -e "Current diff line limit: ${GREEN}${current_lines}${ENDCOLOR} lines"
+    echo -e "Current diff char cap:   ${GREEN}${current_chars}${ENDCOLOR} characters"
+    echo
+    echo -e "These settings control how much of the staged diff is sent to the AI."
+    echo -e "Larger values give the model more context but use more tokens (cost more)."
+    echo
+    echo -e "Recommended ranges:"
+    echo -e "• Line limit: ${BLUE}100-1000${ENDCOLOR} lines (default 300)"
+    echo -e "• Char cap:   ${BLUE}8000-40000${ENDCOLOR} characters (default 20000, ~5000 tokens)"
+    echo
+    echo -e "Press Enter on either prompt to keep the current value"
+    read -p "New diff line limit: " lines_input
+    if [ -n "$lines_input" ]; then
+        if ! validate_numeric_input "$lines_input" 10 5000; then
+            show_sanitization_error "diff line limit" "Please enter a positive number between 10 and 5000."
+            exit 1
+        fi
+        lines_input="$validated_number"
+        if [ "$lines_input" -lt 50 ] || [ "$lines_input" -gt 2000 ]; then
+            echo -e "${YELLOW}Warning: Value outside recommended range (50-2000)${ENDCOLOR}"
+            read -n 1 -p "Continue anyway? (y/n) " -s choice
+            echo
+            if ! is_yes "$choice"; then
+                exit
+            fi
+        fi
+        set_ai_diff_limit "$lines_input"
+        echo -e "${GREEN}AI diff line limit set to ${lines_input}${ENDCOLOR}"
+    fi
+    read -p "New diff char cap: " chars_input
+    if [ -n "$chars_input" ]; then
+        if ! validate_numeric_input "$chars_input" 1000 200000; then
+            show_sanitization_error "diff char cap" "Please enter a positive number between 1000 and 200000."
+            exit 1
+        fi
+        chars_input="$validated_number"
+        if [ "$chars_input" -lt 4000 ] || [ "$chars_input" -gt 100000 ]; then
+            echo -e "${YELLOW}Warning: Value outside recommended range (4000-100000)${ENDCOLOR}"
+            read -n 1 -p "Continue anyway? (y/n) " -s choice
+            echo
+            if ! is_yes "$choice"; then
+                exit
+            fi
+        fi
+        set_ai_diff_max_chars "$chars_input"
+        echo -e "${GREEN}AI diff char cap set to ${chars_input}${ENDCOLOR}"
+    fi
+    if [ -z "$lines_input" ] && [ -z "$chars_input" ]; then
+        echo -e "${YELLOW}No changes${ENDCOLOR}"
+        exit
+    fi
+    echo
+    echo -e "Do you want to apply ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+    yes_no_choice "\nApply AI diff settings globally" "true"
+    if [ -n "$lines_input" ]; then
+        git config --global gitbasher.ai-diff-limit "$lines_input"
+    fi
+    if [ -n "$chars_input" ]; then
+        git config --global gitbasher.ai-diff-max-chars "$chars_input"
+    fi
+}
 function set_scopes {
     echo -e "${YELLOW}Enter a list of predefined scopes${ENDCOLOR}"
     echo
@@ -1823,9 +2139,20 @@ function delete_global {
     if [ "$global_ai_history" != "" ]; then
         echo -e "9. AI commit history limit: ${GREEN}$global_ai_history${ENDCOLOR}"
     fi
+    global_ai_diff_lines=$(git config --global --get gitbasher.ai-diff-limit)
+    global_ai_diff_chars=$(git config --global --get gitbasher.ai-diff-max-chars)
+    if [ -n "$global_ai_diff_lines" ] || [ -n "$global_ai_diff_chars" ]; then
+        diff_summary=""
+        [ -n "$global_ai_diff_lines" ] && diff_summary="${global_ai_diff_lines} lines"
+        if [ -n "$global_ai_diff_chars" ]; then
+            [ -n "$diff_summary" ] && diff_summary="${diff_summary}, "
+            diff_summary="${diff_summary}${global_ai_diff_chars} chars"
+        fi
+        echo -e "10. AI diff payload: ${GREEN}${diff_summary}${ENDCOLOR}"
+    fi
     echo -e "0. Exit"
-    read -n 1 -s choice
-    re='^[0123456789]+$'
+    read -p "" choice
+    re='^([0-9]|10)$'
     if ! [[ $choice =~ $re ]]; then
         echo -e "${RED}Invalid choice${ENDCOLOR}" >&2
         return 1
@@ -1870,6 +2197,11 @@ function delete_global {
         9)
             echo -e "${GREEN}Unset AI commit history limit from global settings${ENDCOLOR}"
             git config --global --unset gitbasher.ai-commit-history-limit
+            ;;
+        10)
+            echo -e "${GREEN}Unset AI diff payload settings from global settings${ENDCOLOR}"
+            git config --global --unset gitbasher.ai-diff-limit 2>/dev/null
+            git config --global --unset gitbasher.ai-diff-max-chars 2>/dev/null
             ;;
     esac
 }
@@ -1921,6 +2253,7 @@ function config_script {
         model|m)              set_ai_model_cfg="true";;
         proxy|prx|p)          set_proxy_cfg="true";;
         history|hist)         set_ai_history_cfg="true";;
+        diff|payload)         set_ai_diff_cfg="true";;
         delete|unset|del)     delete_cfg="true";;
         user|name|email|u)    set_user_cfg="true";;
         help|h)               help="true";;
@@ -1945,6 +2278,8 @@ function config_script {
         header="$header AI PROXY"
     elif [ -n "${set_ai_history_cfg}" ]; then
         header="$header AI COMMIT HISTORY"
+    elif [ -n "${set_ai_diff_cfg}" ]; then
+        header="$header AI DIFF PAYLOAD"
     elif [ -n "${delete_cfg}" ]; then
         header="$header UNSET GLOBAL CONFIG"
     elif [ -n "${set_user_cfg}" ]; then
@@ -1992,6 +2327,10 @@ function config_script {
         configure_ai_history
         exit
     fi
+    if [ "$set_ai_diff_cfg" == "true" ]; then
+        configure_ai_diff
+        exit
+    fi
     if [ "$delete_cfg" == "true" ]; then
         delete_global
         exit
@@ -2011,6 +2350,7 @@ function config_script {
         msg="$msg\n${BOLD}model${ENDCOLOR}_m_Set AI model for OpenRouter"
         msg="$msg\n${BOLD}proxy${ENDCOLOR}_prx|p_Set HTTP proxy for AI requests (bypass geo-restrictions)"
         msg="$msg\n${BOLD}history${ENDCOLOR}_hist_Set number of recent commits to include in AI prompts"
+        msg="$msg\n${BOLD}diff${ENDCOLOR}_payload_Set diff payload size (lines and char cap) sent to AI"
         msg="$msg\n${BOLD}delete${ENDCOLOR}_unset|del_Unset global configuration"
         msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
         echo -e "$(echo -e "$msg" | column -ts'_')"
@@ -3553,30 +3893,55 @@ function pull {
 function push {
     push_output=$(git push $1 ${origin_name} ${current_branch} 2>&1)
     push_code=$?
-    if [ $push_code -eq 0 ] ; then 
+    if [ $push_code -eq 0 ] ; then
         echo -e "${GREEN}Successful push!${ENDCOLOR}"
         repo=$(get_repo)
-        echo -e "${YELLOW}Repo:${ENDCOLOR}\t${repo}"
+        host=$(get_repo_host "$repo")
+        head_hash=$(git rev-parse HEAD 2>/dev/null)
+        print_link "Repo" "$repo"
+        if [ -n "$head_hash" ]; then
+            commit_url=$(get_commit_url "$head_hash" "$repo")
+            if [ -n "$commit_url" ]; then
+                print_link "Commit" "$commit_url"
+            fi
+        fi
         if [[ ${current_branch} != ${main_branch} ]]; then
-            link=$(echo "$push_output" | grep "https://" | sed 's|^remote:[[:space:]]*||')
-            if [[ $repo == *"github"* ]]; then
-                if [ "$link" != "" ]; then
-                    echo -e "${YELLOW}New PR:${ENDCOLOR}\t${link}"
+            branch_url=$(get_branch_url "${current_branch}" "$repo")
+            if [ -n "$branch_url" ]; then
+                print_link "Branch" "$branch_url"
+            fi
+            link=$(echo "$push_output" | grep -Eo "https?://[^[:space:]]+" | head -n 1 | sed 's|^remote:[[:space:]]*||')
+            if [ "$host" = "github" ]; then
+                if [ -n "$link" ]; then
+                    print_link "New PR" "$link"
                 else
-                    echo -e "${YELLOW}PRs:${ENDCOLOR}\t${repo}/pulls"
+                    new_pr_url=$(get_new_pr_url "${main_branch}" "${current_branch}" "$repo")
+                    print_link "New PR" "$new_pr_url"
                 fi
-            elif [[ $repo == *"gitlab"* ]]; then
-                is_new=$(echo "$push_output" | grep "create a merge request")
-                if [ "$is_new" != "" ]; then
-                    echo -e "${YELLOW}New MR:${ENDCOLOR}\t${link}"
-                else
-                    if [ "$link" != "" ]; then
-                        echo -e "${YELLOW}MR:${ENDCOLOR}\t${link}"
+            elif [ "$host" = "gitlab" ]; then
+                if [ -n "$link" ]; then
+                    is_new=$(echo "$push_output" | grep -i "create a merge request")
+                    if [ -n "$is_new" ]; then
+                        print_link "New MR" "$link"
                     else
-                        echo -e "${YELLOW}MRs:${ENDCOLOR}\t${repo}/merge_requests"
+                        print_link "MR" "$link"
                     fi
+                else
+                    new_mr_url=$(get_new_pr_url "${main_branch}" "${current_branch}" "$repo")
+                    print_link "New MR" "$new_mr_url"
+                fi
+            elif [ "$host" = "bitbucket" ]; then
+                if [ -n "$link" ]; then
+                    print_link "New PR" "$link"
+                else
+                    new_pr_url=$(get_new_pr_url "${main_branch}" "${current_branch}" "$repo")
+                    print_link "New PR" "$new_pr_url"
                 fi
             fi
+        fi
+        ci_url=$(get_ci_url "${current_branch}" "$repo")
+        if [ -n "$ci_url" ]; then
+            print_link "$(get_ci_label "$repo")" "$ci_url"
         fi
         exit
     fi
@@ -3767,6 +4132,429 @@ function detect_scopes_from_staged_files {
         fi
     fi
 }
+function build_split_groups_from_staged {
+    detect_scopes_from_staged_files
+    unset split_groups split_group_keys
+    declare -gA split_groups=()
+    split_group_keys=()
+    if [ -z "$detected_scopes" ]; then
+        return 1
+    fi
+    local -a scopes_arr
+    IFS=' ' read -r -a scopes_arr <<< "$detected_scopes"
+    local staged_files
+    staged_files=$(git diff --name-only --cached)
+    [ -z "$staged_files" ] && return 1
+    local file scope comp comp_lower comp_no_ext_lower assigned
+    local -a comps
+    while IFS= read -r file; do
+        [ -z "$file" ] && continue
+        assigned=""
+        IFS='/' read -r -a comps <<< "$file"
+        for scope in "${scopes_arr[@]}"; do
+            for comp in "${comps[@]}"; do
+                [ -z "$comp" ] && continue
+                comp_lower="${comp,,}"
+                comp_no_ext_lower="${comp_lower%.*}"
+                [ -z "$comp_no_ext_lower" ] && comp_no_ext_lower="$comp_lower"
+                if [ "$comp_lower" = "$scope" ] || [ "$comp_no_ext_lower" = "$scope" ]; then
+                    assigned="$scope"
+                    break 2
+                fi
+            done
+        done
+        [ -z "$assigned" ] && assigned="misc"
+        if [ -z "${split_groups[$assigned]:-}" ]; then
+            split_group_keys+=("$assigned")
+            split_groups[$assigned]="$file"
+        else
+            split_groups[$assigned]+=$'\n'"$file"
+        fi
+    done <<< "$staged_files"
+    if [ ${#split_group_keys[@]} -lt 2 ]; then
+        return 1
+    fi
+    return 0
+}
+function is_heuristic_weak {
+    local total
+    total=$(git diff --name-only --cached | grep -c .)
+    [ "$total" -lt 4 ] && return 1
+    if [ ${#split_group_keys[@]} -le 1 ]; then
+        local subdir_count
+        subdir_count=$(git diff --name-only --cached | LC_ALL=C awk -F/ 'NF>=3 {print $1"/"$2}' | sort -u | grep -c .)
+        [ "$subdir_count" -ge 2 ] && return 0
+        return 1
+    fi
+    local max_size=0 n
+    local s
+    for s in "${split_group_keys[@]}"; do
+        n=$(printf '%s\n' "${split_groups[$s]}" | grep -c .)
+        [ "$n" -gt "$max_size" ] && max_size="$n"
+    done
+    local pct=$((max_size * 100 / total))
+    [ "$pct" -gt 70 ] && return 0
+    return 1
+}
+function refine_groups_with_ai {
+    local staged_files
+    staged_files=$(git diff --name-only --cached)
+    [ -z "$staged_files" ] && return 1
+    local diff_stat recent_commits
+    diff_stat=$(get_limited_diff_stat_for_ai)
+    recent_commits=$(get_recent_commit_messages_for_ai)
+    local heuristic_hint=""
+    if [ -n "$detected_scopes" ]; then
+        heuristic_hint="$detected_scopes"
+    fi
+    local system_prompt='You group staged git files into logical scopes for atomic commits.
+Input arrives in XML tags: a list of staged files, a diff summary, recent commit messages (for codebase scope conventions), and heuristic-detected candidate scope tokens.
+Task: assign EVERY staged file to a single scope. Use 2-5 groups when there is meaningful separation; use exactly 1 group only if all files truly belong together. Use lowercase scope names that match the style of <recent_commits>. Prefer scope names from <heuristic_candidates> when they fit the file path or change; invent new ones only when none of the candidates apply. Use "misc" for files with no clear scope (e.g., README, top-level config).
+Output format: TSV only. One line per staged file in the form <scope><TAB><file_path>. No header, no prose, no markdown fences, no surrounding quotes. Every file from <staged_files> MUST appear exactly once. The file paths must be byte-identical to those in <staged_files>.'
+    local user_prompt="<recent_commits>
+${recent_commits}
+</recent_commits>
+<staged_files>
+${staged_files}
+</staged_files>
+<diff_summary>
+${diff_stat}
+</diff_summary>
+<heuristic_candidates>
+${heuristic_hint}
+</heuristic_candidates>
+Output TSV (scope<TAB>file) for every staged file. No prose."
+    local ai_response
+    ai_response=$(call_openrouter_api "$system_prompt" "$user_prompt" "$AI_MAX_TOKENS_FULL" "$(get_ai_model_for grouping)" 2>/dev/null)
+    if [ $? -ne 0 ] || [ -z "$ai_response" ]; then
+        return 1
+    fi
+    ai_response=$(printf '%s' "$ai_response" | LC_ALL=C sed -e 's/^```[a-zA-Z]*$//' -e 's/^```$//')
+    local -A staged_set=()
+    while IFS= read -r f; do
+        [ -n "$f" ] && staged_set["$f"]=1
+    done <<< "$staged_files"
+    local -A new_groups=()
+    local -a new_keys=()
+    local line scope file tab_count
+    local tab=$'\t'
+    while IFS= read -r line; do
+        line=$(printf '%s' "$line" | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        [ -z "$line" ] && continue
+        tab_count=$(printf '%s' "$line" | LC_ALL=C tr -cd "$tab" | wc -c | tr -d ' ')
+        [ "$tab_count" -ne 1 ] && continue
+        scope="${line%%	*}"
+        file="${line#*	}"
+        if ! [[ "$scope" =~ ^[a-zA-Z0-9._/-]+$ ]]; then
+            continue
+        fi
+        scope=$(printf '%s' "$scope" | LC_ALL=C tr '[:upper:]' '[:lower:]')
+        [ -z "${staged_set[$file]:-}" ] && continue
+        if [ -z "${new_groups[$scope]:-}" ]; then
+            new_keys+=("$scope")
+            new_groups[$scope]="$file"
+        else
+            new_groups[$scope]+=$'\n'"$file"
+        fi
+    done <<< "$ai_response"
+    local total_assigned=0 total_staged
+    local key
+    for key in "${new_keys[@]}"; do
+        total_assigned=$((total_assigned + $(printf '%s\n' "${new_groups[$key]}" | grep -c .)))
+    done
+    total_staged=$(printf '%s\n' "$staged_files" | grep -c .)
+    if [ "$total_assigned" -ne "$total_staged" ] || [ ${#new_keys[@]} -lt 1 ]; then
+        return 1
+    fi
+    unset split_groups split_group_keys
+    declare -gA split_groups
+    split_group_keys=()
+    for key in "${new_keys[@]}"; do
+        split_groups[$key]="${new_groups[$key]}"
+        split_group_keys+=("$key")
+    done
+    return 0
+}
+function _restore_split_snapshot {
+    local snapshot="$1"
+    [ -f "$snapshot" ] || return
+    local currently_staged
+    currently_staged=$(git diff --name-only --cached)
+    if [ -n "$currently_staged" ]; then
+        while IFS= read -r f; do
+            [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
+        done <<< "$currently_staged"
+    fi
+    while IFS= read -r f; do
+        [ -n "$f" ] && git add -- "$f" >/dev/null 2>&1
+    done < "$snapshot"
+    rm -f "$snapshot"
+}
+function perform_commit_split {
+    local original_staged
+    original_staged=$(git diff --name-only --cached)
+    if [ -z "$original_staged" ]; then
+        echo -e "${RED}No staged files to split${ENDCOLOR}"
+        return 1
+    fi
+    local snapshot_file
+    snapshot_file=$(mktemp "/tmp/gitb-split-snapshot.XXXXXX")
+    printf '%s\n' "$original_staged" > "$snapshot_file"
+    trap "_restore_split_snapshot '$snapshot_file'" INT TERM
+    local total=${#split_group_keys[@]}
+    local idx=0
+    local commit_count=0
+    local -a commit_hashes=()
+    local ai_ok="true"
+    if ! check_ai_available 2>/dev/null; then
+        ai_ok="false"
+    fi
+    local scope files_str msg ai_msg choice scope_for_msg prefix manual_input
+    local -a files_array
+    for scope in "${split_group_keys[@]}"; do
+        idx=$((idx + 1))
+        echo
+        echo -e "${YELLOW}── Split commit ${idx}/${total}: scope '${scope}' ──${ENDCOLOR}"
+        local currently_staged
+        currently_staged=$(git diff --name-only --cached)
+        if [ -n "$currently_staged" ]; then
+            while IFS= read -r f; do
+                [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
+            done <<< "$currently_staged"
+        fi
+        files_str="${split_groups[$scope]}"
+        files_array=()
+        while IFS= read -r f; do
+            [ -n "$f" ] && files_array+=("$f")
+        done <<< "$files_str"
+        if [ ${#files_array[@]} -eq 0 ]; then
+            echo -e "${YELLOW}No files in this group, skipping${ENDCOLOR}"
+            continue
+        fi
+        if ! git add -- "${files_array[@]}"; then
+            echo -e "${RED}Failed to stage files for scope '${scope}'${ENDCOLOR}"
+            _restore_split_snapshot "$snapshot_file"
+            trap - INT TERM
+            return 1
+        fi
+        echo -e "${YELLOW}Files in this commit:${ENDCOLOR}"
+        print_staged_files
+        echo
+        scope_for_msg="$scope"
+        [ "$scope" = "misc" ] && scope_for_msg=""
+        msg=""
+        if [ -n "$llm" ] && [ "$ai_ok" = "true" ]; then
+            echo -e "${YELLOW}Generating commit message with AI...${ENDCOLOR}"
+            ai_msg=$(generate_ai_commit_message "simple" "$scope_for_msg" "$scope_for_msg" "")
+            if [ $? -eq 0 ] && [ -n "$ai_msg" ]; then
+                ai_msg=$(echo "$ai_msg" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+                if [ -n "$auto_accept" ]; then
+                    msg="$ai_msg"
+                    echo -e "${GREEN}AI message:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
+                else
+                    echo
+                    echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
+                    read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) "
+                    echo
+                    normalize_key "$choice"
+                    while [ "$normalized_key" = "r" ]; do
+                        echo -e "${YELLOW}Regenerating...${ENDCOLOR}"
+                        ai_msg=$(generate_ai_commit_message "simple" "$scope_for_msg" "$scope_for_msg" "")
+                        if [ $? -ne 0 ] || [ -z "$ai_msg" ]; then
+                            ai_msg=""
+                            break
+                        fi
+                        ai_msg=$(echo "$ai_msg" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+                        echo
+                        echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
+                        read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) "
+                        echo
+                        normalize_key "$choice"
+                    done
+                    if [ "$normalized_key" = "y" ] || [ -z "$choice" ]; then
+                        msg="$ai_msg"
+                    elif [ "$normalized_key" = "e" ]; then
+                        read -p "Edit: " -e -i "$ai_msg" manual_input
+                        msg="$manual_input"
+                    elif [ "$normalized_key" = "s" ]; then
+                        echo -e "${YELLOW}Skipping scope '${scope}' (files left unstaged)${ENDCOLOR}"
+                        while IFS= read -r f; do
+                            [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
+                        done <<< "$files_str"
+                        continue
+                    elif [ "$choice" = "0" ]; then
+                        _restore_split_snapshot "$snapshot_file"
+                        trap - INT TERM
+                        echo
+                        echo -e "${YELLOW}Aborted. Created ${commit_count} commit(s); original staging restored.${ENDCOLOR}"
+                        exit 0
+                    fi
+                fi
+            fi
+        fi
+        if [ -z "$msg" ] && [ -n "$auto_accept" ]; then
+            echo -e "${RED}AI message generation failed; auto-accept mode cannot prompt for a manual message.${ENDCOLOR}"
+            echo -e "${YELLOW}Configure AI (gitb cfg ai) or use a non-ff mode.${ENDCOLOR}"
+            _restore_split_snapshot "$snapshot_file"
+            trap - INT TERM
+            return 1
+        fi
+        if [ -z "$msg" ]; then
+            local commit_type=""
+            local is_empty_msg=""
+            echo -e "${YELLOW}What type of changes for ${YELLOW}${scope}${ENDCOLOR}?${ENDCOLOR}"
+            echo -e "1. ${BOLD}feat${ENDCOLOR}    2. ${BOLD}fix${ENDCOLOR}     3. ${BOLD}refactor${ENDCOLOR}  4. ${BOLD}test${ENDCOLOR}    5. ${BOLD}build${ENDCOLOR}"
+            echo -e "6. ${BOLD}ci${ENDCOLOR}      7. ${BOLD}chore${ENDCOLOR}   8. ${BOLD}docs${ENDCOLOR}      9. plain (no type/scope)   s. skip group   0. abort split"
+            local tchoice
+            while true; do
+                read -n 1 -s tchoice
+                case "$tchoice" in
+                    1) commit_type="feat"; break ;;
+                    2) commit_type="fix"; break ;;
+                    3) commit_type="refactor"; break ;;
+                    4) commit_type="test"; break ;;
+                    5) commit_type="build"; break ;;
+                    6) commit_type="ci"; break ;;
+                    7) commit_type="chore"; break ;;
+                    8) commit_type="docs"; break ;;
+                    9) is_empty_msg="true"; break ;;
+                    s|S)
+                        echo -e "${YELLOW}Skipping scope '${scope}' (files left unstaged)${ENDCOLOR}"
+                        while IFS= read -r f; do
+                            [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
+                        done <<< "$files_str"
+                        continue 2
+                        ;;
+                    0)
+                        _restore_split_snapshot "$snapshot_file"
+                        trap - INT TERM
+                        echo
+                        echo -e "${YELLOW}Aborted. Created ${commit_count} commit(s); original staging restored.${ENDCOLOR}"
+                        exit 0
+                        ;;
+                esac
+            done
+            prefix=""
+            if [ -z "$is_empty_msg" ]; then
+                if [ -n "$scope_for_msg" ]; then
+                    prefix="${commit_type}(${scope_for_msg}): "
+                else
+                    prefix="${commit_type}: "
+                fi
+            fi
+            echo -e "${YELLOW}Write a summary (Enter to skip group):${ENDCOLOR}"
+            read -p "$prefix" -e manual_input
+            if [ -z "$manual_input" ]; then
+                echo -e "${YELLOW}Skipping scope '${scope}'${ENDCOLOR}"
+                while IFS= read -r f; do
+                    [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
+                done <<< "$files_str"
+                continue
+            fi
+            if ! sanitize_commit_message "$manual_input"; then
+                show_sanitization_error "commit message" "Use printable characters only, 1-2000 characters."
+                _restore_split_snapshot "$snapshot_file"
+                trap - INT TERM
+                return 1
+            fi
+            msg="${prefix}${sanitized_commit_message}"
+        fi
+        local result
+        result=$(git commit -m """$msg""" 2>&1)
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}Commit failed:${ENDCOLOR}"
+            echo "$result"
+            _restore_split_snapshot "$snapshot_file"
+            trap - INT TERM
+            return 1
+        fi
+        commit_count=$((commit_count + 1))
+        local last_hash
+        last_hash=$(git rev-parse --short HEAD)
+        commit_hashes+=("$last_hash")
+        echo -e "${GREEN}Committed ${last_hash} ${msg}${ENDCOLOR}"
+    done
+    rm -f "$snapshot_file"
+    trap - INT TERM
+    git config --unset gitbasher.cached-git-add 2>/dev/null
+    git config --unset gitbasher.cached-commit-message 2>/dev/null
+    echo
+    if [ $commit_count -eq 0 ]; then
+        echo -e "${YELLOW}No commits were created.${ENDCOLOR}"
+        exit 0
+    fi
+    echo -e "${GREEN}Created ${commit_count} atomic commit(s) on ${current_branch}:${ENDCOLOR}"
+    for h in "${commit_hashes[@]}"; do
+        echo -e "  ${BLUE}${h}${ENDCOLOR}"
+    done
+    if [ -n "${push}" ]; then
+        echo
+        push_script y
+    fi
+    exit 0
+}
+function try_offer_commit_split {
+    local force_split="$1"
+    local auto_yes="$2"
+    local auto_split
+    auto_split=$(get_config_value gitbasher.commit-auto-split "ask")
+    if [ "$auto_split" = "never" ] && [ -z "$force_split" ]; then
+        return 1
+    fi
+    build_split_groups_from_staged
+    local heuristic_result=$?
+    local ai_grouping
+    ai_grouping=$(get_config_value gitbasher.commit-ai-grouping "auto")
+    local should_refine="false"
+    case "$ai_grouping" in
+        always) should_refine="true" ;;
+        never)  should_refine="false" ;;
+        *)      # auto: refine only when heuristic is suspect
+                if is_heuristic_weak; then
+                    should_refine="true"
+                fi
+                ;;
+    esac
+    if [ -z "$llm" ]; then
+        should_refine="false"
+    fi
+    if [ "$should_refine" = "true" ] && check_ai_available 2>/dev/null; then
+        echo
+        echo -e "${YELLOW}Refining scope grouping with AI...${ENDCOLOR}"
+        if ! refine_groups_with_ai; then
+            echo -e "${YELLOW}AI grouping failed, falling back to heuristic.${ENDCOLOR}"
+        fi
+    fi
+    if [ ${#split_group_keys[@]} -lt 2 ]; then
+        if [ -n "$force_split" ]; then
+            echo -e "${YELLOW}Cannot split: could not identify multiple distinct scopes.${ENDCOLOR}"
+        fi
+        return 1
+    fi
+    echo
+    echo -e "${YELLOW}Detected changes across ${#split_group_keys[@]} scopes:${ENDCOLOR}"
+    local scope file_count
+    for scope in "${split_group_keys[@]}"; do
+        file_count=$(printf '%s\n' "${split_groups[$scope]}" | grep -c .)
+        echo -e "  ${BOLD}${scope}${ENDCOLOR} (${file_count} file(s)):"
+        while IFS= read -r f; do
+            [ -n "$f" ] && echo -e "    ${GRAY}${f}${ENDCOLOR}"
+        done <<< "${split_groups[$scope]}"
+    done
+    echo
+    local choice
+    if [ -n "$force_split" ] || [ -n "$auto_yes" ] || [ "$auto_split" = "always" ]; then
+        choice="y"
+    else
+        read_key choice "Split into ${#split_group_keys[@]} atomic commits for a cleaner changelog? (y/N) "
+        echo
+    fi
+    if ! is_yes "$choice"; then
+        return 1
+    fi
+    perform_commit_split
+    return $?
+}
 function handle_ai_commit_generation {
     local step="$1"
     local ai_mode="$2"
@@ -3784,32 +4572,38 @@ function handle_ai_commit_generation {
         exit 1
     fi
     detect_scopes_from_staged_files
-    local ai_commit_message
-    if [ "$ai_mode" = "full" ]; then
-        ai_commit_message=$(generate_ai_commit_message_full "$detected_scopes" "$scopes")
-    elif [ "$ai_mode" = "subject" ]; then
-        ai_commit_message=$(generate_ai_commit_message_subject "$commit_prefix" "$detected_scopes")
-    else
-        ai_commit_message=$(generate_ai_commit_message "$detected_scopes" "$scopes")
-    fi
-    if [ $? -ne 0 ] || [ -z "$ai_commit_message" ]; then
+    local ai_commit_message choice
+    while true; do
+        ai_commit_message=$(generate_ai_commit_message "$ai_mode" "$detected_scopes" "$scopes" "$commit_prefix")
+        if [ $? -ne 0 ] || [ -z "$ai_commit_message" ]; then
+            echo
+            echo -e "${RED}Failed to generate AI commit message${ENDCOLOR}"
+            cleanup_on_exit "$git_add"
+            exit 1
+        fi
+        ai_commit_message=$(echo "$ai_commit_message" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
         echo
-        echo -e "${RED}Failed to generate AI commit message${ENDCOLOR}"
-        cleanup_on_exit "$git_add"
-        exit 1
-    fi
-    ai_commit_message=$(echo "$ai_commit_message" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-    echo
-    echo -e "${GREEN}AI generated commit message:${ENDCOLOR}"
-    echo -e "${BOLD}$ai_commit_message${ENDCOLOR}"
-    echo
-    git config gitbasher.cached-commit-message "$ai_commit_message"
-    read_key choice "Use this commit message? (y/n/e to edit/0 to exit) "
-    echo
-    if [ "$ai_mode" != "subject" ] && [ "$choice" != "0" ]; then
+        echo -e "${GREEN}AI generated commit message:${ENDCOLOR}"
+        echo -e "${BOLD}$ai_commit_message${ENDCOLOR}"
         echo
-    fi
-    normalize_key "$choice"
+        git config gitbasher.cached-commit-message "$ai_commit_message"
+        if [ -n "$auto_accept" ]; then
+            choice="y"
+            normalized_key="y"
+            break
+        fi
+        read_key choice "Use this commit message? (y/n/r to regenerate/e to edit/0 to exit) "
+        echo
+        if [ "$ai_mode" != "subject" ] && [ "$choice" != "0" ]; then
+            echo
+        fi
+        normalize_key "$choice"
+        if [ "$normalized_key" = "r" ]; then
+            echo -e "${YELLOW}Regenerating...${ENDCOLOR}"
+            continue
+        fi
+        break
+    done
     if [ "$normalized_key" = "y" ] || [ -z "$choice" ]; then
         commit="$ai_commit_message"
         if [ "$ai_mode" = "subject" ]; then
@@ -3910,13 +4704,43 @@ function after_commit {
         echo -e "Undo commit: ${YELLOW}gitb reset${ENDCOLOR}"
     fi
 }
+function set_commit_flag_from_token {
+    case "$1" in
+        ai|llm|i)            llm="true";;
+        fast|f)              fast="true";;
+        push|pu|p)           push="true";;
+        scope|s)             scope="true";;
+        msg|m)               msg="true";;
+        ticket|jira|j|t)     ticket="true";;
+        staged)              staged="true";;
+        fixup|fix|x)         fixup="true";;
+        amend|am|a)          amend="true";;
+        split|sp|sl)         split="true";;
+        last|l)              last="true";;
+        revert|rev)          revert="true";;
+        help|h)              help="true";;
+        *) return 1;;
+    esac
+    return 0
+}
 function commit_script {
+    if [ $# -ge 2 ]; then
+        for tok in "$@"; do
+            set_commit_flag_from_token "$tok" || wrong_mode "commit" "$tok"
+        done
+    else
     case "$1" in
         scope|s)            ;; # general commit with scope
+        split|sp|sl)        split="true";; # force atomic-split flow (heuristic + manual messages)
+        splitp|spp|slp)     split="true"; push="true";;
+        aisplit|isplit|aispl|ispl)        split="true"; llm="true";; # AI-refined grouping + AI messages
+        aisplitp|isplitp|aisplp|isplp)    split="true"; llm="true"; push="true";;
         msg|m)              msg="true";;
         ticket|jira|j|t)    ticket="true";;
         fast|f)             fast="true";;
         fasts|fs|sf)        fast="true"; scope="true";;
+        ff)                 fast="true"; llm="true"; auto_accept="true";; # ultrafast: no prompts at all
+        ffp|ffpush)         fast="true"; llm="true"; auto_accept="true"; push="true";;
         staged|st)          staged="true";;
         push|pu|p)          push="true";;
         fastp|fp|pf)        fast="true"; push="true";;
@@ -3946,11 +4770,24 @@ function commit_script {
         *)
             wrong_mode "commit" $1
     esac
+    fi
     header_msg="GIT COMMIT"
     if [ -n "${llm}" ]; then
         header_msg="$header_msg AI"
     fi
-    if [ -n "${staged}" ]; then
+    if [ -n "${auto_accept}" ]; then
+        if [ -n "${push}" ]; then
+            header_msg="$header_msg ULTRAFAST & PUSH"
+        else
+            header_msg="$header_msg ULTRAFAST"
+        fi
+    elif [ -n "${split}" ]; then
+        if [ -n "${push}" ]; then
+            header_msg="$header_msg SPLIT & PUSH"
+        else
+            header_msg="$header_msg SPLIT"
+        fi
+    elif [ -n "${staged}" ]; then
         header_msg="$header_msg STAGED"
     elif [ -n "${fast}" ]; then
         if [ -n "${push}" ]; then
@@ -3996,6 +4833,12 @@ function commit_script {
         msg="$msg\n${BOLD}push${ENDCOLOR}_pu|p_Create a commit and push changes at the end"
         msg="$msg\n${BOLD}fastp${ENDCOLOR}_fp|pf_Create a commit in the fast mode and push changes"
         msg="$msg\n${BOLD}fastsp${ENDCOLOR}_fsp|fps_Create a commit in the fast mode with scope and push changes"
+        msg="$msg\n${BOLD}split${ENDCOLOR}_sp|sl_Split staged changes into one commit per detected scope (heuristic grouping, manual type+summary per group)"
+        msg="$msg\n${BOLD}splitp${ENDCOLOR}_spp|slp_Same as split, then push the resulting commits"
+        msg="$msg\n${BOLD}aisplit${ENDCOLOR}_isplit|aispl|ispl_Same as split, but AI refines the grouping when heuristic is weak and writes each commit message"
+        msg="$msg\n${BOLD}aisplitp${ENDCOLOR}_isplitp|aisplp|isplp_Same as aisplit, then push the resulting commits"
+        msg="$msg\n${BOLD}ff${ENDCOLOR}_ _Ultrafast: git add ., AI-grouped split, AI messages, no prompts (requires AI configured)"
+        msg="$msg\n${BOLD}ffp${ENDCOLOR}_ffpush_Same as ff, then push the resulting commits"
         msg="$msg\n${BOLD}fixup${ENDCOLOR}_fix|x_Select files and commit to make a --fixup commit (git commit --fixup <hash>)"
         msg="$msg\n${BOLD}fixupp${ENDCOLOR}_fixp|xp|px_Select files and commit to make a --fixup commit and push changes"
         msg="$msg\n${BOLD}fixupst${ENDCOLOR}_xst|stx_Use already staged files to make a --fixup commit (git commit --fixup <hash>)"
@@ -4172,6 +5015,17 @@ function commit_script {
     else
         staged_files_list="$(sed 's/^/\t/' <<< "$(git diff --name-only --cached)")"
     fi
+    if [ -z "${amend}" ] && [ -z "${fixup}" ] && [ -z "${msg}" ] && [ -z "${ticket}" ]; then
+        _split_auto_yes=""
+        if [ -n "$fast" ] || [ -n "$auto_accept" ]; then
+            _split_auto_yes="true"
+        fi
+        try_offer_commit_split "$split" "$_split_auto_yes"
+        if [ -n "$split" ]; then
+            cleanup_on_exit "$git_add"
+            exit 0
+        fi
+    fi
     saved_commit_message=$(git config --get gitbasher.cached-commit-message 2>/dev/null)
     if [ -n "$saved_commit_message" ] && [ -z "${fixup}" ] && [ -z "${amend}" ]; then
         echo
@@ -4267,14 +5121,14 @@ function commit_script {
         step="1"
     fi
     echo -e "${YELLOW}Step ${step}.${ENDCOLOR} What ${YELLOW}type${ENDCOLOR} of changes do you want to commit?"
-    echo -e "Final meesage will be ${YELLOW}<type>${ENDCOLOR}(${BLUE}<scope>${ENDCOLOR}): ${BLUE}<summary>${ENDCOLOR}"
+    echo -e "Final message will be ${YELLOW}<type>${ENDCOLOR}(${BLUE}<scope>${ENDCOLOR}): ${BLUE}<summary>${ENDCOLOR}"
     echo -e "1. ${BOLD}feat${ENDCOLOR}:\tnew feature, logic change or performance improvement"
     echo -e "2. ${BOLD}fix${ENDCOLOR}:\t\tsmall changes, eg. bug fix"
     echo -e "3. ${BOLD}refactor${ENDCOLOR}:\tcode change that neither fixes a bug nor adds a feature, style changes"
     echo -e "4. ${BOLD}test${ENDCOLOR}:\tadding missing tests or changing existing tests"
     echo -e "5. ${BOLD}build${ENDCOLOR}:\tchanges that affect the build system or external dependencies"
     echo -e "6. ${BOLD}ci${ENDCOLOR}:\t\tchanges to CI configuration files and scripts"
-    echo -e "7. ${BOLD}chore${ENDCOLOR}:\tmaintanance and housekeeping"
+    echo -e "7. ${BOLD}chore${ENDCOLOR}:\tmaintenance and housekeeping"
     echo -e "8. ${BOLD}docs${ENDCOLOR}:\tdocumentation changes"
     echo -e "9.  \t\twrite plain commit without type and scope"
     echo -e "0. Exit without changes"
@@ -4318,7 +5172,7 @@ function commit_script {
         fi
         echo
         echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Enter a ${YELLOW}scope${ENDCOLOR} of changes to provide some additional context"
-        echo -e "Final meesage will be ${BLUE}${commit_type}${ENDCOLOR}(${YELLOW}<scope>${ENDCOLOR}): ${BLUE}<summary>${ENDCOLOR}"
+        echo -e "Final message will be ${BLUE}${commit_type}${ENDCOLOR}(${YELLOW}<scope>${ENDCOLOR}): ${BLUE}<summary>${ENDCOLOR}"
         echo -e "Press Enter to continue without scope or enter 0 to exit without changes"
         detect_scopes_from_staged_files
         all_scopes=""
@@ -4391,11 +5245,11 @@ function commit_script {
     fi
     echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Write a ${YELLOW}summary${ENDCOLOR} about your changes"
     if [ -n "$is_empty" ]; then
-        echo -e "Final meesage will be ${YELLOW}<summary>${ENDCOLOR}"
+        echo -e "Final message will be ${YELLOW}<summary>${ENDCOLOR}"
     elif [ "$commit_scope" == "" ]; then
-        echo -e "Final meesage will be ${BLUE}${commit_type}${ENDCOLOR}: ${YELLOW}<summary>${ENDCOLOR}"
+        echo -e "Final message will be ${BLUE}${commit_type}${ENDCOLOR}: ${YELLOW}<summary>${ENDCOLOR}"
     else
-        echo -e "Final meesage will be ${BLUE}${commit_type}${ENDCOLOR}(${BLUE}${commit_scope}${ENDCOLOR}): ${YELLOW}<summary>${ENDCOLOR}"
+        echo -e "Final message will be ${BLUE}${commit_type}${ENDCOLOR}(${BLUE}${commit_scope}${ENDCOLOR}): ${YELLOW}<summary>${ENDCOLOR}"
     fi
     echo -e "Press Enter if you want to exit"
     if [ -n "$msg" ]; then
@@ -5158,6 +6012,7 @@ function push_tag {
         exit
     fi
     repo=$(get_repo)
+    host=$(get_repo_host "$repo")
     if [ -n "$all" ]; then
         echo
         IFS=$'\n' read -rd '' -a lines_with_success <<< "$(sed -n '/\[new tag\]/p' <<< "$push_output")"
@@ -5166,7 +6021,13 @@ function push_tag {
             echo -e "${GREEN}Pushed successfully!${ENDCOLOR}"
             for index in "${!lines_with_success[@]}"
             do
-                echo -e "\t$(sed -e 's#.*\-> \(\)#\1#' <<< "${lines_with_success[index]}" )"
+                pushed_tag=$(sed -e 's#.*\-> \(\)#\1#' <<< "${lines_with_success[index]}" )
+                pushed_tag_url=$(get_tag_url "$pushed_tag" "$repo")
+                if [ -n "$pushed_tag_url" ]; then
+                    echo -e "\t${pushed_tag}\t${pushed_tag_url}"
+                else
+                    echo -e "\t${pushed_tag}"
+                fi
             done
             echo
         fi
@@ -5180,7 +6041,7 @@ function push_tag {
                 echo -e "\t$(sed -e 's#.*\-> \(\)#\1#' <<< "${lines_with_rejected[index]}" )"
             done
             echo
-            echo -e "${YELLOW}Repo:${ENDCOLOR} ${repo}"
+            print_link "Repo" "$repo"
             exit
         fi
         echo -e "${RED}Cannot push! Error message:${ENDCOLOR}"
@@ -5194,12 +6055,24 @@ function push_tag {
     else
         echo -e "${GREEN}Successful push all local tags!${ENDCOLOR}"
     fi
-    echo -e "${YELLOW}Repo:${ENDCOLOR}\t${repo}"
-    if [ -z "$all" ]; then
-        if [[ $repo == *"github"* ]]; then
-            echo -e "${YELLOW}Tag:${ENDCOLOR}\t${repo}/releases/tag/$1"
-        elif [[ $repo == *"gitlab"* ]]; then
-            echo -e "${YELLOW}Tag:${ENDCOLOR}\t${repo}/-/tags/$1"
+    print_link "Repo" "$repo"
+    if [ -z "$all" ] && [ -n "$1" ]; then
+        tag_url=$(get_tag_url "$1" "$repo")
+        if [ -n "$tag_url" ]; then
+            print_link "Tag" "$tag_url"
+        fi
+        release_url=$(get_new_release_url "$1" "$repo")
+        if [ -n "$release_url" ]; then
+            print_link "Release" "$release_url"
+        fi
+        ci_url=$(get_tag_ci_url "$1" "$repo")
+        if [ -n "$ci_url" ]; then
+            print_link "$(get_ci_label "$repo")" "$ci_url"
+        fi
+    elif [ -n "$all" ]; then
+        releases_url=$(get_releases_url "$repo")
+        if [ -n "$releases_url" ]; then
+            print_link "Releases" "$releases_url"
         fi
     fi
 }
@@ -7882,6 +8755,258 @@ function hooks_script {
         ;;
     esac
 } 
+function read_remote_url {
+    local prompt_text="${1:-Remote URL}"
+    echo -e "Examples:"
+    echo -e "  ${GRAY}https://github.com/user/repo.git${ENDCOLOR}"
+    echo -e "  ${GRAY}git@github.com:user/repo.git${ENDCOLOR}"
+    echo -e "  ${GRAY}ssh://git@server.com/repo.git${ENDCOLOR}"
+    echo
+    echo -e "Press Enter to cancel"
+    read -p "${prompt_text}: " -e raw_url
+    if [ -z "$raw_url" ]; then
+        exit
+    fi
+    if ! validate_git_url "$raw_url"; then
+        echo
+        echo -e "${RED}Invalid git URL format!${ENDCOLOR}" >&2
+        echo -e "${YELLOW}Expected one of:${ENDCOLOR}" >&2
+        echo -e "  https://host/user/repo.git" >&2
+        echo -e "  git@host:user/repo.git" >&2
+        echo -e "  ssh://git@host/repo.git" >&2
+        exit 1
+    fi
+    new_url="$validated_url"
+}
+function check_remote_reachable {
+    local url="$1"
+    local check
+    check=$(git ls-remote "$url" 2>&1)
+    if [[ "$check" == *"does not appear to be a git"* ]]; then
+        echo -e "${RED}'$url' is not a git repository!${ENDCOLOR}" >&2
+        echo -e "${YELLOW}Check the URL and that you have access to it.${ENDCOLOR}" >&2
+        return 1
+    fi
+    if [ -z "$check" ]; then
+        echo -e "${YELLOW}Note: repository '$url' appears to be empty${ENDCOLOR}"
+    fi
+    return 0
+}
+function origin_show {
+    local remotes
+    remotes=$(git remote)
+    if [ -z "$remotes" ]; then
+        echo -e "${YELLOW}No remotes configured in this repo${ENDCOLOR}"
+        echo
+        echo -e "Add one with: ${GREEN}gitb origin set${ENDCOLOR}"
+        return
+    fi
+    echo -e "${YELLOW}Configured remotes:${ENDCOLOR}"
+    while IFS= read -r name; do
+        local url
+        url=$(git config --get "remote.${name}.url")
+        echo -e "  ${BLUE}${name}${ENDCOLOR}\t${url}"
+    done <<< "$remotes"
+    local repo_url
+    repo_url=$(get_repo)
+    if [ -n "$repo_url" ]; then
+        echo
+        echo -e "${YELLOW}Web URL:${ENDCOLOR}\t${repo_url}"
+    fi
+}
+function origin_set {
+    local existing
+    existing=$(git remote get-url origin 2>/dev/null)
+    if [ -n "$existing" ]; then
+        echo -e "${YELLOW}Origin already configured:${ENDCOLOR} ${BLUE}$existing${ENDCOLOR}"
+        echo
+        echo -e "Use ${GREEN}gitb origin change${ENDCOLOR} to update the URL"
+        echo -e "Use ${GREEN}gitb origin remove${ENDCOLOR} to delete it first"
+        exit 1
+    fi
+    if [ -n "$1" ]; then
+        if ! validate_git_url "$1"; then
+            echo -e "${RED}Invalid git URL format: $1${ENDCOLOR}" >&2
+            exit 1
+        fi
+        new_url="$validated_url"
+    else
+        echo -e "Add a remote origin"
+        echo
+        read_remote_url "Origin URL"
+    fi
+    echo
+    echo -e "${YELLOW}Verifying remote...${ENDCOLOR}"
+    if ! check_remote_reachable "$new_url"; then
+        exit 1
+    fi
+    git remote add origin "$new_url"
+    echo
+    echo -e "${GREEN}Origin added:${ENDCOLOR} ${BLUE}$new_url${ENDCOLOR}"
+}
+function origin_change {
+    local target_remote="${origin_name:-origin}"
+    local existing
+    existing=$(git remote get-url "$target_remote" 2>/dev/null)
+    if [ -z "$existing" ]; then
+        target_remote=$(git remote | head -n 1)
+        if [ -n "$target_remote" ]; then
+            existing=$(git remote get-url "$target_remote" 2>/dev/null)
+        fi
+    fi
+    if [ -z "$existing" ]; then
+        echo -e "${YELLOW}No remote configured${ENDCOLOR}"
+        echo
+        echo -e "Use ${GREEN}gitb origin set${ENDCOLOR} to add one"
+        exit 1
+    fi
+    echo -e "Remote: ${BLUE}$target_remote${ENDCOLOR}"
+    echo -e "Current URL: ${GRAY}$existing${ENDCOLOR}"
+    echo
+    if [ -n "$1" ]; then
+        if ! validate_git_url "$1"; then
+            echo -e "${RED}Invalid git URL format: $1${ENDCOLOR}" >&2
+            exit 1
+        fi
+        new_url="$validated_url"
+    else
+        read_remote_url "New URL"
+    fi
+    if [ "$new_url" == "$existing" ]; then
+        echo
+        echo -e "${YELLOW}URL unchanged${ENDCOLOR}"
+        exit
+    fi
+    echo
+    echo -e "${YELLOW}Verifying remote...${ENDCOLOR}"
+    if ! check_remote_reachable "$new_url"; then
+        exit 1
+    fi
+    git remote set-url "$target_remote" "$new_url"
+    echo
+    echo -e "${GREEN}Remote URL updated${ENDCOLOR}"
+    echo -e "  ${GRAY}$existing${ENDCOLOR}"
+    echo -e "  ${GREEN}->${ENDCOLOR} ${BLUE}$new_url${ENDCOLOR}"
+}
+function origin_rename {
+    local current_name="${origin_name:-origin}"
+    if [ -z "$(git remote get-url "$current_name" 2>/dev/null)" ]; then
+        current_name=$(git remote | head -n 1)
+    fi
+    if [ -z "$current_name" ]; then
+        echo -e "${YELLOW}No remote configured${ENDCOLOR}"
+        exit 1
+    fi
+    local current_url
+    current_url=$(git remote get-url "$current_name")
+    echo -e "Current name: ${BLUE}$current_name${ENDCOLOR}"
+    echo -e "URL: ${GRAY}$current_url${ENDCOLOR}"
+    echo
+    local raw_name="$1"
+    if [ -z "$raw_name" ]; then
+        echo -e "Press Enter to cancel"
+        read -p "New name: " -e raw_name
+        if [ -z "$raw_name" ]; then
+            exit
+        fi
+    fi
+    if ! sanitize_git_name "$raw_name"; then
+        show_sanitization_error "remote name" "Use letters, numbers, dots, dashes, and underscores."
+        exit 1
+    fi
+    local new_name="$sanitized_git_name"
+    if [ "$new_name" == "$current_name" ]; then
+        echo
+        echo -e "${YELLOW}Name unchanged${ENDCOLOR}"
+        exit
+    fi
+    if [ -n "$(git remote get-url "$new_name" 2>/dev/null)" ]; then
+        echo
+        echo -e "${RED}Remote '$new_name' already exists${ENDCOLOR}" >&2
+        exit 1
+    fi
+    git remote rename "$current_name" "$new_name"
+    echo
+    echo -e "${GREEN}Remote renamed:${ENDCOLOR} ${GRAY}$current_name${ENDCOLOR} ${GREEN}->${ENDCOLOR} ${BLUE}$new_name${ENDCOLOR}"
+}
+function origin_remove {
+    local target="${origin_name:-origin}"
+    local existing
+    existing=$(git remote get-url "$target" 2>/dev/null)
+    if [ -z "$existing" ]; then
+        target=$(git remote | head -n 1)
+        if [ -z "$target" ]; then
+            echo -e "${YELLOW}No remotes to remove${ENDCOLOR}"
+            exit
+        fi
+        existing=$(git remote get-url "$target")
+    fi
+    echo -e "Remote: ${BLUE}$target${ENDCOLOR}"
+    echo -e "URL: ${GRAY}$existing${ENDCOLOR}"
+    echo
+    echo -e "Are you sure you want to remove this remote (y/n)?"
+    yes_no_choice "" "true"
+    git remote remove "$target"
+    echo
+    echo -e "${GREEN}Remote '$target' removed${ENDCOLOR}"
+}
+function origin_script {
+    case "$1" in
+        ""|show|info)             show_origin="true";;
+        set|add|new|a)            set_origin="true";;
+        change|update|c|u|set-url) change_origin="true";;
+        rename|mv|ren)            rename_origin="true";;
+        remove|delete|rm|del|d)   remove_origin="true";;
+        help|h)                   help="true";;
+        *)
+            wrong_mode "origin" $1
+    esac
+    header="GIT ORIGIN"
+    if [ -n "${set_origin}" ]; then
+        header="$header SET"
+    elif [ -n "${change_origin}" ]; then
+        header="$header CHANGE"
+    elif [ -n "${rename_origin}" ]; then
+        header="$header RENAME"
+    elif [ -n "${remove_origin}" ]; then
+        header="$header REMOVE"
+    fi
+    echo -e "${YELLOW}${header}${ENDCOLOR}"
+    echo
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb origin <mode> [<url>|<name>]${ENDCOLOR}"
+        echo
+        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_show|info_Show configured remotes"
+        msg="$msg\n${BOLD}set${ENDCOLOR}_add|new|a_Add a new origin (fails if origin already set)"
+        msg="$msg\n${BOLD}change${ENDCOLOR}_update|c|u|set-url_Change existing origin URL (after repo rename or move)"
+        msg="$msg\n${BOLD}rename${ENDCOLOR}_mv|ren_Rename a remote (e.g. origin -> upstream)"
+        msg="$msg\n${BOLD}remove${ENDCOLOR}_rm|del|d_Remove the remote"
+        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
+        echo -e "$(echo -e "$msg" | column -ts '_')"
+        exit
+    fi
+    if [ -n "$show_origin" ]; then
+        origin_show
+        exit
+    fi
+    if [ -n "$set_origin" ]; then
+        origin_set "$2"
+        exit
+    fi
+    if [ -n "$change_origin" ]; then
+        origin_change "$2"
+        exit
+    fi
+    if [ -n "$rename_origin" ]; then
+        origin_rename "$2"
+        exit
+    fi
+    if [ -n "$remove_origin" ]; then
+        origin_remove
+        exit
+    fi
+}
 function print_help {
     echo -e "${BOLD}gitbasher${NORMAL} v${GITBASHER_VERSION}"
     echo
@@ -7904,6 +9029,7 @@ function print_help {
     msg="$msg\nreset_res_Easy to use git reset"
     msg="$msg\nstash_s|sta_Manage git stashes"
     msg="$msg\nhook_ho|hk_Git hooks management"
+    msg="$msg\norigin_or|o|remote_Init/set/change/rename/remove the remote origin"
     msg="$msg\nconfig_cf|cfg|conf_Configurate gitbasher"
     msg="$msg\n_ _ _"
     msg="$msg\nprev_-_Switch to the previous branch (like cd -)"
@@ -7938,8 +9064,8 @@ if [ -z "$1" ] || [ "$1" == "--help" ] || [ "$1" == "help" ] || [ "$1" == "man" 
     print_help
 fi
 case "$1" in
-    commit|c|co|com)         
-        commit_script $2
+    commit|c|co|com)
+        commit_script "${@:2}"
     ;;
     push|p|ps|pus)         
         push_script $2
@@ -7988,6 +9114,12 @@ case "$1" in
     ;;
     hook|ho|hk)
         hooks_script $2 $3 $4
+    ;;
+    origin|or|o|remote)
+        origin_script "$2" "$3"
+    ;;
+    init|i)
+        exit
     ;;
     log|l|lg)
         gitlog_script $2 $3

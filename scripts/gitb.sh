@@ -5,7 +5,7 @@
 
 GITBASHER_VERSION="dev"
 
-if [ "$1" == "init" ]; then
+if [ "$1" == "init" ] || [ "$1" == "i" ]; then
     git init
 fi
 
@@ -36,8 +36,10 @@ fi
 
 
 ### Init gitbasher
-source scripts/init.sh
+# common.sh is sourced first so init.sh can use helpers like is_yes during the
+# interactive remote setup prompt
 source scripts/common.sh
+source scripts/init.sh
 
 
 ### Include all scripts
@@ -59,5 +61,6 @@ source scripts/wip.sh
 source scripts/fixup.sh
 source scripts/gitlog.sh
 source scripts/hooks.sh
+source scripts/origin.sh
 
 source scripts/base.sh

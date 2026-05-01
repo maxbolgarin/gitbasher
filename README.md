@@ -105,6 +105,7 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 | **Save & rollback** | `wip` / `unwip`, `undo` (`un`), `reset` (`res`), `stash` (`s`), `fixup` (`fx`) | One-command WIP snapshot/restore · undo last commit/amend/merge/rebase/stash · interactive reset · full stash menu · fixup + autosquash in a single step |
 | **Inspect** | `status` (`st`), `log` (`l`), `reflog` (`rl`), `last-commit` (`lc`), `last-ref` (`lr`) | Pretty repo status, multi-mode log + search, reflog viewer, quick last-commit / last-ref summary |
 | **Hooks** | `hook` (`ho`) | List / create from templates / edit / toggle / remove / test / show — for every git hook |
+| **Repo setup** | `init` (`i`), `origin` (`or`, `o`, `remote`) | `git init` from gitbasher · add/change/rename/remove the remote origin |
 | **Config** | `config` (`cfg`) | User, default branch, separator, editor, ticket prefix, scopes, AI key, AI model, proxy |
 
 Total: **23 top-level commands**, **60+ aliases**, **100+ modes**.
@@ -267,6 +268,8 @@ gitb b -             # back to previous branch (like cd -)
 | [`reset`](#gitb-reset) | `res` | Friendly `git reset` with undo support |
 | [`stash`](#gitb-stash) | `s` `sta` | Full stash menu: select, all, list, pop, apply, show, drop |
 | [`hook`](#gitb-hook) | `ho` `hk` | Manage git hooks: list, create, edit, toggle, remove, test, show |
+| [`origin`](#gitb-origin) | `or` `o` `remote` | Add, change, rename, or remove the remote origin |
+| [`init`](#gitb-init) | `i` | `git init` + optional origin setup prompt |
 | [`config`](#gitb-config) | `cf` `cfg` `conf` | Configure user, branch, AI, scopes, ticket prefix, etc. |
 | [`log`](#gitb-log) | `l` `lg` | Pretty log: current, branch, compare, search |
 | [`status`](#info-commands) | `st` | Repo status and changed files |
@@ -474,6 +477,44 @@ End-to-end fixup-and-autosquash so you don't have to chain `gitb c fix` + `gitb 
 | `remove` | `rm` `r` | Delete hook(s) |
 | `test` | `run` `check` | Test hook execution |
 | `show` | `cat` `view` `s` | Display hook contents |
+
+### `gitb init`
+
+Initialize a new git repository and (optionally) add a remote origin.
+
+```bash
+gitb init             # git init + interactive remote prompt
+gitb origin set <url> # add origin without prompts
+```
+
+`gitb init` runs `git init` in the current directory. If the repo has no
+configured remote, gitbasher offers to add one interactively. Use
+[`gitb origin`](#gitb-origin) for non-interactive remote management.
+
+### `gitb origin`
+
+Add, change, rename, or remove the remote origin. Useful when you create a repo
+without a remote, rename the repo on GitHub/GitLab, or move it to a new host.
+
+| Mode | Aliases | Description |
+|------|---------|-------------|
+| `<empty>` | `show` `info` | List configured remotes and their URLs |
+| `set` | `add` `new` `a` | Add a new origin (errors if origin already set) |
+| `change` | `update` `c` `u` `set-url` | Change the existing origin URL (after rename/move) |
+| `rename` | `mv` `ren` | Rename a remote (e.g. `origin` → `upstream`) |
+| `remove` | `rm` `del` `d` | Remove the remote |
+| `help` | `h` | Show help |
+
+Each mutating mode accepts an optional URL/name as a second argument to skip
+the interactive prompt:
+
+```bash
+gitb origin                                      # show remotes
+gitb origin set git@github.com:me/proj.git       # add origin
+gitb origin change https://github.com/me/new.git # update URL after rename
+gitb origin rename upstream                      # origin → upstream
+gitb origin remove                               # delete the remote
+```
 
 ### `gitb config`
 

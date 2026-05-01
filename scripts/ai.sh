@@ -39,14 +39,68 @@ function set_ai_api_key {
     set_config_value gitbasher.ai-api-key "$1"
 }
 
-### Function to get/set AI model (OpenRouter)
-# Returns: model id or default if not set
+### Function to get/set AI model (OpenRouter) — global override.
+# When set, it wins over the per-task defaults below for every task. When unset
+# (the typical case for new users), each task uses its own per-task default.
+# Returns: explicit user override or empty when nothing has been set.
 function get_ai_model {
-    get_config_value gitbasher.ai-model "openrouter/auto"
+    get_config_value gitbasher.ai-model ""
 }
 
 function set_ai_model {
     set_config_value gitbasher.ai-model "$1"
+}
+
+### Per-task default model IDs.
+# Picked May 2026 for the speed / cost / quality balance that fits each task:
+#   - simple/subject (short structured output, runs interactively): the cheapest
+#     fast tier with strong format compliance.
+#   - full (header + body): a small step up — body prose quality matters more.
+#   - grouping (TSV scope→file mapping, validated downstream): strict instruction
+#     following matters; this only fires when the heuristic is weak so the higher
+#     per-call cost is bounded.
+# Update these when newer GA models supersede the current preview slugs.
+readonly AI_DEFAULT_MODEL_SIMPLE="google/gemini-3.1-flash-lite-preview"
+readonly AI_DEFAULT_MODEL_SUBJECT="google/gemini-3.1-flash-lite-preview"
+readonly AI_DEFAULT_MODEL_FULL="google/gemini-3-flash-preview"
+readonly AI_DEFAULT_MODEL_GROUPING="anthropic/claude-haiku-4.5"
+
+### Resolve the model to use for a specific task.
+# Resolution order:
+#   1. gitbasher.ai-model-<task>  (per-task override, e.g. gitbasher.ai-model-simple)
+#   2. gitbasher.ai-model         (global override, set by `gitb cfg model`)
+#   3. AI_DEFAULT_MODEL_<TASK>    (the recommended default above)
+# $1: task name — one of "simple", "subject", "full", "grouping"
+function get_ai_model_for {
+    local task="$1"
+
+    local task_model
+    task_model=$(get_config_value "gitbasher.ai-model-$task" "")
+    if [ -n "$task_model" ]; then
+        echo "$task_model"
+        return
+    fi
+
+    local global_model
+    global_model=$(get_ai_model)
+    if [ -n "$global_model" ]; then
+        echo "$global_model"
+        return
+    fi
+
+    case "$task" in
+        simple)   echo "$AI_DEFAULT_MODEL_SIMPLE" ;;
+        subject)  echo "$AI_DEFAULT_MODEL_SUBJECT" ;;
+        full)     echo "$AI_DEFAULT_MODEL_FULL" ;;
+        grouping) echo "$AI_DEFAULT_MODEL_GROUPING" ;;
+        *)        echo "$AI_DEFAULT_MODEL_SIMPLE" ;;
+    esac
+}
+
+### Set the model for a specific task (per-task override).
+# $1: task name; $2: model id (empty string clears the override)
+function set_ai_model_for {
+    set_config_value "gitbasher.ai-model-$1" "$2"
 }
 
 ### Function to get AI proxy URL from git config
@@ -329,6 +383,7 @@ function _json_escape_for_payload {
 # $1: system prompt (instructions: role, task, types, rules, examples, output format)
 # $2: user prompt (data: recent commits, staged files, diff, scopes)
 # $3: max_tokens cap on the response (default: AI_MAX_TOKENS_FULL)
+# $4: model id (default: get_ai_model_for "simple" — keeps single-arg legacy callers working)
 # Returns: AI response text
 function call_openrouter_api {
     # Set trap to clear sensitive variables on exit/interrupt
@@ -337,6 +392,7 @@ function call_openrouter_api {
     local system_prompt="$1"
     local user_prompt="$2"
     local max_tokens="${3:-$AI_MAX_TOKENS_FULL}"
+    local model="${4:-$(get_ai_model_for simple)}"
     local api_key=$(get_ai_api_key)
     local max_retries=2
     local retry_delay=2
@@ -346,9 +402,6 @@ function call_openrouter_api {
         clear_sensitive_vars
         return 1
     fi
-
-    # Select OpenRouter model (OpenAI-compatible)
-    local model=$(get_ai_model)
 
     # Build OpenAI-style payload for OpenRouter.
     # Prefer jq for robust JSON encoding; fall back to sed/awk that preserves newlines as JSON \n.
@@ -861,14 +914,14 @@ function generate_ai_commit_message {
     system_prompt=$(build_ai_commit_system_prompt "$mode" "$commit_prefix")
     user_prompt=$(build_ai_commit_user_prompt "$mode" "$detected_scopes" "$provided_scopes")
 
-    local max_tokens
+    local max_tokens model
     case "$mode" in
-        subject) max_tokens="$AI_MAX_TOKENS_SUBJECT" ;;
-        full)    max_tokens="$AI_MAX_TOKENS_FULL" ;;
-        *)       max_tokens="$AI_MAX_TOKENS_SIMPLE" ;;
+        subject) max_tokens="$AI_MAX_TOKENS_SUBJECT"; model=$(get_ai_model_for subject) ;;
+        full)    max_tokens="$AI_MAX_TOKENS_FULL";    model=$(get_ai_model_for full) ;;
+        *)       max_tokens="$AI_MAX_TOKENS_SIMPLE";  model=$(get_ai_model_for simple) ;;
     esac
 
-    call_openrouter_api "$system_prompt" "$user_prompt" "$max_tokens"
+    call_openrouter_api "$system_prompt" "$user_prompt" "$max_tokens" "$model"
 }
 
 ### Function to securely clear sensitive variables

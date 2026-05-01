@@ -488,7 +488,13 @@ function print_configuration {
         echo -e "\tAI key:\t\t${RED}not set${ENDCOLOR}"
     fi
     local ai_model=$(get_ai_model)
-    echo -e "\tAI model:\t${GREEN}$ai_model${ENDCOLOR}"
+    if [ -n "$ai_model" ]; then
+        echo -e "\tAI model:\t${GREEN}$ai_model${ENDCOLOR} ${GRAY}(global override)${ENDCOLOR}"
+    else
+        echo -e "\tAI models:\t${GREEN}$(get_ai_model_for simple)${ENDCOLOR} ${GRAY}(simple/subject)${ENDCOLOR}"
+        echo -e "\t\t\t${GREEN}$(get_ai_model_for full)${ENDCOLOR} ${GRAY}(full)${ENDCOLOR}"
+        echo -e "\t\t\t${GREEN}$(get_ai_model_for grouping)${ENDCOLOR} ${GRAY}(grouping)${ENDCOLOR}"
+    fi
     local ai_proxy=$(get_ai_proxy)
     if [ -n "$ai_proxy" ]; then
         echo -e "\tAI proxy:\t${GREEN}$ai_proxy${ENDCOLOR}"

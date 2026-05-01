@@ -69,8 +69,8 @@ fi
 
 ### Run script
 case "$1" in
-    commit|c|co|com)         
-        commit_script $2
+    commit|c|co|com)
+        commit_script "${@:2}"
     ;;
     push|p|ps|pus)         
         push_script $2

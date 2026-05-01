@@ -959,9 +959,38 @@ function after_commit {
 }
 
 
+### Map a single multi-word token to its commit flag(s).
+# Returns 1 for unknown tokens so the caller can surface a wrong_mode error.
+# Used only when commit_script receives 2+ arguments (multi-word form like
+# `gitb commit ai fast push`). Single-token compact forms (aifp, ffp, ...) are
+# still handled by the case statement below.
+function set_commit_flag_from_token {
+    case "$1" in
+        ai|llm|i)            llm="true";;
+        fast|f)              fast="true";;
+        push|pu|p)           push="true";;
+        scope|s)             scope="true";;
+        msg|m)               msg="true";;
+        ticket|jira|j|t)     ticket="true";;
+        staged)              staged="true";;
+        fixup|fix|x)         fixup="true";;
+        amend|am|a)          amend="true";;
+        split|sp|sl)         split="true";;
+        last|l)              last="true";;
+        revert|rev)          revert="true";;
+        help|h)              help="true";;
+        *) return 1;;
+    esac
+    return 0
+}
+
+
 ### Main function
-# $1: mode
+# $1...: mode token(s)
     # <empty> - regular commit mode
+    # Single token: compact form like aifp, ffp, llmsfp (see case below)
+    # Multiple tokens: any combination of words/aliases in any order, e.g.
+    #   `ai fast push`, `push fast ai`, `ai f p` all map to llm+fast+push
     # msg: use editor to write commit message
     # ticket: add ticket info to the end of message header
     # fast: fast commit with git add .
@@ -969,7 +998,7 @@ function after_commit {
     # push: push changes after commit
     # fastp: fast commit with push
     # fastsp: fast commit with scope and push
-    # fixup: fixup commit   
+    # fixup: fixup commit
     # fastfix: fixup commit with git add .
     # fastfixp: fast fixup commit with push
     # amend: add to the last without edit (add to last commit)
@@ -978,6 +1007,11 @@ function after_commit {
     # revert: revert commit
     # help: print help
 function commit_script {
+    if [ $# -ge 2 ]; then
+        for tok in "$@"; do
+            set_commit_flag_from_token "$tok" || wrong_mode "commit" "$tok"
+        done
+    else
     case "$1" in
         scope|s)            ;; # general commit with scope
         split|sp|sl)        split="true";; # force atomic-split flow (heuristic + manual messages)
@@ -1019,6 +1053,7 @@ function commit_script {
         *)
             wrong_mode "commit" $1
     esac
+    fi
 
 
     ### Print header

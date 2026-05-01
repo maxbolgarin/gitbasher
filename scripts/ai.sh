@@ -139,28 +139,61 @@ function get_limited_diff_for_ai {
 }
 
 ### Function to get limited staged files list for AI prompts
-# Returns: Staged file names limited to prevent token overflow on large commits
+# Each entry includes the per-file action (added/modified/deleted/renamed/copied)
+# so the model knows the full scope of the commit even when the actual diff is
+# truncated. File-list output is cheap (one line per file) so the safety caps
+# are generous compared to the diff caps — the goal is to almost never truncate
+# this section on real commits.
 function get_limited_staged_files_for_ai {
-    local max_files=50
-    local max_chars=2000
+    local max_files=1000
+    local max_chars=50000
 
-    local staged_files=$(git diff --name-only --cached)
-    local total_files=$(echo "$staged_files" | wc -l | tr -d ' ')
+    # --name-status emits one line per file: <CODE><TAB><path> for A/M/D/T,
+    # or <CODE><sim><TAB><old><TAB><new> for renames (R) and copies (C).
+    local raw=$(git diff --cached --name-status)
+    if [ -z "$raw" ]; then
+        echo ""
+        return
+    fi
+
+    # Translate single-letter action codes into human-readable labels and
+    # left-align them so the column is easy to scan. Unknown codes pass
+    # through verbatim as a fallback.
+    local formatted=$(echo "$raw" | LC_ALL=C awk -F'\t' '
+        {
+            code = substr($1, 1, 1)
+            label = code
+            if      (code == "A") label = "added"
+            else if (code == "M") label = "modified"
+            else if (code == "D") label = "deleted"
+            else if (code == "R") label = "renamed"
+            else if (code == "C") label = "copied"
+            else if (code == "T") label = "type changed"
+
+            if ((code == "R" || code == "C") && NF >= 3) {
+                printf "%-13s %s -> %s\n", label ":", $2, $3
+            } else {
+                printf "%-13s %s\n", label ":", $2
+            }
+        }
+    ')
+
+    local total_files=$(echo "$formatted" | wc -l | tr -d ' ')
 
     if [ "$total_files" -gt "$max_files" ]; then
-        staged_files=$(echo "$staged_files" | head -n "$max_files")
-        staged_files="${staged_files}
+        formatted=$(echo "$formatted" | head -n "$max_files")
+        formatted="${formatted}
 ... and $((total_files - max_files)) more files (${total_files} total)"
     fi
 
-    # Further limit by character count
-    local char_count=${#staged_files}
+    # Char-cap as a final safety net for pathological cases (e.g. very long paths)
+    local char_count=${#formatted}
     if [ "$char_count" -gt "$max_chars" ]; then
-        staged_files=$(echo "$staged_files" | head -c "$max_chars")
-        staged_files="${staged_files}... [truncated, ${total_files} files total]"
+        formatted=$(echo "$formatted" | head -c "$max_chars")
+        formatted="${formatted}... [truncated, ${total_files} files total]"
     fi
 
-    echo "$staged_files"
+    echo "$formatted"
 }
 
 ### Function to get limited diff stat for AI prompts
@@ -661,7 +694,7 @@ ${task_text}
     prompt+="
 
 <rules>
-- COVERAGE (most important): Your message MUST account for every distinct change visible across <staged_files>, <diff_summary>, and <diff>. Use <staged_files> as a checklist — if it lists 8 files spanning 4 different concerns, your message reflects all 4 concerns. Never describe only the first change you read. If the diff is truncated, infer the rest from <staged_files> and <diff_summary>
+- COVERAGE (most important): Your message MUST account for every distinct change visible across <staged_files>, <diff_summary>, and <diff>. <staged_files> is your authoritative checklist — every file is listed with its action (added/modified/deleted/renamed/copied) and this section is preserved in full even when <diff> gets truncated. If <diff> is truncated, infer the missing changes from <staged_files> and <diff_summary>. Never describe only the first change you read. The mix of actions also hints at the type: many 'added' files often signal feat, mostly 'modified' files signal fix or refactor, 'renamed'/'deleted' often signal refactor or chore
 - For 2-3 distinct changes, combine them with 'and' (e.g., 'add auth module and user profile page')
 - For 4+ distinct changes, summarize with a count and name the most important ones (e.g., 'add 5 endpoints including auth, profile, settings, dashboard, and notifications')
 - For mixed change types (e.g., a feature and a fix), use the dominant type and mention the mix (e.g., 'feat: add caching layer and fix the related cache-key bug')

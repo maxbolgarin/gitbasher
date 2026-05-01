@@ -237,46 +237,60 @@ function configure_ai_key {
 function configure_ai_model {
     echo -e "${YELLOW}Configure AI Model${ENDCOLOR}"
     echo
-    
+
     current_model=$(get_ai_model)
-    echo -e "Current model: ${GREEN}$current_model${ENDCOLOR}"
+    if [ -n "$current_model" ]; then
+        echo -e "Current global override: ${GREEN}$current_model${ENDCOLOR}"
+    else
+        echo -e "No global override set — each task uses its per-task default:"
+        echo -e "  • simple   → ${GREEN}$(get_ai_model_for simple)${ENDCOLOR}"
+        echo -e "  • subject  → ${GREEN}$(get_ai_model_for subject)${ENDCOLOR}"
+        echo -e "  • full     → ${GREEN}$(get_ai_model_for full)${ENDCOLOR}"
+        echo -e "  • grouping → ${GREEN}$(get_ai_model_for grouping)${ENDCOLOR}"
+    fi
     echo
-    echo -e "Enter the OpenRouter model ID you want to use for AI commit messages"
+    echo -e "Set a single model for all tasks (a global override), or leave empty to keep using the per-task defaults."
+    echo -e "Per-task overrides can be set directly with git config:"
+    echo -e "  ${BLUE}git config gitbasher.ai-model-simple <model_id>${ENDCOLOR}    (and -subject / -full / -grouping)"
+    echo
     echo -e "Popular models:"
-    echo -e "  • ${BLUE}openrouter/auto${ENDCOLOR} - Auto-select best available model (default)"
-    echo -e "  • ${BLUE}openai/gpt-4o-mini${ENDCOLOR} - Fast openai model"
-    echo -e "  • ${BLUE}anthropic/claude-haiku-4.5${ENDCOLOR} - Fast anthropic model"
-    echo -e "  • ${BLUE}google/gemini-2.5-flash${ENDCOLOR} - Fast google model"
+    echo -e "  • ${BLUE}openrouter/auto${ENDCOLOR} - Auto-select best available model"
+    echo -e "  • ${BLUE}google/gemini-3.1-flash-lite-preview${ENDCOLOR} - Fastest, cheapest"
+    echo -e "  • ${BLUE}google/gemini-3-flash-preview${ENDCOLOR} - Better body prose"
+    echo -e "  • ${BLUE}anthropic/claude-haiku-4.5${ENDCOLOR} - Strict instruction following"
+    echo -e "  • ${BLUE}openai/gpt-5-mini${ENDCOLOR} - Strong reasoning, low cost"
     echo
-    echo -e "Press Enter to exit without changes or enter 0 to reset to default"
-    
+    echo -e "Press Enter to exit without changes or enter 0 to clear the override (back to per-task defaults)"
+
     read -p "Model ID: " model_input
-    
+
     if [ "$model_input" == "" ]; then
         exit
     fi
-    
+
     if [ "$model_input" == "0" ]; then
-        set_ai_model "openrouter/auto"
+        # Clear both local and global overrides
+        git config --unset gitbasher.ai-model 2>/dev/null
+        git config --global --unset gitbasher.ai-model 2>/dev/null
         echo
-        echo -e "${GREEN}AI model reset to default (openrouter/auto)${ENDCOLOR}"
+        echo -e "${GREEN}Global model override cleared. Each task now uses its per-task default.${ENDCOLOR}"
         exit
     fi
-    
+
     echo
-    
+
     # Basic validation - check for reasonable model ID format
     if [[ ! "$model_input" =~ ^[a-zA-Z0-9._/-]+$ ]]; then
         echo -e "${RED}Invalid model ID format${ENDCOLOR}" >&2
         echo -e "${YELLOW}Model ID should contain only letters, numbers, dots, dashes, underscores, and slashes${ENDCOLOR}" >&2
         exit 1
     fi
-    
+
     # Set the model
     set_ai_model "$model_input"
     echo -e "${GREEN}AI model set to '$model_input' for '${project_name}' repo${ENDCOLOR}"
     echo
-    
+
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet AI model globally" "true"
     set_config_value gitbasher.ai-model "$model_input" "true"

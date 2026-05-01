@@ -227,6 +227,35 @@ gitb cfg proxy
 | **Full workflow** | `gitb c aifp` | Add all + AI commit + push |
 | **Need control** | `gitb c ais` | AI message + manual type/scope |
 | **Detailed commit** | `gitb c aim` | Generates multiline commit message |
+| **Hands-free**       | `gitb c ff`  | Stage everything, AI-grouped split, AI messages, no prompts |
+
+### AI Models
+
+Each AI task uses a model picked for its speed / cost / quality balance. Defaults (May 2026):
+
+| Task | Default model | Why |
+|------|---------------|-----|
+| `simple` (single-line message) | `google/gemini-3.1-flash-lite-preview` | Cheapest fast tier; 2.5x faster TTFT than 2.5 Flash |
+| `subject` (subject after manual type/scope) | `google/gemini-3.1-flash-lite-preview` | Same — short structured output |
+| `full` (header + body) | `google/gemini-3-flash-preview` | Better body prose (+15% accuracy vs 2.5 Flash) |
+| `grouping` (atomic-split scope→file mapping) | `anthropic/claude-haiku-4.5` | Strict instruction following for the validated TSV output |
+
+Override per task via git config (no UI needed):
+```bash
+git config gitbasher.ai-model-simple   <model_id>
+git config gitbasher.ai-model-subject  <model_id>
+git config gitbasher.ai-model-full     <model_id>
+git config gitbasher.ai-model-grouping <model_id>
+```
+
+Or set a single global override that applies to every task:
+```bash
+gitb cfg model      # interactive
+# or
+git config gitbasher.ai-model <model_id>
+```
+
+Some Gemini 3.x defaults are preview slugs; they'll be updated when Google promotes them to GA.
 
 ## Common Workflows
 

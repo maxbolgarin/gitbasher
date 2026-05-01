@@ -227,6 +227,158 @@ function build_split_groups_from_staged {
     return 0
 }
 
+### Check if the heuristic grouping looks unreliable enough to warrant AI refinement.
+# Triggers when:
+#   - 1 group but staged files span 2+ second-level subdirs (e.g. service/auth, service/api)
+#     — the top-level dir won as scope, masking the real per-feature subdivisions
+#   - one group dominates with >70% of files (and there are 4+ files total) —
+#     suggests the dominant scope is a generic container rather than a real feature
+# Returns 0 (true) if weak, 1 (false) if heuristic looks fine.
+function is_heuristic_weak {
+    local total
+    total=$(git diff --name-only --cached | grep -c .)
+    [ "$total" -lt 4 ] && return 1
+
+    if [ ${#split_group_keys[@]} -le 1 ]; then
+        # Only consider files at depth ≥ 3 (e.g. service/auth/login.go) — shallow
+        # files like auth/file1.go don't have a sub-scope to discover, so
+        # counting them would produce false weakness signals.
+        local subdir_count
+        subdir_count=$(git diff --name-only --cached | LC_ALL=C awk -F/ 'NF>=3 {print $1"/"$2}' | sort -u | grep -c .)
+        [ "$subdir_count" -ge 2 ] && return 0
+        return 1
+    fi
+
+    local max_size=0 n
+    local s
+    for s in "${split_group_keys[@]}"; do
+        n=$(printf '%s\n' "${split_groups[$s]}" | grep -c .)
+        [ "$n" -gt "$max_size" ] && max_size="$n"
+    done
+    local pct=$((max_size * 100 / total))
+    [ "$pct" -gt 70 ] && return 0
+    return 1
+}
+
+### Use AI to refine the file→scope grouping when the heuristic looks weak.
+# Sends the staged file list, diff summary, recent commit messages (for codebase
+# scope conventions), and the heuristic's candidate scopes to the model. Expects
+# back a TSV "<scope>\t<file>" — one line per staged file. Validates the output:
+# every staged file must be assigned exactly once and scope names must be safe.
+# On success, overwrites split_groups / split_group_keys with the AI grouping.
+# Returns 0 on success, 1 on AI failure or unparseable output (caller falls back).
+function refine_groups_with_ai {
+    local staged_files
+    staged_files=$(git diff --name-only --cached)
+    [ -z "$staged_files" ] && return 1
+
+    local diff_stat recent_commits
+    diff_stat=$(get_limited_diff_stat_for_ai)
+    recent_commits=$(get_recent_commit_messages_for_ai)
+
+    local heuristic_hint=""
+    if [ -n "$detected_scopes" ]; then
+        heuristic_hint="$detected_scopes"
+    fi
+
+    local system_prompt='You group staged git files into logical scopes for atomic commits.
+
+Input arrives in XML tags: a list of staged files, a diff summary, recent commit messages (for codebase scope conventions), and heuristic-detected candidate scope tokens.
+
+Task: assign EVERY staged file to a single scope. Use 2-5 groups when there is meaningful separation; use exactly 1 group only if all files truly belong together. Use lowercase scope names that match the style of <recent_commits>. Prefer scope names from <heuristic_candidates> when they fit the file path or change; invent new ones only when none of the candidates apply. Use "misc" for files with no clear scope (e.g., README, top-level config).
+
+Output format: TSV only. One line per staged file in the form <scope><TAB><file_path>. No header, no prose, no markdown fences, no surrounding quotes. Every file from <staged_files> MUST appear exactly once. The file paths must be byte-identical to those in <staged_files>.'
+
+    local user_prompt="<recent_commits>
+${recent_commits}
+</recent_commits>
+
+<staged_files>
+${staged_files}
+</staged_files>
+
+<diff_summary>
+${diff_stat}
+</diff_summary>
+
+<heuristic_candidates>
+${heuristic_hint}
+</heuristic_candidates>
+
+Output TSV (scope<TAB>file) for every staged file. No prose."
+
+    local ai_response
+    ai_response=$(call_openrouter_api "$system_prompt" "$user_prompt" "$AI_MAX_TOKENS_FULL" 2>/dev/null)
+    if [ $? -ne 0 ] || [ -z "$ai_response" ]; then
+        return 1
+    fi
+
+    # Strip stray markdown fences if the model added them despite instructions
+    ai_response=$(printf '%s' "$ai_response" | LC_ALL=C sed -e 's/^```[a-zA-Z]*$//' -e 's/^```$//')
+
+    # Build a set of expected staged files for validation
+    local -A staged_set=()
+    while IFS= read -r f; do
+        [ -n "$f" ] && staged_set["$f"]=1
+    done <<< "$staged_files"
+
+    local -A new_groups=()
+    local -a new_keys=()
+    local line scope file tab_count
+    local tab=$'\t'
+
+    while IFS= read -r line; do
+        # Trim leading/trailing whitespace
+        line=$(printf '%s' "$line" | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        [ -z "$line" ] && continue
+
+        # Require exactly one tab so scope/file are unambiguous
+        tab_count=$(printf '%s' "$line" | LC_ALL=C tr -cd "$tab" | wc -c | tr -d ' ')
+        [ "$tab_count" -ne 1 ] && continue
+
+        scope="${line%%	*}"
+        file="${line#*	}"
+
+        # Validate scope characters (same charset as sanitize_git_name)
+        if ! [[ "$scope" =~ ^[a-zA-Z0-9._/-]+$ ]]; then
+            continue
+        fi
+        scope=$(printf '%s' "$scope" | LC_ALL=C tr '[:upper:]' '[:lower:]')
+
+        # Reject files the model invented or paraphrased
+        [ -z "${staged_set[$file]:-}" ] && continue
+
+        if [ -z "${new_groups[$scope]:-}" ]; then
+            new_keys+=("$scope")
+            new_groups[$scope]="$file"
+        else
+            new_groups[$scope]+=$'\n'"$file"
+        fi
+    done <<< "$ai_response"
+
+    # Every staged file must be covered — partial output means we fall back
+    local total_assigned=0 total_staged
+    local key
+    for key in "${new_keys[@]}"; do
+        total_assigned=$((total_assigned + $(printf '%s\n' "${new_groups[$key]}" | grep -c .)))
+    done
+    total_staged=$(printf '%s\n' "$staged_files" | grep -c .)
+    if [ "$total_assigned" -ne "$total_staged" ] || [ ${#new_keys[@]} -lt 1 ]; then
+        return 1
+    fi
+
+    # Replace globals with AI grouping
+    unset split_groups split_group_keys
+    declare -gA split_groups
+    split_group_keys=()
+    for key in "${new_keys[@]}"; do
+        split_groups[$key]="${new_groups[$key]}"
+        split_group_keys+=("$key")
+    done
+
+    return 0
+}
+
 ### Restore the original staging snapshot (used when user aborts mid-split).
 # Best-effort: re-stages every file that was originally staged. Files that
 # were already committed earlier in the split loop are silently skipped by
@@ -327,53 +479,68 @@ function perform_commit_split {
 
         msg=""
 
-        # Try AI if available; fall back to manual on any failure
+        # Try AI if available; fall back to manual on any failure.
+        # In auto_accept mode (ff), commit silently without prompting.
         if [ "$ai_ok" = "true" ]; then
             echo -e "${YELLOW}Generating commit message with AI...${ENDCOLOR}"
             ai_msg=$(generate_ai_commit_message "simple" "$scope_for_msg" "$scope_for_msg" "")
             if [ $? -eq 0 ] && [ -n "$ai_msg" ]; then
                 ai_msg=$(echo "$ai_msg" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-                echo
-                echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
-                read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) "
-                echo
-                normalize_key "$choice"
 
-                while [ "$normalized_key" = "r" ]; do
-                    echo -e "${YELLOW}Regenerating...${ENDCOLOR}"
-                    ai_msg=$(generate_ai_commit_message "simple" "$scope_for_msg" "$scope_for_msg" "")
-                    if [ $? -ne 0 ] || [ -z "$ai_msg" ]; then
-                        ai_msg=""
-                        break
-                    fi
-                    ai_msg=$(echo "$ai_msg" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+                if [ -n "$auto_accept" ]; then
+                    msg="$ai_msg"
+                    echo -e "${GREEN}AI message:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
+                else
                     echo
                     echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
                     read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) "
                     echo
                     normalize_key "$choice"
-                done
 
-                if [ "$normalized_key" = "y" ] || [ -z "$choice" ]; then
-                    msg="$ai_msg"
-                elif [ "$normalized_key" = "e" ]; then
-                    read -p "Edit: " -e -i "$ai_msg" manual_input
-                    msg="$manual_input"
-                elif [ "$normalized_key" = "s" ]; then
-                    echo -e "${YELLOW}Skipping scope '${scope}' (files left unstaged)${ENDCOLOR}"
-                    # Unstage so the file stays in the working copy for later
-                    while IFS= read -r f; do
-                        [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
-                    done <<< "$files_str"
-                    continue
-                elif [ "$choice" = "0" ]; then
-                    _restore_split_snapshot "$snapshot_file"
-                    trap - INT TERM
-                    echo
-                    echo -e "${YELLOW}Aborted. Created ${commit_count} commit(s); original staging restored.${ENDCOLOR}"
-                    exit 0
+                    while [ "$normalized_key" = "r" ]; do
+                        echo -e "${YELLOW}Regenerating...${ENDCOLOR}"
+                        ai_msg=$(generate_ai_commit_message "simple" "$scope_for_msg" "$scope_for_msg" "")
+                        if [ $? -ne 0 ] || [ -z "$ai_msg" ]; then
+                            ai_msg=""
+                            break
+                        fi
+                        ai_msg=$(echo "$ai_msg" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+                        echo
+                        echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
+                        read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) "
+                        echo
+                        normalize_key "$choice"
+                    done
+
+                    if [ "$normalized_key" = "y" ] || [ -z "$choice" ]; then
+                        msg="$ai_msg"
+                    elif [ "$normalized_key" = "e" ]; then
+                        read -p "Edit: " -e -i "$ai_msg" manual_input
+                        msg="$manual_input"
+                    elif [ "$normalized_key" = "s" ]; then
+                        echo -e "${YELLOW}Skipping scope '${scope}' (files left unstaged)${ENDCOLOR}"
+                        while IFS= read -r f; do
+                            [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
+                        done <<< "$files_str"
+                        continue
+                    elif [ "$choice" = "0" ]; then
+                        _restore_split_snapshot "$snapshot_file"
+                        trap - INT TERM
+                        echo
+                        echo -e "${YELLOW}Aborted. Created ${commit_count} commit(s); original staging restored.${ENDCOLOR}"
+                        exit 0
+                    fi
                 fi
             fi
+        fi
+
+        # Auto-accept can't fall back to a manual prompt — fail loudly instead
+        if [ -z "$msg" ] && [ -n "$auto_accept" ]; then
+            echo -e "${RED}AI message generation failed; auto-accept mode cannot prompt for a manual message.${ENDCOLOR}"
+            echo -e "${YELLOW}Configure AI (gitb cfg ai) or use a non-ff mode.${ENDCOLOR}"
+            _restore_split_snapshot "$snapshot_file"
+            trap - INT TERM
+            return 1
         fi
 
         # Manual fallback (no AI or AI failed)
@@ -454,25 +621,60 @@ function perform_commit_split {
 ### Offer to split the staged changes into atomic per-scope commits.
 # Skipped silently when:
 #   - gitbasher.commit-auto-split = "never"
-#   - fewer than 2 distinct scopes are detected
-# Auto-accepts when gitbasher.commit-auto-split = "always".
-# Otherwise prompts the user. If accepted, performs the split and exits the
-# script. Returns to the caller (no exit) when the user declines or the split
-# isn't applicable, so the normal single-commit flow continues unchanged.
+#   - fewer than 2 distinct scopes are detected (after optional AI refinement)
+# Auto-accepts the y/N prompt when:
+#   - gitbasher.commit-auto-split = "always"
+#   - $1 is non-empty (split mode forced via CLI)
+#   - $2 is non-empty (caller is fast/auto-accept and doesn't want to ask)
+# When the heuristic grouping looks weak (one dominant group, or a single group
+# spanning multiple subdirs), AI refinement is invoked to propose a better
+# scope→file mapping. Disable with gitbasher.commit-ai-grouping = "never";
+# force always-on with "always".
+# Returns to the caller (no exit) when the user declines or the split isn't
+# applicable; perform_commit_split exits the script directly on success.
 # $1: "true" to force the split flow even when the config says "ask"/"never"
+# $2: "true" to skip the y/N prompt and proceed straight to splitting
 function try_offer_commit_split {
     local force_split="$1"
+    local auto_yes="$2"
 
     local auto_split
     auto_split=$(get_config_value gitbasher.commit-auto-split "ask")
-
     if [ "$auto_split" = "never" ] && [ -z "$force_split" ]; then
         return 1
     fi
 
-    if ! build_split_groups_from_staged; then
+    # Always run heuristic first — fast and free
+    build_split_groups_from_staged
+    local heuristic_result=$?
+
+    # Maybe escalate to AI refinement
+    local ai_grouping
+    ai_grouping=$(get_config_value gitbasher.commit-ai-grouping "auto")
+    local should_refine="false"
+    case "$ai_grouping" in
+        always) should_refine="true" ;;
+        never)  should_refine="false" ;;
+        *)      # auto: refine only when heuristic is suspect
+                if is_heuristic_weak; then
+                    should_refine="true"
+                fi
+                ;;
+    esac
+
+    if [ "$should_refine" = "true" ] && check_ai_available 2>/dev/null; then
+        echo
+        echo -e "${YELLOW}Refining scope grouping with AI...${ENDCOLOR}"
+        if ! refine_groups_with_ai; then
+            # AI failed; keep heuristic groups (may be empty)
+            echo -e "${YELLOW}AI grouping failed, falling back to heuristic.${ENDCOLOR}"
+        fi
+    fi
+
+    # After refinement we may finally have ≥2 groups even if heuristic returned 1
+    if [ ${#split_group_keys[@]} -lt 2 ]; then
         if [ -n "$force_split" ]; then
-            echo -e "${YELLOW}Cannot split: only one scope detected in staged files.${ENDCOLOR}"
+            echo -e "${YELLOW}Cannot split: could not identify multiple distinct scopes.${ENDCOLOR}"
         fi
         return 1
     fi
@@ -490,7 +692,7 @@ function try_offer_commit_split {
     echo
 
     local choice
-    if [ -n "$force_split" ] || [ "$auto_split" = "always" ]; then
+    if [ -n "$force_split" ] || [ -n "$auto_yes" ] || [ "$auto_split" = "always" ]; then
         choice="y"
     else
         read_key choice "Split into ${#split_group_keys[@]} atomic commits for a cleaner changelog? (y/N) "
@@ -556,6 +758,13 @@ function handle_ai_commit_generation {
         # Save AI commit message so it can be reused if user exits.
         # It will be cleared only after a successful commit.
         git config gitbasher.cached-commit-message "$ai_commit_message"
+
+        # Auto-accept mode (ff): take the first AI message and skip the prompt
+        if [ -n "$auto_accept" ]; then
+            choice="y"
+            normalized_key="y"
+            break
+        fi
 
         read_key choice "Use this commit message? (y/n/r to regenerate/e to edit/0 to exit) "
         echo
@@ -736,6 +945,8 @@ function commit_script {
         ticket|jira|j|t)    ticket="true";;
         fast|f)             fast="true";;
         fasts|fs|sf)        fast="true"; scope="true";;
+        ff)                 fast="true"; llm="true"; auto_accept="true";; # ultrafast: no prompts at all
+        ffp|ffpush)         fast="true"; llm="true"; auto_accept="true"; push="true";;
         staged|st)          staged="true";;
         push|pu|p)          push="true";;
         fastp|fp|pf)        fast="true"; push="true";;
@@ -773,7 +984,13 @@ function commit_script {
         header_msg="$header_msg AI"
     fi
 
-    if [ -n "${split}" ]; then
+    if [ -n "${auto_accept}" ]; then
+        if [ -n "${push}" ]; then
+            header_msg="$header_msg ULTRAFAST & PUSH"
+        else
+            header_msg="$header_msg ULTRAFAST"
+        fi
+    elif [ -n "${split}" ]; then
         if [ -n "${push}" ]; then
             header_msg="$header_msg SPLIT & PUSH"
         else
@@ -827,8 +1044,10 @@ function commit_script {
         msg="$msg\n${BOLD}push${ENDCOLOR}_pu|p_Create a commit and push changes at the end"
         msg="$msg\n${BOLD}fastp${ENDCOLOR}_fp|pf_Create a commit in the fast mode and push changes"
         msg="$msg\n${BOLD}fastsp${ENDCOLOR}_fsp|fps_Create a commit in the fast mode with scope and push changes"
-        msg="$msg\n${BOLD}split${ENDCOLOR}_sp|sl_Split staged changes into one atomic commit per detected scope (uses AI for messages when configured)"
+        msg="$msg\n${BOLD}split${ENDCOLOR}_sp|sl_Split staged changes into one atomic commit per detected scope (AI-refined when heuristic is weak)"
         msg="$msg\n${BOLD}splitp${ENDCOLOR}_spp|slp_Same as split, then push the resulting commits"
+        msg="$msg\n${BOLD}ff${ENDCOLOR}_ _Ultrafast: git add ., AI-grouped split, AI messages, no prompts (requires AI configured)"
+        msg="$msg\n${BOLD}ffp${ENDCOLOR}_ffpush_Same as ff, then push the resulting commits"
         msg="$msg\n${BOLD}fixup${ENDCOLOR}_fix|x_Select files and commit to make a --fixup commit (git commit --fixup <hash>)"
         msg="$msg\n${BOLD}fixupp${ENDCOLOR}_fixp|xp|px_Select files and commit to make a --fixup commit and push changes"
         msg="$msg\n${BOLD}fixupst${ENDCOLOR}_xst|stx_Use already staged files to make a --fixup commit (git commit --fixup <hash>)"
@@ -1058,8 +1277,13 @@ function commit_script {
     # Split runs the entire commit flow itself (one commit per scope) and exits
     # the script on success. Skipped for modes where it doesn't make sense
     # (amend, fixup, multi-line msg, ticket) or when forced off via config.
+    # Fast/auto-accept modes skip the y/N prompt — split silently when applicable.
     if [ -z "${amend}" ] && [ -z "${fixup}" ] && [ -z "${msg}" ] && [ -z "${ticket}" ]; then
-        try_offer_commit_split "$split"
+        _split_auto_yes=""
+        if [ -n "$fast" ] || [ -n "$auto_accept" ]; then
+            _split_auto_yes="true"
+        fi
+        try_offer_commit_split "$split" "$_split_auto_yes"
         # If the user explicitly asked for split mode but it wasn't applicable,
         # don't silently fall through to the single-commit flow.
         if [ -n "$split" ]; then

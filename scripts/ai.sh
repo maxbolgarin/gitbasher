@@ -282,16 +282,28 @@ function secure_curl_with_api_key {
     )
 }
 
+### Escape a string for embedding inside JSON double quotes (fallback when jq is unavailable).
+# Returns the escaped body WITHOUT the surrounding quotes.
+# LC_ALL=C avoids "illegal byte sequence" errors from BSD sed on macOS when the
+# input contains non-UTF-8-validatable bytes (e.g. Russian or other non-ASCII content in diffs).
+function _json_escape_for_payload {
+    printf '%s' "$1" \
+        | LC_ALL=C sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e $'s/\t/\\\\t/g' -e $'s/\r/\\\\r/g' \
+        | LC_ALL=C awk 'BEGIN{ORS=""} NR>1{print "\\n"} {print}'
+}
+
 ### Function to make request to OpenRouter API
-# $1: prompt text
-# $2: max_tokens cap on the response (default: AI_MAX_TOKENS_FULL)
+# $1: system prompt (instructions: role, task, types, rules, examples, output format)
+# $2: user prompt (data: recent commits, staged files, diff, scopes)
+# $3: max_tokens cap on the response (default: AI_MAX_TOKENS_FULL)
 # Returns: AI response text
 function call_openrouter_api {
     # Set trap to clear sensitive variables on exit/interrupt
     trap 'clear_sensitive_vars' EXIT INT TERM
 
-    local prompt="$1"
-    local max_tokens="${2:-$AI_MAX_TOKENS_FULL}"
+    local system_prompt="$1"
+    local user_prompt="$2"
+    local max_tokens="${3:-$AI_MAX_TOKENS_FULL}"
     local api_key=$(get_ai_api_key)
     local max_retries=2
     local retry_delay=2
@@ -306,23 +318,20 @@ function call_openrouter_api {
     local model=$(get_ai_model)
 
     # Build OpenAI-style payload for OpenRouter.
-    # Prefer jq for robust JSON encoding; fall back to sed/awk that preserves newlines as JSON \n
-    # (the previous implementation collapsed newlines to spaces, destroying prompt structure).
-    # LC_ALL=C avoids "illegal byte sequence" errors from BSD sed on macOS when the
-    # prompt contains non-UTF-8-validatable bytes (e.g. Russian or other non-ASCII content in diffs).
+    # Prefer jq for robust JSON encoding; fall back to sed/awk that preserves newlines as JSON \n.
     local json_payload
     if command -v jq &>/dev/null; then
         json_payload=$(jq -nc \
             --arg model "$model" \
-            --arg content "$prompt" \
+            --arg system "$system_prompt" \
+            --arg user "$user_prompt" \
             --argjson temperature "$AI_TEMPERATURE" \
             --argjson max_tokens "$max_tokens" \
-            '{model: $model, messages: [{role: "user", content: $content}], temperature: $temperature, max_tokens: $max_tokens}')
+            '{model: $model, messages: [{role: "system", content: $system}, {role: "user", content: $user}], temperature: $temperature, max_tokens: $max_tokens}')
     else
-        local escaped_prompt=$(printf '%s' "$prompt" \
-            | LC_ALL=C sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e $'s/\t/\\\\t/g' -e $'s/\r/\\\\r/g' \
-            | LC_ALL=C awk 'BEGIN{ORS=""} NR>1{print "\\n"} {print}')
-        json_payload="{\"model\":\"$model\",\"messages\":[{\"role\":\"user\",\"content\":\"$escaped_prompt\"}],\"temperature\":$AI_TEMPERATURE,\"max_tokens\":$max_tokens}"
+        local system_escaped=$(_json_escape_for_payload "$system_prompt")
+        local user_escaped=$(_json_escape_for_payload "$user_prompt")
+        json_payload="{\"model\":\"$model\",\"messages\":[{\"role\":\"system\",\"content\":\"$system_escaped\"},{\"role\":\"user\",\"content\":\"$user_escaped\"}],\"temperature\":$AI_TEMPERATURE,\"max_tokens\":$max_tokens}"
     fi
 
     # Make API request with optional proxy and retry logic
@@ -597,49 +606,48 @@ function check_ai_available {
     return 0
 }
 
-### Build the AI prompt for commit-message generation
+### Build the SYSTEM message for commit-message generation
+# Static instructions: role, task, types, rules, examples, output format.
 # $1: mode ("simple" | "subject" | "full")
-# $2: detected scopes (optional, space-separated)
-# $3: provided scopes (optional, space-separated; ignored in "subject" mode)
-# $4: commit prefix (only used in "subject" mode, e.g. "feat(auth): ")
-# Echoes the assembled prompt
-function build_ai_commit_prompt {
+# $2: commit prefix (only used in "subject" mode, e.g. "feat(auth): ")
+function build_ai_commit_system_prompt {
     local mode="$1"
-    local detected_scopes="$2"
-    local provided_scopes="$3"
-    local commit_prefix="$4"
+    local commit_prefix="$2"
 
-    local staged_files_limited=$(get_limited_staged_files_for_ai)
-    local diff_stat=$(get_limited_diff_stat_for_ai)
-    local diff_details=$(get_limited_diff_for_ai)
-    local recent_commits=$(get_recent_commit_messages_for_ai)
-
-    # Mode-specific task statement
-    local task_line
+    # Mode-specific task and output-format wording
+    local task_text output_format_text length_rule
     case "$mode" in
         subject)
-            task_line="Generate the SUBJECT TEXT only. The user has already chosen the prefix '${commit_prefix}'; do NOT include that prefix in your output — write only what comes after it."
+            task_text="Generate the SUBJECT TEXT only. The user has already chosen the prefix '${commit_prefix}'. The final commit header will be the literal concatenation: '${commit_prefix}<your output>'. Write only the suffix that comes after the prefix — do NOT include the prefix, type, scope, colon, or leading space."
+            output_format_text="Output ONLY the subject text. No prose before or after. No markdown fences. No surrounding quotes. No leading or trailing whitespace."
+            length_rule="The complete header (the prefix '${commit_prefix}' concatenated with your output) must be 100 characters or fewer."
             ;;
         full)
-            task_line="Generate a conventional commit in the format 'type(scope): subject', followed by a blank line, then a 1-3 sentence body explaining WHY."
+            task_text="Generate a conventional commit in the format 'type(scope): subject', followed by a blank line, then a 1-3 sentence body explaining WHY the change is being made."
+            output_format_text="Output ONLY the commit message (header line, blank line, body). No prose before or after. No markdown fences. No surrounding quotes."
+            length_rule="The header line (type + scope + colon + space + subject) must be 100 characters or fewer."
             ;;
         *)
-            task_line="Generate a conventional commit message in the format 'type(scope): subject' (single line, no body)."
+            task_text="Generate a single-line conventional commit message in the format 'type(scope): subject'. No body."
+            output_format_text="Output ONLY the commit message on one line. No prose before or after. No markdown fences. No surrounding quotes."
+            length_rule="The full message (type + scope + colon + space + subject) must be 100 characters or fewer."
             ;;
     esac
 
-    local prompt="You are a conventional commit message generator. Analyze the git change data inside the XML tags below and produce a commit message that matches this repository's style.
+    local prompt="You are a conventional commit message generator. You will receive git change data from the user wrapped in XML tags. Produce a commit message that follows the rules below and matches the style of <recent_commits>.
 
-${task_line}"
+<task>
+${task_text}
+</task>"
 
     # Types are only relevant when the model picks the type itself
     if [ "$mode" != "subject" ]; then
         prompt+="
 
 <types>
-- feat: new feature, logic change or performance improvement
-- fix: small changes, bug fix, fixes of features
-- refactor: code change that neither fixes a bug nor adds a feature, style changes, NO NEW BEHAVIOUR
+- feat: new feature, logic change, or performance improvement
+- fix: bug fix or small correction to existing behaviour
+- refactor: code change that neither fixes a bug nor adds a feature; style changes; NO NEW BEHAVIOUR
 - test: adding missing tests or changing existing tests
 - build: changes that affect the build system or external dependencies
 - ci: changes to CI configuration files and scripts
@@ -650,7 +658,96 @@ ${task_line}"
 
     prompt+="
 
-<recent_commits>
+<rules>
+- ${length_rule}
+- Subject text must be lowercase and must not end with a period
+- Use the imperative mood (e.g. 'add', 'fix', 'remove') — NOT past tense ('added', 'fixed') or progressive ('adding', 'fixing')
+- Be specific about WHAT changed. Avoid vague phrases like 'improve existing feature', 'update code', or 'fix bug'
+- Match the typical length, level of detail, and verb style of <recent_commits>. Generate fresh content for the actual diff — do not copy a recent message verbatim
+- For 2-3 distinct changes, combine them with 'and' (e.g., 'add auth module and user profile page')
+- For 4+ distinct changes, summarize with a count and list the most important ones (e.g., 'add 5 endpoints including auth, profile, settings, dashboard, and notifications')
+- For mixed change types (e.g., a feature and a fix), use the dominant type and mention the mix
+- Never write vague messages like 'multiple changes' or 'various updates'"
+
+    if [ "$mode" != "subject" ]; then
+        prompt+="
+- If a meaningful scope is clear from the diff, include it. Prefer one from <provided_scopes> when present, otherwise pick from <detected_scopes>, otherwise omit the scope entirely"
+    fi
+
+    if [ "$mode" = "full" ]; then
+        prompt+="
+- Body length: 1-3 sentences explaining WHY the change is being made (motivation, context, trade-off). If there are multiple distinct changes, list them in the body"
+    fi
+
+    prompt+="
+</rules>
+
+<examples>"
+
+    case "$mode" in
+        subject)
+            prompt+="
+<example>add backup codes for MFA recovery</example>
+<example>handle null userData in user lookup</example>
+<example>extract diff truncation into shared helper</example>
+<example>bump axios to 1.7.4 to address CVE-2024-39338</example>
+<example>add 4 endpoints including profile, settings, dashboard, and notifications</example>"
+            ;;
+        full)
+            prompt+="
+<example>
+feat(auth): add backup codes for MFA recovery
+
+Required for SOC2 compliance — users need a recovery path when their TOTP device is unavailable. Replaces the old email-only fallback flow.
+</example>
+<example>
+fix(api): handle null userData in user lookup
+
+The upstream service started returning null for deleted users instead of a 404. Treat null as 'not found' to preserve the client-facing 404 contract.
+</example>
+<example>
+refactor(commit): extract diff truncation into shared helper
+
+The same line/char-cap logic was duplicated across three prompt builders. Centralising it makes future limit changes a single-place edit.
+</example>"
+            ;;
+        *)
+            prompt+="
+<example>feat(auth): add backup codes for MFA recovery</example>
+<example>fix(api): handle null userData in user lookup</example>
+<example>refactor(commit): extract diff truncation into shared helper</example>
+<example>docs: add v1 to v2 migration guide</example>
+<example>chore: bump axios to 1.7.4 to address CVE-2024-39338</example>
+<example>feat: add 4 endpoints including profile, settings, dashboard, and notifications</example>"
+            ;;
+    esac
+
+    prompt+="
+</examples>
+
+<output_format>
+${output_format_text}
+</output_format>"
+
+    printf '%s' "$prompt"
+}
+
+### Build the USER message for commit-message generation
+# Per-call data: recent commits, staged files, diff, scopes.
+# $1: mode ("simple" | "subject" | "full")
+# $2: detected scopes (optional, space-separated)
+# $3: provided scopes (optional, space-separated; ignored in "subject" mode)
+function build_ai_commit_user_prompt {
+    local mode="$1"
+    local detected_scopes="$2"
+    local provided_scopes="$3"
+
+    local staged_files_limited=$(get_limited_staged_files_for_ai)
+    local diff_stat=$(get_limited_diff_stat_for_ai)
+    local diff_details=$(get_limited_diff_for_ai)
+    local recent_commits=$(get_recent_commit_messages_for_ai)
+
+    local prompt="<recent_commits>
 ${recent_commits}
 </recent_commits>
 
@@ -685,30 +782,7 @@ ${detected_scopes}
 
     prompt+="
 
-<rules>
-- Subject must be lowercase and must not end with a period
-- Subject must be 100 characters or fewer
-- Be specific about WHAT changed; avoid vague phrases like 'improve existing feature' or 'fix bug'
-- Use <recent_commits> as style guidance, not as a template — do not copy them verbatim
-- For 2-3 distinct changes, combine them with 'and' (e.g., 'feat: add auth module and user profile page')
-- For 4+ distinct changes, summarize with a count and list the most important ones (e.g., 'feat: add 5 features including auth, profiles, settings, dashboard, and notifications')
-- For mixed change types, use the dominant type and mention the mix (e.g., 'feat: add auth module and fix login validation')
-- Never write vague messages like 'multiple changes' or 'various updates'"
-
-    if [ "$mode" != "subject" ]; then
-        prompt+="
-- If a meaningful scope is clear from the diff, include it. Prefer one from <provided_scopes> when present, otherwise pick from <detected_scopes>, otherwise omit the scope entirely"
-    fi
-
-    if [ "$mode" = "full" ]; then
-        prompt+="
-- Body length: 1-3 sentences explaining the WHY. If there are multiple distinct changes, list them in the body"
-    fi
-
-    prompt+="
-</rules>
-
-Output ONLY the commit message — no prose, no markdown fences, no surrounding quotes."
+Now generate the commit message based on the data above, following all rules and matching the example style."
 
     printf '%s' "$prompt"
 }
@@ -731,8 +805,9 @@ function generate_ai_commit_message {
         return 1
     fi
 
-    local prompt
-    prompt=$(build_ai_commit_prompt "$mode" "$detected_scopes" "$provided_scopes" "$commit_prefix")
+    local system_prompt user_prompt
+    system_prompt=$(build_ai_commit_system_prompt "$mode" "$commit_prefix")
+    user_prompt=$(build_ai_commit_user_prompt "$mode" "$detected_scopes" "$provided_scopes")
 
     local max_tokens
     case "$mode" in
@@ -741,7 +816,7 @@ function generate_ai_commit_message {
         *)       max_tokens="$AI_MAX_TOKENS_SIMPLE" ;;
     esac
 
-    call_openrouter_api "$prompt" "$max_tokens"
+    call_openrouter_api "$system_prompt" "$user_prompt" "$max_tokens"
 }
 
 ### Function to securely clear sensitive variables

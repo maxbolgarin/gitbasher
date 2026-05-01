@@ -45,6 +45,18 @@ npm install -g gitbasher
 
 **Requirements:** `bash` 4.0+, `git` 2.23+ (macOS: `brew install bash git`).
 
+**Uninstall:**
+```bash
+npm uninstall -g gitbasher          # if installed via npm
+sudo rm -f $(which gitb)            # if installed via curl
+```
+
+Per-repo gitbasher settings live in `git config` under the `gitbasher.*` namespace and are removed with the repo. To clear global settings (AI key, default branch, scopes, etc.):
+```bash
+git config --global --remove-section gitbasher 2>/dev/null
+git config --global --unset core.editor 2>/dev/null   # only if you set it via gitb cfg editor
+```
+
 ---
 
 ## 60-second quick start

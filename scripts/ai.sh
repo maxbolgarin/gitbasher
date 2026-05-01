@@ -760,9 +760,7 @@ ${task_text}
 
     if [ "$mode" != "subject" ]; then
         prompt+="
-- SCOPE (include whenever detectable): Always include a scope when one can be inferred from <staged_files>, <provided_scopes>, or <detected_scopes>. Prefer scopes from <provided_scopes> over <detected_scopes>; treat <staged_files> as the source of truth when both are silent. Only omit the scope when the changes touch so many unrelated areas that no meaningful scope (or scope-set) summarizes them
-- For changes spanning 2-3 distinct codebase areas, list scopes comma-separated inside the parens (e.g., 'feat(auth,api): add login endpoints and matching middleware', 'fix(parser,ast): handle nested generics and trailing commas'). Order scopes by impact (most-changed first)
-- For 4+ unrelated scopes, omit the scope and let the subject (and body, in full mode) name the affected areas explicitly"
+- SCOPE: Use exactly ONE scope per commit, or omit the scope entirely (plain 'type: subject') when the changes don't fit a single scope. Never put multiple scopes in the parens (e.g. 'feat(auth,api):' is forbidden). When one scope clearly dominates the diff (most files / most logical weight), use that scope; when no single scope dominates, omit it and name the affected areas in the subject text instead. Prefer scope names from <provided_scopes> over <detected_scopes>; treat <staged_files> as the source of truth when both are silent"
     fi
 
     if [ "$mode" = "full" ]; then
@@ -803,14 +801,14 @@ feat(api): add rate limiting, structured request logs, and CORS preflight handli
 Three middleware additions for the public API release: token-bucket limiter (60 req/min/IP), structured request logs feeding the new audit pipeline, and explicit CORS preflight responses for the browser SDK.
 </example>
 <example>
-feat(auth,billing): add SSO login and metered usage reporting
+feat: add SSO login and metered usage reporting
 
-Two product-level additions for the Q3 release: SAML/OIDC SSO replacing the legacy email-link auth flow, and per-tenant metered usage events emitted from the billing service to feed the new invoicing pipeline.
+Two product-level additions for the Q3 release that span unrelated areas: SAML/OIDC SSO replacing the legacy email-link auth flow, and per-tenant metered usage events emitted from the billing service to feed the new invoicing pipeline.
 </example>
 <example>
-refactor(commit,ai): unify prompt builders, switch to XML-tagged sections, and add regenerate option
+refactor(commit): unify prompt builders, switch to XML-tagged sections, and add regenerate option
 
-Three closely related changes touching commit.sh and ai.sh: collapse the three near-duplicate generate_* functions into one mode-dispatched entry point, restructure prompts as XML-tagged sections so the model can separate instructions from data, and add an 'r' option in commit.sh so users can ask for a different message without re-running the whole command.
+Three closely related changes: collapse the three near-duplicate generate_* functions into one mode-dispatched entry point, restructure prompts as XML-tagged sections so the model can separate instructions from data, and add an 'r' option so users can ask for a different message without re-running the whole command.
 </example>"
             ;;
         *)
@@ -818,11 +816,11 @@ Three closely related changes touching commit.sh and ai.sh: collapse the three n
 <example>feat(auth): add backup codes for MFA recovery</example>
 <example>fix(api): handle null userData in user lookup</example>
 <example>refactor(commit): extract diff truncation into shared helper</example>
-<example>feat(auth,api): add login endpoints and matching auth middleware</example>
-<example>fix(parser,ast): handle nested generics and trailing commas</example>
+<example>feat(auth): add login endpoints and matching auth middleware</example>
+<example>fix(parser): handle nested generics and trailing commas in the AST builder</example>
 <example>docs: add v1 to v2 migration guide</example>
 <example>chore: bump axios to 1.7.4 to address CVE-2024-39338</example>
-<example>refactor(commit,ai): unify prompt builders and switch to XML-tagged sections</example>
+<example>refactor: unify prompt builders across commit and ai modules and switch to XML-tagged sections</example>
 <example>feat: add 4 endpoints including profile, settings, dashboard, and notifications</example>"
             ;;
     esac

@@ -52,6 +52,135 @@ teardown() {
     [ -z "$repo_name" ]
 }
 
+# ===== get_repo_host tests =====
+
+@test "get_repo_host: detects github" {
+    [ "$(get_repo_host "https://github.com/user/repo")" = "github" ]
+}
+
+@test "get_repo_host: detects gitlab" {
+    [ "$(get_repo_host "https://gitlab.com/user/repo")" = "gitlab" ]
+}
+
+@test "get_repo_host: detects bitbucket" {
+    [ "$(get_repo_host "https://bitbucket.org/user/repo")" = "bitbucket" ]
+}
+
+@test "get_repo_host: returns empty for unknown host" {
+    [ -z "$(get_repo_host "https://example.com/user/repo")" ]
+}
+
+# ===== URL builder tests =====
+
+@test "get_branch_url: github" {
+    [ "$(get_branch_url "feat" "https://github.com/u/r")" = "https://github.com/u/r/tree/feat" ]
+}
+
+@test "get_branch_url: gitlab" {
+    [ "$(get_branch_url "feat" "https://gitlab.com/u/r")" = "https://gitlab.com/u/r/-/tree/feat" ]
+}
+
+@test "get_branch_url: bitbucket" {
+    [ "$(get_branch_url "feat" "https://bitbucket.org/u/r")" = "https://bitbucket.org/u/r/branch/feat" ]
+}
+
+@test "get_commit_url: github" {
+    [ "$(get_commit_url "abc123" "https://github.com/u/r")" = "https://github.com/u/r/commit/abc123" ]
+}
+
+@test "get_commit_url: gitlab" {
+    [ "$(get_commit_url "abc123" "https://gitlab.com/u/r")" = "https://gitlab.com/u/r/-/commit/abc123" ]
+}
+
+@test "get_commit_url: bitbucket" {
+    [ "$(get_commit_url "abc123" "https://bitbucket.org/u/r")" = "https://bitbucket.org/u/r/commits/abc123" ]
+}
+
+@test "get_new_pr_url: github builds compare URL" {
+    result=$(get_new_pr_url "main" "feat" "https://github.com/u/r")
+    [ "$result" = "https://github.com/u/r/compare/main...feat?expand=1" ]
+}
+
+@test "get_new_pr_url: gitlab builds new MR URL with source and target" {
+    result=$(get_new_pr_url "main" "feat" "https://gitlab.com/u/r")
+    [[ "$result" =~ "merge_requests/new" ]]
+    [[ "$result" =~ "source_branch%5D=feat" ]]
+    [[ "$result" =~ "target_branch%5D=main" ]]
+}
+
+@test "get_new_pr_url: bitbucket" {
+    result=$(get_new_pr_url "main" "feat" "https://bitbucket.org/u/r")
+    [ "$result" = "https://bitbucket.org/u/r/pull-requests/new?source=feat&dest=main" ]
+}
+
+@test "get_ci_url: github with branch" {
+    [ "$(get_ci_url "feat" "https://github.com/u/r")" = "https://github.com/u/r/actions?query=branch%3Afeat" ]
+}
+
+@test "get_ci_url: github without branch" {
+    [ "$(get_ci_url "" "https://github.com/u/r")" = "https://github.com/u/r/actions" ]
+}
+
+@test "get_ci_url: gitlab with branch" {
+    [ "$(get_ci_url "feat" "https://gitlab.com/u/r")" = "https://gitlab.com/u/r/-/pipelines?ref=feat" ]
+}
+
+@test "get_ci_url: bitbucket" {
+    [ "$(get_ci_url "feat" "https://bitbucket.org/u/r")" = "https://bitbucket.org/u/r/pipelines" ]
+}
+
+@test "get_ci_label: github" {
+    [ "$(get_ci_label "https://github.com/u/r")" = "Actions" ]
+}
+
+@test "get_ci_label: gitlab" {
+    [ "$(get_ci_label "https://gitlab.com/u/r")" = "Pipeline" ]
+}
+
+@test "get_ci_label: bitbucket" {
+    [ "$(get_ci_label "https://bitbucket.org/u/r")" = "Pipelines" ]
+}
+
+@test "get_ci_label: unknown host falls back to CI" {
+    [ "$(get_ci_label "https://example.com/u/r")" = "CI" ]
+}
+
+@test "get_tag_url: github" {
+    [ "$(get_tag_url "v1.0.0" "https://github.com/u/r")" = "https://github.com/u/r/releases/tag/v1.0.0" ]
+}
+
+@test "get_tag_url: gitlab" {
+    [ "$(get_tag_url "v1.0.0" "https://gitlab.com/u/r")" = "https://gitlab.com/u/r/-/tags/v1.0.0" ]
+}
+
+@test "get_tag_url: bitbucket" {
+    [ "$(get_tag_url "v1.0.0" "https://bitbucket.org/u/r")" = "https://bitbucket.org/u/r/src/v1.0.0" ]
+}
+
+@test "get_new_release_url: github" {
+    [ "$(get_new_release_url "v1.0.0" "https://github.com/u/r")" = "https://github.com/u/r/releases/new?tag=v1.0.0" ]
+}
+
+@test "get_new_release_url: gitlab" {
+    [ "$(get_new_release_url "v1.0.0" "https://gitlab.com/u/r")" = "https://gitlab.com/u/r/-/releases/new?tag_name=v1.0.0" ]
+}
+
+@test "get_releases_url: github" {
+    [ "$(get_releases_url "https://github.com/u/r")" = "https://github.com/u/r/releases" ]
+}
+
+@test "get_releases_url: gitlab" {
+    [ "$(get_releases_url "https://gitlab.com/u/r")" = "https://gitlab.com/u/r/-/releases" ]
+}
+
+@test "get_tag_ci_url: github" {
+    [ "$(get_tag_ci_url "v1.0.0" "https://github.com/u/r")" = "https://github.com/u/r/actions?query=ref%3Arefs%2Ftags%2Fv1.0.0" ]
+}
+
+@test "get_tag_ci_url: gitlab" {
+    [ "$(get_tag_ci_url "v1.0.0" "https://gitlab.com/u/r")" = "https://gitlab.com/u/r/-/pipelines?ref=v1.0.0" ]
+}
+
 # ===== git_status tests =====
 
 @test "git_status: shows modified files" {

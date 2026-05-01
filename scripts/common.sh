@@ -466,6 +466,161 @@ function get_repo_name {
 }
 
 
+### Detect remote host kind from a repo URL
+# $1: repo URL (optional, defaults to current repo)
+# Return: "github", "gitlab", "bitbucket" or empty string
+function get_repo_host {
+    local repo=${1:-$(get_repo)}
+    if [[ "$repo" == *"github"* ]]; then
+        echo "github"
+    elif [[ "$repo" == *"gitlab"* ]]; then
+        echo "gitlab"
+    elif [[ "$repo" == *"bitbucket"* ]]; then
+        echo "bitbucket"
+    else
+        echo ""
+    fi
+}
+
+
+### URL to a branch in the remote repo
+# $1: branch name, $2: repo URL (optional)
+function get_branch_url {
+    local branch=$1
+    local repo=${2:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/tree/${branch}";;
+        gitlab)    echo "${repo}/-/tree/${branch}";;
+        bitbucket) echo "${repo}/branch/${branch}";;
+    esac
+}
+
+
+### URL to a commit in the remote repo
+# $1: commit hash, $2: repo URL (optional)
+function get_commit_url {
+    local hash=$1
+    local repo=${2:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/commit/${hash}";;
+        gitlab)    echo "${repo}/-/commit/${hash}";;
+        bitbucket) echo "${repo}/commits/${hash}";;
+    esac
+}
+
+
+### URL to open a new pull/merge request from a branch
+# $1: base branch, $2: source branch, $3: repo URL (optional)
+function get_new_pr_url {
+    local base=$1
+    local branch=$2
+    local repo=${3:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/compare/${base}...${branch}?expand=1";;
+        gitlab)    echo "${repo}/-/merge_requests/new?merge_request%5Bsource_branch%5D=${branch}&merge_request%5Btarget_branch%5D=${base}";;
+        bitbucket) echo "${repo}/pull-requests/new?source=${branch}&dest=${base}";;
+    esac
+}
+
+
+### URL to the list of pull/merge requests
+# $1: repo URL (optional)
+function get_prs_url {
+    local repo=${1:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/pulls";;
+        gitlab)    echo "${repo}/-/merge_requests";;
+        bitbucket) echo "${repo}/pull-requests";;
+    esac
+}
+
+
+### URL to CI runs filtered by branch (or all runs when branch is empty)
+# $1: branch name (optional), $2: repo URL (optional)
+function get_ci_url {
+    local branch=$1
+    local repo=${2:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)
+            if [ -n "$branch" ]; then
+                echo "${repo}/actions?query=branch%3A${branch}"
+            else
+                echo "${repo}/actions"
+            fi;;
+        gitlab)
+            if [ -n "$branch" ]; then
+                echo "${repo}/-/pipelines?ref=${branch}"
+            else
+                echo "${repo}/-/pipelines"
+            fi;;
+        bitbucket)
+            echo "${repo}/pipelines";;
+    esac
+}
+
+
+### Human-friendly label for the CI system
+# $1: repo URL (optional)
+function get_ci_label {
+    case "$(get_repo_host "${1:-$(get_repo)}")" in
+        github)    echo "Actions";;
+        gitlab)    echo "Pipeline";;
+        bitbucket) echo "Pipelines";;
+        *)         echo "CI";;
+    esac
+}
+
+
+### URL to a tag page in the remote repo
+# $1: tag name, $2: repo URL (optional)
+function get_tag_url {
+    local tag=$1
+    local repo=${2:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/releases/tag/${tag}";;
+        gitlab)    echo "${repo}/-/tags/${tag}";;
+        bitbucket) echo "${repo}/src/${tag}";;
+    esac
+}
+
+
+### URL to create a new release for a tag
+# $1: tag name, $2: repo URL (optional)
+function get_new_release_url {
+    local tag=$1
+    local repo=${2:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/releases/new?tag=${tag}";;
+        gitlab)    echo "${repo}/-/releases/new?tag_name=${tag}";;
+    esac
+}
+
+
+### URL to all releases / downloads
+# $1: repo URL (optional)
+function get_releases_url {
+    local repo=${1:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/releases";;
+        gitlab)    echo "${repo}/-/releases";;
+        bitbucket) echo "${repo}/downloads/?tab=tags";;
+    esac
+}
+
+
+### URL to CI runs triggered by a tag
+# $1: tag name, $2: repo URL (optional)
+function get_tag_ci_url {
+    local tag=$1
+    local repo=${2:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/actions?query=ref%3Arefs%2Ftags%2F${tag}";;
+        gitlab)    echo "${repo}/-/pipelines?ref=${tag}";;
+        bitbucket) echo "${repo}/pipelines";;
+    esac
+}
+
+
 ### Function prints current config
 function print_configuration {
     echo -e "${YELLOW}Current configuration:${ENDCOLOR}"

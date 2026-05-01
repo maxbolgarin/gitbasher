@@ -33,6 +33,7 @@ function push_tag {
     fi
     
     repo=$(get_repo)
+    host=$(get_repo_host "$repo")
 
     # Print `push-all` result
     if [ -n "$all" ]; then
@@ -43,10 +44,16 @@ function push_tag {
         number_of_tags=${#lines_with_success[@]}
         if [ "$number_of_tags" != 0 ]; then
             echo -e "${GREEN}Pushed successfully!${ENDCOLOR}"
-            
+
             for index in "${!lines_with_success[@]}"
             do
-                echo -e "\t$(sed -e 's#.*\-> \(\)#\1#' <<< "${lines_with_success[index]}" )"
+                pushed_tag=$(sed -e 's#.*\-> \(\)#\1#' <<< "${lines_with_success[index]}" )
+                pushed_tag_url=$(get_tag_url "$pushed_tag" "$repo")
+                if [ -n "$pushed_tag_url" ]; then
+                    echo -e "\t${pushed_tag}\t${pushed_tag_url}"
+                else
+                    echo -e "\t${pushed_tag}"
+                fi
             done
             echo
         fi
@@ -67,7 +74,7 @@ function push_tag {
             echo -e "${YELLOW}Repo:${ENDCOLOR} ${repo}"
             exit
         fi
-        
+
         echo -e "${RED}Cannot push! Error message:${ENDCOLOR}"
         echo "$push_output"
         exit $push_code
@@ -84,11 +91,26 @@ function push_tag {
 
     echo -e "${YELLOW}Repo:${ENDCOLOR}\t${repo}"
 
-    if [ -z "$all" ]; then
-        if [[ $repo == *"github"* ]]; then
-            echo -e "${YELLOW}Tag:${ENDCOLOR}\t${repo}/releases/tag/$1"
-        elif [[ $repo == *"gitlab"* ]]; then
-            echo -e "${YELLOW}Tag:${ENDCOLOR}\t${repo}/-/tags/$1"
+    if [ -z "$all" ] && [ -n "$1" ]; then
+        tag_url=$(get_tag_url "$1" "$repo")
+        if [ -n "$tag_url" ]; then
+            echo -e "${YELLOW}Tag:${ENDCOLOR}\t${tag_url}"
+        fi
+
+        release_url=$(get_new_release_url "$1" "$repo")
+        if [ -n "$release_url" ]; then
+            echo -e "${YELLOW}Release:${ENDCOLOR}\t${release_url}"
+        fi
+
+        ci_url=$(get_tag_ci_url "$1" "$repo")
+        if [ -n "$ci_url" ]; then
+            ci_label=$(get_ci_label "$repo")
+            echo -e "${YELLOW}${ci_label}:${ENDCOLOR}\t${ci_url}"
+        fi
+    elif [ -n "$all" ]; then
+        releases_url=$(get_releases_url "$repo")
+        if [ -n "$releases_url" ]; then
+            echo -e "${YELLOW}Releases:${ENDCOLOR}\t${releases_url}"
         fi
     fi
 }

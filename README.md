@@ -365,8 +365,10 @@ gitb hook create            # Set up project hooks
 | `push`     | `pu` `p`    | Create commit and push changes | Deploy-ready commits |
 | `fastp`    | `fp`         | Fast commit and push | One-command workflow |
 | `fastsp`   | `fsp` `fps` | Fast commit with scope and push | Complete feature deployment |
-| `split`    | `sp` `sl`   | Split staged changes into one atomic commit per detected scope (AI-refines grouping when heuristic is weak) | Cleaner per-scope changelog entries |
+| `split`    | `sp` `sl`   | Split staged changes into one commit per detected scope (heuristic grouping, manual type+summary per group) | Atomic commits without AI |
 | `splitp`   | `spp` `slp` | Same as split, then push the resulting commits | Atomic split with deploy |
+| `aisplit`  | `isplit`    | Same as split, but AI refines the grouping when heuristic is weak and writes each commit message | AI-driven atomic split |
+| `aisplitp` | `isplitp`   | Same as aisplit, then push the resulting commits | AI atomic split with deploy |
 | `ff`       |             | Ultrafast: `git add .`, AI-grouped split, AI messages, no prompts (requires AI configured) | Hands-free commit on a clean branch |
 | `ffp`      | `ffpush`    | Same as ff, then push the resulting commits | Fully automated commit + push |
 | `ai`       | `llm` `i`   | AI-generated commit message | Smart commit automation |

@@ -401,6 +401,84 @@ function configure_ai_history {
 }
 
 
+### Function asks user to configure AI diff payload size
+# Controls how much of the staged diff is sent to the model. Two knobs:
+#   - lines: head -n N applied to the diff (primary cap, intuitive for users)
+#   - max chars: hard ceiling on the payload, protects against pathological
+#     single-line diffs (e.g. a generated bundle line)
+function configure_ai_diff {
+    echo -e "${YELLOW}Configure AI Diff Payload Size${ENDCOLOR}"
+    echo
+
+    current_lines=$(get_ai_diff_limit)
+    current_chars=$(get_ai_diff_max_chars)
+    echo -e "Current diff line limit: ${GREEN}${current_lines}${ENDCOLOR} lines"
+    echo -e "Current diff char cap:   ${GREEN}${current_chars}${ENDCOLOR} characters"
+    echo
+    echo -e "These settings control how much of the staged diff is sent to the AI."
+    echo -e "Larger values give the model more context but use more tokens (cost more)."
+    echo
+    echo -e "Recommended ranges:"
+    echo -e "• Line limit: ${BLUE}100-1000${ENDCOLOR} lines (default 300)"
+    echo -e "• Char cap:   ${BLUE}8000-40000${ENDCOLOR} characters (default 20000, ~5000 tokens)"
+    echo
+    echo -e "Press Enter on either prompt to keep the current value"
+
+    read -p "New diff line limit: " lines_input
+    if [ -n "$lines_input" ]; then
+        if ! validate_numeric_input "$lines_input" 10 5000; then
+            show_sanitization_error "diff line limit" "Please enter a positive number between 10 and 5000."
+            exit 1
+        fi
+        lines_input="$validated_number"
+        if [ "$lines_input" -lt 50 ] || [ "$lines_input" -gt 2000 ]; then
+            echo -e "${YELLOW}Warning: Value outside recommended range (50-2000)${ENDCOLOR}"
+            read -n 1 -p "Continue anyway? (y/n) " -s choice
+            echo
+            if ! is_yes "$choice"; then
+                exit
+            fi
+        fi
+        set_ai_diff_limit "$lines_input"
+        echo -e "${GREEN}AI diff line limit set to ${lines_input}${ENDCOLOR}"
+    fi
+
+    read -p "New diff char cap: " chars_input
+    if [ -n "$chars_input" ]; then
+        if ! validate_numeric_input "$chars_input" 1000 200000; then
+            show_sanitization_error "diff char cap" "Please enter a positive number between 1000 and 200000."
+            exit 1
+        fi
+        chars_input="$validated_number"
+        if [ "$chars_input" -lt 4000 ] || [ "$chars_input" -gt 100000 ]; then
+            echo -e "${YELLOW}Warning: Value outside recommended range (4000-100000)${ENDCOLOR}"
+            read -n 1 -p "Continue anyway? (y/n) " -s choice
+            echo
+            if ! is_yes "$choice"; then
+                exit
+            fi
+        fi
+        set_ai_diff_max_chars "$chars_input"
+        echo -e "${GREEN}AI diff char cap set to ${chars_input}${ENDCOLOR}"
+    fi
+
+    if [ -z "$lines_input" ] && [ -z "$chars_input" ]; then
+        echo -e "${YELLOW}No changes${ENDCOLOR}"
+        exit
+    fi
+
+    echo
+    echo -e "Do you want to apply ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+    yes_no_choice "\nApply AI diff settings globally" "true"
+    if [ -n "$lines_input" ]; then
+        git config --global gitbasher.ai-diff-limit "$lines_input"
+    fi
+    if [ -n "$chars_input" ]; then
+        git config --global gitbasher.ai-diff-max-chars "$chars_input"
+    fi
+}
+
+
 ### Function asks user to set scope
 function set_scopes {
     echo -e "${YELLOW}Enter a list of predefined scopes${ENDCOLOR}"
@@ -503,10 +581,22 @@ function delete_global {
         echo -e "9. AI commit history limit: ${GREEN}$global_ai_history${ENDCOLOR}"
     fi
 
+    global_ai_diff_lines=$(git config --global --get gitbasher.ai-diff-limit)
+    global_ai_diff_chars=$(git config --global --get gitbasher.ai-diff-max-chars)
+    if [ -n "$global_ai_diff_lines" ] || [ -n "$global_ai_diff_chars" ]; then
+        diff_summary=""
+        [ -n "$global_ai_diff_lines" ] && diff_summary="${global_ai_diff_lines} lines"
+        if [ -n "$global_ai_diff_chars" ]; then
+            [ -n "$diff_summary" ] && diff_summary="${diff_summary}, "
+            diff_summary="${diff_summary}${global_ai_diff_chars} chars"
+        fi
+        echo -e "10. AI diff payload: ${GREEN}${diff_summary}${ENDCOLOR}"
+    fi
+
     echo -e "0. Exit"
 
-    read -n 1 -s choice
-    re='^[0123456789]+$'
+    read -p "" choice
+    re='^([0-9]|10)$'
     if ! [[ $choice =~ $re ]]; then
         echo -e "${RED}Invalid choice${ENDCOLOR}" >&2
         return 1
@@ -554,6 +644,11 @@ function delete_global {
         9)
             echo -e "${GREEN}Unset AI commit history limit from global settings${ENDCOLOR}"
             git config --global --unset gitbasher.ai-commit-history-limit
+            ;;
+        10)
+            echo -e "${GREEN}Unset AI diff payload settings from global settings${ENDCOLOR}"
+            git config --global --unset gitbasher.ai-diff-limit 2>/dev/null
+            git config --global --unset gitbasher.ai-diff-max-chars 2>/dev/null
             ;;
     esac
 }
@@ -626,6 +721,7 @@ function config_script {
         model|m)              set_ai_model_cfg="true";;
         proxy|prx|p)          set_proxy_cfg="true";;
         history|hist)         set_ai_history_cfg="true";;
+        diff|payload)         set_ai_diff_cfg="true";;
         delete|unset|del)     delete_cfg="true";;
         user|name|email|u)    set_user_cfg="true";;
         help|h)               help="true";;
@@ -652,6 +748,8 @@ function config_script {
         header="$header AI PROXY"
     elif [ -n "${set_ai_history_cfg}" ]; then
         header="$header AI COMMIT HISTORY"
+    elif [ -n "${set_ai_diff_cfg}" ]; then
+        header="$header AI DIFF PAYLOAD"
     elif [ -n "${delete_cfg}" ]; then
         header="$header UNSET GLOBAL CONFIG"
     elif [ -n "${set_user_cfg}" ]; then
@@ -711,6 +809,11 @@ function config_script {
         exit
     fi
 
+    if [ "$set_ai_diff_cfg" == "true" ]; then
+        configure_ai_diff
+        exit
+    fi
+
     if [ "$delete_cfg" == "true" ]; then
         delete_global
         exit
@@ -731,6 +834,7 @@ function config_script {
         msg="$msg\n${BOLD}model${ENDCOLOR}_m_Set AI model for OpenRouter"
         msg="$msg\n${BOLD}proxy${ENDCOLOR}_prx|p_Set HTTP proxy for AI requests (bypass geo-restrictions)"
         msg="$msg\n${BOLD}history${ENDCOLOR}_hist_Set number of recent commits to include in AI prompts"
+        msg="$msg\n${BOLD}diff${ENDCOLOR}_payload_Set diff payload size (lines and char cap) sent to AI"
         msg="$msg\n${BOLD}delete${ENDCOLOR}_unset|del_Unset global configuration"
         msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
         echo -e "$(echo -e "$msg" | column -ts'_')"

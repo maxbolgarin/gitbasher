@@ -320,39 +320,39 @@ function normalize_key {
         return
     fi
 
-    # Convert to lowercase first
+    # Convert ASCII uppercase to lowercase (tr only handles ASCII)
     normalized_key=$(echo "$key" | tr '[:upper:]' '[:lower:]')
 
-    # Map Russian layout to Latin (same physical key positions)
+    # Map Russian layout (both lowercase and uppercase) to Latin (same physical key positions)
     case "$normalized_key" in
-        "й") normalized_key="q" ;;
-        "ц") normalized_key="w" ;;
-        "у") normalized_key="e" ;;
-        "к") normalized_key="r" ;;
-        "е") normalized_key="t" ;;
-        "н") normalized_key="y" ;;
-        "г") normalized_key="u" ;;
-        "ш") normalized_key="i" ;;
-        "щ") normalized_key="o" ;;
-        "з") normalized_key="p" ;;
-        "х") normalized_key="[" ;;
-        "ъ") normalized_key="]" ;;
-        "ф") normalized_key="a" ;;
-        "ы") normalized_key="s" ;;
-        "в") normalized_key="d" ;;
-        "а") normalized_key="f" ;;
-        "п") normalized_key="g" ;;
-        "р") normalized_key="h" ;;
-        "о") normalized_key="j" ;;
-        "л") normalized_key="k" ;;
-        "д") normalized_key="l" ;;
-        "я") normalized_key="z" ;;
-        "ч") normalized_key="x" ;;
-        "с") normalized_key="c" ;;
-        "м") normalized_key="v" ;;
-        "и") normalized_key="b" ;;
-        "т") normalized_key="n" ;;
-        "ь") normalized_key="m" ;;
+        "й"|"Й") normalized_key="q" ;;
+        "ц"|"Ц") normalized_key="w" ;;
+        "у"|"У") normalized_key="e" ;;
+        "к"|"К") normalized_key="r" ;;
+        "е"|"Е") normalized_key="t" ;;
+        "н"|"Н") normalized_key="y" ;;
+        "г"|"Г") normalized_key="u" ;;
+        "ш"|"Ш") normalized_key="i" ;;
+        "щ"|"Щ") normalized_key="o" ;;
+        "з"|"З") normalized_key="p" ;;
+        "х"|"Х") normalized_key="[" ;;
+        "ъ"|"Ъ") normalized_key="]" ;;
+        "ф"|"Ф") normalized_key="a" ;;
+        "ы"|"Ы") normalized_key="s" ;;
+        "в"|"В") normalized_key="d" ;;
+        "а"|"А") normalized_key="f" ;;
+        "п"|"П") normalized_key="g" ;;
+        "р"|"Р") normalized_key="h" ;;
+        "о"|"О") normalized_key="j" ;;
+        "л"|"Л") normalized_key="k" ;;
+        "д"|"Д") normalized_key="l" ;;
+        "я"|"Я") normalized_key="z" ;;
+        "ч"|"Ч") normalized_key="x" ;;
+        "с"|"С") normalized_key="c" ;;
+        "м"|"М") normalized_key="v" ;;
+        "и"|"И") normalized_key="b" ;;
+        "т"|"Т") normalized_key="n" ;;
+        "ь"|"Ь") normalized_key="m" ;;
     esac
 }
 
@@ -446,15 +446,25 @@ function wrong_mode {
 # Return: url to repo
 function get_repo {
     local remote_name=${origin_name:-origin}
+    local repo
     repo=$(git config --get "remote.${remote_name}.url")
-    repo="${repo/"com:"/"com/"}"
-    repo="${repo/"io:"/"io/"}"
-    repo="${repo/"org:"/"org/"}"
-    repo="${repo/"net:"/"net/"}"
-    repo="${repo/"dev:"/"dev/"}"
-    repo="${repo/"ru:"/"ru/"}"
-    repo="${repo/"git@"/"https://"}"
-    repo="${repo/".git"/""}" 
+    if [ -z "$repo" ]; then
+        echo ""
+        return
+    fi
+
+    # Convert SSH-style URLs (git@host:user/repo) into https URLs by replacing
+    # the first ':' after the host with '/'. This is more robust than
+    # whitelisting specific TLDs and supports any host (github.com, gitlab.com,
+    # self-hosted servers with .ai/.uk/.de/etc).
+    if [[ "$repo" =~ ^git@([^:]+):(.*)$ ]]; then
+        repo="https://${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+    elif [[ "$repo" =~ ^ssh://git@([^/]+)/(.*)$ ]]; then
+        repo="https://${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+    fi
+
+    # Strip .git suffix if present
+    repo="${repo%.git}"
     echo "$repo"
 }
 
@@ -799,14 +809,20 @@ function git_status {
 ### Function prints staged files with color-coded status
 # Added: green, Modified: yellow, Deleted: red
 function print_staged_files {
+    local staged_diff
+    staged_diff=$(git diff --name-status --cached)
+    if [ -z "$staged_diff" ]; then
+        return
+    fi
     while IFS=$'\t' read -r status file _; do
+        [ -z "$file" ] && continue
         case "${status:0:1}" in
             A) echo -e "\t${GREEN}${file}${ENDCOLOR}" ;;
             M) echo -e "\t${YELLOW}${file}${ENDCOLOR}" ;;
             D) echo -e "\t${RED}${file}${ENDCOLOR}" ;;
             *) echo -e "\t${file}${ENDCOLOR}" ;;
         esac
-    done <<< "$(git diff --name-status --cached)"
+    done <<< "$staged_diff"
 }
 
 
@@ -947,7 +963,7 @@ function get_push_list {
         return
     fi
     
-    push_list_check=$(git --no-pager log $origin/$1..HEAD 2>&1)
+    push_list_check=$(git --no-pager log $origin/$1..HEAD 2>&1 || true)
     if [[ $push_list_check != *"unknown revision or path not in the working tree"* ]] && [[ $push_list_check != *"fatal:"* ]]; then
         push_list=$(commit_list 999 "tab" $origin/$1..HEAD)
         history_from="$origin/$1"
@@ -963,7 +979,7 @@ function get_push_list {
         fi
     fi
     
-    base_commit=$(diff -u <(git rev-list --first-parent $1) <(git rev-list --first-parent $2) | sed -ne 's/^ //p' | head -1)
+    base_commit=$(diff -u <(git rev-list --first-parent $1 2>/dev/null) <(git rev-list --first-parent $2 2>/dev/null) | sed -ne 's/^ //p' | head -1 || true)
     if [ -n "$base_commit" ]; then
         push_list=$(commit_list 999 "tab" $base_commit..HEAD)
         history_from="${base_commit::7}"

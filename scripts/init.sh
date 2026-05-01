@@ -88,10 +88,10 @@ function validate_git_url {
     # git@github.com:user/repo.git
     # ssh://git@server.com/repo.git
     # /path/to/repo.git (local)
-    if [[ "$cleaned" =~ ^https?://[a-zA-Z0-9.-]+/[a-zA-Z0-9._/-]+(.git)?$ ]] || \
-       [[ "$cleaned" =~ ^git@[a-zA-Z0-9.-]+:[a-zA-Z0-9._/-]+(.git)?$ ]] || \
-       [[ "$cleaned" =~ ^ssh://[a-zA-Z0-9@.-]+/[a-zA-Z0-9._/-]+(.git)?$ ]] || \
-       [[ "$cleaned" =~ ^[a-zA-Z0-9._/-]+(.git)?$ ]]; then
+    if [[ "$cleaned" =~ ^https?://[a-zA-Z0-9.-]+/[a-zA-Z0-9._/-]+(\.git)?$ ]] || \
+       [[ "$cleaned" =~ ^git@[a-zA-Z0-9.-]+:[a-zA-Z0-9._/-]+(\.git)?$ ]] || \
+       [[ "$cleaned" =~ ^ssh://[a-zA-Z0-9@.-]+/[a-zA-Z0-9._/-]+(\.git)?$ ]] || \
+       [[ "$cleaned" =~ ^[a-zA-Z0-9._/-]+(\.git)?$ ]]; then
         
         # Length check
         if [ ${#cleaned} -le 500 ]; then

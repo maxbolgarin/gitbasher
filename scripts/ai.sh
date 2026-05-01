@@ -10,12 +10,14 @@ readonly OPENROUTER_API_URL="https://openrouter.ai/api/v1/chat/completions"
 # regenerate produces a meaningfully different phrasing.
 readonly AI_TEMPERATURE="0.3"
 
-# Per-mode max_tokens caps. These cap the response size to control cost and
-# prevent runaway output if the model misinterprets the format. Values are
-# generous enough to fit the longest reasonable message in each mode.
-readonly AI_MAX_TOKENS_SUBJECT=100
-readonly AI_MAX_TOKENS_SIMPLE=150
-readonly AI_MAX_TOKENS_FULL=500
+# Per-mode max_tokens caps. These bound runaway output if the model loops or
+# misreads the format; they are NOT a target — the model stops at EOS and only
+# bills for tokens it actually generates. Sized generously so legitimate output
+# never gets truncated mid-message, including code-heavy or non-English content
+# that tokenizes 2-4x worse than plain English.
+readonly AI_MAX_TOKENS_SUBJECT=256
+readonly AI_MAX_TOKENS_SIMPLE=512
+readonly AI_MAX_TOKENS_FULL=1024
 
 ### Function to get AI API key from environment variable or git config
 # Checks environment variable GITB_AI_API_KEY first, then falls back to git config

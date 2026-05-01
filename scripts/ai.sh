@@ -272,16 +272,24 @@ function call_openrouter_api {
         return 1
     fi
     
-    # Escape special characters in prompt for JSON
-    # LC_ALL=C avoids "illegal byte sequence" errors from BSD sed on macOS when the
-    # prompt contains non-UTF-8-validatable bytes (e.g. Russian or other non-ASCII content in diffs).
-    local escaped_prompt=$(echo "$prompt" | LC_ALL=C sed 's/\\/\\\\/g' | LC_ALL=C sed 's/"/\\"/g' | tr '\n' ' ' | LC_ALL=C sed 's/  */ /g')
-
     # Select OpenRouter model (OpenAI-compatible)
     local model=$(get_ai_model)
 
-    # Build OpenAI-style payload for OpenRouter
-    local json_payload="{\"model\":\"$model\",\"messages\":[{\"role\": \"user\", \"content\": \"$escaped_prompt\"}]}"
+    # Build OpenAI-style payload for OpenRouter.
+    # Prefer jq for robust JSON encoding; fall back to sed/awk that preserves newlines as JSON \n
+    # (the previous implementation collapsed newlines to spaces, destroying prompt structure).
+    # LC_ALL=C avoids "illegal byte sequence" errors from BSD sed on macOS when the
+    # prompt contains non-UTF-8-validatable bytes (e.g. Russian or other non-ASCII content in diffs).
+    local json_payload
+    if command -v jq &>/dev/null; then
+        json_payload=$(jq -nc --arg model "$model" --arg content "$prompt" \
+            '{model: $model, messages: [{role: "user", content: $content}]}')
+    else
+        local escaped_prompt=$(printf '%s' "$prompt" \
+            | LC_ALL=C sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e $'s/\t/\\\\t/g' -e $'s/\r/\\\\r/g' \
+            | LC_ALL=C awk 'BEGIN{ORS=""} NR>1{print "\\n"} {print}')
+        json_payload="{\"model\":\"$model\",\"messages\":[{\"role\":\"user\",\"content\":\"$escaped_prompt\"}]}"
+    fi
 
     # Make API request with optional proxy and retry logic
     local proxy_url=$(get_ai_proxy)
@@ -581,8 +589,8 @@ function generate_ai_commit_message {
 
 Available types:
 - feat: new feature, logic change or performance improvement
-- fix: small changes, bug fix, fnixes of features
-- refactor: code change that neither fixes a bug nor adds a feature, style changes, NO NEW BEAVIOUR
+- fix: small changes, bug fix, fixes of features
+- refactor: code change that neither fixes a bug nor adds a feature, style changes, NO NEW BEHAVIOUR
 - test: adding missing tests or changing existing tests
 - build: changes that affect the build system or external dependencies
 - ci: changes to CI configuration files and scripts
@@ -722,12 +730,12 @@ function generate_ai_commit_message_full {
     # Create prompt for AI
     local prompt="Analyze the following git changes and generate a conventional commit message in the format 'type(scope): subject' with body.
 
-Write a body for the commit message, where you can explain why you are making the change. The length of the body should be 1-2 sentences, not more.
+Write a body for the commit message, where you can explain why you are making the change. The length of the body should be 1-3 sentences, not more.
 
 Available types:
 - feat: new feature, logic change or performance improvement
 - fix: small changes, bug fix, fixes of features
-- refactor: code change that neither fixes a bug nor adds a feature, style changes, NO NEW BEAVIOUR
+- refactor: code change that neither fixes a bug nor adds a feature, style changes, NO NEW BEHAVIOUR
 - test: adding missing tests or changing existing tests
 - build: changes that affect the build system or external dependencies
 - ci: changes to CI configuration files and scripts
@@ -766,7 +774,7 @@ $diff_details
 
 Generate ONLY the commit message in the format 'type(scope): subject' with body. The subject should:
 - Explain the idea of the change in details
-- Be short, it should not be more that 100 characters in title and 1-2 sentences in body
+- Be short, it should not be more that 100 characters in title and 1-3 sentences in body
 - Be specific, don't be very general, so do NOT write 'improve existing feature' or 'fix bug'
 - Be lowercase and not end with a period
 - Follow the style and patterns from the recent commits shown above

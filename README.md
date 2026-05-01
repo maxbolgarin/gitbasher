@@ -355,6 +355,23 @@ gitb hook create            # Set up project hooks
 
 ### `gitb commit <mode>`
 
+> **Tip — multi-word modes.** Any combination of commit modifiers can be written
+> as separate words in any order. The compact form and the multi-word form are
+> equivalent — they set the same flags:
+>
+> ```bash
+> gitb commit aifp           # compact
+> gitb commit ai fast push   # multi-word — same result
+> gitb commit push fast ai   # any order
+> gitb commit ai f p         # short aliases also work
+> ```
+>
+> Recognized modifier words: `ai` (`llm`, `i`), `fast` (`f`), `push` (`pu`, `p`),
+> `scope` (`s`), `msg` (`m`), `staged`, `fixup` (`fix`, `x`), `amend` (`am`,
+> `a`), `split` (`sp`, `sl`), `ticket` (`jira`, `j`, `t`), `last` (`l`),
+> `revert` (`rev`), `help` (`h`). The `ff`/`ffp` ultrafast modes remain
+> compact-only.
+
 | **Mode**   | **Short**    | **Description** | **Example Use Case** |
 |------------|--------------|-----------------|---------------------|
 | `<empty>`  |              | Select files to commit and create conventional message | Regular feature development |

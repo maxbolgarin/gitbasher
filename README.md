@@ -14,7 +14,7 @@
 gitb commit push       # stage, write a conventional commit, push — in one flow
 gitb c ai              # AI-generated commit message
 gitb sync              # fetch main + rebase your branch
-gitb wip               # snapshot WIP, push, keep moving
+gitb wip up            # stash WIP, push backup branch, clean working tree
 gitb undo              # roll back your last commit / amend / merge / rebase / stash
 ```
 
@@ -85,7 +85,7 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 - [Common workflows](#common-workflows)
 - [Command reference](#command-reference)
   - [commit](#gitb-commit) · [push](#gitb-push) · [pull](#gitb-pull) · [branch](#gitb-branch) · [tag](#gitb-tag) · [merge](#gitb-merge) · [rebase](#gitb-rebase)
-  - [cherry](#gitb-cherry) · [sync](#gitb-sync) · [wip / unwip](#gitb-wip--unwip) · [fixup](#gitb-fixup) · [undo](#gitb-undo) · [reset](#gitb-reset) · [stash](#gitb-stash)
+  - [cherry](#gitb-cherry) · [sync](#gitb-sync) · [wip](#gitb-wip) · [fixup](#gitb-fixup) · [undo](#gitb-undo) · [reset](#gitb-reset) · [stash](#gitb-stash)
   - [hook](#gitb-hook) · [config](#gitb-config) · [log](#gitb-log) · [info commands](#info-commands)
 - [Configuration](#configuration)
 - [Troubleshooting](#troubleshooting)
@@ -119,7 +119,7 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 | **Branches** | `branch` (`b`), `prev` (`-`) | List / switch / create-from-current / create-from-updated-main / delete (orphaned, merged, gone) / recent / previous / checkout-tag |
 | **Integration** | `merge` (`m`), `rebase` (`r`), `cherry` (`ch`) | Merge into current / into main / from remote · rebase onto main / interactive / autosquash / fastautosquash / pull-commits · cherry-pick by hash, range, or interactive |
 | **Tags & releases** | `tag` (`t`) | Lightweight, annotated, from-commit, push, push-all, delete, delete-all, list, fetch-remote |
-| **Save & rollback** | `wip` / `unwip`, `undo` (`un`), `reset` (`res`), `stash` (`s`), `fixup` (`fx`) | One-command WIP snapshot/restore · undo last commit/amend/merge/rebase/stash · interactive reset · full stash menu · fixup + autosquash in a single step |
+| **Save & rollback** | `wip` (`up`/`down`), `undo` (`un`), `reset` (`res`), `stash` (`s`), `fixup` (`fx`) | Stash WIP + push backup branch, restore in one step · undo last commit/amend/merge/rebase/stash · interactive reset · full stash menu · fixup + autosquash in a single step |
 | **Inspect** | `status` (`st`), `log` (`l`), `reflog` (`rl`), `last-commit` (`lc`), `last-ref` (`lr`) | Pretty repo status, multi-mode log + search, reflog viewer, quick last-commit / last-ref summary |
 | **Hooks** | `hook` (`ho`) | List / create from templates / edit / toggle / remove / test / show — for every git hook |
 | **Repo setup** | `init` (`i`), `origin` (`or`, `o`, `remote`) | `git init` from gitbasher · add/change/rename/remove the remote origin |
@@ -219,9 +219,10 @@ gitb sync merge      # use merge instead of rebase
 
 ### Save WIP across machines / branches
 ```bash
-gitb wip             # add . + WIP commit + push
+gitb wip up          # stash changes + push backup to origin/wip/<branch>
 # … on another machine …
-gitb pu && gitb unwip   # restore changes, drop the WIP commit
+gitb pull            # fetch the wip/<branch>
+gitb wip down        # pop the wip stash and remove the remote backup
 ```
 
 ### Hotfix
@@ -278,8 +279,7 @@ gitb b -             # back to previous branch (like cd -)
 | [`rebase`](#gitb-rebase) | `r` `re` `base` | Rebase onto main / interactive / autosquash / pull-commits |
 | [`cherry`](#gitb-cherry) | `ch` `cp` | Cherry-pick by hash, range, or interactive picker |
 | [`sync`](#gitb-sync) | `sy` | Fetch main + rebase (or merge) current branch, optional push |
-| [`wip`](#gitb-wip--unwip) | `w` | Stage all + WIP commit + push (one keystroke save) |
-| [`unwip`](#gitb-wip--unwip) | `uw` | Undo a WIP commit and restore the changes |
+| [`wip`](#gitb-wip) | `w` | Stash all + backup to remote (`up`) / restore (`down`) |
 | [`fixup`](#gitb-fixup) | `fx` | Create fixup commit and autosquash in one step |
 | [`undo`](#gitb-undo) | `un` | Undo last commit / amend / merge / rebase / stash |
 | [`reset`](#gitb-reset) | `res` | Friendly `git reset` with undo support |
@@ -427,15 +427,15 @@ Fetch the default branch and update your current branch. Useful mid-feature.
 | `merge` | `m` | Use merge instead of rebase |
 | `mergep` | `mp` `pm` | Merge + push |
 
-### `gitb wip` / `unwip`
+### `gitb wip`
 
-Snapshot work-in-progress in one keystroke; restore it later.
+Stash work-in-progress as a single `wip` stash and back it up to a remote `wip/<branch>` branch so it survives between machines. Restore later with `wip down`.
 
-| Command | Mode | Description |
-|---------|------|-------------|
-| `gitb wip` | `<empty>` | Stage all, WIP commit, push |
-| `gitb wip` | `nopush` (`np` `n`) | Stage all + WIP commit, no push |
-| `gitb unwip` | | Undo the WIP commit, restore the changes to the working tree |
+| Command | Mode | Aliases | Description |
+|---------|------|---------|-------------|
+| `gitb wip up` | | `u` | Stash all changes (incl. untracked) as `wip: <branch>` and force-push the stash to `origin/wip/<branch>` |
+| `gitb wip up nopush` | | `np` `n` | Stash only, skip the remote backup |
+| `gitb wip down` | | `d` | Pop the most recent wip stash for the current branch and delete the remote backup |
 
 ### `gitb fixup`
 

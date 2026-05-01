@@ -22,21 +22,26 @@ gitb undo              # roll back your last commit / amend / merge / rebase / s
 
 ## Install in 10 seconds
 
-**npm (easiest):**
+**One-liner (no Node required):**
+```bash
+curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash
+```
+
+The installer auto-detects your OS, picks `/usr/local/bin` (with `sudo` if needed) or falls back to `~/.local/bin`, downloads the latest release, and prints a PATH hint if required. Override with env vars:
+
+```bash
+GITB_DIR=~/.local/bin   curl ... | bash    # custom location, no sudo
+GITB_VERSION=v3.10.2    curl ... | bash    # pin a release
+GITB_NO_SUDO=1          curl ... | bash    # never use sudo
+```
+
+**npm:**
 ```bash
 npm install -g gitbasher
 ```
 
-**Standalone binary (no Node required):**
-```bash
-GITB_PATH=/usr/local/bin/gitb && \
-sudo mkdir -p $(dirname $GITB_PATH) && \
-curl -fSL https://github.com/maxbolgarin/gitbasher/releases/latest/download/gitb | sudo tee $GITB_PATH > /dev/null && \
-sudo chmod +x $GITB_PATH
-```
-
 > Windows users: run inside [WSL](https://learn.microsoft.com/en-us/windows/wsl/setup/environment).
-> No `sudo`? Install to `~/.local/bin` and add it to `PATH`.
+> Prefer to inspect first? `curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh -o install.sh && less install.sh && bash install.sh`
 
 **Requirements:** `bash` 4.0+, `git` 2.23+ (macOS: `brew install bash git`).
 
@@ -634,7 +639,8 @@ gitb cfg proxy        # in restricted regions
 
 ```bash
 npm uninstall -g gitbasher           # if installed via npm
-sudo rm /usr/local/bin/gitb          # if installed via curl
+sudo rm /usr/local/bin/gitb          # if installed system-wide
+rm -f ~/.local/bin/gitb              # if installed per-user
 rm -rf ~/.gitbasher                  # remove config (optional)
 ```
 </details>

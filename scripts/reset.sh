@@ -7,9 +7,9 @@
 
 ### Main function
 # $1: mode
-    # empty: reset last commit (git reset HEAD^ --mixed)
-    # soft: reset last commit, but remain all fiels staged (git reset HEAD^ --soft)
-    # undo: undo last action (git reset HEAD@{1})
+    # empty: preview and reset last commit (git reset HEAD^ --mixed)
+    # soft: preview and reset last commit, but keep all files staged (git reset HEAD^ --soft)
+    # undo: preview and undo last reset (git reset HEAD@{1})
     # interactive: select a commit to reset
     # ref: select a HEAD reference to reset
 function reset_script {
@@ -47,11 +47,11 @@ function reset_script {
         echo -e "usage: ${YELLOW}gitb reset <mode>${ENDCOLOR}"
         echo
         msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Reset last commit (git reset HEAD^ --mixed)"
-        msg="$msg\n${BOLD}soft${ENDCOLOR}_s_Reset last commit, but remain all files staged (git reset HEAD^ --soft)"
-        msg="$msg\n${BOLD}undo${ENDCOLOR}_u_Undo last commit reset (git reset HEAD@{1})"
-        msg="$msg\n${BOLD}interactive${ENDCOLOR}_i_Select a commit to reset"
-        msg="$msg\n${BOLD}ref${ENDCOLOR}_r_Select a HEAD reference to reset"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Preview and reset last commit (git reset --mixed HEAD^)"
+        msg="$msg\n${BOLD}soft${ENDCOLOR}_s_Preview and reset last commit, keeping changes staged (git reset --soft HEAD^)"
+        msg="$msg\n${BOLD}undo${ENDCOLOR}_u_Preview and undo last reset (git reset --mixed HEAD@{1})"
+        msg="$msg\n${BOLD}interactive${ENDCOLOR}_i_Select a commit to reset, then preview before applying"
+        msg="$msg\n${BOLD}ref${ENDCOLOR}_r_Select a HEAD reference to reset, then preview before applying"
         msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
         echo -e "$(echo -e "$msg" | column -ts'_')"
         exit
@@ -88,11 +88,36 @@ function reset_script {
         args="--soft"
     fi
     
-    reset_output=$(git reset $args $move_ref 2>&1)
+    target_commit=$(git log -n 1 --pretty="%s | ${YELLOW}%h${ENDCOLOR} | ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})" "$move_ref" 2>/dev/null)
+    if [ -z "$target_commit" ]; then
+        echo -e "${RED}Cannot resolve reset target:${ENDCOLOR} $move_ref"
+        exit 1
+    fi
+
+    echo -e "${YELLOW}Current HEAD:${ENDCOLOR}\t$cancelled_commit"
+    if [ -n "$ref" ] || [ -n "$undo" ]; then
+        echo -e "${YELLOW}Current action:${ENDCOLOR}\t$cancelled_action"
+    fi
+    echo -e "${GREEN}Reset target:${ENDCOLOR}\t$move_ref -> $target_commit"
+    echo -e "${BLUE}Reset type:${ENDCOLOR}\t$args"
+    echo
+
+    if [ "$args" = "--soft" ]; then
+        echo -e "This will move HEAD and ${GREEN}keep reset changes staged${ENDCOLOR}"
+    else
+        echo -e "This will move HEAD and ${YELLOW}leave reset changes unstaged${ENDCOLOR}"
+    fi
+    echo -e "Do you want to continue (y/n)?"
+    yes_no_choice "Resetting..."
+
+    reset_output=$(git reset "$args" "$move_ref" 2>&1)
     check_code $? "$reset_output" "reset"
 
     new_commit=$(git log -n 1 --pretty="%s | ${YELLOW}%h${ENDCOLOR} | ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})")
     new_action=$(git reflog -n 1 --pretty="%gs | ${YELLOW}%h${ENDCOLOR} | ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})")
+
+    echo -e "${GREEN}Reset completed successfully!${ENDCOLOR}"
+    echo
 
     msg="${GREEN}New last commit:${ENDCOLOR}|${new_commit}"
     if [ -n "$ref" ] || [ -n "$undo" ]; then

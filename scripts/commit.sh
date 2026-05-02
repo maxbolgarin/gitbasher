@@ -406,6 +406,24 @@ function _restore_split_snapshot {
     rm -f "$snapshot"
 }
 
+function print_split_type_menu {
+    local scope="$1"
+
+    echo -e "${YELLOW}What type of changes for ${BLUE}${scope}${ENDCOLOR}?${ENDCOLOR}"
+    echo -e "Final message will be ${YELLOW}<type>${ENDCOLOR}(${BLUE}<scope>${ENDCOLOR}): ${BLUE}<summary>${ENDCOLOR}"
+    echo -e "1. ${BLUE}${BOLD}feat${ENDCOLOR}:\tnew feature, logic change or performance improvement"
+    echo -e "2. ${BLUE}${BOLD}fix${ENDCOLOR}:\t\tsmall changes, eg. bug fix"
+    echo -e "3. ${BLUE}${BOLD}refactor${ENDCOLOR}:\tcode change that neither fixes a bug nor adds a feature, style changes"
+    echo -e "4. ${BLUE}${BOLD}test${ENDCOLOR}:\tadding missing tests or changing existing tests"
+    echo -e "5. ${BLUE}${BOLD}build${ENDCOLOR}:\tchanges that affect the build system or external dependencies"
+    echo -e "6. ${BLUE}${BOLD}ci${ENDCOLOR}:\t\tchanges to CI configuration files and scripts"
+    echo -e "7. ${BLUE}${BOLD}chore${ENDCOLOR}:\tmaintenance and housekeeping"
+    echo -e "8. ${BLUE}${BOLD}docs${ENDCOLOR}:\tdocumentation changes"
+    echo -e "9. ${BOLD}plain${ENDCOLOR}:\twrite plain commit without type and scope"
+    echo -e "s. ${YELLOW}${BOLD}skip${ENDCOLOR}:\tskip this group and leave its files unstaged"
+    echo -e "0. ${RED}${BOLD}abort${ENDCOLOR}:\tabort split and restore original staging"
+}
+
 ### Walk the split groups, generate a message per group (AI when available),
 ### and create one commit per group. Restores staging on abort.
 # Globals consumed: split_groups, split_group_keys, push, current_branch
@@ -550,18 +568,7 @@ function perform_commit_split {
         if [ -z "$msg" ]; then
             local commit_type=""
             local is_empty_msg=""
-            echo -e "${YELLOW}What type of changes for ${YELLOW}${scope}${ENDCOLOR}?${ENDCOLOR}"
-            echo -e "1. ${BOLD}feat${ENDCOLOR}:\tnew feature, logic change or performance improvement"
-            echo -e "2. ${BOLD}fix${ENDCOLOR}:\t\tsmall changes, eg. bug fix"
-            echo -e "3. ${BOLD}refactor${ENDCOLOR}:\tcode change that neither fixes a bug nor adds a feature, style changes"
-            echo -e "4. ${BOLD}test${ENDCOLOR}:\tadding missing tests or changing existing tests"
-            echo -e "5. ${BOLD}build${ENDCOLOR}:\tchanges that affect the build system or external dependencies"
-            echo -e "6. ${BOLD}ci${ENDCOLOR}:\t\tchanges to CI configuration files and scripts"
-            echo -e "7. ${BOLD}chore${ENDCOLOR}:\tmaintenance and housekeeping"
-            echo -e "8. ${BOLD}docs${ENDCOLOR}:\tdocumentation changes"
-            echo -e "9.  \t\twrite plain commit without type and scope"
-            echo -e "s. ${BOLD}skip${ENDCOLOR}:\tskip this group and leave its files unstaged"
-            echo -e "0. ${BOLD}abort${ENDCOLOR}:\tabort split and restore original staging"
+            print_split_type_menu "$scope"
 
             local tchoice
             while true; do

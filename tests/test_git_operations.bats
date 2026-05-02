@@ -216,7 +216,7 @@ teardown() {
 @test "reset_script: previews mixed reset and asks for approval" {
     make_test_commit "file1.txt" "Commit to reset"
 
-    run bash -c 'source "$GITBASHER_ROOT/scripts/init.sh"; source "$GITBASHER_ROOT/scripts/common.sh"; source "$GITBASHER_ROOT/scripts/reset.sh"; cd "$TEST_REPO"; reset_script' <<< "y"
+    run bash -c 'printf "y" | (source "$GITBASHER_ROOT/scripts/init.sh"; source "$GITBASHER_ROOT/scripts/common.sh"; source "$GITBASHER_ROOT/scripts/reset.sh"; cd "$TEST_REPO"; reset_script)'
 
     assert_success
     [[ "$output" =~ "Current HEAD:" ]]
@@ -234,7 +234,7 @@ teardown() {
     make_test_commit "file1.txt" "Commit to keep"
     original_head=$(git rev-parse HEAD)
 
-    run bash -c 'source "$GITBASHER_ROOT/scripts/init.sh"; source "$GITBASHER_ROOT/scripts/common.sh"; source "$GITBASHER_ROOT/scripts/reset.sh"; cd "$TEST_REPO"; reset_script' <<< "n"
+    run bash -c 'printf "n" | (source "$GITBASHER_ROOT/scripts/init.sh"; source "$GITBASHER_ROOT/scripts/common.sh"; source "$GITBASHER_ROOT/scripts/reset.sh"; cd "$TEST_REPO"; reset_script)'
 
     assert_success
     [[ "$output" =~ "Do you want to continue" ]]

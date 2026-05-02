@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-GITBASHER_VERSION="3.10.2-26-gaea894f"
+GITBASHER_VERSION="3.10.2-27-g4cdc1b8"
 if [ "$1" == "init" ] || [ "$1" == "i" ]; then
     git init
 fi

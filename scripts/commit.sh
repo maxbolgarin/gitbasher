@@ -422,6 +422,7 @@ function print_split_type_menu {
     echo -e "9. ${BOLD}plain${ENDCOLOR}:\twrite plain commit without type and scope"
     echo -e "s. ${YELLOW}${BOLD}skip${ENDCOLOR}:\tskip this group and leave its files unstaged"
     echo -e "0. ${RED}${BOLD}abort${ENDCOLOR}:\tabort split and restore original staging"
+    echo
 }
 
 ### Walk the split groups, generate a message per group (AI when available),
@@ -514,6 +515,7 @@ function perform_commit_split {
                     echo
                     read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) "
                     echo
+                    echo
                     normalize_key "$choice"
 
                     while [ "$normalized_key" = "r" ]; do
@@ -528,6 +530,7 @@ function perform_commit_split {
                         echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
                         echo
                         read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) "
+                        echo
                         echo
                         normalize_key "$choice"
                     done
@@ -1404,6 +1407,7 @@ function commit_script {
         echo -e "${YELLOW}Found previous commit message:${ENDCOLOR} ${BOLD}$saved_commit_message${ENDCOLOR}"
         echo
         read_key choice "Use it? (y/e to edit/n) "
+        echo
         echo
         normalize_key "$choice"
         if [ "$normalized_key" = "y" ] || [ -z "$choice" ]; then

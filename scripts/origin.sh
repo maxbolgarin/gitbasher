@@ -82,10 +82,49 @@ function origin_show {
 
     local repo_url
     repo_url=$(get_repo)
-    if [ -n "$repo_url" ]; then
-        echo
-        echo -e "${YELLOW}Web URL:${ENDCOLOR}\t${repo_url}"
+    if [ -z "$repo_url" ]; then
+        return
     fi
+
+    echo
+    echo -e "${YELLOW}Web links:${ENDCOLOR}"
+    print_link "Repo" "$repo_url"
+
+    local host
+    host=$(get_repo_host "$repo_url")
+    if [ -z "$host" ]; then
+        return
+    fi
+
+    local issues_url prs_url branches_url tags_url commits_url ci_url
+    local releases_url wiki_url insights_url contributors_url forks_url
+    local settings_url
+
+    issues_url=$(get_issues_url "$repo_url")
+    prs_url=$(get_prs_url "$repo_url")
+    branches_url=$(get_branches_url "$repo_url")
+    tags_url=$(get_tags_url "$repo_url")
+    commits_url=$(get_commits_url "$repo_url")
+    ci_url=$(get_ci_url "" "$repo_url")
+    releases_url=$(get_releases_url "$repo_url")
+    wiki_url=$(get_wiki_url "$repo_url")
+    insights_url=$(get_insights_url "$repo_url")
+    contributors_url=$(get_contributors_url "$repo_url")
+    forks_url=$(get_forks_url "$repo_url")
+    settings_url=$(get_settings_url "$repo_url")
+
+    [ -n "$issues_url" ]       && print_link "Issues" "$issues_url"
+    [ -n "$prs_url" ]          && print_link "$(get_pr_label "$repo_url")" "$prs_url"
+    [ -n "$branches_url" ]     && print_link "Branches" "$branches_url"
+    [ -n "$tags_url" ]         && print_link "Tags" "$tags_url"
+    [ -n "$commits_url" ]      && print_link "Commits" "$commits_url"
+    [ -n "$releases_url" ]     && print_link "Releases" "$releases_url"
+    [ -n "$ci_url" ]           && print_link "$(get_ci_label "$repo_url")" "$ci_url"
+    [ -n "$wiki_url" ]         && print_link "Wiki" "$wiki_url"
+    [ -n "$insights_url" ]     && print_link "Insights" "$insights_url"
+    [ -n "$contributors_url" ] && print_link "People" "$contributors_url"
+    [ -n "$forks_url" ]        && print_link "Forks" "$forks_url"
+    [ -n "$settings_url" ]     && print_link "Settings" "$settings_url"
 }
 
 

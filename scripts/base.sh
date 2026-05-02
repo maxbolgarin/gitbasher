@@ -62,7 +62,20 @@ if [ "$1" == "--version" ] || [ "$1" == "-v" ] || [ "$1" == "version" ]; then
     exit
 fi
 
-if [ -z "$1" ] || [ "$1" == "--help" ] || [ "$1" == "help" ] || [ "$1" == "man" ]; then
+### Normalize --help/-h anywhere in args -> 'help' so every subcommand
+### handler sees a consistent token. Lets users write `gitb --help`,
+### `gitb commit --help`, `gitb branch -h`, etc.
+__gitb_args=()
+for __gitb_a in "$@"; do
+    case "$__gitb_a" in
+        --help|-h) __gitb_args+=("help") ;;
+        *)         __gitb_args+=("$__gitb_a") ;;
+    esac
+done
+set -- "${__gitb_args[@]}"
+unset __gitb_args __gitb_a
+
+if [ -z "$1" ] || [ "$1" == "help" ] || [ "$1" == "man" ]; then
     print_help
 fi
 

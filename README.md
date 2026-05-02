@@ -123,10 +123,11 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 | **Save & rollback** | `wip` (`up`/`down`), `undo` (`un`), `reset` (`res`), `stash` (`s`), `fixup` (`fx`) | Stash WIP + push backup branch, restore in one step · undo last commit/amend/merge/rebase/stash · interactive reset · full stash menu · fixup + autosquash in a single step |
 | **Inspect** | `status` (`st`), `log` (`l`), `reflog` (`rl`), `last-commit` (`lc`), `last-ref` (`lr`) | Pretty repo status, multi-mode log + search, reflog viewer, quick last-commit / last-ref summary |
 | **Hooks** | `hook` (`ho`) | List / create from templates / edit / toggle / remove / test / show — for every git hook |
+| **Workflows** | `workflows` (`wf`, `flow`) | List / show / edit / create from templates / remove CI workflow files (GitHub Actions, GitLab CI, Bitbucket Pipelines) |
 | **Repo setup** | `init` (`i`), `origin` (`or`, `o`, `remote`) | `git init` from gitbasher · add/change/rename/remove the remote origin |
 | **Config** | `config` (`cfg`) | User, default branch, separator, editor, ticket prefix, scopes, AI key, AI model, proxy |
 
-Total: **23 top-level commands**, **60+ aliases**, **100+ modes**.
+Total: **24 top-level commands**, **60+ aliases**, **100+ modes**.
 
 ---
 
@@ -286,6 +287,7 @@ gitb b -             # back to previous branch (like cd -)
 | [`reset`](#gitb-reset) | `res` | Friendly `git reset` with undo support |
 | [`stash`](#gitb-stash) | `s` `sta` | Full stash menu: select, all, list, pop, apply, show, drop |
 | [`hook`](#gitb-hook) | `ho` `hk` | Manage git hooks: list, create, edit, toggle, remove, test, show |
+| [`workflows`](#gitb-workflows) | `wf` `flow` | Manage CI workflow files: list, show, edit, create from templates, remove |
 | [`origin`](#gitb-origin) | `or` `o` `remote` | Add, change, rename, or remove the remote origin |
 | [`init`](#gitb-init) | `i` | `git init` + optional origin setup prompt |
 | [`config`](#gitb-config) | `cf` `cfg` `conf` | Configure user, branch, AI, scopes, ticket prefix, etc. |
@@ -495,6 +497,32 @@ End-to-end fixup-and-autosquash so you don't have to chain `gitb c fix` + `gitb 
 | `remove` | `rm` `r` | Delete hook(s) |
 | `test` | `run` `check` | Test hook execution |
 | `show` | `cat` `view` `s` | Display hook contents |
+
+### `gitb workflows`
+
+Manage CI workflow files in the repository: list parsed names and triggers,
+view contents, edit, create from templates, or remove. Reads from
+`.github/workflows/` for GitHub repos, or the host-specific config file for
+GitLab (`.gitlab-ci.yml`) and Bitbucket (`bitbucket-pipelines.yml`).
+
+| Mode | Aliases | Description |
+|------|---------|-------------|
+| `<empty>` | `list` `ls` `l` | List workflow files with names, triggers, and the CI URL for the current branch |
+| `show` | `view` `cat` `s` | Print the contents of a workflow file |
+| `edit` | `e` | Open a workflow file in the configured editor |
+| `create` | `new` `add` `c` | Create a new workflow from a template (basic / ci-bash / ci-node / ci-go / release) |
+| `remove` | `rm` `delete` `del` `d` | Delete a workflow file |
+| `open` | `o` `url` | Print the URL to the CI page for the current branch |
+| `help` | `h` | Show help |
+
+```bash
+gitb workflows                           # list with triggers + branch CI link
+gitb workflows show build                # cat .github/workflows/build.yml
+gitb workflows edit release              # open in $EDITOR
+gitb workflows create release release    # scaffold release.yml from template
+gitb workflows remove old-pipeline       # delete after confirmation
+gitb workflows open                      # print Actions URL for current branch
+```
 
 ### `gitb init`
 

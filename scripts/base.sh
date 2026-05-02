@@ -23,6 +23,7 @@ function print_help {
     msg="$msg\nreset_res_Easy to use git reset"
     msg="$msg\nstash_s|sta_Manage git stashes"
     msg="$msg\nhook_ho|hk_Git hooks management"
+    msg="$msg\nworkflows_wf|flow_Manage CI/CD workflow files (GitHub Actions, GitLab CI)"
     msg="$msg\norigin_or|o|remote_Init/set/change/rename/remove the remote origin"
     msg="$msg\nconfig_cf|cfg|conf_Configurate gitbasher"
 
@@ -129,6 +130,9 @@ case "$1" in
     ;;
     hook|ho|hk)
         hooks_script $2 $3 $4
+    ;;
+    workflows|workflow|wf|flow)
+        workflows_script "$2" "$3" "$4"
     ;;
     origin|or|o|remote)
         origin_script "$2" "$3"

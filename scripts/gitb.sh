@@ -62,5 +62,6 @@ source scripts/fixup.sh
 source scripts/gitlog.sh
 source scripts/hooks.sh
 source scripts/origin.sh
+source scripts/workflows.sh
 
 source scripts/base.sh

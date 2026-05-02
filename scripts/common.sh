@@ -618,6 +618,135 @@ function get_releases_url {
 }
 
 
+### URL to the issues page
+# $1: repo URL (optional)
+function get_issues_url {
+    local repo=${1:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/issues";;
+        gitlab)    echo "${repo}/-/issues";;
+        bitbucket) echo "${repo}/issues";;
+    esac
+}
+
+
+### URL to create a new issue
+# $1: repo URL (optional)
+function get_new_issue_url {
+    local repo=${1:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/issues/new";;
+        gitlab)    echo "${repo}/-/issues/new";;
+        bitbucket) echo "${repo}/issues/new";;
+    esac
+}
+
+
+### URL to the branches list page
+# $1: repo URL (optional)
+function get_branches_url {
+    local repo=${1:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/branches";;
+        gitlab)    echo "${repo}/-/branches";;
+        bitbucket) echo "${repo}/branches";;
+    esac
+}
+
+
+### URL to the tags list page
+# $1: repo URL (optional)
+function get_tags_url {
+    local repo=${1:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/tags";;
+        gitlab)    echo "${repo}/-/tags";;
+        bitbucket) echo "${repo}/branches/?tab=tags";;
+    esac
+}
+
+
+### URL to the commit history page
+# $1: repo URL (optional)
+function get_commits_url {
+    local repo=${1:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/commits";;
+        gitlab)    echo "${repo}/-/commits";;
+        bitbucket) echo "${repo}/commits";;
+    esac
+}
+
+
+### URL to the project wiki
+# $1: repo URL (optional)
+function get_wiki_url {
+    local repo=${1:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/wiki";;
+        gitlab)    echo "${repo}/-/wikis/home";;
+    esac
+}
+
+
+### URL to the project settings page
+# $1: repo URL (optional)
+function get_settings_url {
+    local repo=${1:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/settings";;
+        gitlab)    echo "${repo}/edit";;
+        bitbucket) echo "${repo}/admin";;
+    esac
+}
+
+
+### URL to the project insights / activity page
+# $1: repo URL (optional)
+function get_insights_url {
+    local repo=${1:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/pulse";;
+        gitlab)    echo "${repo}/activity";;
+    esac
+}
+
+
+### URL to the contributors graph
+# $1: repo URL (optional)
+function get_contributors_url {
+    local repo=${1:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/graphs/contributors";;
+        gitlab)    echo "${repo}/-/graphs/master";;
+    esac
+}
+
+
+### URL to the forks/network page
+# $1: repo URL (optional)
+function get_forks_url {
+    local repo=${1:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/network/members";;
+        gitlab)    echo "${repo}/-/forks";;
+        bitbucket) echo "${repo}/forks";;
+    esac
+}
+
+
+### Human-friendly label for pull/merge requests
+# $1: repo URL (optional)
+function get_pr_label {
+    case "$(get_repo_host "${1:-$(get_repo)}")" in
+        github)    echo "Pulls";;
+        gitlab)    echo "MRs";;
+        bitbucket) echo "Pulls";;
+        *)         echo "PRs";;
+    esac
+}
+
+
 ### Print a "label: url" line with a fixed-width label so multiple lines align,
 ### regardless of the label length (color escapes don't affect padding).
 # $1: label text (without trailing colon)

@@ -181,6 +181,126 @@ teardown() {
     [ "$(get_tag_ci_url "v1.0.0" "https://gitlab.com/u/r")" = "https://gitlab.com/u/r/-/pipelines?ref=v1.0.0" ]
 }
 
+@test "get_issues_url: github" {
+    [ "$(get_issues_url "https://github.com/u/r")" = "https://github.com/u/r/issues" ]
+}
+
+@test "get_issues_url: gitlab" {
+    [ "$(get_issues_url "https://gitlab.com/u/r")" = "https://gitlab.com/u/r/-/issues" ]
+}
+
+@test "get_issues_url: bitbucket" {
+    [ "$(get_issues_url "https://bitbucket.org/u/r")" = "https://bitbucket.org/u/r/issues" ]
+}
+
+@test "get_branches_url: github" {
+    [ "$(get_branches_url "https://github.com/u/r")" = "https://github.com/u/r/branches" ]
+}
+
+@test "get_branches_url: gitlab" {
+    [ "$(get_branches_url "https://gitlab.com/u/r")" = "https://gitlab.com/u/r/-/branches" ]
+}
+
+@test "get_branches_url: bitbucket" {
+    [ "$(get_branches_url "https://bitbucket.org/u/r")" = "https://bitbucket.org/u/r/branches" ]
+}
+
+@test "get_tags_url: github" {
+    [ "$(get_tags_url "https://github.com/u/r")" = "https://github.com/u/r/tags" ]
+}
+
+@test "get_tags_url: gitlab" {
+    [ "$(get_tags_url "https://gitlab.com/u/r")" = "https://gitlab.com/u/r/-/tags" ]
+}
+
+@test "get_tags_url: bitbucket" {
+    [ "$(get_tags_url "https://bitbucket.org/u/r")" = "https://bitbucket.org/u/r/branches/?tab=tags" ]
+}
+
+@test "get_commits_url: github" {
+    [ "$(get_commits_url "https://github.com/u/r")" = "https://github.com/u/r/commits" ]
+}
+
+@test "get_commits_url: gitlab" {
+    [ "$(get_commits_url "https://gitlab.com/u/r")" = "https://gitlab.com/u/r/-/commits" ]
+}
+
+@test "get_commits_url: bitbucket" {
+    [ "$(get_commits_url "https://bitbucket.org/u/r")" = "https://bitbucket.org/u/r/commits" ]
+}
+
+@test "get_wiki_url: github" {
+    [ "$(get_wiki_url "https://github.com/u/r")" = "https://github.com/u/r/wiki" ]
+}
+
+@test "get_wiki_url: gitlab" {
+    [ "$(get_wiki_url "https://gitlab.com/u/r")" = "https://gitlab.com/u/r/-/wikis/home" ]
+}
+
+@test "get_wiki_url: bitbucket returns empty" {
+    [ -z "$(get_wiki_url "https://bitbucket.org/u/r")" ]
+}
+
+@test "get_settings_url: github" {
+    [ "$(get_settings_url "https://github.com/u/r")" = "https://github.com/u/r/settings" ]
+}
+
+@test "get_settings_url: gitlab" {
+    [ "$(get_settings_url "https://gitlab.com/u/r")" = "https://gitlab.com/u/r/edit" ]
+}
+
+@test "get_settings_url: bitbucket" {
+    [ "$(get_settings_url "https://bitbucket.org/u/r")" = "https://bitbucket.org/u/r/admin" ]
+}
+
+@test "get_insights_url: github" {
+    [ "$(get_insights_url "https://github.com/u/r")" = "https://github.com/u/r/pulse" ]
+}
+
+@test "get_insights_url: gitlab" {
+    [ "$(get_insights_url "https://gitlab.com/u/r")" = "https://gitlab.com/u/r/activity" ]
+}
+
+@test "get_insights_url: bitbucket returns empty" {
+    [ -z "$(get_insights_url "https://bitbucket.org/u/r")" ]
+}
+
+@test "get_contributors_url: github" {
+    [ "$(get_contributors_url "https://github.com/u/r")" = "https://github.com/u/r/graphs/contributors" ]
+}
+
+@test "get_contributors_url: gitlab" {
+    [ "$(get_contributors_url "https://gitlab.com/u/r")" = "https://gitlab.com/u/r/-/graphs/master" ]
+}
+
+@test "get_forks_url: github" {
+    [ "$(get_forks_url "https://github.com/u/r")" = "https://github.com/u/r/network/members" ]
+}
+
+@test "get_forks_url: gitlab" {
+    [ "$(get_forks_url "https://gitlab.com/u/r")" = "https://gitlab.com/u/r/-/forks" ]
+}
+
+@test "get_forks_url: bitbucket" {
+    [ "$(get_forks_url "https://bitbucket.org/u/r")" = "https://bitbucket.org/u/r/forks" ]
+}
+
+@test "get_pr_label: github" {
+    [ "$(get_pr_label "https://github.com/u/r")" = "Pulls" ]
+}
+
+@test "get_pr_label: gitlab" {
+    [ "$(get_pr_label "https://gitlab.com/u/r")" = "MRs" ]
+}
+
+@test "get_pr_label: bitbucket" {
+    [ "$(get_pr_label "https://bitbucket.org/u/r")" = "Pulls" ]
+}
+
+@test "get_pr_label: unknown host falls back to PRs" {
+    [ "$(get_pr_label "https://example.com/u/r")" = "PRs" ]
+}
+
 # ===== git_status tests =====
 
 @test "git_status: shows modified files" {

@@ -493,6 +493,7 @@ function perform_commit_split {
                 else
                     echo
                     echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
+                    echo
                     read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) "
                     echo
                     normalize_key "$choice"
@@ -507,6 +508,7 @@ function perform_commit_split {
                         ai_msg=$(echo "$ai_msg" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
                         echo
                         echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
+                        echo
                         read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) "
                         echo
                         normalize_key "$choice"
@@ -549,12 +551,25 @@ function perform_commit_split {
             local commit_type=""
             local is_empty_msg=""
             echo -e "${YELLOW}What type of changes for ${YELLOW}${scope}${ENDCOLOR}?${ENDCOLOR}"
-            echo -e "1. ${BOLD}feat${ENDCOLOR}    2. ${BOLD}fix${ENDCOLOR}     3. ${BOLD}refactor${ENDCOLOR}  4. ${BOLD}test${ENDCOLOR}    5. ${BOLD}build${ENDCOLOR}"
-            echo -e "6. ${BOLD}ci${ENDCOLOR}      7. ${BOLD}chore${ENDCOLOR}   8. ${BOLD}docs${ENDCOLOR}      9. plain (no type/scope)   s. skip group   0. abort split"
+            echo -e "1. ${BOLD}feat${ENDCOLOR}:\tnew feature, logic change or performance improvement"
+            echo -e "2. ${BOLD}fix${ENDCOLOR}:\t\tsmall changes, eg. bug fix"
+            echo -e "3. ${BOLD}refactor${ENDCOLOR}:\tcode change that neither fixes a bug nor adds a feature, style changes"
+            echo -e "4. ${BOLD}test${ENDCOLOR}:\tadding missing tests or changing existing tests"
+            echo -e "5. ${BOLD}build${ENDCOLOR}:\tchanges that affect the build system or external dependencies"
+            echo -e "6. ${BOLD}ci${ENDCOLOR}:\t\tchanges to CI configuration files and scripts"
+            echo -e "7. ${BOLD}chore${ENDCOLOR}:\tmaintenance and housekeeping"
+            echo -e "8. ${BOLD}docs${ENDCOLOR}:\tdocumentation changes"
+            echo -e "9.  \t\twrite plain commit without type and scope"
+            echo -e "s. ${BOLD}skip${ENDCOLOR}:\tskip this group and leave its files unstaged"
+            echo -e "0. ${BOLD}abort${ENDCOLOR}:\tabort split and restore original staging"
 
             local tchoice
             while true; do
-                read -n 1 -s tchoice
+                read_key tchoice
+                if ! sanitize_choice_input "$tchoice" "^[0-9s]$"; then
+                    continue
+                fi
+                tchoice="$sanitized_choice"
                 case "$tchoice" in
                     1) commit_type="feat"; break ;;
                     2) commit_type="fix"; break ;;
@@ -565,7 +580,7 @@ function perform_commit_split {
                     7) commit_type="chore"; break ;;
                     8) commit_type="docs"; break ;;
                     9) is_empty_msg="true"; break ;;
-                    s|S)
+                    s)
                         echo -e "${YELLOW}Skipping scope '${scope}' (files left unstaged)${ENDCOLOR}"
                         while IFS= read -r f; do
                             [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
@@ -1380,6 +1395,7 @@ function commit_script {
     if [ -n "$saved_commit_message" ] && [ -z "${fixup}" ] && [ -z "${amend}" ]; then
         echo
         echo -e "${YELLOW}Found previous commit message:${ENDCOLOR} ${BOLD}$saved_commit_message${ENDCOLOR}"
+        echo
         read_key choice "Use it? (y/e to edit/n) "
         echo
         normalize_key "$choice"

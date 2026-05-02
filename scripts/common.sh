@@ -398,6 +398,21 @@ function read_key {
     IFS= read -r -s -n 1 _key
 
     if [ -n "$_key" ]; then
+        if [ "$_key" = $'\e' ]; then
+            local _esc_rest=""
+            local _esc_part=""
+
+            # Arrow keys and similar controls arrive as escape sequences. Drain the
+            # remaining bytes now so they are not echoed as invalid input later.
+            while IFS= read -r -s -n 1 -t 0.01 _esc_part; do
+                _esc_rest="${_esc_rest}${_esc_part}"
+                if [[ "$_esc_rest" =~ ^(\[|O).*[@-~]$ ]] || [ ${#_esc_rest} -ge 8 ]; then
+                    break
+                fi
+            done
+            _key="${_key}${_esc_rest}"
+        fi
+
         # Check if read gave us a single byte (possible partial UTF-8)
         local _byte_len
         _byte_len=$(printf '%s' "$_key" | wc -c | tr -d ' ')

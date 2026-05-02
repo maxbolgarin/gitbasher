@@ -200,3 +200,16 @@ setup() {
     [ "$sanitized_choice" = "a" ]
     ! sanitize_choice_input "z" "^[abc]$"
 }
+
+@test "sanitize_choice_input: rejects ANSI escape sequences" {
+    ! sanitize_choice_input $'\e[D' "^[0-9s]$"
+}
+
+# ===== read_key tests =====
+
+@test "read_key: consumes an ANSI sequence without swallowing the next key" {
+    run bash -c 'source "$GITBASHER_ROOT/scripts/init.sh"; source "$GITBASHER_ROOT/scripts/common.sh"; { read_key first; read_key second; printf "%s\n%s" "$(printf "%s" "$first" | wc -c | tr -d " ")" "$second"; } < <(printf "\033[D1")'
+    assert_success
+    [ "${lines[0]}" = "3" ]
+    [ "${lines[1]}" = "1" ]
+}

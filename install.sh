@@ -3,18 +3,40 @@
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/master/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/master/install.sh | bash -s -- --sudo
+#
+# Flags:
+#   --sudo         Install system-wide to /usr/local/bin (uses sudo if needed)
 #
 # Environment:
 #   GITB_VERSION   Tag to install (default: latest)
-#   GITB_DIR       Target directory (default: auto: /usr/local/bin or ~/.local/bin)
-#   GITB_NO_SUDO   Set to 1 to skip sudo and install to ~/.local/bin
+#   GITB_DIR       Target directory (default: ~/.local/bin, or /usr/local/bin with --sudo)
+#   GITB_SUDO      Set to 1 for system-wide install (same as --sudo)
+#   GITB_NO_SUDO   Set to 1 to forbid sudo even when needed (kept for back-compat)
 
 set -eu
 
 REPO="maxbolgarin/gitbasher"
 VERSION="${GITB_VERSION:-latest}"
 TARGET_DIR="${GITB_DIR:-}"
+USE_SUDO="${GITB_SUDO:-0}"
 NO_SUDO="${GITB_NO_SUDO:-0}"
+
+for arg in "$@"; do
+    case "$arg" in
+        --sudo)    USE_SUDO=1 ;;
+        --no-sudo) NO_SUDO=1 ;;
+        -h|--help)
+            sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+            exit 0 ;;
+        *) printf "Unknown argument: %s\n" "$arg" >&2; exit 2 ;;
+    esac
+done
+
+if [ "$USE_SUDO" = "1" ] && [ "$NO_SUDO" = "1" ]; then
+    printf "Conflicting options: --sudo and --no-sudo (or GITB_SUDO/GITB_NO_SUDO).\n" >&2
+    exit 2
+fi
 
 if [ -t 1 ]; then
     RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'
@@ -72,13 +94,7 @@ needs_sudo() {
 }
 
 if [ -z "$TARGET_DIR" ]; then
-    if [ "$NO_SUDO" = "1" ]; then
-        TARGET_DIR="$HOME/.local/bin"
-    elif [ "$(id -u)" -eq 0 ]; then
-        TARGET_DIR="/usr/local/bin"
-    elif [ -w /usr/local/bin ] 2>/dev/null; then
-        TARGET_DIR="/usr/local/bin"
-    elif command -v sudo >/dev/null 2>&1; then
+    if [ "$USE_SUDO" = "1" ] || [ "$(id -u)" -eq 0 ]; then
         TARGET_DIR="/usr/local/bin"
     else
         TARGET_DIR="$HOME/.local/bin"
@@ -87,7 +103,7 @@ fi
 
 if needs_sudo "$TARGET_DIR"; then
     if [ "$NO_SUDO" = "1" ]; then
-        die "Cannot write to $TARGET_DIR and GITB_NO_SUDO=1. Set GITB_DIR=\$HOME/.local/bin and rerun."
+        die "Cannot write to $TARGET_DIR without sudo. Drop --no-sudo or pick a writable GITB_DIR (e.g. \$HOME/.local/bin)."
     fi
     if ! command -v sudo >/dev/null 2>&1; then
         die "Cannot write to $TARGET_DIR and sudo is not available. Set GITB_DIR=\$HOME/.local/bin and rerun."

@@ -27,12 +27,12 @@ gitb undo              # roll back your last commit / amend / merge / rebase / s
 curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash
 ```
 
-The installer auto-detects your OS, picks `/usr/local/bin` (with `sudo` if needed) or falls back to `~/.local/bin`, downloads the latest release, and prints a PATH hint if required. Override with env vars:
+By default the installer drops `gitb` into `~/.local/bin` — no `sudo`, no password prompt. It downloads the latest release and prints a PATH hint if needed. Opt into a system-wide install or override the location:
 
 ```bash
-GITB_DIR=~/.local/bin   curl ... | bash    # custom location, no sudo
+curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash -s -- --sudo   # /usr/local/bin (sudo)
+GITB_DIR=/opt/bin       curl ... | bash    # custom location
 GITB_VERSION=v3.10.2    curl ... | bash    # pin a release
-GITB_NO_SUDO=1          curl ... | bash    # never use sudo
 ```
 
 **npm:**
@@ -48,7 +48,8 @@ npm install -g gitbasher
 **Uninstall:**
 ```bash
 npm uninstall -g gitbasher          # if installed via npm
-sudo rm -f $(which gitb)            # if installed via curl
+rm -f ~/.local/bin/gitb             # if installed via curl (default location)
+sudo rm -f /usr/local/bin/gitb      # if installed via curl with --sudo
 ```
 
 Per-repo gitbasher settings live in `git config` under the `gitbasher.*` namespace and are removed with the repo. To clear global settings (AI key, default branch, scopes, etc.):
@@ -614,7 +615,10 @@ Reinstall via npm (`npm install -g gitbasher`) or curl (see [install](#install-i
 <details>
 <summary><b>Permission denied during install</b></summary>
 
-Use `sudo`, or install to `~/.local/bin` and add it to `PATH`.
+The default install goes to `~/.local/bin` (no sudo). For a system-wide install pass `--sudo`:
+```bash
+curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash -s -- --sudo
+```
 </details>
 
 <details>

@@ -280,7 +280,7 @@ gitb b -             # back to previous branch (like cd -)
 | [`sync`](#gitb-sync) | `sy` | Fetch main + rebase (or merge) current branch, optional push |
 | [`wip`](#gitb-wip) | `w` | Stash all + backup to remote (`up`) / restore (`down`) |
 | [`undo`](#gitb-undo) | `un` | Undo last commit / amend / merge / rebase / stash |
-| [`reset`](#gitb-reset) | `res` | Friendly `git reset` with undo support |
+| [`reset`](#gitb-reset) | `res` | Friendly `git reset` with preview, approval, and undo support |
 | [`stash`](#gitb-stash) | `s` `sta` | Full stash menu: select, all, list, pop, apply, show, drop |
 | [`hook`](#gitb-hook) | `ho` `hk` | Manage git hooks: list, create, edit, toggle, remove, test, show |
 | [`origin`](#gitb-origin) | `or` `o` `remote` | Add, change, rename, or remove the remote origin |
@@ -449,11 +449,11 @@ Stash work-in-progress as a single `wip` stash and back it up to a remote `wip/<
 
 | Mode | Aliases | Description |
 |------|---------|-------------|
-| `<empty>` | | Reset last commit (mixed) |
-| `soft` | `s` | Soft reset last commit |
-| `undo` | `u` | Undo last reset |
-| `interactive` | `i` | Pick commit to reset to |
-| `ref` | `r` | Reset to a `HEAD` reference (reflog recovery) |
+| `<empty>` | | Preview and reset last commit (mixed) |
+| `soft` | `s` | Preview and soft reset last commit |
+| `undo` | `u` | Preview and undo last reset |
+| `interactive` | `i` | Pick commit to reset to, then approve |
+| `ref` | `r` | Reset to a `HEAD` reference with approval (reflog recovery) |
 
 ### `gitb stash`
 

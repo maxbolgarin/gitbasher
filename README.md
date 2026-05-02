@@ -86,7 +86,7 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 - [Common workflows](#common-workflows)
 - [Command reference](#command-reference)
   - [commit](#gitb-commit) · [push](#gitb-push) · [pull](#gitb-pull) · [branch](#gitb-branch) · [tag](#gitb-tag) · [merge](#gitb-merge) · [rebase](#gitb-rebase)
-  - [cherry](#gitb-cherry) · [sync](#gitb-sync) · [wip](#gitb-wip) · [fixup](#gitb-fixup) · [undo](#gitb-undo) · [reset](#gitb-reset) · [stash](#gitb-stash)
+  - [cherry](#gitb-cherry) · [sync](#gitb-sync) · [wip](#gitb-wip) · [undo](#gitb-undo) · [reset](#gitb-reset) · [stash](#gitb-stash)
   - [hook](#gitb-hook) · [config](#gitb-config) · [log](#gitb-log) · [info commands](#info-commands)
 - [Configuration](#configuration)
 - [Troubleshooting](#troubleshooting)
@@ -101,7 +101,7 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 - **AI commit messages** — `gitb c ai` writes the message for you (Gemini / Claude via OpenRouter, fully configurable).
 - **Atomic split** — `gitb c split` (or `aisplit`) breaks a messy working tree into one commit per logical scope.
 - **Safer git** — push/pull detect conflicts up front, `undo` rolls back commit/amend/merge/rebase/stash, `reset` is interactive.
-- **Whole workflows, not just commands** — `sync`, `wip`, `fixup`, `branch newd`, `merge to-main` chain the steps you'd otherwise do by hand.
+- **Whole workflows, not just commands** — `sync`, `wip`, `branch newd`, `merge to-main` chain the steps you'd otherwise do by hand.
 - **One file, no deps** — pure bash. Drop the binary anywhere on `PATH` and go.
 - **115+ tests** — BATS test suite covers sanitization, git ops, branch logic.
 
@@ -120,13 +120,13 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 | **Branches** | `branch` (`b`), `prev` (`-`) | List / switch / create-from-current / create-from-updated-main / delete (orphaned, merged, gone) / recent / previous / checkout-tag |
 | **Integration** | `merge` (`m`), `rebase` (`r`), `cherry` (`ch`) | Merge into current / into main / from remote · rebase onto main / interactive / autosquash / fastautosquash / pull-commits · cherry-pick by hash, range, or interactive |
 | **Tags & releases** | `tag` (`t`) | Lightweight, annotated, from-commit, push, push-all, delete, delete-all, list, fetch-remote |
-| **Save & rollback** | `wip` (`up`/`down`), `undo` (`un`), `reset` (`res`), `stash` (`s`), `fixup` (`fx`) | Stash WIP + push backup branch, restore in one step · undo last commit/amend/merge/rebase/stash · interactive reset · full stash menu · fixup + autosquash in a single step |
+| **Save & rollback** | `wip` (`up`/`down`), `undo` (`un`), `reset` (`res`), `stash` (`s`) | Stash WIP + push backup branch, restore in one step · undo last commit/amend/merge/rebase/stash · interactive reset · full stash menu |
 | **Inspect** | `status` (`st`), `log` (`l`), `reflog` (`rl`), `last-commit` (`lc`), `last-ref` (`lr`) | Pretty repo status, multi-mode log + search, reflog viewer, quick last-commit / last-ref summary |
 | **Hooks** | `hook` (`ho`) | List / create from templates / edit / toggle / remove / test / show — for every git hook |
 | **Repo setup** | `init` (`i`), `origin` (`or`, `o`, `remote`) | `git init` from gitbasher · add/change/rename/remove the remote origin |
 | **Config** | `config` (`cfg`) | User, default branch, separator, editor, ticket prefix, scopes, AI key, AI model, proxy |
 
-Total: **23 top-level commands**, **60+ aliases**, **100+ modes**.
+Total: **22 top-level commands**, **60+ aliases**, **100+ modes**.
 
 ---
 
@@ -207,8 +207,6 @@ gitb c push          # commit + push
 gitb c fix           # fixup commit for review feedback
 gitb r a             # autosquash fixups
 gitb p f             # force-push cleaned history
-# — or in one step —
-gitb fx fastp        # add all + fixup + autosquash + force-push
 ```
 
 ### Sync with main mid-feature
@@ -281,7 +279,6 @@ gitb b -             # back to previous branch (like cd -)
 | [`cherry`](#gitb-cherry) | `ch` `cp` | Cherry-pick by hash, range, or interactive picker |
 | [`sync`](#gitb-sync) | `sy` | Fetch main + rebase (or merge) current branch, optional push |
 | [`wip`](#gitb-wip) | `w` | Stash all + backup to remote (`up`) / restore (`down`) |
-| [`fixup`](#gitb-fixup) | `fx` | Create fixup commit and autosquash in one step |
 | [`undo`](#gitb-undo) | `un` | Undo last commit / amend / merge / rebase / stash |
 | [`reset`](#gitb-reset) | `res` | Friendly `git reset` with undo support |
 | [`stash`](#gitb-stash) | `s` `sta` | Full stash menu: select, all, list, pop, apply, show, drop |
@@ -437,18 +434,6 @@ Stash work-in-progress as a single `wip` stash and back it up to a remote `wip/<
 | `gitb wip up` | | `u` | Stash all changes (incl. untracked) as `wip: <branch>` and force-push the stash to `origin/wip/<branch>` |
 | `gitb wip up nopush` | | `np` `n` | Stash only, skip the remote backup |
 | `gitb wip down` | | `d` | Pop the most recent wip stash for the current branch and delete the remote backup |
-
-### `gitb fixup`
-
-End-to-end fixup-and-autosquash so you don't have to chain `gitb c fix` + `gitb r a`.
-
-| Mode | Aliases | Description |
-|------|---------|-------------|
-| `<empty>` | | Select files, pick commit, fixup, autosquash |
-| `fast` | `f` | Add all, pick commit, fixup, autosquash |
-| `commit` | `c` | Create fixup commit only (= `gitb c x`) |
-| `push` | `p` | Fixup + autosquash + force-push |
-| `fastp` | `fp` `pf` | Fast variant + force-push |
 
 ### `gitb undo`
 

@@ -7,6 +7,7 @@ load setup_suite
 setup() {
     setup_test_repo
     source_gitbasher
+    source "$GITBASHER_ROOT/scripts/reset.sh"
     cd "$TEST_REPO"
 
     # Set required global variables
@@ -210,6 +211,35 @@ teardown() {
     git reset --hard HEAD~1
 
     [ ! -f "file1.txt" ]
+}
+
+@test "reset_script: previews mixed reset and asks for approval" {
+    make_test_commit "file1.txt" "Commit to reset"
+
+    run bash -c 'source "$GITBASHER_ROOT/scripts/init.sh"; source "$GITBASHER_ROOT/scripts/common.sh"; source "$GITBASHER_ROOT/scripts/reset.sh"; cd "$TEST_REPO"; reset_script' <<< "y"
+
+    assert_success
+    [[ "$output" =~ "Current HEAD:" ]]
+    [[ "$output" =~ "Reset target:" ]]
+    [[ "$output" =~ "Reset type:" ]]
+    [[ "$output" =~ "Do you want to continue" ]]
+
+    count=$(git rev-list --count HEAD)
+    [ "$count" -eq 1 ]
+    status=$(git status --short)
+    [[ "$status" =~ "file1.txt" ]]
+}
+
+@test "reset_script: cancellation leaves HEAD unchanged" {
+    make_test_commit "file1.txt" "Commit to keep"
+    original_head=$(git rev-parse HEAD)
+
+    run bash -c 'source "$GITBASHER_ROOT/scripts/init.sh"; source "$GITBASHER_ROOT/scripts/common.sh"; source "$GITBASHER_ROOT/scripts/reset.sh"; cd "$TEST_REPO"; reset_script' <<< "n"
+
+    assert_success
+    [[ "$output" =~ "Do you want to continue" ]]
+    current_head=$(git rev-parse HEAD)
+    [ "$current_head" = "$original_head" ]
 }
 
 # ===== Stash operations =====

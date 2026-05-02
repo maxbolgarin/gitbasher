@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-GITBASHER_VERSION="3.10.2-34-g578988f"
+GITBASHER_VERSION="3.10.2-35-gc6f883f"
 if [ "$1" == "init" ] || [ "$1" == "i" ]; then
     git init
 fi
@@ -7601,145 +7601,6 @@ function wip_script {
         *)              wrong_mode "wip" "$1";;
     esac
 }
-function fixup_script {
-    case "$1" in
-        fast|f)         fixup_fast="true";;
-        commit|c)       fixup_commit_only="true";;
-        push|p)         fixup_push="true";;
-        fastp|fp|pf)    fixup_fast="true"; fixup_push="true";;
-        help|h)         help="true";;
-        *)
-            wrong_mode "fixup" $1
-    esac
-    header_msg="GIT FIXUP"
-    if [ -n "${fixup_fast}" ]; then
-        if [ -n "${fixup_push}" ]; then
-            header_msg="$header_msg FAST & PUSH"
-        else
-            header_msg="$header_msg FAST"
-        fi
-    elif [ -n "${fixup_commit_only}" ]; then
-        header_msg="$header_msg COMMIT ONLY"
-    elif [ -n "${fixup_push}" ]; then
-        header_msg="$header_msg & PUSH"
-    fi
-    echo -e "${YELLOW}${header_msg}${ENDCOLOR}"
-    echo
-    if [ -n "$help" ]; then
-        echo -e "usage: ${YELLOW}gitb fixup <mode>${ENDCOLOR}"
-        echo
-        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Select files, pick a commit to fixup, create fixup commit, then autosquash"
-        msg="$msg\n${BOLD}fast${ENDCOLOR}_f_Add all files, pick a commit to fixup, fixup commit, then autosquash"
-        msg="$msg\n${BOLD}commit${ENDCOLOR}_c_Only create a fixup commit without autosquash (same as gitb c x)"
-        msg="$msg\n${BOLD}push${ENDCOLOR}_p_Select files, fixup + autosquash + force push"
-        msg="$msg\n${BOLD}fastp${ENDCOLOR}_fp|pf_Add all files, fixup + autosquash + force push"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
-        exit
-    fi
-    if [ -n "$fixup_fast" ]; then
-        if git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then
-            echo -e "${GREEN}No changes to commit${ENDCOLOR}"
-            exit
-        fi
-        echo -e "${YELLOW}Step 1.${ENDCOLOR} Adding all files"
-        git add -A
-        echo -e "${GREEN}All files staged${ENDCOLOR}"
-        echo -e "${YELLOW}Staged files:${ENDCOLOR}"
-        print_staged_files
-    else
-        changes=$(git_status)
-        if [ -z "$changes" ]; then
-            echo -e "${GREEN}No changes to commit${ENDCOLOR}"
-            exit
-        fi
-        echo -e "${YELLOW}Step 1.${ENDCOLOR} Select files to commit"
-        echo "$changes"
-        echo
-        echo "Enter file patterns to stage (like git add command)"
-        echo "Press Enter if you want to exit"
-        while [ true ]; do
-            read -p "$(echo -n -e "${BOLD}git add${ENDCOLOR} ")" -e git_add
-            if [ "$git_add" == "" ]; then
-                exit
-            fi
-            if ! sanitize_file_path "$git_add"; then
-                show_sanitization_error "file pattern" "Invalid file path or pattern."
-                continue
-            fi
-            git_add="$sanitized_file_path"
-            add_output=$(git add $git_add 2>&1)
-            add_code=$?
-            if [ $add_code -eq 0 ]; then
-                break
-            else
-                echo -e "${RED}$add_output${ENDCOLOR}"
-                echo
-            fi
-        done
-        echo
-        echo -e "${YELLOW}Staged files:${ENDCOLOR}"
-        print_staged_files
-    fi
-    echo
-    echo -e "${YELLOW}Step 2.${ENDCOLOR} Select a commit to ${YELLOW}--fixup${ENDCOLOR}:"
-    choose_commit 9
-    echo
-    echo -e "${YELLOW}Creating fixup commit...${ENDCOLOR}"
-    result=$(git commit --fixup $commit_hash 2>&1)
-    commit_code=$?
-    if [ $commit_code -ne 0 ]; then
-        echo -e "${RED}Cannot create fixup commit! Error message:${ENDCOLOR}"
-        echo "$result"
-        if [ -n "$git_add" ]; then
-            git restore --staged "$git_add"
-        fi
-        exit $commit_code
-    fi
-    after_commit "fixup"
-    if [ -n "$fixup_commit_only" ]; then
-        echo
-        echo -e "Run ${YELLOW}gitb rebase a${ENDCOLOR} to autosquash, or ${YELLOW}gitb fixup${ENDCOLOR} next time for auto-squash"
-        exit
-    fi
-    echo
-    echo -e "${YELLOW}Step 3.${ENDCOLOR} Running autosquash rebase..."
-    echo
-    merge_base=$(git merge-base HEAD ${main_branch} 2>/dev/null)
-    if [ -z "$merge_base" ] || [ "$merge_base" == "$(git rev-parse HEAD)" ]; then
-        local_commit_count=$(git rev-list --count HEAD 2>/dev/null || echo "0")
-        if [ "$local_commit_count" -gt 50 ]; then
-            merge_base="HEAD~50"
-        else
-            merge_base=$(git rev-list --max-parents=0 HEAD 2>/dev/null | tail -1)
-            if [ -z "$merge_base" ]; then
-                merge_base="HEAD~10"
-            fi
-        fi
-    fi
-    rebase_output=$(GIT_SEQUENCE_EDITOR=true git rebase -i --autosquash $merge_base 3>&2 2>&1 1>&3)
-    rebase_code=$?
-    if [ $rebase_code -eq 0 ]; then
-        echo -e "${GREEN}Autosquash rebase successful!${ENDCOLOR}"
-    else
-        if [[ $rebase_output == *"Resolve all conflicts"* ]]; then
-            echo -e "${RED}Rebase has conflicts! Resolve them manually:${ENDCOLOR}"
-            echo -e "  ${YELLOW}git rebase --continue${ENDCOLOR} after resolving"
-            echo -e "  ${YELLOW}git rebase --abort${ENDCOLOR} to cancel"
-        else
-            echo -e "${RED}Autosquash rebase failed:${ENDCOLOR}"
-            echo "$rebase_output"
-        fi
-        exit $rebase_code
-    fi
-    if [ -n "$fixup_push" ]; then
-        echo
-        echo -e "${YELLOW}Force pushing after autosquash...${ENDCOLOR}"
-        echo
-        push_script f
-    fi
-}
 function project_status {
     echo -e "${YELLOW}$project_name${ENDCOLOR} | ${CYAN}$repo_url${ENDCOLOR}"
     echo
@@ -9235,7 +9096,6 @@ function print_help {
     msg="$msg\ncherry_ch|cp_Cherry-pick commits from other branches"
     msg="$msg\nsync_sy_Sync current branch with $main_branch (fetch + rebase/merge)"
     msg="$msg\nwip_w_Stash work-in-progress and back it up to remote (up/down)"
-    msg="$msg\nfixup_fx_Create fixup commit + autosquash rebase in one step"
     msg="$msg\nundo_un_Quick undo for commit, amend, merge, rebase, or stash"
     msg="$msg\nreset_res_Easy to use git reset"
     msg="$msg\nstash_s|sta_Manage git stashes"
@@ -9316,9 +9176,6 @@ case "$1" in
     ;;
     config|cf|cfg|conf)         
         config_script $2
-    ;;
-    fixup|fx)
-        fixup_script $2
     ;;
     undo|un)
         undo_script $2

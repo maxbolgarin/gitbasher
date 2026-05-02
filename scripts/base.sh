@@ -18,7 +18,6 @@ function print_help {
     msg="$msg\ncherry_ch|cp_Cherry-pick commits from other branches"
     msg="$msg\nsync_sy_Sync current branch with $main_branch (fetch + rebase/merge)"
     msg="$msg\nwip_w_Stash work-in-progress and back it up to remote (up/down)"
-    msg="$msg\nfixup_fx_Create fixup commit + autosquash rebase in one step"
     msg="$msg\nundo_un_Quick undo for commit, amend, merge, rebase, or stash"
     msg="$msg\nreset_res_Easy to use git reset"
     msg="$msg\nstash_s|sta_Manage git stashes"
@@ -114,9 +113,6 @@ case "$1" in
     ;;
     config|cf|cfg|conf)         
         config_script $2
-    ;;
-    fixup|fx)
-        fixup_script $2
     ;;
     undo|un)
         undo_script $2

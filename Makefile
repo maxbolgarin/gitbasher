@@ -7,8 +7,8 @@ build:
 
 .PHONY: install
 install: build
-	@cp ./dist/gitb /usr/local/bin/gitb
-	@chmod +x /usr/local/bin/gitb
+	@cp ./dist/gitb ~/.local/bin/gitb
+	@chmod +x ~/.local/bin/gitb
 
 .PHONY: release
 release: build

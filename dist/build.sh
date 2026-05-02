@@ -18,5 +18,10 @@ contents=$(echo "#!/usr/bin/env bash" && build $1 | sed '/^[[:space:]]*#\{1,3\}[
 echo "$contents" > $2
 
 if [ -n "$3" ]; then
-    sed -i "s/GITBASHER_VERSION=\"dev\"/GITBASHER_VERSION=\"$3\"/" "$2"
+    # BSD/macOS sed requires a backup extension after -i (use '' for none); GNU sed does not.
+    if sed --version >/dev/null 2>&1; then
+        sed -i "s/GITBASHER_VERSION=\"dev\"/GITBASHER_VERSION=\"$3\"/" "$2"
+    else
+        sed -i '' "s/GITBASHER_VERSION=\"dev\"/GITBASHER_VERSION=\"$3\"/" "$2"
+    fi
 fi

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-GITBASHER_VERSION="dev"
+GITBASHER_VERSION="3.10.2-26-gaea894f"
 if [ "$1" == "init" ] || [ "$1" == "i" ]; then
     git init
 fi
@@ -2728,6 +2728,11 @@ function resolve_conflicts {
 }
 function merge_commit {
     merge_error="false"
+    if [ ! -f "$(git rev-parse --git-dir)/MERGE_HEAD" ]; then
+        echo
+        echo -e "${GREEN}Merge already committed${ENDCOLOR}"
+        return
+    fi
     files_with_conflicts_one_line="$(echo "$2" | tr '\n' ' ' | sed 's/ $//')"
     files_with_conflicts_new="$(git --no-pager grep -l --name-only -E "[<=>]{7} HEAD" $files_with_conflicts_one_line)"
     if [ "$files_with_conflicts_new" != "" ]; then
@@ -2746,17 +2751,17 @@ function merge_commit {
         commit_message="$3"
         result=$(git commit -m "$commit_message" 2>&1)
         commit_status=$?
-        if [[ $result != *"not staged for commit"* ]]; then
+        if [[ $result != *"not staged for commit"* ]] && [[ $result != *"nothing to commit"* ]]; then
             check_code $commit_status "$result" "creating default merge commit"
-        fi  
+        fi
     else
         staged_with_tab="$(sed 's/^/####\t/' <<< "$2")"
         commitmsg_file=$(mktemp "/tmp/commitmsg.XXXXXX")
         trap 'rm -f "$commitmsg_file"' EXIT INT TERM
         echo """
 ####
-#### Write a message about merge from '$5/$4' into '$4'. Lines starting with '#' will be ignored. 
-#### 
+#### Write a message about merge from '$5/$4' into '$4'. Lines starting with '#' will be ignored.
+####
 #### On branch $4
 #### Changes to be commited:
 ${staged_with_tab}
@@ -2776,13 +2781,14 @@ ${staged_with_tab}
                 rm -f "$commitmsg_file"
                 merge_error="true"
                 exit
-            fi    
+            fi
         done
         rm -f "$commitmsg_file"
         result=$(git commit -m """$commit_message""" 2>&1)
-        if [[ $result != *"not staged for commit"* ]]; then
-            check_code $? "$result" "creating merge commit"
-        fi  
+        commit_status=$?
+        if [[ $result != *"not staged for commit"* ]] && [[ $result != *"nothing to commit"* ]]; then
+            check_code $commit_status "$result" "creating merge commit"
+        fi
     fi
 }
 function rebase_script {
@@ -7324,31 +7330,39 @@ function undo_stash {
     echo -e "${GREEN}Changes re-stashed successfully!${ENDCOLOR}"
     echo -e "${YELLOW}Your changes are saved in the stash. Use ${BOLD}gitb stash pop${NORMAL}${YELLOW} to restore them.${ENDCOLOR}"
 }
-function wip_script {
+function wip_stash_message {
+    echo "wip: ${current_branch}"
+}
+function wip_remote_branch {
+    echo "wip/${current_branch}"
+}
+function find_wip_stash {
+    wip_stash_ref=""
+    local target
+    target="$(wip_stash_message)"
+    while IFS= read -r line; do
+        local ref="${line%%:*}"
+        local subject="${line#*: }"
+        if [ "$subject" = "On ${current_branch}: ${target}" ] || [ "$subject" = "WIP on ${current_branch}: ${target}" ] || [[ "$line" == *"${target}"* ]]; then
+            wip_stash_ref="$ref"
+            return 0
+        fi
+    done < <(git stash list)
+    [ -n "$wip_stash_ref" ]
+}
+function wip_up {
+    local nopush=""
     case "$1" in
         nopush|np|n)    nopush="true";;
-        help|h)         help="true";;
-        *)
-            wrong_mode "wip" $1
+        "")             ;;
+        *)              wrong_mode "wip up" "$1";;
     esac
-    header_msg="GIT WIP"
-    if [ -n "${nopush}" ]; then
+    local header_msg="GIT WIP UP"
+    if [ -n "$nopush" ]; then
         header_msg="$header_msg (NO PUSH)"
     fi
     echo -e "${YELLOW}${header_msg}${ENDCOLOR}"
     echo
-    if [ -n "$help" ]; then
-        echo -e "usage: ${YELLOW}gitb wip <mode>${ENDCOLOR}"
-        echo
-        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Stage all changes, create WIP commit, and push"
-        msg="$msg\n${BOLD}nopush${ENDCOLOR}_np|n_Stage all changes and create WIP commit without pushing"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
-        echo
-        echo -e "Use ${YELLOW}gitb unwip${ENDCOLOR} to undo the WIP commit and restore your changes"
-        exit
-    fi
     if git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then
         echo -e "${GREEN}No changes to save${ENDCOLOR}"
         exit
@@ -7356,72 +7370,117 @@ function wip_script {
     echo -e "${YELLOW}Changes to save:${ENDCOLOR}"
     git_status
     echo
-    git add -A
-    wip_message="wip: ${current_branch} work in progress"
-    result=$(git commit -m "$wip_message" 2>&1)
-    commit_code=$?
-    if [ $commit_code -ne 0 ]; then
-        echo -e "${RED}Cannot create WIP commit! Error message:${ENDCOLOR}"
-        echo "$result"
-        git reset HEAD 2>/dev/null
-        exit $commit_code
+    local message
+    message="$(wip_stash_message)"
+    local stash_output stash_code
+    stash_output=$(git stash push --include-untracked --message "$message" 2>&1)
+    stash_code=$?
+    if [ $stash_code -ne 0 ]; then
+        echo -e "${RED}Cannot stash changes! Error message:${ENDCOLOR}"
+        echo "$stash_output"
+        exit $stash_code
     fi
-    commit_hash=$(git rev-parse HEAD)
-    echo -e "${GREEN}WIP saved!${ENDCOLOR}"
-    echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR} $wip_message"
+    local stash_hash
+    stash_hash=$(git rev-parse --short stash@{0} 2>/dev/null)
+    echo -e "${GREEN}WIP stashed!${ENDCOLOR} ${BLUE}[${stash_hash}]${ENDCOLOR} $message"
     echo
-    if [ -z "$nopush" ] && [ -n "$origin_name" ]; then
-        echo -e "${YELLOW}Pushing WIP...${ENDCOLOR}"
-        echo
-        push_output=$(git push ${origin_name} ${current_branch} 2>&1)
-        push_code=$?
-        if [ $push_code -eq 0 ]; then
-            echo -e "${GREEN}WIP pushed to ${origin_name}/${current_branch}${ENDCOLOR}"
-        else
-            echo -e "${YELLOW}Could not push WIP (you can push manually later)${ENDCOLOR}"
-            echo "$push_output"
-        fi
-    elif [ -z "$nopush" ] && [ -z "$origin_name" ]; then
+    if [ -n "$nopush" ]; then
+        echo -e "Restore with: ${YELLOW}gitb wip down${ENDCOLOR}"
+        return
+    fi
+    if [ -z "$origin_name" ]; then
         echo -e "${YELLOW}No remote configured, skipping push${ENDCOLOR}"
+        echo
+        echo -e "Restore with: ${YELLOW}gitb wip down${ENDCOLOR}"
+        return
+    fi
+    local remote_branch
+    remote_branch="$(wip_remote_branch)"
+    echo -e "${YELLOW}Pushing WIP backup to ${origin_name}/${remote_branch}...${ENDCOLOR}"
+    local push_output push_code
+    push_output=$(git push --force "${origin_name}" "stash@{0}:refs/heads/${remote_branch}" 2>&1)
+    push_code=$?
+    if [ $push_code -eq 0 ]; then
+        echo -e "${GREEN}WIP pushed to ${origin_name}/${remote_branch}${ENDCOLOR}"
+    else
+        echo -e "${YELLOW}Could not push WIP backup (you can push manually later)${ENDCOLOR}"
+        echo "$push_output"
     fi
     echo
-    echo -e "Restore with: ${YELLOW}gitb unwip${ENDCOLOR}"
+    echo -e "Restore with: ${YELLOW}gitb wip down${ENDCOLOR}"
 }
-function unwip_script {
-    if [ "$1" == "help" ] || [ "$1" == "h" ]; then
-        echo -e "${YELLOW}GIT UNWIP${ENDCOLOR}"
-        echo
-        echo -e "usage: ${YELLOW}gitb unwip${ENDCOLOR}"
-        echo
-        echo -e "Undoes the last WIP commit, restoring your changes to the working tree."
-        echo -e "Changes will be unstaged so you can re-organize them before committing."
-        exit
-    fi
-    echo -e "${YELLOW}GIT UNWIP${ENDCOLOR}"
+function wip_down {
+    case "$1" in
+        "")     ;;
+        *)      wrong_mode "wip down" "$1";;
+    esac
+    echo -e "${YELLOW}GIT WIP DOWN${ENDCOLOR}"
     echo
-    last_message=$(git log -n 1 --pretty="%s" 2>/dev/null)
-    if [[ "$last_message" != wip:* ]]; then
-        echo -e "${RED}Last commit is not a WIP commit${ENDCOLOR}"
-        echo -e "Last commit: ${YELLOW}$last_message${ENDCOLOR}"
+    if ! find_wip_stash; then
+        echo -e "${RED}No WIP stash found for branch ${current_branch}${ENDCOLOR}"
         echo
-        echo -e "Use ${YELLOW}gitb undo${ENDCOLOR} to undo a regular commit"
+        echo -e "Save one first with: ${YELLOW}gitb wip up${ENDCOLOR}"
         exit 1
     fi
-    wip_commit=$(git log -n 1 --pretty="%s | ${YELLOW}%h${ENDCOLOR} | ${GREEN}%cr${ENDCOLOR}")
-    echo -e "${YELLOW}WIP commit to undo:${ENDCOLOR}"
-    echo -e "\t$wip_commit"
+    local stash_summary
+    stash_summary=$(git stash list --pretty="%gd | %s | ${GREEN_ES}%cr${ENDCOLOR_ES}" "$wip_stash_ref" 2>/dev/null | head -n 1)
+    echo -e "${YELLOW}WIP stash to restore:${ENDCOLOR}"
+    echo -e "\t${stash_summary}"
     echo
-    reset_output=$(git reset HEAD~1 2>&1)
-    reset_code=$?
-    if [ $reset_code -ne 0 ]; then
-        echo -e "${RED}Cannot undo WIP commit! Error message:${ENDCOLOR}"
-        echo "$reset_output"
-        exit $reset_code
+    local pop_output pop_code
+    pop_output=$(git stash pop "$wip_stash_ref" 2>&1)
+    pop_code=$?
+    if [ $pop_code -ne 0 ]; then
+        echo -e "${RED}Cannot restore WIP! Error message:${ENDCOLOR}"
+        echo "$pop_output"
+        exit $pop_code
     fi
-    echo -e "${GREEN}WIP commit undone!${ENDCOLOR}"
+    echo -e "${GREEN}WIP restored!${ENDCOLOR}"
     echo
     echo -e "${YELLOW}Restored changes:${ENDCOLOR}"
     git_status
+    if [ -z "$origin_name" ]; then
+        return
+    fi
+    local remote_branch
+    remote_branch="$(wip_remote_branch)"
+    if ! git ls-remote --exit-code --heads "$origin_name" "$remote_branch" >/dev/null 2>&1; then
+        return
+    fi
+    echo
+    echo -e "${YELLOW}Removing remote WIP backup ${origin_name}/${remote_branch}...${ENDCOLOR}"
+    local delete_output delete_code
+    delete_output=$(git push "$origin_name" --delete "$remote_branch" 2>&1)
+    delete_code=$?
+    if [ $delete_code -eq 0 ]; then
+        echo -e "${GREEN}Remote WIP backup removed${ENDCOLOR}"
+    else
+        echo -e "${YELLOW}Could not remove remote WIP backup (you can delete it manually later)${ENDCOLOR}"
+        echo "$delete_output"
+    fi
+}
+function wip_help {
+    echo -e "${YELLOW}GIT WIP${ENDCOLOR}"
+    echo
+    echo -e "usage: ${YELLOW}gitb wip <up|down>${ENDCOLOR}"
+    echo
+    msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
+    msg="$msg\n${BOLD}up${ENDCOLOR}_u_Stash all changes as 'wip' and push a backup branch to remote"
+    msg="$msg\n${BOLD}up nopush${ENDCOLOR}_u np|n_Stash all changes as 'wip' without pushing"
+    msg="$msg\n${BOLD}down${ENDCOLOR}_d_Restore the WIP stash for the current branch and remove the remote backup"
+    msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
+    echo -e "$(echo -e "$msg" | column -ts'_')"
+    echo
+    echo -e "WIP saves work-in-progress as a git stash and pushes a backup to"
+    echo -e "${YELLOW}${origin_name:-origin}/wip/<branch>${ENDCOLOR} so you can recover it from anywhere."
+}
+function wip_script {
+    case "$1" in
+        up|u)           wip_up "$2";;
+        down|d)         wip_down "$2";;
+        help|h|"")      wip_help;;
+        *)              wrong_mode "wip" "$1";;
+    esac
 }
 function fixup_script {
     case "$1" in
@@ -9022,8 +9081,7 @@ function print_help {
     msg="$msg\nrebase_r|re|base_Rebase current branch"
     msg="$msg\ncherry_ch|cp_Cherry-pick commits from other branches"
     msg="$msg\nsync_sy_Sync current branch with $main_branch (fetch + rebase/merge)"
-    msg="$msg\nwip_w_Quick WIP commit + push for saving work in progress"
-    msg="$msg\nunwip_uw_Undo a WIP commit and restore changes"
+    msg="$msg\nwip_w_Stash work-in-progress and back it up to remote (up/down)"
     msg="$msg\nfixup_fx_Create fixup commit + autosquash rebase in one step"
     msg="$msg\nundo_un_Quick undo for commit, amend, merge, rebase, or stash"
     msg="$msg\nreset_res_Easy to use git reset"
@@ -9086,10 +9144,7 @@ case "$1" in
         sync_script $2
     ;;
     wip|w)
-        wip_script $2
-    ;;
-    unwip|uw)
-        unwip_script $2
+        wip_script $2 $3
     ;;
     branch|b|br|bran)         
         branch_script $2

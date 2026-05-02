@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-GITBASHER_VERSION="3.10.2-27-g4cdc1b8"
+GITBASHER_VERSION="3.10.2-34-g578988f"
 if [ "$1" == "init" ] || [ "$1" == "i" ]; then
     git init
 fi
@@ -409,6 +409,91 @@ function get_releases_url {
         github)    echo "${repo}/releases";;
         gitlab)    echo "${repo}/-/releases";;
         bitbucket) echo "${repo}/downloads/?tab=tags";;
+    esac
+}
+function get_issues_url {
+    local repo=${1:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/issues";;
+        gitlab)    echo "${repo}/-/issues";;
+        bitbucket) echo "${repo}/issues";;
+    esac
+}
+function get_new_issue_url {
+    local repo=${1:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/issues/new";;
+        gitlab)    echo "${repo}/-/issues/new";;
+        bitbucket) echo "${repo}/issues/new";;
+    esac
+}
+function get_branches_url {
+    local repo=${1:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/branches";;
+        gitlab)    echo "${repo}/-/branches";;
+        bitbucket) echo "${repo}/branches";;
+    esac
+}
+function get_tags_url {
+    local repo=${1:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/tags";;
+        gitlab)    echo "${repo}/-/tags";;
+        bitbucket) echo "${repo}/branches/?tab=tags";;
+    esac
+}
+function get_commits_url {
+    local repo=${1:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/commits";;
+        gitlab)    echo "${repo}/-/commits";;
+        bitbucket) echo "${repo}/commits";;
+    esac
+}
+function get_wiki_url {
+    local repo=${1:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/wiki";;
+        gitlab)    echo "${repo}/-/wikis/home";;
+    esac
+}
+function get_settings_url {
+    local repo=${1:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/settings";;
+        gitlab)    echo "${repo}/edit";;
+        bitbucket) echo "${repo}/admin";;
+    esac
+}
+function get_insights_url {
+    local repo=${1:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/pulse";;
+        gitlab)    echo "${repo}/activity";;
+    esac
+}
+function get_contributors_url {
+    local repo=${1:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/graphs/contributors";;
+        gitlab)    echo "${repo}/-/graphs/master";;
+    esac
+}
+function get_forks_url {
+    local repo=${1:-$(get_repo)}
+    case "$(get_repo_host "$repo")" in
+        github)    echo "${repo}/network/members";;
+        gitlab)    echo "${repo}/-/forks";;
+        bitbucket) echo "${repo}/forks";;
+    esac
+}
+function get_pr_label {
+    case "$(get_repo_host "${1:-$(get_repo)}")" in
+        github)    echo "Pulls";;
+        gitlab)    echo "MRs";;
+        bitbucket) echo "Pulls";;
+        *)         echo "PRs";;
     esac
 }
 function print_link {
@@ -8902,10 +8987,44 @@ function origin_show {
     done <<< "$remotes"
     local repo_url
     repo_url=$(get_repo)
-    if [ -n "$repo_url" ]; then
-        echo
-        echo -e "${YELLOW}Web URL:${ENDCOLOR}\t${repo_url}"
+    if [ -z "$repo_url" ]; then
+        return
     fi
+    echo
+    echo -e "${YELLOW}Web links:${ENDCOLOR}"
+    print_link "Repo" "$repo_url"
+    local host
+    host=$(get_repo_host "$repo_url")
+    if [ -z "$host" ]; then
+        return
+    fi
+    local issues_url prs_url branches_url tags_url commits_url ci_url
+    local releases_url wiki_url insights_url contributors_url forks_url
+    local settings_url
+    issues_url=$(get_issues_url "$repo_url")
+    prs_url=$(get_prs_url "$repo_url")
+    branches_url=$(get_branches_url "$repo_url")
+    tags_url=$(get_tags_url "$repo_url")
+    commits_url=$(get_commits_url "$repo_url")
+    ci_url=$(get_ci_url "" "$repo_url")
+    releases_url=$(get_releases_url "$repo_url")
+    wiki_url=$(get_wiki_url "$repo_url")
+    insights_url=$(get_insights_url "$repo_url")
+    contributors_url=$(get_contributors_url "$repo_url")
+    forks_url=$(get_forks_url "$repo_url")
+    settings_url=$(get_settings_url "$repo_url")
+    [ -n "$issues_url" ]       && print_link "Issues" "$issues_url"
+    [ -n "$prs_url" ]          && print_link "$(get_pr_label "$repo_url")" "$prs_url"
+    [ -n "$branches_url" ]     && print_link "Branches" "$branches_url"
+    [ -n "$tags_url" ]         && print_link "Tags" "$tags_url"
+    [ -n "$commits_url" ]      && print_link "Commits" "$commits_url"
+    [ -n "$releases_url" ]     && print_link "Releases" "$releases_url"
+    [ -n "$ci_url" ]           && print_link "$(get_ci_label "$repo_url")" "$ci_url"
+    [ -n "$wiki_url" ]         && print_link "Wiki" "$wiki_url"
+    [ -n "$insights_url" ]     && print_link "Insights" "$insights_url"
+    [ -n "$contributors_url" ] && print_link "People" "$contributors_url"
+    [ -n "$forks_url" ]        && print_link "Forks" "$forks_url"
+    [ -n "$settings_url" ]     && print_link "Settings" "$settings_url"
 }
 function origin_set {
     local existing

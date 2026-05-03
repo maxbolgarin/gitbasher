@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-GITBASHER_VERSION="3.10.2-56-gb2a4384"
+GITBASHER_VERSION="3.10.2-62-gdc8a943"
 if [ "$1" == "init" ] || [ "$1" == "i" ]; then
     git init
 fi
@@ -8,39 +8,20 @@ if [[ "$git_check" == *"fatal: not a git repository"* ]]; then
     echo "You can use gitb only in a git repository"
     exit
 fi
-if ((BASH_VERSINFO[0] < 4)); then
-    _gitb_candidate=$(command -v bash 2>/dev/null)
-    if [ -n "$_gitb_candidate" ] && [ -x "$_gitb_candidate" ] \
-       && "$_gitb_candidate" -c '((BASH_VERSINFO[0] >= 4))' >/dev/null 2>&1; then
-        exec "$_gitb_candidate" "$0" "$@"
+if ((BASH_VERSINFO[0] < 4)); then 
+    if [ -x "/opt/homebrew/bin/bash" ]; then
+        exec /opt/homebrew/bin/bash "$0" "$@"
+        exit $?
+    elif [ -x "/usr/local/bin/bash" ]; then
+        exec /usr/local/bin/bash "$0" "$@"
+        exit $?
     fi
-    if command -v brew >/dev/null 2>&1; then
-        _gitb_candidate="$(brew --prefix bash 2>/dev/null)/bin/bash"
-        if [ -x "$_gitb_candidate" ]; then
-            exec "$_gitb_candidate" "$0" "$@"
-        fi
-    fi
-    for _gitb_candidate in /opt/homebrew/bin/bash /usr/local/bin/bash; do
-        [ -x "$_gitb_candidate" ] && exec "$_gitb_candidate" "$0" "$@"
-    done
-    unset _gitb_candidate
     printf "Sorry, you need at least bash-4.0 to run gitbasher.\n\n"
     printf "Linux (Debian/Ubuntu):\n    sudo apt update && sudo apt install --only-upgrade bash\n\n"
     printf "macOS:\n    1) Install Homebrew (if missing):\n       /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"\n    2) Install newer bash:\n       brew install bash\n    3) Optional: make it your default shell (then restart Terminal):\n       sudo sh -c 'echo /opt/homebrew/bin/bash >> /etc/shells' && chsh -s /opt/homebrew/bin/bash\n\n"
     printf "Or run gitb explicitly with the newer bash when installed:\n    /opt/homebrew/bin/bash $0 \"\$@\"\n\n"
     exit 1; 
 fi
-git_dir=$(git rev-parse --git-dir 2>/dev/null)
-if [ -n "$git_dir" ] && [ -e "$git_dir/index.lock" ]; then
-    printf "\033[33mDetected %s/index.lock from a possibly interrupted git operation.\033[0m\n" "$git_dir"
-    printf "Another git process may be running. Remove the lock and continue?\n"
-    read -p "(y/N) " _gitb_lock_ans
-    case "$_gitb_lock_ans" in
-        y|Y|yes|YES) rm -f "$git_dir/index.lock" ;;
-        *) exit 1 ;;
-    esac
-fi
-unset git_dir _gitb_lock_ans
 RED_ES="\x1b[31m"
 GREEN_ES="\x1b[32m"
 YELLOW_ES="\x1b[33m"
@@ -4021,12 +4002,15 @@ function pull_script {
         merge|m)            merge="true";;
         rebase|r)           rebase="true";;
         interactive|ri|rs)  rebase="true"; interactive="true";;
+        dry|d|dr)           dry="true";;
         help|h)             help="true";;
         *)
             wrong_mode "pull" $1
     esac
     header_msg="GIT PULL"
-    if [ -n "${fetch}" ]; then
+    if [ -n "${dry}" ]; then
+        header_msg="$header_msg DRY RUN"
+    elif [ -n "${fetch}" ]; then
         if [ -n "${all}" ]; then
             header_msg="$header_msg FETCH ALL"
         else
@@ -4059,6 +4043,7 @@ function pull_script {
         msg="$msg\n${BOLD}merge${ENDCOLOR}_m_Fetch current branch and then merge it"
         msg="$msg\n${BOLD}rebase${ENDCOLOR}_r_Fetch current branch and then rebase"
         msg="$msg\n${BOLD}interactive${ENDCOLOR}_ri|rs_Fetch current branch and then rebase in interactive mode with --autosquash"
+        msg="$msg\n${BOLD}dry${ENDCOLOR}_d|dr_Preview incoming commits from remote without modifying local refs"
         msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
         echo -e "$(echo -e "$msg" | column -ts'_')"
         exit
@@ -4072,6 +4057,53 @@ function pull_script {
         echo -e "${RED}No git remote configured.${ENDCOLOR}"
         echo -e "Use ${BLUE}git remote add origin <url>${ENDCOLOR} to set it up first."
         exit 1
+    fi
+    if [ -n "$dry" ]; then
+        echo -e "${YELLOW}Checking '$origin_name/$current_branch' for incoming commits...${ENDCOLOR}"
+        echo
+        remote_tracking_ref="refs/remotes/$origin_name/$current_branch"
+        saved_ref=$(git rev-parse --verify --quiet "$remote_tracking_ref")
+        dry_output=$(git fetch --no-tags "$origin_name" "$current_branch" 2>&1)
+        dry_code=$?
+        if [ -n "$saved_ref" ]; then
+            git update-ref "$remote_tracking_ref" "$saved_ref" 2>/dev/null
+        else
+            git update-ref -d "$remote_tracking_ref" 2>/dev/null
+        fi
+        if [ $dry_code != 0 ]; then
+            if [[ "$dry_output" == *"couldn't find remote ref"* ]]; then
+                echo -e "${YELLOW}There is no '$current_branch' in $origin_name${ENDCOLOR}"
+                exit
+            fi
+            echo -e "${RED}Cannot fetch! Error message:${ENDCOLOR}"
+            echo -e "$dry_output"
+            exit $dry_code
+        fi
+        behind_commits=$(commit_list 999 "tab" "HEAD..FETCH_HEAD")
+        ahead_commits=$(commit_list 999 "tab" "FETCH_HEAD..HEAD")
+        if [ -z "$behind_commits" ] && [ -z "$ahead_commits" ]; then
+            echo -e "${GREEN}Already up to date${ENDCOLOR}"
+            echo
+            echo -e "${BLUE}Dry run only — no local refs were modified${ENDCOLOR}"
+            exit
+        fi
+        if [ -n "$behind_commits" ]; then
+            behind_count=$(echo -e "$behind_commits" | wc -l | sed 's/^ *//;s/ *$//')
+            echo -e "Your branch is behind ${YELLOW}$origin_name/$current_branch${ENDCOLOR} by ${BOLD}$behind_count${ENDCOLOR} commits"
+            echo -e "$behind_commits"
+        fi
+        if [ -n "$ahead_commits" ]; then
+            if [ -n "$behind_commits" ]; then
+                echo
+            fi
+            ahead_count=$(echo -e "$ahead_commits" | wc -l | sed 's/^ *//;s/ *$//')
+            echo -e "Your branch is ahead of ${YELLOW}$origin_name/$current_branch${ENDCOLOR} by ${BOLD}$ahead_count${ENDCOLOR} commits"
+            echo -e "$ahead_commits"
+        fi
+        echo
+        echo -e "${BLUE}Dry run only — no local refs were modified${ENDCOLOR}"
+        echo -e "Run ${YELLOW}gitb pull${ENDCOLOR} to apply changes"
+        exit
     fi
     if [ -n "$fetch" ]; then
         if [ -n "$all" ]; then
@@ -7446,12 +7478,15 @@ function sync_script {
         push|p)         sync_push="true";;
         merge|m)        sync_merge="true";;
         mergep|mp|pm)   sync_merge="true"; sync_push="true";;
+        dry|d|dr)       sync_dry="true";;
         help|h)         help="true";;
         *)
             wrong_mode "sync" $1
     esac
     header_msg="GIT SYNC"
-    if [ -n "${sync_merge}" ]; then
+    if [ -n "${sync_dry}" ]; then
+        header_msg="$header_msg DRY RUN"
+    elif [ -n "${sync_merge}" ]; then
         if [ -n "${sync_push}" ]; then
             header_msg="$header_msg MERGE & PUSH"
         else
@@ -7470,12 +7505,59 @@ function sync_script {
         msg="$msg\n${BOLD}push${ENDCOLOR}_p_Fetch $main_branch, rebase current branch onto it, and force push"
         msg="$msg\n${BOLD}merge${ENDCOLOR}_m_Fetch $main_branch and merge it into current branch"
         msg="$msg\n${BOLD}mergep${ENDCOLOR}_mp|pm_Fetch $main_branch, merge it into current branch, and push"
+        msg="$msg\n${BOLD}dry${ENDCOLOR}_d|dr_Preview commits that sync would bring in from $main_branch without modifying local refs"
         msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
         echo -e "$(echo -e "$msg" | column -ts'_')"
         exit
     fi
     if [ "$current_branch" == "$main_branch" ]; then
-        echo -e "${YELLOW}Already on ${main_branch}, use ${BOLD}gitb pull${NORMAL}${YELLOW} instead${ENDCOLOR}"
+        if [ -n "$sync_dry" ]; then
+            echo -e "${YELLOW}Already on ${main_branch}, use ${BOLD}gitb pull dry${NORMAL}${YELLOW} instead${ENDCOLOR}"
+        else
+            echo -e "${YELLOW}Already on ${main_branch}, use ${BOLD}gitb pull${NORMAL}${YELLOW} instead${ENDCOLOR}"
+        fi
+        exit
+    fi
+    if [ -n "$sync_dry" ]; then
+        if [ -z "$origin_name" ]; then
+            echo -e "${RED}No git remote configured.${ENDCOLOR}"
+            echo -e "Use ${BLUE}git remote add origin <url>${ENDCOLOR} to set it up first."
+            exit 1
+        fi
+        echo -e "${YELLOW}Checking ${origin_name}/${main_branch} for incoming commits...${ENDCOLOR}"
+        echo
+        remote_tracking_ref="refs/remotes/$origin_name/$main_branch"
+        saved_ref=$(git rev-parse --verify --quiet "$remote_tracking_ref")
+        dry_output=$(git fetch --no-tags "$origin_name" "$main_branch" 2>&1)
+        dry_code=$?
+        if [ -n "$saved_ref" ]; then
+            git update-ref "$remote_tracking_ref" "$saved_ref" 2>/dev/null
+        else
+            git update-ref -d "$remote_tracking_ref" 2>/dev/null
+        fi
+        if [ $dry_code != 0 ]; then
+            echo -e "${RED}Cannot fetch ${main_branch}! Error message:${ENDCOLOR}"
+            echo -e "$dry_output"
+            exit $dry_code
+        fi
+        incoming=$(commit_list 999 "tab" "HEAD..FETCH_HEAD")
+        local_only=$(commit_list 999 "tab" "FETCH_HEAD..HEAD")
+        if [ -z "$incoming" ]; then
+            echo -e "${GREEN}Already up to date with ${main_branch}${ENDCOLOR}"
+        else
+            incoming_count=$(echo -e "$incoming" | wc -l | sed 's/^ *//;s/ *$//')
+            echo -e "${BOLD}$incoming_count${ENDCOLOR} commits on ${YELLOW}${origin_name}/${main_branch}${ENDCOLOR} would be applied to ${YELLOW}${current_branch}${ENDCOLOR}"
+            echo -e "$incoming"
+        fi
+        if [ -n "$local_only" ]; then
+            echo
+            local_count=$(echo -e "$local_only" | wc -l | sed 's/^ *//;s/ *$//')
+            echo -e "${BOLD}$local_count${ENDCOLOR} local commits on ${YELLOW}${current_branch}${ENDCOLOR} would be replayed on top after rebase"
+            echo -e "$local_only"
+        fi
+        echo
+        echo -e "${BLUE}Dry run only — no local refs were modified${ENDCOLOR}"
+        echo -e "Run ${YELLOW}gitb sync${ENDCOLOR} to apply changes"
         exit
     fi
     is_clean=$(git status | tail -n 1)
@@ -7789,23 +7871,136 @@ function find_wip_stash {
     done < <(git stash list)
     [ -n "$wip_stash_ref" ]
 }
-function wip_up {
-    local nopush=""
-    case "$1" in
-        nopush|np|n)    nopush="true";;
-        "")             ;;
-        *)              wrong_mode "wip up" "$1";;
-    esac
-    local header_msg="GIT WIP UP"
-    if [ -n "$nopush" ]; then
-        header_msg="$header_msg (NO PUSH)"
+function find_wip_branch {
+    local wip_branch
+    wip_branch="$(wip_remote_branch)"
+    git show-ref --verify --quiet "refs/heads/${wip_branch}"
+}
+function find_wip_worktree {
+    wip_worktree_path=""
+    local wip_branch
+    wip_branch="$(wip_remote_branch)"
+    local cur_path="" cur_branch=""
+    while IFS= read -r line; do
+        case "$line" in
+            "worktree "*) cur_path="${line#worktree }"; cur_branch="" ;;
+            "branch "*)   cur_branch="${line#branch }"
+                          if [ "${cur_branch}" = "refs/heads/${wip_branch}" ]; then
+                              wip_worktree_path="$cur_path"
+                              return 0
+                          fi ;;
+            "")           cur_path=""; cur_branch="" ;;
+        esac
+    done < <(git worktree list --porcelain 2>/dev/null)
+    [ -n "$wip_worktree_path" ]
+}
+function wip_worktree_default_path {
+    local base
+    base=$(get_config_value gitbasher.worktreebase "")
+    local repo_root
+    repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+    local repo_dir_name
+    repo_dir_name=$(basename "$repo_root")
+    local safe_branch
+    safe_branch=$(echo "wip-${current_branch}" | tr '/' '-')
+    if [ -n "$base" ]; then
+        echo "${base%/}/${repo_dir_name}-${safe_branch}"
+    else
+        local parent_dir
+        parent_dir=$(dirname "$repo_root")
+        echo "${parent_dir}/${repo_dir_name}-${safe_branch}"
     fi
-    echo -e "${YELLOW}${header_msg}${ENDCOLOR}"
+}
+function prompt_wip_backend {
+    wip_backend=""
+    echo -e "${YELLOW}Where do you want to save the WIP?${ENDCOLOR}"
     echo
+    echo -e "1. ${BOLD}Stash${NORMAL}    - quick & local (with optional remote backup branch)"
+    echo -e "2. ${BOLD}Branch${NORMAL}   - commit changes onto a ${BLUE}wip/${current_branch}${ENDCOLOR} branch (with optional push)"
+    echo -e "3. ${BOLD}Worktree${NORMAL} - move WIP into a sibling worktree on ${BLUE}wip/${current_branch}${ENDCOLOR}"
+    echo "0. Exit"
+    echo
+    local choice
+    read -n 1 -s choice
+    echo
+    case "$choice" in
+        1) wip_backend="stash";;
+        2) wip_backend="branch";;
+        3) wip_backend="worktree";;
+        0) exit;;
+        *) echo -e "${RED}Invalid option${ENDCOLOR}"; exit 1;;
+    esac
+}
+function require_changes {
     if git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then
         echo -e "${GREEN}No changes to save${ENDCOLOR}"
         exit
     fi
+}
+function require_clean {
+    if ! git diff --quiet || ! git diff --cached --quiet; then
+        echo -e "${RED}Working tree has uncommitted changes${ENDCOLOR}"
+        echo -e "Commit or stash them before restoring the WIP"
+        exit 1
+    fi
+}
+function wip_push_stash_backup {
+    if [ -z "$origin_name" ]; then
+        echo -e "${YELLOW}No remote configured, skipping push${ENDCOLOR}"
+        return
+    fi
+    local remote_branch
+    remote_branch="$(wip_remote_branch)"
+    echo -e "${YELLOW}Pushing WIP backup to ${origin_name}/${remote_branch}...${ENDCOLOR}"
+    local push_output push_code
+    push_output=$(git push --force "${origin_name}" "stash@{0}:refs/heads/${remote_branch}" 2>&1)
+    push_code=$?
+    if [ $push_code -eq 0 ]; then
+        echo -e "${GREEN}WIP pushed to ${origin_name}/${remote_branch}${ENDCOLOR}"
+    else
+        echo -e "${YELLOW}Could not push WIP backup (you can push manually later)${ENDCOLOR}"
+        echo "$push_output"
+    fi
+}
+function wip_push_branch {
+    local branch="$1"
+    if [ -z "$origin_name" ]; then
+        echo -e "${YELLOW}No remote configured, skipping push${ENDCOLOR}"
+        return
+    fi
+    echo -e "${YELLOW}Pushing ${branch} to ${origin_name}...${ENDCOLOR}"
+    local push_output push_code
+    push_output=$(git push --force --set-upstream "${origin_name}" "${branch}" 2>&1)
+    push_code=$?
+    if [ $push_code -eq 0 ]; then
+        echo -e "${GREEN}Pushed to ${origin_name}/${branch}${ENDCOLOR}"
+    else
+        echo -e "${YELLOW}Could not push ${branch} (you can push manually later)${ENDCOLOR}"
+        echo "$push_output"
+    fi
+}
+function wip_delete_remote_branch {
+    local branch="$1"
+    if [ -z "$origin_name" ]; then
+        return
+    fi
+    if ! git ls-remote --exit-code --heads "$origin_name" "$branch" >/dev/null 2>&1; then
+        return
+    fi
+    echo -e "${YELLOW}Removing remote WIP backup ${origin_name}/${branch}...${ENDCOLOR}"
+    local out code
+    out=$(git push "$origin_name" --delete "$branch" 2>&1)
+    code=$?
+    if [ $code -eq 0 ]; then
+        echo -e "${GREEN}Remote WIP backup removed${ENDCOLOR}"
+    else
+        echo -e "${YELLOW}Could not remove remote WIP backup (you can delete it manually later)${ENDCOLOR}"
+        echo "$out"
+    fi
+}
+function wip_up_stash {
+    local nopush="$1"
+    require_changes
     echo -e "${YELLOW}Changes to save:${ENDCOLOR}"
     git_status
     echo
@@ -7823,41 +8018,144 @@ function wip_up {
     stash_hash=$(git rev-parse --short stash@{0} 2>/dev/null)
     echo -e "${GREEN}WIP stashed!${ENDCOLOR} ${BLUE}[${stash_hash}]${ENDCOLOR} $message"
     echo
-    if [ -n "$nopush" ]; then
-        echo -e "Restore with: ${YELLOW}gitb wip down${ENDCOLOR}"
-        return
-    fi
-    if [ -z "$origin_name" ]; then
-        echo -e "${YELLOW}No remote configured, skipping push${ENDCOLOR}"
+    if [ -z "$nopush" ]; then
+        wip_push_stash_backup
         echo
-        echo -e "Restore with: ${YELLOW}gitb wip down${ENDCOLOR}"
-        return
     fi
-    local remote_branch
-    remote_branch="$(wip_remote_branch)"
-    echo -e "${YELLOW}Pushing WIP backup to ${origin_name}/${remote_branch}...${ENDCOLOR}"
-    local push_output push_code
-    push_output=$(git push --force "${origin_name}" "stash@{0}:refs/heads/${remote_branch}" 2>&1)
-    push_code=$?
-    if [ $push_code -eq 0 ]; then
-        echo -e "${GREEN}WIP pushed to ${origin_name}/${remote_branch}${ENDCOLOR}"
-    else
-        echo -e "${YELLOW}Could not push WIP backup (you can push manually later)${ENDCOLOR}"
-        echo "$push_output"
-    fi
-    echo
     echo -e "Restore with: ${YELLOW}gitb wip down${ENDCOLOR}"
 }
-function wip_down {
-    case "$1" in
-        "")     ;;
-        *)      wrong_mode "wip down" "$1";;
-    esac
-    echo -e "${YELLOW}GIT WIP DOWN${ENDCOLOR}"
+function wip_up_branch {
+    local nopush="$1"
+    require_changes
+    if find_wip_branch; then
+        echo -e "${RED}Branch ${BOLD}$(wip_remote_branch)${NORMAL}${RED} already exists${ENDCOLOR}"
+        echo -e "Restore or delete it first: ${YELLOW}gitb wip down branch${ENDCOLOR}"
+        exit 1
+    fi
+    echo -e "${YELLOW}Changes to save:${ENDCOLOR}"
+    git_status
     echo
+    local original_branch="$current_branch"
+    local wip_branch
+    wip_branch="$(wip_remote_branch)"
+    local stash_output
+    stash_output=$(git stash push --include-untracked --message "wip-transfer: ${original_branch}" 2>&1)
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Cannot stash changes for transfer:${ENDCOLOR}"
+        echo "$stash_output"
+        exit 1
+    fi
+    local create_output
+    create_output=$(git switch -c "$wip_branch" 2>&1)
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Cannot create branch ${wip_branch}:${ENDCOLOR}"
+        echo "$create_output"
+        git stash pop >/dev/null 2>&1
+        exit 1
+    fi
+    local pop_output
+    pop_output=$(git stash pop 2>&1)
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Cannot apply WIP onto ${wip_branch}:${ENDCOLOR}"
+        echo "$pop_output"
+        echo
+        echo -e "${YELLOW}You are now on ${wip_branch}. Resolve conflicts and finish manually.${ENDCOLOR}"
+        exit 1
+    fi
+    git add -A >/dev/null 2>&1
+    local ts
+    ts=$(date +"%Y-%m-%d %H:%M:%S")
+    local commit_output
+    commit_output=$(git -c commit.gpgsign=false commit -m "wip: ${original_branch} @ ${ts}" 2>&1)
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Cannot create wip commit:${ENDCOLOR}"
+        echo "$commit_output"
+        exit 1
+    fi
+    local wip_hash
+    wip_hash=$(git rev-parse --short HEAD 2>/dev/null)
+    local switch_output
+    switch_output=$(git switch "$original_branch" 2>&1)
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Could not switch back to ${original_branch}:${ENDCOLOR}"
+        echo "$switch_output"
+        echo
+        echo -e "${YELLOW}WIP committed on ${wip_branch} (${wip_hash}). Switch back manually.${ENDCOLOR}"
+        exit 1
+    fi
+    current_branch="$original_branch"
+    echo -e "${GREEN}WIP committed!${ENDCOLOR} ${BLUE}[${wip_hash}]${ENDCOLOR} on ${BLUE}${wip_branch}${ENDCOLOR}"
+    echo -e "${GREEN}Switched back to ${original_branch} with a clean working tree${ENDCOLOR}"
+    echo
+    if [ -z "$nopush" ]; then
+        wip_push_branch "$wip_branch"
+        echo
+    fi
+    echo -e "Restore with: ${YELLOW}gitb wip down${ENDCOLOR}"
+}
+function wip_up_worktree {
+    local nopush="$1"
+    require_changes
+    if find_wip_branch; then
+        echo -e "${RED}Branch ${BOLD}$(wip_remote_branch)${NORMAL}${RED} already exists${ENDCOLOR}"
+        echo -e "Restore or delete it first: ${YELLOW}gitb wip down worktree${ENDCOLOR}"
+        exit 1
+    fi
+    local wip_branch wip_path
+    wip_branch="$(wip_remote_branch)"
+    wip_path="$(wip_worktree_default_path)"
+    if [ -e "$wip_path" ]; then
+        echo -e "${RED}Path ${wip_path} already exists${ENDCOLOR}"
+        exit 1
+    fi
+    echo -e "${YELLOW}Changes to save:${ENDCOLOR}"
+    git_status
+    echo
+    local stash_output
+    stash_output=$(git stash push --include-untracked --message "wip-transfer: ${current_branch}" 2>&1)
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Cannot stash changes for transfer:${ENDCOLOR}"
+        echo "$stash_output"
+        exit 1
+    fi
+    echo -e "${YELLOW}Creating worktree at ${BOLD}${wip_path}${NORMAL}${YELLOW} on branch ${BOLD}${wip_branch}${NORMAL}...${ENDCOLOR}"
+    local add_output
+    add_output=$(git worktree add -b "$wip_branch" "$wip_path" HEAD 2>&1)
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Cannot create worktree:${ENDCOLOR}"
+        echo "$add_output"
+        git stash pop >/dev/null 2>&1
+        exit 1
+    fi
+    local pop_output
+    pop_output=$(git -C "$wip_path" stash pop 2>&1)
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Cannot apply WIP onto worktree:${ENDCOLOR}"
+        echo "$pop_output"
+        echo
+        echo -e "${YELLOW}Stash kept; resolve manually in ${wip_path}.${ENDCOLOR}"
+        exit 1
+    fi
+    echo -e "${GREEN}WIP moved into worktree${ENDCOLOR}"
+    echo -e "  branch: ${BLUE}${wip_branch}${ENDCOLOR}"
+    echo -e "  path:   ${wip_path}"
+    echo
+    if [ -z "$nopush" ] && [ -n "$origin_name" ]; then
+        git -C "$wip_path" add -A >/dev/null 2>&1
+        if ! git -C "$wip_path" diff --cached --quiet; then
+            local ts
+            ts=$(date +"%Y-%m-%d %H:%M:%S")
+            git -C "$wip_path" -c commit.gpgsign=false commit -m "wip: ${current_branch} @ ${ts}" >/dev/null 2>&1
+            wip_push_branch "$wip_branch"
+            echo
+        fi
+    fi
+    echo -e "Continue working: ${YELLOW}cd ${wip_path}${ENDCOLOR}"
+    echo -e "Restore with:     ${YELLOW}gitb wip down${ENDCOLOR} (run from the original worktree)"
+}
+function wip_down_stash {
     if ! find_wip_stash; then
         echo -e "${RED}No WIP stash found for branch ${current_branch}${ENDCOLOR}"
-        echo
         echo -e "Save one first with: ${YELLOW}gitb wip up${ENDCOLOR}"
         exit 1
     fi
@@ -7878,48 +8176,963 @@ function wip_down {
     echo
     echo -e "${YELLOW}Restored changes:${ENDCOLOR}"
     git_status
-    if [ -z "$origin_name" ]; then
-        return
+    wip_delete_remote_branch "$(wip_remote_branch)"
+}
+function wip_down_branch {
+    local wip_branch
+    wip_branch="$(wip_remote_branch)"
+    if ! find_wip_branch; then
+        echo -e "${RED}No WIP branch ${wip_branch} found${ENDCOLOR}"
+        echo -e "Save one first with: ${YELLOW}gitb wip up branch${ENDCOLOR}"
+        exit 1
     fi
-    local remote_branch
-    remote_branch="$(wip_remote_branch)"
-    if ! git ls-remote --exit-code --heads "$origin_name" "$remote_branch" >/dev/null 2>&1; then
-        return
+    require_clean
+    echo -e "${YELLOW}Restoring WIP from ${BOLD}${wip_branch}${NORMAL}...${ENDCOLOR}"
+    echo
+    local merge_output merge_code
+    merge_output=$(git merge --squash --no-commit "$wip_branch" 2>&1)
+    merge_code=$?
+    if [ $merge_code -ne 0 ]; then
+        echo -e "${RED}Cannot restore WIP (squash-merge failed):${ENDCOLOR}"
+        echo "$merge_output"
+        echo
+        echo -e "${YELLOW}Resolve conflicts manually, then ${BOLD}git reset HEAD${NORMAL}${YELLOW} to leave them unstaged.${ENDCOLOR}"
+        exit $merge_code
+    fi
+    git reset HEAD >/dev/null 2>&1
+    rm -f "$(git rev-parse --git-path MERGE_MSG 2>/dev/null)" 2>/dev/null
+    echo -e "${GREEN}WIP restored!${ENDCOLOR}"
+    echo
+    echo -e "${YELLOW}Restored changes:${ENDCOLOR}"
+    git_status
+    echo
+    echo -e "${YELLOW}Removing local branch ${wip_branch}...${ENDCOLOR}"
+    local del_out
+    del_out=$(git branch -D "$wip_branch" 2>&1)
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Local branch ${wip_branch} deleted${ENDCOLOR}"
+    else
+        echo -e "${YELLOW}Could not delete local branch (delete manually):${ENDCOLOR}"
+        echo "$del_out"
+    fi
+    wip_delete_remote_branch "$wip_branch"
+}
+function wip_down_worktree {
+    local wip_branch
+    wip_branch="$(wip_remote_branch)"
+    if ! find_wip_worktree; then
+        echo -e "${RED}No WIP worktree found for ${wip_branch}${ENDCOLOR}"
+        echo -e "Save one first with: ${YELLOW}gitb wip up worktree${ENDCOLOR}"
+        exit 1
+    fi
+    local current_path
+    current_path=$(git rev-parse --show-toplevel 2>/dev/null)
+    if [ "$wip_worktree_path" = "$current_path" ]; then
+        echo -e "${RED}You are inside the WIP worktree (${wip_worktree_path})${ENDCOLOR}"
+        echo -e "Switch back to the original worktree first"
+        exit 1
+    fi
+    require_clean
+    echo -e "${YELLOW}Restoring WIP from worktree ${BOLD}${wip_worktree_path}${NORMAL}...${ENDCOLOR}"
+    echo
+    local has_pending="false"
+    if ! git -C "$wip_worktree_path" diff --quiet || \
+       ! git -C "$wip_worktree_path" diff --cached --quiet || \
+       [ -n "$(git -C "$wip_worktree_path" ls-files --others --exclude-standard)" ]; then
+        has_pending="true"
+        git -C "$wip_worktree_path" add -A >/dev/null 2>&1
+        git -C "$wip_worktree_path" -c commit.gpgsign=false commit -m "wip-pending: ${current_branch}" >/dev/null 2>&1
+    fi
+    local merge_output merge_code
+    merge_output=$(git merge --squash --no-commit "$wip_branch" 2>&1)
+    merge_code=$?
+    if [ $merge_code -ne 0 ]; then
+        echo -e "${RED}Cannot restore WIP (squash-merge failed):${ENDCOLOR}"
+        echo "$merge_output"
+        echo
+        echo -e "${YELLOW}Resolve conflicts manually; the wip worktree is still at ${wip_worktree_path}${ENDCOLOR}"
+        exit $merge_code
+    fi
+    git reset HEAD >/dev/null 2>&1
+    rm -f "$(git rev-parse --git-path MERGE_MSG 2>/dev/null)" 2>/dev/null
+    echo -e "${GREEN}WIP restored!${ENDCOLOR}"
+    if [ "$has_pending" = "true" ]; then
+        echo -e "(including uncommitted changes from the wip worktree)"
     fi
     echo
-    echo -e "${YELLOW}Removing remote WIP backup ${origin_name}/${remote_branch}...${ENDCOLOR}"
-    local delete_output delete_code
-    delete_output=$(git push "$origin_name" --delete "$remote_branch" 2>&1)
-    delete_code=$?
-    if [ $delete_code -eq 0 ]; then
-        echo -e "${GREEN}Remote WIP backup removed${ENDCOLOR}"
+    echo -e "${YELLOW}Restored changes:${ENDCOLOR}"
+    git_status
+    echo
+    echo -e "${YELLOW}Removing worktree ${wip_worktree_path}...${ENDCOLOR}"
+    local rm_out rm_code
+    rm_out=$(git worktree remove --force "$wip_worktree_path" 2>&1)
+    rm_code=$?
+    if [ $rm_code -eq 0 ]; then
+        echo -e "${GREEN}Worktree removed${ENDCOLOR}"
     else
-        echo -e "${YELLOW}Could not remove remote WIP backup (you can delete it manually later)${ENDCOLOR}"
-        echo "$delete_output"
+        echo -e "${YELLOW}Could not remove worktree (remove manually):${ENDCOLOR}"
+        echo "$rm_out"
     fi
+    local del_out del_code
+    del_out=$(git branch -D "$wip_branch" 2>&1)
+    del_code=$?
+    if [ $del_code -eq 0 ]; then
+        echo -e "${GREEN}Local branch ${wip_branch} deleted${ENDCOLOR}"
+    else
+        echo -e "${YELLOW}Could not delete local branch (delete manually):${ENDCOLOR}"
+        echo "$del_out"
+    fi
+    wip_delete_remote_branch "$wip_branch"
+}
+function wip_up {
+    local backend="" nopush=""
+    for arg in "$@"; do
+        case "$arg" in
+            stash|s)             backend="stash";;
+            branch|b)            backend="branch";;
+            worktree|w|wt|tree)  backend="worktree";;
+            nopush|np|n)         nopush="true";;
+            "")                  ;;
+            *)                   wrong_mode "wip up" "$arg";;
+        esac
+    done
+    local header_msg="GIT WIP UP"
+    if [ -n "$backend" ]; then
+        header_msg="${header_msg} ($(echo "$backend" | tr 'a-z' 'A-Z'))"
+    fi
+    if [ -n "$nopush" ]; then
+        header_msg="${header_msg} (NO PUSH)"
+    fi
+    echo -e "${YELLOW}${header_msg}${ENDCOLOR}"
+    echo
+    if [ -z "$backend" ]; then
+        if [ -n "$nopush" ]; then
+            backend="stash"
+        else
+            prompt_wip_backend
+            backend="$wip_backend"
+            echo
+        fi
+    fi
+    case "$backend" in
+        stash)    wip_up_stash    "$nopush";;
+        branch)   wip_up_branch   "$nopush";;
+        worktree) wip_up_worktree "$nopush";;
+    esac
+}
+function wip_down {
+    local backend=""
+    case "$1" in
+        stash|s)             backend="stash";;
+        branch|b)            backend="branch";;
+        worktree|w|wt|tree)  backend="worktree";;
+        "")                  ;;
+        *)                   wrong_mode "wip down" "$1";;
+    esac
+    local header_msg="GIT WIP DOWN"
+    if [ -n "$backend" ]; then
+        header_msg="${header_msg} ($(echo "$backend" | tr 'a-z' 'A-Z'))"
+    fi
+    echo -e "${YELLOW}${header_msg}${ENDCOLOR}"
+    echo
+    if [ -z "$backend" ]; then
+        local available=()
+        if find_wip_stash; then
+            available+=("stash")
+        fi
+        if find_wip_worktree; then
+            available+=("worktree")
+        elif find_wip_branch; then
+            available+=("branch")
+        fi
+        if [ ${#available[@]} -eq 0 ]; then
+            echo -e "${RED}No WIP found for branch ${current_branch}${ENDCOLOR}"
+            echo -e "Save one first with: ${YELLOW}gitb wip up${ENDCOLOR}"
+            exit 1
+        fi
+        if [ ${#available[@]} -eq 1 ]; then
+            backend="${available[0]}"
+            echo -e "${YELLOW}Restoring from ${backend}${ENDCOLOR}"
+            echo
+        else
+            echo -e "${YELLOW}Multiple WIP saves found. Pick one:${ENDCOLOR}"
+            echo
+            for index in "${!available[@]}"; do
+                echo -e "$(($index+1)). ${BOLD}${available[$index]}${ENDCOLOR}"
+            done
+            echo "0. Exit"
+            echo
+            local choice
+            read -n 1 -s choice
+            echo
+            local idx=$((choice-1))
+            if [ "$choice" = "0" ] || [ -z "${available[$idx]}" ]; then
+                exit
+            fi
+            backend="${available[$idx]}"
+            echo
+        fi
+    fi
+    case "$backend" in
+        stash)    wip_down_stash;;
+        branch)   wip_down_branch;;
+        worktree) wip_down_worktree;;
+    esac
 }
 function wip_help {
     echo -e "${YELLOW}GIT WIP${ENDCOLOR}"
     echo
-    echo -e "usage: ${YELLOW}gitb wip <up|down>${ENDCOLOR}"
+    echo -e "usage: ${YELLOW}gitb wip <up|down> [stash|branch|worktree] [nopush]${ENDCOLOR}"
     echo
     msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-    msg="$msg\n${BOLD}up${ENDCOLOR}_u_Stash all changes as 'wip' and push a backup branch to remote"
-    msg="$msg\n${BOLD}up nopush${ENDCOLOR}_u np|n_Stash all changes as 'wip' without pushing"
-    msg="$msg\n${BOLD}down${ENDCOLOR}_d_Restore the WIP stash for the current branch and remove the remote backup"
+    msg="$msg\n${BOLD}up${ENDCOLOR}_u_Save WIP (prompts for backend)"
+    msg="$msg\n${BOLD}up stash${ENDCOLOR}_u s_Save as a stash with optional remote backup branch"
+    msg="$msg\n${BOLD}up branch${ENDCOLOR}_u b_Commit changes onto a wip/<branch> branch (with optional push)"
+    msg="$msg\n${BOLD}up worktree${ENDCOLOR}_u w|wt_Move WIP into a sibling worktree on wip/<branch>"
+    msg="$msg\n${BOLD}up <mode> nopush${ENDCOLOR}_np|n_Skip the push step (works with any backend)"
+    msg="$msg\n${BOLD}down${ENDCOLOR}_d_Restore WIP (auto-detects backend, prompts if ambiguous)"
+    msg="$msg\n${BOLD}down stash${ENDCOLOR}_d s_Restore from the stash"
+    msg="$msg\n${BOLD}down branch${ENDCOLOR}_d b_Restore from the wip/<branch> branch"
+    msg="$msg\n${BOLD}down worktree${ENDCOLOR}_d w|wt_Restore from the wip/<branch> worktree"
     msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
     echo -e "$(echo -e "$msg" | column -ts'_')"
     echo
-    echo -e "WIP saves work-in-progress as a git stash and pushes a backup to"
-    echo -e "${YELLOW}${origin_name:-origin}/wip/<branch>${ENDCOLOR} so you can recover it from anywhere."
+    echo -e "${YELLOW}Backends${ENDCOLOR}"
+    echo -e "  ${BOLD}stash${NORMAL}    - Quick & local; pushes ${YELLOW}${origin_name:-origin}/wip/<branch>${ENDCOLOR} as a backup."
+    echo -e "  ${BOLD}branch${NORMAL}   - Commits all changes onto a ${YELLOW}wip/<branch>${ENDCOLOR} branch; clean tree on current branch."
+    echo -e "  ${BOLD}worktree${NORMAL} - Same as branch, but the WIP lives in a ${YELLOW}sibling worktree${ENDCOLOR} so you can keep working on it."
 }
 function wip_script {
     case "$1" in
-        up|u)           wip_up "$2";;
-        down|d)         wip_down "$2";;
+        up|u)           shift; wip_up "$@";;
+        down|d)         shift; wip_down "$@";;
         help|h|"")      wip_help;;
         *)              wrong_mode "wip" "$1";;
     esac
+}
+function list_worktrees_data {
+    worktrees_path=()
+    worktrees_head=()
+    worktrees_info=()
+    local raw
+    raw=$(git worktree list --porcelain 2>&1)
+    if [ $? -ne 0 ]; then
+        return 1
+    fi
+    local cur_path="" cur_head="" cur_branch="" cur_bare="" cur_detached="" cur_locked="" cur_prunable=""
+    local main_path
+    main_path=$(git rev-parse --show-toplevel 2>/dev/null)
+    flush_worktree() {
+        if [ -z "$cur_path" ]; then
+            return
+        fi
+        local label
+        if [ -n "$cur_bare" ]; then
+            label="(bare)"
+        elif [ -n "$cur_branch" ]; then
+            label="${cur_branch#refs/heads/}"
+        elif [ -n "$cur_detached" ]; then
+            label="(detached @ ${cur_head:0:7})"
+        else
+            label="${cur_head:0:7}"
+        fi
+        worktrees_path+=("$cur_path")
+        worktrees_head+=("$label")
+        local marker="  "
+        if [ "$cur_path" == "$main_path" ]; then
+            marker="* "
+        fi
+        local extras=""
+        if [ -n "$cur_locked" ]; then
+            extras="${extras} ${YELLOW_ES}[locked]${ENDCOLOR_ES}"
+        fi
+        if [ -n "$cur_prunable" ]; then
+            extras="${extras} ${RED_ES}[prunable]${ENDCOLOR_ES}"
+        fi
+        worktrees_info+=("${marker}${BLUE_ES}${label}${ENDCOLOR_ES} | ${cur_path}${extras}")
+        cur_path=""; cur_head=""; cur_branch=""; cur_bare=""; cur_detached=""; cur_locked=""; cur_prunable=""
+    }
+    while IFS= read -r line; do
+        case "$line" in
+            "worktree "*)  flush_worktree; cur_path="${line#worktree }" ;;
+            "HEAD "*)      cur_head="${line#HEAD }" ;;
+            "branch "*)    cur_branch="${line#branch }" ;;
+            "bare")        cur_bare="true" ;;
+            "detached")    cur_detached="true" ;;
+            "locked"*)     cur_locked="true" ;;
+            "prunable"*)   cur_prunable="true" ;;
+            "")            flush_worktree ;;
+        esac
+    done <<< "$raw"
+    flush_worktree
+    unset -f flush_worktree
+    return 0
+}
+function choose_worktree {
+    local filter="$1"
+    if ! list_worktrees_data; then
+        echo -e "${RED}Failed to list worktrees${ENDCOLOR}"
+        return 1
+    fi
+    if [ ${#worktrees_path[@]} -eq 0 ]; then
+        echo -e "${YELLOW}No worktrees found${ENDCOLOR}"
+        return 1
+    fi
+    local current_path
+    current_path=$(git rev-parse --show-toplevel 2>/dev/null)
+    local main_path
+    main_path=$(git worktree list --porcelain 2>/dev/null | awk 'NR==1 && /^worktree /{print substr($0,10); exit}')
+    local display_paths=() display_heads=() display_lines=()
+    for index in "${!worktrees_path[@]}"; do
+        local p="${worktrees_path[$index]}"
+        if [ "$filter" == "removable" ]; then
+            if [ "$p" == "$main_path" ] || [ "$p" == "$current_path" ]; then
+                continue
+            fi
+        fi
+        display_paths+=("$p")
+        display_heads+=("${worktrees_head[$index]}")
+        display_lines+=("${worktrees_info[$index]}")
+    done
+    if [ ${#display_paths[@]} -eq 0 ]; then
+        if [ "$filter" == "removable" ]; then
+            echo -e "${YELLOW}No removable worktrees found${ENDCOLOR}"
+            echo -e "(the main worktree and the current one are excluded)"
+        else
+            echo -e "${YELLOW}No worktrees found${ENDCOLOR}"
+        fi
+        return 1
+    fi
+    local lines_str
+    lines_str=$(printf '%s\n' "${display_lines[@]}" | column -ts'|')
+    local IFS_OLD="$IFS"
+    IFS=$'\n' read -rd '' -a aligned_lines <<< "$lines_str" || true
+    IFS="$IFS_OLD"
+    for index in "${!display_paths[@]}"; do
+        echo -e "$(($index+1)). ${aligned_lines[$index]}"
+    done
+    if [ ${#display_paths[@]} -gt 9 ]; then
+        echo "00. Exit"
+    else
+        echo "0. Exit"
+    fi
+    echo
+    read_prefix="Select worktree number: "
+    choose "${display_paths[@]}"
+    selected_worktree_path="$choice_result"
+    for index in "${!display_paths[@]}"; do
+        if [ "${display_paths[$index]}" == "$selected_worktree_path" ]; then
+            selected_worktree_head="${display_heads[$index]}"
+            break
+        fi
+    done
+    return 0
+}
+function default_worktree_path {
+    local branch="$1"
+    local base
+    base=$(get_config_value gitbasher.worktreebase "")
+    local repo_root
+    repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+    local repo_dir_name
+    repo_dir_name=$(basename "$repo_root")
+    local safe_branch
+    safe_branch=$(echo "$branch" | tr '/' '-')
+    if [ -n "$base" ]; then
+        echo "${base%/}/${safe_branch}"
+    else
+        local parent_dir
+        parent_dir=$(dirname "$repo_root")
+        echo "${parent_dir}/${repo_dir_name}-${safe_branch}"
+    fi
+}
+function prompt_worktree_branch {
+    local from_label="${1:-$current_branch}"
+    detected_prefixes=""
+    all_branches=$(git branch -a --format='%(refname:short)' 2>/dev/null | sed 's|origin/||g' | sort -u)
+    if [ -n "$all_branches" ]; then
+        declare -A prefix_candidates
+        while IFS= read -r branch; do
+            if [ -n "$branch" ] && [[ "$branch" != "$main_branch" ]] && [[ "$branch" != "HEAD" ]]; then
+                if [[ "$branch" =~ ^([a-zA-Z0-9]+)[-_/](.+)$ ]]; then
+                    prefix="${BASH_REMATCH[1]}"
+                    if [[ ${#prefix} -ge 2 ]] && [[ ! "$prefix" =~ ^(dev|tmp|old|new|test)$ ]]; then
+                        prefix_candidates["$prefix"]=1
+                    fi
+                fi
+            fi
+        done <<< "$all_branches"
+        detected_prefixes_array=()
+        for prefix in "${!prefix_candidates[@]}"; do
+            detected_prefixes_array+=("$prefix")
+        done
+        if [ ${#detected_prefixes_array[@]} -gt 0 ]; then
+            IFS=$'\n' detected_prefixes_sorted=($(sort <<<"${detected_prefixes_array[*]}"))
+            unset IFS
+            detected_prefixes="${detected_prefixes_sorted[*]}"
+        fi
+    fi
+    all_prefixes=""
+    if [ -n "$ticket_name" ]; then
+        if [ -n "$detected_prefixes" ]; then
+            all_prefixes="$ticket_name $detected_prefixes"
+        else
+            all_prefixes="$ticket_name"
+        fi
+    elif [ -n "$detected_prefixes" ]; then
+        all_prefixes="$detected_prefixes"
+    fi
+    local branch_type="" branch_type_and_sep=""
+    if [ -z "$all_prefixes" ]; then
+        echo -e "${YELLOW}Step 1.${ENDCOLOR} Enter the full name of the branch (worktree from ${BOLD}${BLUE}${from_label}${ENDCOLOR})"
+        echo "Press Enter if you want to exit"
+        printf "${BOLD}git branch${ENDCOLOR} "
+        read -e branch_name
+        if [ -z "$branch_name" ]; then
+            return 1
+        fi
+        if ! sanitize_git_name "$branch_name"; then
+            show_sanitization_error "branch name" "Use only letters, numbers, dots, dashes, underscores, and slashes."
+            return 1
+        fi
+        wt_branch_name="$sanitized_git_name"
+    else
+        echo -e "${YELLOW}Step 1.${ENDCOLOR} Enter a ${YELLOW}prefix${ENDCOLOR} for the new branch (worktree from ${BOLD}${BLUE}${from_label}${ENDCOLOR})"
+        echo -e "A branch will be created with '${YELLOW}${sep}${ENDCOLOR}' as a separator (e.g., ${YELLOW}prefix${sep}name${ENDCOLOR})"
+        echo -e "Press Enter to continue without prefix or enter 0 to exit without changes"
+        IFS=' ' read -r -a prefixes_array <<< "$all_prefixes"
+        declare -A prefixes_map
+        local res=""
+        for i in "${!prefixes_array[@]}"; do
+            local option=$((i+1))
+            prefixes_map["$option"]="${prefixes_array[$i]}"
+            res="$res$option. ${BOLD}${prefixes_array[$i]}${ENDCOLOR}|"
+        done
+        local no_prefix_option=$((${#prefixes_array[@]}+1))
+        prefixes_map["$no_prefix_option"]=""
+        echo -e "You can select one of the ${YELLOW}detected prefixes${ENDCOLOR}: $(echo $res | column -ts'|')"
+        while [ true ]; do
+            read -p "<prefix>: " choice
+            if [ "$choice" == "0" ]; then
+                return 1
+            fi
+            if [ "$choice" == "" ]; then
+                branch_type=""
+                branch_type_and_sep=""
+                break
+            fi
+            local re='^[1-9][0-9]*$'
+            if [[ $choice =~ $re ]] && [ -n "${prefixes_map[$choice]+isset}" ]; then
+                branch_type="${prefixes_map[$choice]}"
+                if [ -n "$branch_type" ]; then
+                    branch_type_and_sep="${branch_type}${sep}"
+                fi
+                break
+            else
+                if [ -n "$choice" ]; then
+                    if ! sanitize_git_name "$choice"; then
+                        show_sanitization_error "branch prefix" "Use only letters, numbers, dots, dashes, underscores, and slashes."
+                        echo
+                        continue
+                    fi
+                    branch_type="$sanitized_git_name"
+                    branch_type_and_sep="${branch_type}${sep}"
+                    break
+                else
+                    echo -e "${RED}Please enter a valid option number or custom prefix.${ENDCOLOR}"
+                    echo
+                    continue
+                fi
+            fi
+        done
+        echo
+        echo -e "${YELLOW}Step 2.${ENDCOLOR} Enter the ${YELLOW}name${ENDCOLOR} of the branch"
+        echo "Press Enter if you want to exit"
+        printf "${BOLD}git branch${ENDCOLOR}"
+        read -p " ${branch_type_and_sep}" -e branch_name
+        if [ -z "$branch_name" ]; then
+            return 1
+        fi
+        if ! sanitize_git_name "$branch_name"; then
+            show_sanitization_error "branch name" "Use only letters, numbers, dots, dashes, underscores, and slashes."
+            return 1
+        fi
+        wt_branch_name="${branch_type_and_sep}${sanitized_git_name}"
+    fi
+    if [[ "$wt_branch_name" == "HEAD" ]] || [[ "$wt_branch_name" == "$origin_name" ]]; then
+        echo
+        echo -e "${RED}This name is forbidden${ENDCOLOR}"
+        return 1
+    fi
+    return 0
+}
+function prompt_worktree_path {
+    local default_path="$1"
+    echo
+    echo -e "${YELLOW}Where should the worktree live?${ENDCOLOR}"
+    echo -e "Press Enter to accept the default, or type a different path"
+    echo -e "Default: ${BOLD}${default_path}${ENDCOLOR}"
+    read -p "Worktree path: " -e custom_path
+    if [ -z "$custom_path" ]; then
+        wt_path="$default_path"
+    else
+        if ! sanitize_file_path "$custom_path"; then
+            show_sanitization_error "worktree path" "Path contains invalid characters."
+            return 1
+        fi
+        wt_path="$sanitized_file_path"
+    fi
+    if [ -e "$wt_path" ]; then
+        echo
+        echo -e "${RED}Path '${wt_path}' already exists${ENDCOLOR}"
+        return 1
+    fi
+    return 0
+}
+function worktree_add {
+    local source_mode="$1"
+    if [ "$source_mode" == "default" ]; then
+        if [ -n "$origin_name" ]; then
+            echo -e "${YELLOW}Fetching ${origin_name}/${main_branch}...${ENDCOLOR}"
+            local fetch_output
+            fetch_output=$(git fetch "$origin_name" "$main_branch" 2>&1)
+            if [ $? -ne 0 ]; then
+                echo -e "${RED}Failed to fetch ${main_branch}${ENDCOLOR}"
+                echo "$fetch_output"
+                return 1
+            fi
+            echo
+        fi
+    fi
+    if [ "$source_mode" == "current" ] || [ "$source_mode" == "default" ]; then
+        local from_label="$current_branch"
+        local from_ref="HEAD"
+        if [ "$source_mode" == "default" ]; then
+            from_label="$main_branch"
+            if [ -n "$origin_name" ] && git rev-parse --verify --quiet "$origin_name/$main_branch" >/dev/null 2>&1; then
+                from_ref="$origin_name/$main_branch"
+            else
+                from_ref="$main_branch"
+            fi
+        fi
+        if ! prompt_worktree_branch "$from_label"; then
+            return 1
+        fi
+        if git show-ref --verify --quiet "refs/heads/$wt_branch_name" 2>/dev/null; then
+            echo
+            echo -e "${RED}Branch '${wt_branch_name}' already exists${ENDCOLOR}"
+            echo -e "Use ${BOLD}gitb worktree addb${NORMAL} to attach an existing branch to a new worktree"
+            return 1
+        fi
+        local default_path
+        default_path=$(default_worktree_path "$wt_branch_name")
+        if ! prompt_worktree_path "$default_path"; then
+            return 1
+        fi
+        echo
+        echo -e "${YELLOW}Creating worktree at ${BOLD}${wt_path}${NORMAL}${YELLOW} with new branch ${BOLD}${wt_branch_name}${NORMAL}${YELLOW} from ${BOLD}${from_label}${NORMAL}${YELLOW}...${ENDCOLOR}"
+        local add_output
+        add_output=$(git worktree add -b "$wt_branch_name" "$wt_path" "$from_ref" 2>&1)
+        local add_code=$?
+        echo
+        if [ $add_code -eq 0 ]; then
+            echo -e "${GREEN}Worktree created${ENDCOLOR}"
+            echo -e "  branch: ${BLUE}${wt_branch_name}${ENDCOLOR}"
+            echo -e "  path:   ${wt_path}"
+            echo
+            echo -e "Switch into it: ${YELLOW}cd ${wt_path}${ENDCOLOR}"
+        else
+            echo -e "${RED}Failed to create worktree${ENDCOLOR}"
+            echo "$add_output"
+            return $add_code
+        fi
+        return 0
+    fi
+    if [ "$source_mode" == "branch" ]; then
+        echo -e "${YELLOW}Pick a local branch to check out into a new worktree${ENDCOLOR}"
+        echo
+        choose_branch
+        echo
+        if [ "$branch_name" == "$current_branch" ]; then
+            echo -e "${RED}Branch '${branch_name}' is already checked out in this worktree${ENDCOLOR}"
+            return 1
+        fi
+        local default_path
+        default_path=$(default_worktree_path "$branch_name")
+        if ! prompt_worktree_path "$default_path"; then
+            return 1
+        fi
+        echo
+        echo -e "${YELLOW}Creating worktree at ${BOLD}${wt_path}${NORMAL}${YELLOW} for ${BOLD}${branch_name}${NORMAL}${YELLOW}...${ENDCOLOR}"
+        local add_output
+        add_output=$(git worktree add "$wt_path" "$branch_name" 2>&1)
+        local add_code=$?
+        echo
+        if [ $add_code -eq 0 ]; then
+            echo -e "${GREEN}Worktree created${ENDCOLOR}"
+            echo -e "  branch: ${BLUE}${branch_name}${ENDCOLOR}"
+            echo -e "  path:   ${wt_path}"
+            echo
+            echo -e "Switch into it: ${YELLOW}cd ${wt_path}${ENDCOLOR}"
+        else
+            if [[ "$add_output" == *"already used by worktree"* ]]; then
+                echo -e "${RED}Branch '${branch_name}' is already checked out in another worktree${ENDCOLOR}"
+            else
+                echo -e "${RED}Failed to create worktree${ENDCOLOR}"
+            fi
+            echo "$add_output"
+            return $add_code
+        fi
+        return 0
+    fi
+    if [ "$source_mode" == "remote" ]; then
+        if [ -z "$origin_name" ]; then
+            echo -e "${RED}No git remote configured${ENDCOLOR}"
+            return 1
+        fi
+        echo -e "${YELLOW}Fetching ${origin_name}...${ENDCOLOR}"
+        echo
+        local fetch_output
+        fetch_output=$(git fetch "$origin_name" 2>&1)
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}Failed to fetch remote${ENDCOLOR}"
+            echo "$fetch_output"
+            return 1
+        fi
+        git remote prune "$origin_name" >/dev/null 2>&1
+        echo -e "${YELLOW}Pick a remote branch to check out into a new worktree${ENDCOLOR}"
+        choose_branch "remote"
+        echo
+        local default_path
+        default_path=$(default_worktree_path "$branch_name")
+        if ! prompt_worktree_path "$default_path"; then
+            return 1
+        fi
+        echo
+        echo -e "${YELLOW}Creating worktree at ${BOLD}${wt_path}${NORMAL}${YELLOW} tracking ${BOLD}${origin_name}/${branch_name}${NORMAL}${YELLOW}...${ENDCOLOR}"
+        local add_output
+        if git show-ref --verify --quiet "refs/heads/$branch_name" 2>/dev/null; then
+            add_output=$(git worktree add "$wt_path" "$branch_name" 2>&1)
+        else
+            add_output=$(git worktree add --track -b "$branch_name" "$wt_path" "$origin_name/$branch_name" 2>&1)
+        fi
+        local add_code=$?
+        echo
+        if [ $add_code -eq 0 ]; then
+            echo -e "${GREEN}Worktree created${ENDCOLOR}"
+            echo -e "  branch: ${BLUE}${branch_name}${ENDCOLOR}"
+            echo -e "  path:   ${wt_path}"
+            echo
+            echo -e "Switch into it: ${YELLOW}cd ${wt_path}${ENDCOLOR}"
+        else
+            echo -e "${RED}Failed to create worktree${ENDCOLOR}"
+            echo "$add_output"
+            return $add_code
+        fi
+        return 0
+    fi
+}
+function worktree_remove {
+    echo -e "${YELLOW}Pick a worktree to remove${ENDCOLOR}"
+    echo
+    if ! choose_worktree "removable"; then
+        return 1
+    fi
+    echo
+    echo -e "${YELLOW}Removing worktree at ${BOLD}${selected_worktree_path}${NORMAL}${YELLOW} (${selected_worktree_head})...${ENDCOLOR}"
+    local rm_output
+    rm_output=$(git worktree remove "$selected_worktree_path" 2>&1)
+    local rm_code=$?
+    if [ $rm_code -eq 0 ]; then
+        echo -e "${GREEN}Worktree removed${ENDCOLOR}"
+        return 0
+    fi
+    if [[ "$rm_output" == *"contains modified or untracked files"* ]] || \
+       [[ "$rm_output" == *"is dirty"* ]] || \
+       [[ "$rm_output" == *"locked working tree"* ]] || \
+       [[ "$rm_output" == *"is locked"* ]]; then
+        echo -e "${RED}${rm_output}${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}Force remove this worktree? (uncommitted changes will be lost)${ENDCOLOR}"
+        echo -e "Do you want to continue (y/n)?"
+        yes_no_choice "Force removing worktree..."
+        rm_output=$(git worktree remove --force "$selected_worktree_path" 2>&1)
+        rm_code=$?
+        if [ $rm_code -eq 0 ]; then
+            echo -e "${GREEN}Worktree removed${ENDCOLOR}"
+            return 0
+        fi
+    fi
+    echo -e "${RED}Failed to remove worktree${ENDCOLOR}"
+    echo "$rm_output"
+    return $rm_code
+}
+function worktree_prune {
+    echo -e "${YELLOW}Pruning stale worktree records...${ENDCOLOR}"
+    echo
+    local dry_run
+    dry_run=$(git worktree prune --dry-run --verbose 2>&1)
+    if [ -z "$dry_run" ]; then
+        echo -e "${GREEN}Nothing to prune${ENDCOLOR}"
+        return 0
+    fi
+    echo -e "${YELLOW}Records that would be removed:${ENDCOLOR}"
+    echo "$dry_run"
+    echo
+    echo -e "${YELLOW}Continue? (y/n)${ENDCOLOR}"
+    yes_no_choice "Pruning..."
+    local prune_output
+    prune_output=$(git worktree prune --verbose 2>&1)
+    local prune_code=$?
+    if [ $prune_code -eq 0 ]; then
+        if [ -n "$prune_output" ]; then
+            echo "$prune_output"
+        fi
+        echo -e "${GREEN}Done${ENDCOLOR}"
+        return 0
+    fi
+    echo -e "${RED}Failed to prune worktrees${ENDCOLOR}"
+    echo "$prune_output"
+    return $prune_code
+}
+function worktree_lock_unlock {
+    local action="$1"
+    echo -e "${YELLOW}Pick a worktree to ${action}${ENDCOLOR}"
+    echo
+    if ! choose_worktree; then
+        return 1
+    fi
+    local reason=""
+    if [ "$action" == "lock" ]; then
+        echo
+        read -p "Reason for the lock (optional, press Enter to skip): " -e reason
+        if [ -n "$reason" ]; then
+            if ! sanitize_text_input "$reason" 200; then
+                show_sanitization_error "lock reason" "Use printable characters only, max 200 characters."
+                return 1
+            fi
+            reason="$sanitized_text"
+        fi
+    fi
+    echo
+    local out
+    if [ "$action" == "lock" ]; then
+        if [ -n "$reason" ]; then
+            out=$(git worktree lock --reason "$reason" "$selected_worktree_path" 2>&1)
+        else
+            out=$(git worktree lock "$selected_worktree_path" 2>&1)
+        fi
+    else
+        out=$(git worktree unlock "$selected_worktree_path" 2>&1)
+    fi
+    local code=$?
+    if [ $code -eq 0 ]; then
+        echo -e "${GREEN}Worktree ${action}ed${ENDCOLOR}: ${selected_worktree_path}"
+        return 0
+    fi
+    echo -e "${RED}Failed to ${action} worktree${ENDCOLOR}"
+    echo "$out"
+    return $code
+}
+function worktree_move {
+    echo -e "${YELLOW}Pick a worktree to move${ENDCOLOR}"
+    echo
+    if ! choose_worktree "removable"; then
+        return 1
+    fi
+    echo
+    echo -e "${YELLOW}New path for the worktree${ENDCOLOR}"
+    echo -e "Current path: ${BOLD}${selected_worktree_path}${NORMAL}"
+    read -p "New path: " -e new_path
+    if [ -z "$new_path" ]; then
+        echo -e "${YELLOW}Cancelled${ENDCOLOR}"
+        return 1
+    fi
+    if ! sanitize_file_path "$new_path"; then
+        show_sanitization_error "worktree path" "Path contains invalid characters."
+        return 1
+    fi
+    new_path="$sanitized_file_path"
+    if [ -e "$new_path" ]; then
+        echo
+        echo -e "${RED}Path '${new_path}' already exists${ENDCOLOR}"
+        return 1
+    fi
+    echo
+    echo -e "${YELLOW}Moving worktree to ${BOLD}${new_path}${NORMAL}${YELLOW}...${ENDCOLOR}"
+    local mv_output
+    mv_output=$(git worktree move "$selected_worktree_path" "$new_path" 2>&1)
+    local mv_code=$?
+    if [ $mv_code -eq 0 ]; then
+        echo -e "${GREEN}Worktree moved${ENDCOLOR}"
+        return 0
+    fi
+    echo -e "${RED}Failed to move worktree${ENDCOLOR}"
+    echo "$mv_output"
+    return $mv_code
+}
+function worktree_path {
+    echo -e "${YELLOW}Pick a worktree${ENDCOLOR}"
+    echo
+    if ! choose_worktree; then
+        return 1
+    fi
+    echo
+    echo -e "${GREEN}Path:${ENDCOLOR} ${selected_worktree_path}"
+    echo
+    echo -e "Open it with: ${YELLOW}cd ${selected_worktree_path}${ENDCOLOR}"
+    return 0
+}
+function worktree_script {
+    case "$1" in
+        list|l|ls)              list_mode="true";;
+        add|a|new|n|c)          add_mode="true"; add_source="current";;
+        addd|ad|nd|cd)          add_mode="true"; add_source="default";;
+        addb|ab|from|b)         add_mode="true"; add_source="branch";;
+        addr|ar|remote|r)       add_mode="true"; add_source="remote";;
+        remove|rm|del|d)        remove_mode="true";;
+        prune|pr|p)             prune_mode="true";;
+        lock)                   lock_mode="true";;
+        unlock|ul)              unlock_mode="true";;
+        move|mv)                move_mode="true";;
+        path|cd|switch|sw)      path_mode="true";;
+        help|h)                 help="true";;
+        "")                     interactive="true";;
+        *)                      wrong_mode "worktree" "$1";;
+    esac
+    local header="GIT WORKTREE"
+    if [ -n "$list_mode" ]; then
+        header="$header LIST"
+    elif [ -n "$add_mode" ]; then
+        case "$add_source" in
+            current) header="$header ADD" ;;
+            default) header="$header ADD FROM DEFAULT" ;;
+            branch)  header="$header ADD FROM BRANCH" ;;
+            remote)  header="$header ADD FROM REMOTE" ;;
+        esac
+    elif [ -n "$remove_mode" ]; then
+        header="$header REMOVE"
+    elif [ -n "$prune_mode" ]; then
+        header="$header PRUNE"
+    elif [ -n "$lock_mode" ]; then
+        header="$header LOCK"
+    elif [ -n "$unlock_mode" ]; then
+        header="$header UNLOCK"
+    elif [ -n "$move_mode" ]; then
+        header="$header MOVE"
+    elif [ -n "$path_mode" ]; then
+        header="$header PATH"
+    fi
+    echo -e "${YELLOW}${header}${ENDCOLOR}"
+    echo
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb worktree <mode>${ENDCOLOR}"
+        echo
+        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Show interactive worktree menu"
+        msg="$msg\n${BOLD}list${ENDCOLOR}_l|ls_List all worktrees"
+        msg="$msg\n${BOLD}add${ENDCOLOR}_a|new|n|c_Create a worktree with a new branch from current HEAD"
+        msg="$msg\n${BOLD}addd${ENDCOLOR}_ad|nd|cd_Fetch + create worktree with new branch from $main_branch"
+        msg="$msg\n${BOLD}addb${ENDCOLOR}_ab|from|b_Create a worktree from an existing local branch"
+        msg="$msg\n${BOLD}addr${ENDCOLOR}_ar|remote|r_Fetch + create worktree tracking a remote branch"
+        msg="$msg\n${BOLD}remove${ENDCOLOR}_rm|del|d_Remove a worktree (interactive picker)"
+        msg="$msg\n${BOLD}move${ENDCOLOR}_mv_Move a worktree to a new path"
+        msg="$msg\n${BOLD}lock${ENDCOLOR}_ _Lock a worktree (with optional reason)"
+        msg="$msg\n${BOLD}unlock${ENDCOLOR}_ul_Unlock a worktree"
+        msg="$msg\n${BOLD}prune${ENDCOLOR}_pr|p_Remove stale worktree records"
+        msg="$msg\n${BOLD}path${ENDCOLOR}_cd|switch|sw_Print the path to a chosen worktree"
+        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
+        echo -e "$(echo -e "$msg" | column -ts'_')"
+        echo
+        echo -e "${YELLOW}Tips${ENDCOLOR}"
+        echo -e "  - Default worktree path: ${BOLD}../<repo>-<branch>${NORMAL}"
+        echo -e "  - Override the base directory with ${BOLD}git config gitbasher.worktreebase <dir>${NORMAL}"
+        echo -e "  - Use ${BOLD}cd \$(gitb worktree path)${NORMAL} to jump into a worktree"
+        exit
+    fi
+    if [ -n "$interactive" ]; then
+        if list_worktrees_data; then
+            if [ ${#worktrees_path[@]} -gt 0 ]; then
+                echo -e "${YELLOW}Existing worktrees:${ENDCOLOR}"
+                echo
+                local lines_str
+                lines_str=$(printf '%s\n' "${worktrees_info[@]}" | column -ts'|')
+                echo -e "$lines_str"
+                echo
+            fi
+        fi
+        echo -e "${YELLOW}What do you want to do?${ENDCOLOR}"
+        echo
+        echo "1. Add worktree (new branch from current)"
+        echo "2. Add worktree (new branch from $main_branch)"
+        echo "3. Add worktree from existing local branch"
+        echo "4. Add worktree from remote branch"
+        echo "5. Remove a worktree"
+        echo "6. Move a worktree"
+        echo "7. Lock a worktree"
+        echo "8. Unlock a worktree"
+        echo "9. Prune stale records"
+        echo "0. Exit"
+        echo
+        local choice
+        read -n 1 -s choice
+        echo
+        case "$choice" in
+            1) add_mode="true"; add_source="current";;
+            2) add_mode="true"; add_source="default";;
+            3) add_mode="true"; add_source="branch";;
+            4) add_mode="true"; add_source="remote";;
+            5) remove_mode="true";;
+            6) move_mode="true";;
+            7) lock_mode="true";;
+            8) unlock_mode="true";;
+            9) prune_mode="true";;
+            0) exit;;
+            *) echo -e "${RED}Invalid option${ENDCOLOR}"; exit 1;;
+        esac
+    fi
+    if [ -n "$list_mode" ]; then
+        if ! list_worktrees_data; then
+            echo -e "${RED}Failed to list worktrees${ENDCOLOR}"
+            exit 1
+        fi
+        if [ ${#worktrees_path[@]} -eq 0 ]; then
+            echo -e "${YELLOW}No worktrees found${ENDCOLOR}"
+            exit
+        fi
+        local lines_str
+        lines_str=$(printf '%s\n' "${worktrees_info[@]}" | column -ts'|')
+        echo -e "$lines_str"
+        exit
+    fi
+    if [ -n "$add_mode" ]; then
+        worktree_add "$add_source"
+        exit
+    fi
+    if [ -n "$remove_mode" ]; then
+        worktree_remove
+        exit
+    fi
+    if [ -n "$prune_mode" ]; then
+        worktree_prune
+        exit
+    fi
+    if [ -n "$lock_mode" ]; then
+        worktree_lock_unlock "lock"
+        exit
+    fi
+    if [ -n "$unlock_mode" ]; then
+        worktree_lock_unlock "unlock"
+        exit
+    fi
+    if [ -n "$move_mode" ]; then
+        worktree_move
+        exit
+    fi
+    if [ -n "$path_mode" ]; then
+        worktree_path
+        exit
+    fi
 }
 function project_status {
     echo -e "${YELLOW}$project_name${ENDCOLOR} | ${CYAN}$repo_url${ENDCOLOR}"
@@ -9428,6 +10641,7 @@ function print_help {
     msg="$msg\nundo_un_Undo commit, amend, merge, rebase, or stash actions"
     msg="$msg\nreset_res_Preview and apply common git reset flows"
     msg="$msg\nstash_s|sta_Manage git stashes"
+    msg="$msg\nworktree_wt|tree_List, add, remove, lock, move, and prune git worktrees"
     msg="$msg\nhook_ho|hk_List, create, edit, toggle, and test git hooks"
     msg="$msg\norigin_or|o|remote_Init, set, change, rename, or remove remotes"
     msg="$msg\nconfig_cf|cfg|conf_Configure gitbasher settings"
@@ -9501,7 +10715,7 @@ case "$1" in
         sync_script $2
     ;;
     wip|w)
-        wip_script $2 $3
+        wip_script "${@:2}"
     ;;
     branch|b|br|bran)         
         branch_script $2
@@ -9520,6 +10734,9 @@ case "$1" in
     ;;
     stash|s|sta)
         stash_script $2
+    ;;
+    worktree|wt|tree)
+        worktree_script "$2"
     ;;
     hook|ho|hk)
         hooks_script $2 $3 $4

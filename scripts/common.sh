@@ -380,6 +380,28 @@ function is_no {
     return 1
 }
 
+### Returns 0 (true) when HEAD points at a branch; 1 (false) when detached.
+function on_branch {
+    git symbolic-ref --quiet HEAD >/dev/null 2>&1
+}
+
+### Warn the user when the working tree is in detached-HEAD state and prompt
+### before proceeding. Defaults to NO (safer) on Enter.
+# $1: short verb describing the operation (e.g. "commit", "push")
+function warn_if_detached_head {
+    on_branch && return 0
+    local _action="${1:-this operation}"
+    echo
+    echo -e "${YELLOW}You are in detached HEAD state.${ENDCOLOR}"
+    echo "Any new commits will not be on a branch and may be reclaimed by git's garbage collector."
+    read -n 1 -p "Continue ${_action} anyway? (y/N) " _ans
+    echo
+    case "$_ans" in
+        y|Y) return 0 ;;
+        *) exit 1 ;;
+    esac
+}
+
 ### Read a single key press, properly handling multi-byte UTF-8 characters
 # Works correctly in silent mode even with non-Latin keyboard layouts (e.g. Russian)
 # In silent mode (-s), read -n 1 may return a single byte instead of a full character.

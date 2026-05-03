@@ -428,6 +428,54 @@ function print_split_type_menu {
     echo
 }
 
+function print_commit_type_menu {
+    local step="$1"
+
+    echo -e "${YELLOW}Step ${step}.${ENDCOLOR} What ${YELLOW}type${ENDCOLOR} of changes do you want to commit?"
+    echo -e "Final message will be ${YELLOW}<type>${ENDCOLOR}(${BLUE}<scope>${ENDCOLOR}): ${BLUE}<summary>${ENDCOLOR}"
+    echo -e "1. ${BLUE}${BOLD}feat${ENDCOLOR}:\tnew feature, logic change or performance improvement"
+    echo -e "2. ${BLUE}${BOLD}fix${ENDCOLOR}:\t\tsmall changes, eg. bug fix"
+    echo -e "3. ${BLUE}${BOLD}refactor${ENDCOLOR}:\tcode change that neither fixes a bug nor adds a feature, style changes"
+    echo -e "4. ${BLUE}${BOLD}test${ENDCOLOR}:\tadding missing tests or changing existing tests"
+    echo -e "5. ${BLUE}${BOLD}build${ENDCOLOR}:\tchanges that affect the build system or external dependencies"
+    echo -e "6. ${BLUE}${BOLD}ci${ENDCOLOR}:\t\tchanges to CI configuration files and scripts"
+    echo -e "7. ${BLUE}${BOLD}chore${ENDCOLOR}:\tmaintenance and housekeeping"
+    echo -e "8. ${BLUE}${BOLD}docs${ENDCOLOR}:\tdocumentation changes"
+    echo -e "9. ${BOLD}plain${ENDCOLOR}:\twrite plain commit without type and scope"
+    echo -e "0. ${RED}${BOLD}exit${ENDCOLOR}:\texit without changes"
+}
+
+function print_split_groups_preview {
+    local -A staged_status_by_file=()
+    local staged_diff status file new_file
+    staged_diff=$(git -c core.quotePath=false diff --name-status --cached)
+    while IFS=$'\t' read -r status file new_file; do
+        [ -z "$file" ] && continue
+        if [[ "$status" == R* || "$status" == C* ]]; then
+            [ -n "$new_file" ] && file="$new_file"
+        fi
+        staged_status_by_file["$file"]="${status:0:1}"
+    done <<< "$staged_diff"
+
+    echo -e "${YELLOW}Detected changes across ${#split_group_keys[@]} scopes:${ENDCOLOR}"
+    local scope file_count file_color staged_status
+    for scope in "${split_group_keys[@]}"; do
+        file_count=$(printf '%s\n' "${split_groups[$scope]}" | grep -c .)
+        echo -e "  ${BLUE}${BOLD}${scope}${ENDCOLOR} (${file_count} file(s)):"
+        while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            staged_status="${staged_status_by_file[$file]}"
+            case "$staged_status" in
+                A) file_color="$GREEN" ;;
+                M) file_color="$YELLOW" ;;
+                D) file_color="$RED" ;;
+                *) file_color="$GRAY" ;;
+            esac
+            echo -e "    ${file_color}${file}${ENDCOLOR}"
+        done <<< "${split_groups[$scope]}"
+    done
+}
+
 ### Walk the split groups, generate a message per group (AI when available),
 ### and create one commit per group. Restores staging on abort.
 # Globals consumed: split_groups, split_group_keys, push, current_branch
@@ -451,6 +499,7 @@ function perform_commit_split {
     local idx=0
     local commit_count=0
     local -a commit_hashes=()
+    local -a commit_headers=()
     local ai_ok="true"
     if ! check_ai_available 2>/dev/null; then
         ai_ok="false"
@@ -462,7 +511,7 @@ function perform_commit_split {
     for scope in "${split_group_keys[@]}"; do
         idx=$((idx + 1))
         echo
-        echo -e "${YELLOW}── Split commit ${idx}/${total}: scope '${scope}' ──${ENDCOLOR}"
+        echo -e "${BOLD}── Split commit ${idx}/${total}: scope '${BLUE}${scope}' ──${ENDCOLOR}"
 
         # Reset everything that's currently staged, then stage only this group
         local currently_staged
@@ -518,12 +567,18 @@ function perform_commit_split {
                     echo
                     read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) "
                     echo
-                    echo
                     normalize_key "$choice"
 
+                    local rejected_ai_messages=""
                     while [ "$normalized_key" = "r" ]; do
                         echo -e "${YELLOW}Regenerating...${ENDCOLOR}"
-                        ai_msg=$(generate_ai_commit_message "simple" "$scope_for_msg" "$scope_for_msg" "")
+                        if [ -n "$rejected_ai_messages" ]; then
+                            rejected_ai_messages="${rejected_ai_messages}
+${ai_msg}"
+                        else
+                            rejected_ai_messages="$ai_msg"
+                        fi
+                        ai_msg=$(generate_ai_commit_message "simple" "$scope_for_msg" "$scope_for_msg" "" "$rejected_ai_messages")
                         if [ $? -ne 0 ] || [ -z "$ai_msg" ]; then
                             ai_msg=""
                             break
@@ -533,7 +588,6 @@ function perform_commit_split {
                         echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
                         echo
                         read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) "
-                        echo
                         echo
                         normalize_key "$choice"
                     done
@@ -652,6 +706,7 @@ function perform_commit_split {
         local last_hash
         last_hash=$(git rev-parse --short HEAD)
         commit_hashes+=("$last_hash")
+        commit_headers+=("$msg")
         echo -e "${GREEN}Committed ${last_hash} ${msg}${ENDCOLOR}"
     done
 
@@ -668,8 +723,8 @@ function perform_commit_split {
         exit 0
     fi
     echo -e "${GREEN}Created ${commit_count} atomic commit(s) on ${current_branch}:${ENDCOLOR}"
-    for h in "${commit_hashes[@]}"; do
-        echo -e "  ${BLUE}${h}${ENDCOLOR}"
+    for i in "${!commit_hashes[@]}"; do
+        echo -e "  ${BLUE}${commit_hashes[$i]}${ENDCOLOR} ${commit_headers[$i]}"
     done
 
     if [ -n "${push}" ]; then
@@ -749,15 +804,7 @@ function try_offer_commit_split {
     fi
 
     echo
-    echo -e "${YELLOW}Detected changes across ${#split_group_keys[@]} scopes:${ENDCOLOR}"
-    local scope file_count
-    for scope in "${split_group_keys[@]}"; do
-        file_count=$(printf '%s\n' "${split_groups[$scope]}" | grep -c .)
-        echo -e "  ${BOLD}${scope}${ENDCOLOR} (${file_count} file(s)):"
-        while IFS= read -r f; do
-            [ -n "$f" ] && echo -e "    ${GRAY}${f}${ENDCOLOR}"
-        done <<< "${split_groups[$scope]}"
-    done
+    print_split_groups_preview
     echo
 
     local choice
@@ -803,10 +850,11 @@ function handle_ai_commit_generation {
     # Detect scopes from staged files for AI context
     detect_scopes_from_staged_files
 
-    # Generate / regenerate loop: user can press 'r' to ask the model again with the same context
+    # Generate / regenerate loop: user can press 'r' to ask the model again with rejected messages included.
     local ai_commit_message choice
+    local rejected_ai_messages=""
     while true; do
-        ai_commit_message=$(generate_ai_commit_message "$ai_mode" "$detected_scopes" "$scopes" "$commit_prefix")
+        ai_commit_message=$(generate_ai_commit_message "$ai_mode" "$detected_scopes" "$scopes" "$commit_prefix" "$rejected_ai_messages")
 
         if [ $? -ne 0 ] || [ -z "$ai_commit_message" ]; then
             echo
@@ -844,6 +892,12 @@ function handle_ai_commit_generation {
         normalize_key "$choice"
         if [ "$normalized_key" = "r" ]; then
             echo -e "${YELLOW}Regenerating...${ENDCOLOR}"
+            if [ -n "$rejected_ai_messages" ]; then
+                rejected_ai_messages="${rejected_ai_messages}
+${ai_commit_message}"
+            else
+                rejected_ai_messages="$ai_commit_message"
+            fi
             continue
         fi
         break
@@ -1001,6 +1055,7 @@ function set_commit_flag_from_token {
         msg|m)               msg="true";;
         ticket|jira|j|t)     ticket="true";;
         staged)              staged="true";;
+        no-split|nosplit|nsp|nsl) no_split="true";;
         fixup|fix|x)         fixup="true";;
         amend|am|a)          amend="true";;
         split|sp|sl)         split="true";;
@@ -1046,6 +1101,7 @@ function commit_script {
         splitp|spp|slp)     split="true"; push="true";;
         aisplit|isplit|aispl|ispl)        split="true"; llm="true";; # AI-refined grouping + AI messages
         aisplitp|isplitp|aisplp|isplp)    split="true"; llm="true"; push="true";;
+        no-split|nosplit|nsp|nsl) no_split="true";;
         msg|m)              msg="true";;
         ticket|jira|j|t)    ticket="true";;
         fast|f)             fast="true";;
@@ -1147,25 +1203,26 @@ function commit_script {
         echo -e "Words can be combined freely (${GREEN}ai fast push${ENDCOLOR}) or written as a single"
         echo -e "compact token (${GREEN}aifp${ENDCOLOR}). Aliases are interchangeable."
         echo
-        echo -e "${YELLOW}Modifiers${ENDCOLOR} ${BLUE}(stack on most actions)${ENDCOLOR}"
-        msg="${BOLD}fast${NORMAL}_f_Stage all changes (${GREEN}git add .${ENDCOLOR}) before committing"
-        msg="$msg\n${BOLD}staged${NORMAL}_st_Use already-staged files (skip the add step)"
-        msg="$msg\n${BOLD}push${NORMAL}_p|pu_Push after the commit succeeds"
-        msg="$msg\n${BOLD}scope${NORMAL}_s_Include a scope: 'type(scope): message'"
-        msg="$msg\n${BOLD}msg${NORMAL}_m_Open \$EDITOR for a multiline message body"
-        msg="$msg\n${BOLD}ticket${NORMAL}_t|j|jira_Append ticket info to the header"
-        msg="$msg\n${BOLD}ai${NORMAL}_i|llm_Generate the commit message with AI"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
-        echo
         echo -e "${YELLOW}Actions${ENDCOLOR} ${BLUE}(pick one; default is a regular commit)${ENDCOLOR}"
-        msg="${BOLD}<empty>${NORMAL}_ _Interactive: select files, then enter type/scope/message"
+        msg="${BOLD}<empty>${NORMAL}_ _Interactive commit: choose files, type, scope, and summary"
         msg="$msg\n${BOLD}split${NORMAL}_sp|sl_Split staged changes into one commit per detected scope"
         msg="$msg\n${BOLD}fixup${NORMAL}_x|fix_Create a ${GREEN}--fixup${ENDCOLOR} commit against an older commit"
         msg="$msg\n${BOLD}amend${NORMAL}_a|am_Add changes into the last commit (no message edit)"
         msg="$msg\n${BOLD}last${NORMAL}_l_Rewrite the last commit message"
-        msg="$msg\n${BOLD}revert${NORMAL}_rev_Pick a commit to revert (${GREEN}git revert --no-edit${ENDCOLOR})"
+        msg="$msg\n${BOLD}revert${NORMAL}_rev_Revert a commit (${GREEN}git revert --no-edit${ENDCOLOR})"
         msg="$msg\n${BOLD}ff${NORMAL}_ _Ultrafast: ${BOLD}ai + split + fast${NORMAL} with no prompts (use ${BOLD}ffp${NORMAL} to also push)"
         msg="$msg\n${BOLD}help${NORMAL}_h|--help|-h_Show this help"
+        echo -e "$(echo -e "$msg" | column -ts'_')"
+        echo
+        echo -e "${YELLOW}Modifiers${ENDCOLOR} ${BLUE}(stack with an action, any order)${ENDCOLOR}"
+        msg="${BOLD}fast${NORMAL}_f_Stage all changes (${GREEN}git add .${ENDCOLOR}) before committing"
+        msg="$msg\n${BOLD}staged${NORMAL}_st_Use already-staged files (skip the add step)"
+        msg="$msg\n${BOLD}push${NORMAL}_p|pu_Push after the commit succeeds"
+        msg="$msg\n${BOLD}scope${NORMAL}_s_Force a scope: 'type(scope): message' (useful with fast mode)"
+        msg="$msg\n${BOLD}no-split${NORMAL}_nsp|nsl_Disable automatic split detection for this commit"
+        msg="$msg\n${BOLD}ai${NORMAL}_i|llm_Generate the commit message with AI"
+        msg="$msg\n${BOLD}msg${NORMAL}_m_Open \$EDITOR for a multiline message body"
+        msg="$msg\n${BOLD}ticket${NORMAL}_t|j|jira_Append ticket info to the header"
         echo -e "$(echo -e "$msg" | column -ts'_')"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
@@ -1184,9 +1241,13 @@ function commit_script {
         echo -e "  ${BLUE}•${ENDCOLOR} ${BOLD}fast${NORMAL} and ${BOLD}staged${NORMAL} are mutually exclusive (one stages all, the other uses what's staged)"
         echo -e "  ${BLUE}•${ENDCOLOR} ${BOLD}last${NORMAL} and ${BOLD}revert${NORMAL} take no modifiers; ${BOLD}ff${NORMAL} only accepts ${BOLD}push${NORMAL} (as ${BOLD}ffp${NORMAL})"
         # Clean up cached git add on help exit
-        git config --unset gitbasher.cached-git-add 2>/dev/null
-        exit
+        git config --unset gitbasher.cached-git-add 2>/dev/null || true
+        exit 0
     fi
+
+
+    ### Refuse to silently create unreachable commits in detached-HEAD state
+    warn_if_detached_head "commit"
 
 
     if [ -n "$last" ]; then
@@ -1388,7 +1449,7 @@ function commit_script {
     # the script on success. Skipped for modes where it doesn't make sense
     # (amend, fixup, multi-line msg, ticket) or when forced off via config.
     # Fast/auto-accept modes skip the y/N prompt — split silently when applicable.
-    if [ -z "${amend}" ] && [ -z "${fixup}" ] && [ -z "${msg}" ] && [ -z "${ticket}" ]; then
+    if [ -z "${amend}" ] && [ -z "${fixup}" ] && [ -z "${msg}" ] && [ -z "${ticket}" ] && [ -z "${no_split}" ]; then
         _split_auto_yes=""
         if [ -n "$fast" ] || [ -n "$auto_accept" ]; then
             _split_auto_yes="true"
@@ -1410,7 +1471,6 @@ function commit_script {
         echo -e "${YELLOW}Found previous commit message:${ENDCOLOR} ${BOLD}$saved_commit_message${ENDCOLOR}"
         echo
         read_key choice "Use it? (y/e to edit/n) "
-        echo
         echo
         normalize_key "$choice"
         if [ "$normalized_key" = "y" ] || [ -z "$choice" ]; then
@@ -1532,18 +1592,7 @@ function commit_script {
     if [ -n "${fast}" ] || [ -n "${staged}" ]; then
         step="1"
     fi
-    echo -e "${YELLOW}Step ${step}.${ENDCOLOR} What ${YELLOW}type${ENDCOLOR} of changes do you want to commit?"
-    echo -e "Final message will be ${YELLOW}<type>${ENDCOLOR}(${BLUE}<scope>${ENDCOLOR}): ${BLUE}<summary>${ENDCOLOR}"
-    echo -e "1. ${BOLD}feat${ENDCOLOR}:\tnew feature, logic change or performance improvement"
-    echo -e "2. ${BOLD}fix${ENDCOLOR}:\t\tsmall changes, eg. bug fix"
-    echo -e "3. ${BOLD}refactor${ENDCOLOR}:\tcode change that neither fixes a bug nor adds a feature, style changes"
-    echo -e "4. ${BOLD}test${ENDCOLOR}:\tadding missing tests or changing existing tests"
-    echo -e "5. ${BOLD}build${ENDCOLOR}:\tchanges that affect the build system or external dependencies"
-    echo -e "6. ${BOLD}ci${ENDCOLOR}:\t\tchanges to CI configuration files and scripts"
-    echo -e "7. ${BOLD}chore${ENDCOLOR}:\tmaintenance and housekeeping"
-    echo -e "8. ${BOLD}docs${ENDCOLOR}:\tdocumentation changes"
-    echo -e "9.  \t\twrite plain commit without type and scope"
-    echo -e "0. Exit without changes"
+    print_commit_type_menu "$step"
 
     declare -A types=(
         [1]="feat"
@@ -1561,6 +1610,8 @@ function commit_script {
 
         if [ "$choice" == "0" ]; then
             cleanup_on_exit "$git_add"
+            echo
+            echo -e "${YELLOW}Aborted.${ENDCOLOR}"
             exit
         fi
 

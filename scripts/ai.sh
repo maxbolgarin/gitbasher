@@ -405,29 +405,38 @@ function get_recent_commit_messages_for_ai {
 function validate_proxy_url {
     local proxy_url="$1"
     validated_proxy_url=""
-    
+
     if [ -z "$proxy_url" ]; then
         return 1
     fi
-    
-    # Remove any potential shell metacharacters and validate format
-    # Allow only safe characters: alphanumeric, dots, hyphens, underscores, colons, slashes, @, %
+
+    # Reject pathological lengths up front — real proxy URLs are well under 2 KB
+    if [ ${#proxy_url} -gt 2048 ]; then
+        return 1
+    fi
+
+    # Defense in depth: curl receives the URL as a single arg (no shell injection),
+    # but a clean string makes downstream auditing and logs less noisy.
     local cleaned_url=$(echo "$proxy_url" | sed 's/[^a-zA-Z0-9.:/@_%?&=-]//g')
-    
-    # Basic URL format validation for common proxy formats
-    # http://[user:pass@]host:port
-    # https://[user:pass@]host:port  
-    # socks5://[user:pass@]host:port
-    if [[ "$cleaned_url" =~ ^(https?|socks5)://([a-zA-Z0-9._%-]+(:([a-zA-Z0-9._%-]+))?@)?[a-zA-Z0-9.-]+:[0-9]+(/.*)?$ ]]; then
-        validated_proxy_url="$cleaned_url"
-        return 0
-    elif [[ "$cleaned_url" =~ ^[a-zA-Z0-9.-]+:[0-9]+$ ]]; then
-        # Allow simple host:port format (curl will assume http://)
-        validated_proxy_url="$cleaned_url"
-        return 0
+
+    local port=""
+    # http(s) | socks5 with optional userinfo, capped host length, mandatory port, optional path
+    if [[ "$cleaned_url" =~ ^(https?|socks5)://([a-zA-Z0-9._%-]+(:[a-zA-Z0-9._%-]+)?@)?([a-zA-Z0-9.-]{1,253}):([0-9]{1,5})(/.*)?$ ]]; then
+        port="${BASH_REMATCH[5]}"
+    elif [[ "$cleaned_url" =~ ^([a-zA-Z0-9.-]{1,253}):([0-9]{1,5})$ ]]; then
+        # Bare host:port shorthand — curl treats it as http://
+        port="${BASH_REMATCH[2]}"
     else
         return 1
     fi
+
+    # Port must be in the valid TCP range
+    if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+        return 1
+    fi
+
+    validated_proxy_url="$cleaned_url"
+    return 0
 }
 
 ### Function to securely call curl with API key
@@ -977,10 +986,12 @@ ${output_format_text}
 # $1: mode ("simple" | "subject" | "full")
 # $2: detected scopes (optional, space-separated)
 # $3: provided scopes (optional, space-separated; ignored in "subject" mode)
+# $4: rejected commit messages from this prompt session (optional)
 function build_ai_commit_user_prompt {
     local mode="$1"
     local detected_scopes="$2"
     local provided_scopes="$3"
+    local rejected_messages="${4:-}"
 
     local staged_files_limited=$(get_limited_staged_files_for_ai)
     local diff_stat=$(get_limited_diff_stat_for_ai)
@@ -1020,6 +1031,16 @@ ${detected_scopes}
         fi
     fi
 
+    if [ -n "$rejected_messages" ]; then
+        prompt+="
+
+<rejected_commit_messages>
+${rejected_messages}
+</rejected_commit_messages>
+
+The user rejected the message(s) in <rejected_commit_messages>. Do not repeat them. Generate a meaningfully different commit message while still following the staged changes and output format."
+    fi
+
     prompt+="
 
 Before writing, scan <staged_files> and <diff_summary> end-to-end and identify every distinct change (group related files together). Then write a single commit message that covers them all, following every rule and matching the example style."
@@ -1032,12 +1053,14 @@ Before writing, scan <staged_files> and <diff_summary> end-to-end and identify e
 # $2: detected scopes (optional, space-separated)
 # $3: provided scopes (optional, space-separated; ignored in "subject" mode)
 # $4: commit prefix (only used in "subject" mode, e.g. "feat(auth): ")
+# $5: rejected commit messages from this prompt session (optional)
 # Returns: AI-generated commit message text on stdout, non-zero on failure
 function generate_ai_commit_message {
     local mode="${1:-simple}"
     local detected_scopes="$2"
     local provided_scopes="$3"
     local commit_prefix="$4"
+    local rejected_messages="${5:-}"
 
     local staged_files=$(git -c core.quotePath=false diff --name-only --cached)
     if [ -z "$staged_files" ]; then
@@ -1047,7 +1070,7 @@ function generate_ai_commit_message {
 
     local system_prompt user_prompt
     system_prompt=$(build_ai_commit_system_prompt "$mode" "$commit_prefix")
-    user_prompt=$(build_ai_commit_user_prompt "$mode" "$detected_scopes" "$provided_scopes")
+    user_prompt=$(build_ai_commit_user_prompt "$mode" "$detected_scopes" "$provided_scopes" "$rejected_messages")
 
     local max_tokens model
     case "$mode" in

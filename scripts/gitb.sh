@@ -17,15 +17,26 @@ fi
 
 
 ### Cannot use bash version less than 4 because of many features that was added to language in that version
-if ((BASH_VERSINFO[0] < 4)); then 
-    # Try to re-exec with a newer bash if available (common on macOS/Homebrew)
-    if [ -x "/opt/homebrew/bin/bash" ]; then
-        exec /opt/homebrew/bin/bash "$0" "$@"
-        exit $?
-    elif [ -x "/usr/local/bin/bash" ]; then
-        exec /usr/local/bin/bash "$0" "$@"
-        exit $?
+if ((BASH_VERSINFO[0] < 4)); then
+    # Try to re-exec with a newer bash. Order:
+    #   1. PATH-resolved bash that reports >= 4 (covers MacPorts, nix, custom prefixes, Linux upgrades)
+    #   2. Homebrew-managed bash (handles Apple Silicon vs Intel and custom HOMEBREW_PREFIX)
+    #   3. Hardcoded common paths as a final fallback
+    _gitb_candidate=$(command -v bash 2>/dev/null)
+    if [ -n "$_gitb_candidate" ] && [ -x "$_gitb_candidate" ] \
+       && "$_gitb_candidate" -c '((BASH_VERSINFO[0] >= 4))' >/dev/null 2>&1; then
+        exec "$_gitb_candidate" "$0" "$@"
     fi
+    if command -v brew >/dev/null 2>&1; then
+        _gitb_candidate="$(brew --prefix bash 2>/dev/null)/bin/bash"
+        if [ -x "$_gitb_candidate" ]; then
+            exec "$_gitb_candidate" "$0" "$@"
+        fi
+    fi
+    for _gitb_candidate in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        [ -x "$_gitb_candidate" ] && exec "$_gitb_candidate" "$0" "$@"
+    done
+    unset _gitb_candidate
 
     printf "Sorry, you need at least bash-4.0 to run gitbasher.\n\n"
     printf "Linux (Debian/Ubuntu):\n    sudo apt update && sudo apt install --only-upgrade bash\n\n"

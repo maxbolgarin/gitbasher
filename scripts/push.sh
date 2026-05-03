@@ -139,6 +139,10 @@ function push_script {
     fi
 
 
+    ### Detached HEAD has no current_branch — push would fail with a confusing error
+    warn_if_detached_head "push"
+
+
     ### Check if there are commits to push
     get_push_list ${current_branch} ${main_branch} ${origin_name}
 

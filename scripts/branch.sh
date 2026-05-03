@@ -273,8 +273,12 @@ function branch_script {
         echo
         echo -e "${YELLOW}Checking out to tag ${selected_tag}...${ENDCOLOR}"
         echo
-        
-        checkout_output=$(git checkout "$selected_tag" 2>&1)
+
+        if ! sanitize_git_name "$selected_tag"; then
+            echo -e "${RED}Invalid tag name: ${selected_tag}${ENDCOLOR}"
+            exit 1
+        fi
+        checkout_output=$(git checkout "$sanitized_git_name" 2>&1)
         checkout_code=$?
 
         if [ $checkout_code -eq 0 ]; then

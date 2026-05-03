@@ -14,6 +14,7 @@ function print_help {
     msg="$msg\n${BOLD}gitb c ai${NORMAL}_Generate an AI commit message from staged changes"
     msg="$msg\n${BOLD}gitb c aip${NORMAL}_Generate an AI commit message, commit, and push"
     msg="$msg\n${BOLD}gitb sy${NORMAL}_Sync current branch with $main_branch"
+    msg="$msg\n${BOLD}gitb sq${NORMAL}_Use AI to squash branch commits into changelog-ready history"
     msg="$msg\n${BOLD}gitb b new${NORMAL}_Create a conventionally named branch"
     echo -e "$(echo -e "$msg" | column -ts '_')"
     echo
@@ -26,6 +27,7 @@ function print_help {
     msg="$msg\ntag_t|tg_Create, push, list, fetch, and delete tags"
     msg="$msg\nmerge_m|me_Merge branches into the current branch or $main_branch"
     msg="$msg\nrebase_r|re|base_Rebase current branch, autosquash, or pull commits"
+    msg="$msg\nsquash_sq|tidy_AI-driven squash of branch commits into changelog-ready history"
     msg="$msg\ncherry_ch|cp_Cherry-pick commits from other branches"
     msg="$msg\nsync_sy_Sync current branch with $main_branch (fetch + rebase/merge)"
     msg="$msg\nwip_w_Stash work-in-progress and optionally back it up remotely"
@@ -112,8 +114,11 @@ case "$1" in
     merge|m|me)         
         merge_script $2
     ;;
-    rebase|r|re|base)         
+    rebase|r|re|base)
         rebase_script $2
+    ;;
+    squash|sq|tidy)
+        squash_script $2
     ;;
     cherry|ch|cp)
         cherry_script $2 $3

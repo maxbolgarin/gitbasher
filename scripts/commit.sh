@@ -16,6 +16,57 @@ function cleanup_on_exit {
     fi
 }
 
+### Print git warning/hint output through gitbasher colors.
+# $1: captured git output
+function print_git_warning_output {
+    local git_output="$1"
+    [ -z "$git_output" ] && return 0
+
+    local line
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        case "$line" in
+            warning:*|hint:*)
+                echo -e "${RED}${line}${ENDCOLOR}"
+                ;;
+            *)
+                echo "$line"
+                ;;
+        esac
+    done <<< "$git_output"
+}
+
+### Remove embedded repositories picked up by automatic fast-mode staging.
+# Manual git add selections are intentionally not filtered.
+function unstage_embedded_repositories_from_fast_add {
+    local staged_files
+    staged_files=$(git -c core.quotePath=false diff --name-only --cached)
+    [ -z "$staged_files" ] && return 0
+
+    local file
+    while IFS= read -r file; do
+        [ -z "$file" ] && continue
+        if [ -d "$file" ] && [ -e "$file/.git" ]; then
+            git restore --staged -- "$file" >/dev/null 2>&1
+            echo -e "${RED}warning: skipped embedded git repository in fast mode: ${file}${ENDCOLOR}"
+            echo -e "${RED}hint: Select it manually if you really want to commit it.${ENDCOLOR}"
+        fi
+    done <<< "$staged_files"
+}
+
+### Stage all changes for fast modes without keeping embedded repositories.
+function stage_fast_changes {
+    local result
+    result=$(git add . 2>&1)
+    local code=$?
+
+    print_git_warning_output "$result"
+    [ $code -ne 0 ] && return $code
+
+    unstage_embedded_repositories_from_fast_add
+    return 0
+}
+
 ### Function to detect scopes from staged files
 # Returns: detected_scopes variable set with space-separated scope names
 function detect_scopes_from_staged_files {
@@ -1358,7 +1409,9 @@ function commit_script {
         # Clean up any existing cached git add since we're using staged files
         git config --unset gitbasher.cached-git-add 2>/dev/null
     elif [ -n "${fast}" ]; then
-        git add .
+        if ! stage_fast_changes; then
+            exit 1
+        fi
         git_add="."
         # Clean up any existing cached git add since we're using fast mode
         git config --unset gitbasher.cached-git-add 2>/dev/null

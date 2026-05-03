@@ -830,35 +830,53 @@ function worktree_script {
 
         echo -e "${YELLOW}What do you want to do?${ENDCOLOR}"
         echo
-        echo "1. Add worktree (new branch from current)"
-        echo "2. Add worktree (new branch from $main_branch)"
-        echo "3. Add worktree from existing local branch"
-        echo "4. Add worktree from remote branch"
-        echo "5. Remove a worktree"
-        echo "6. Move a worktree"
-        echo "7. Lock a worktree"
-        echo "8. Unlock a worktree"
-        echo "9. Prune stale records"
+        echo "1. Add a worktree"
+        echo "2. Remove a worktree"
+        echo "3. Move a worktree"
+        echo "4. Lock a worktree"
+        echo "5. Unlock a worktree"
+        echo "6. Prune stale records"
         echo "0. Exit"
         echo
 
         local choice
         read -n 1 -s choice
-        echo
+        read -t 0.01 -s _wt_drain 2>/dev/null
 
         case "$choice" in
-            1) add_mode="true"; add_source="current";;
-            2) add_mode="true"; add_source="default";;
-            3) add_mode="true"; add_source="branch";;
-            4) add_mode="true"; add_source="remote";;
-            5) remove_mode="true";;
-            6) move_mode="true";;
-            7) lock_mode="true";;
-            8) unlock_mode="true";;
-            9) prune_mode="true";;
+            1) add_mode="true";;
+            2) remove_mode="true";;
+            3) move_mode="true";;
+            4) lock_mode="true";;
+            5) unlock_mode="true";;
+            6) prune_mode="true";;
             0) exit;;
             *) echo -e "${RED}Invalid option${ENDCOLOR}"; exit 1;;
         esac
+
+        if [ -n "$add_mode" ]; then
+            echo -e "${YELLOW}How should the worktree's branch be created?${ENDCOLOR}"
+            echo
+            echo "1. New branch from current"
+            echo "2. New branch from $main_branch"
+            echo "3. From existing local branch"
+            echo "4. From remote branch"
+            echo "0. Exit"
+            echo
+
+            local source_choice
+            read -n 1 -s source_choice
+            read -t 0.01 -s _wt_drain 2>/dev/null
+
+            case "$source_choice" in
+                1) add_source="current";;
+                2) add_source="default";;
+                3) add_source="branch";;
+                4) add_source="remote";;
+                0) exit;;
+                *) echo -e "${RED}Invalid option${ENDCOLOR}"; exit 1;;
+            esac
+        fi
     fi
 
     if [ -n "$list_mode" ]; then

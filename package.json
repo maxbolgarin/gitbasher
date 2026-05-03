@@ -25,5 +25,15 @@
     ],
     "engines": {
         "node": ">=14.0.0"
+    },
+    "devDependencies": {
+        "semantic-release": "latest",
+        "@semantic-release/commit-analyzer": "latest",
+        "@semantic-release/release-notes-generator": "latest",
+        "@semantic-release/exec": "latest",
+        "@semantic-release/github": "latest",
+        "@semantic-release/npm": "latest",
+        "@semantic-release/git": "latest",
+        "conventional-changelog-conventionalcommits": "latest"
     }
 }

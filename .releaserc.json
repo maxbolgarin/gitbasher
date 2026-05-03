@@ -50,7 +50,7 @@
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "./dist/build.sh ./scripts/gitb.sh ./dist/gitb ${nextRelease.version} && chmod +x ./dist/gitb"
+        "prepareCmd": "./dist/build.sh ./scripts/gitb.sh ./dist/gitb ${nextRelease.version} && chmod +x ./dist/gitb && shasum -a 256 dist/gitb | awk '{print $1\"  gitb\"}' > dist/gitb.sha256"
       }
     ],
     [
@@ -60,6 +60,10 @@
           {
             "path": "dist/gitb",
             "label": "gitb (single-file script)"
+          },
+          {
+            "path": "dist/gitb.sha256",
+            "label": "SHA-256 checksum"
           }
         ]
       }

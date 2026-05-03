@@ -88,7 +88,3 @@ Maintainers cut releases via `release.yml` (manual `workflow_dispatch`). `semant
 ## Reporting bugs / requesting features
 
 Use the GitHub [issues](https://github.com/maxbolgarin/gitbasher/issues) page. For security-sensitive reports, see [SECURITY.md](./SECURITY.md) instead — please **do not** open a public issue for a vulnerability.
-
-## Code of conduct
-
-This project follows the [Contributor Covenant](./CODE_OF_CONDUCT.md). By participating you agree to abide by its terms.

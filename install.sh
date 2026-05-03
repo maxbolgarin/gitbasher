@@ -2,8 +2,8 @@
 # gitbasher installer
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/master/install.sh | bash
-#   curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/master/install.sh | bash -s -- --sudo
+#   curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash -s -- --sudo
 #
 # Flags:
 #   --sudo         Install system-wide to /usr/local/bin (uses sudo if needed)

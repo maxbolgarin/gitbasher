@@ -1,14 +1,31 @@
-# gitbasher — make `git` fast, friendly, and forgettable
+<p align="center">
+  <img src=".github/logo.jpg" width="240" alt="gitbasher logo" />
+</p>
 
-[![Latest Release](https://img.shields.io/github/v/release/maxbolgarin/gitbasher.svg?style=flat-square)](https://github.com/maxbolgarin/gitbasher/releases/latest)
-[![GitHub license](https://img.shields.io/github/license/maxbolgarin/gitbasher.svg)](https://github.com/maxbolgarin/gitbasher/blob/master/LICENSE)
-[![Build Status](https://github.com/maxbolgarin/gitbasher/actions/workflows/build.yml/badge.svg)](https://github.com/maxbolgarin/gitbasher/actions)
+<h1 align="center">gitbasher</h1>
 
-<picture>
-    <img src=".github/commit.gif" width="600" alt="commit example">
-</picture>
+<p align="center">
+  <strong>The friendly <code>git</code> wrapper that types the boring parts for you.</strong>
+</p>
 
-**gitbasher** is a single-binary `bash` wrapper that turns the most common git operations into one short, interactive command. Stop memorizing flags. Stop pasting the same five commands in a row. Just type `gitb`.
+<p align="center">
+  <a href="https://github.com/maxbolgarin/gitbasher/releases/latest"><img src="https://img.shields.io/github/v/release/maxbolgarin/gitbasher.svg?style=flat-square" alt="Latest Release"></a>
+  <a href="https://github.com/maxbolgarin/gitbasher/blob/main/LICENSE"><img src="https://img.shields.io/github/license/maxbolgarin/gitbasher.svg" alt="License"></a>
+  <a href="https://github.com/maxbolgarin/gitbasher/actions"><img src="https://github.com/maxbolgarin/gitbasher/actions/workflows/build.yml/badge.svg" alt="Build Status"></a>
+  <a href="https://www.npmjs.com/package/gitbasher"><img src="https://img.shields.io/npm/v/gitbasher.svg?label=npm" alt="npm version"></a>
+</p>
+
+<p align="center">
+  <img src=".github/commit.gif" width="640" alt="gitb commit demo" />
+</p>
+
+---
+
+## In 30 seconds
+
+- **What it is** — a single-binary `bash` wrapper for `git`. Short interactive commands replace long flag chains.
+- **Who it's for** — developers who want clean conventional commits, smart pull/push/sync, and undo-everything safety without memorizing git plumbing.
+- **What's different** — AI commit messages that can run **fully local** via Ollama (no key, no network), atomic split, WIP backup across machines, full worktree menu — all in one bash file with zero runtime deps.
 
 ```bash
 gitb commit push       # stage, write a conventional commit, push — in one flow
@@ -20,6 +37,19 @@ gitb undo              # roll back your last commit / amend / merge / rebase / s
 
 ---
 
+## Before & after
+
+| Task | Plain `git` | With `gitb` |
+|------|-------------|-------------|
+| Start a feature off updated main | `git fetch && git checkout main && git pull --ff-only && git checkout -b feat/x` | `gitb b nd` |
+| Conventional commit + push | `git add -A && git commit -m "feat(x): …" && git push -u origin HEAD` | `gitb c aifp` |
+| Sync your branch with main | `git fetch && git rebase origin/main && git push --force-with-lease` | `gitb sync push` |
+| Save WIP & clean tree across machines | `git stash -u && git push origin "HEAD:wip/$(git symbolic-ref --short HEAD)"` | `gitb wip up` |
+| Undo last commit (keep changes staged) | `git reset --soft HEAD~1` | `gitb undo` |
+| Tidy a messy branch into clean commits | (interactive rebase, fold by hand) | `gitb squash` |
+
+---
+
 ## Install in 10 seconds
 
 **One-liner (no Node required):**
@@ -27,21 +57,27 @@ gitb undo              # roll back your last commit / amend / merge / rebase / s
 curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash
 ```
 
-By default the installer drops `gitb` into `~/.local/bin` — no `sudo`, no password prompt. It downloads the latest release and prints a PATH hint if needed. Opt into a system-wide install or override the location:
+The installer drops `gitb` into `~/.local/bin` by default — no `sudo`, no password prompt. It downloads the latest release, verifies its SHA-256, and prints a PATH hint if needed.
 
+**Other install paths:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash -s -- --sudo   # /usr/local/bin (sudo)
-GITB_DIR=/opt/bin       curl ... | bash    # custom location
-GITB_VERSION=v3.10.2    curl ... | bash    # pin a release
-```
+# system-wide install (sudo, /usr/local/bin)
+curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash -s -- --sudo
 
-**npm:**
-```bash
+# custom location
+GITB_DIR=/opt/bin     curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash
+
+# pin a release
+GITB_VERSION=v3.10.2  curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash
+
+# npm
 npm install -g gitbasher
+
+# inspect before running
+curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh -o install.sh && less install.sh && bash install.sh
 ```
 
-> Windows users: run inside [WSL](https://learn.microsoft.com/en-us/windows/wsl/setup/environment).
-> Prefer to inspect first? `curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh -o install.sh && less install.sh && bash install.sh`
+> **Windows:** run inside [WSL](https://learn.microsoft.com/en-us/windows/wsl/setup/environment).
 
 **Requirements:** `bash` 4.0+, `git` 2.23+ (macOS: `brew install bash git`).
 
@@ -52,11 +88,7 @@ rm -f ~/.local/bin/gitb             # if installed via curl (default location)
 sudo rm -f /usr/local/bin/gitb      # if installed via curl with --sudo
 ```
 
-Per-repo gitbasher settings live in `git config` under the `gitbasher.*` namespace and are removed with the repo. To clear global settings (AI key, default branch, scopes, etc.):
-```bash
-git config --global --remove-section gitbasher 2>/dev/null
-git config --global --unset core.editor 2>/dev/null   # only if you set it via gitb cfg editor
-```
+To clear gitbasher's saved settings (AI key, default branch, scopes, …) see [Configuration](#configuration).
 
 ---
 
@@ -75,19 +107,28 @@ gitb pull         # smart pull (rebase / merge / ff)
 gitb branch new   # create a new conventionally-named branch
 ```
 
-Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb st`, …) and a `help` mode (`gitb commit help`).
+Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb st`, …) and inline help (`gitb commit help`).
+
+---
+
+## What's new in v3.10
+
+- **`gitb squash`** — AI folds WIP / fixup commits into clean, changelog-ready history. Try `gitb squash preview` to see the plan first.
+- **Multi-provider AI** — pick **OpenRouter** (default), **OpenAI** direct (GPT-5.4 family), or **Ollama** for fully-local commits with no key and no network.
+- **`gitb worktree`** — full menu: add / list / remove / move / lock / prune, plus `gitb wip up worktree` for parallel WIP.
+- **`gitb update`** — self-update to the latest release.
+- **`gitb cfg completion`** — install / uninstall bash & zsh tab completion for `gitb` and its modes.
+
+Full notes: [GitHub Releases](https://github.com/maxbolgarin/gitbasher/releases).
 
 ---
 
 ## Table of contents
 - [Why gitbasher](#why-gitbasher)
 - [All features at a glance](#all-features-at-a-glance)
-- [AI-powered commits](#ai-powered-commits)
 - [Common workflows](#common-workflows)
+- [AI-powered commits](#ai-powered-commits)
 - [Command reference](#command-reference)
-  - [commit](#gitb-commit) · [push](#gitb-push) · [pull](#gitb-pull) · [branch](#gitb-branch) · [tag](#gitb-tag) · [merge](#gitb-merge) · [rebase](#gitb-rebase) · [squash](#gitb-squash)
-  - [cherry](#gitb-cherry) · [sync](#gitb-sync) · [wip](#gitb-wip) · [undo](#gitb-undo) · [reset](#gitb-reset) · [stash](#gitb-stash)
-  - [worktree](#gitb-worktree) · [hook](#gitb-hook) · [config](#gitb-config) · [log](#gitb-log) · [info commands](#info-commands)
 - [Configuration](#configuration)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
@@ -97,17 +138,15 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 ## Why gitbasher
 
 - **Zero memorization** — no flags to remember, no man pages to grep. Interactive menus where it matters, short aliases where it doesn't.
-- **Conventional commits, free** — type/scope/summary picker built-in, with optional ticket prefixes and multiline editor mode.
-- **AI commit messages** — `gitb c ai` writes the message for you. Pick your provider: OpenRouter (Gemini / Claude / many), OpenAI direct (GPT-5.4 nano/mini), or **fully local via Ollama** — no key, no network, no data leaves your machine.
-- **Atomic split** — `gitb c split` (or `aisplit`) breaks a messy working tree into one commit per logical scope.
-- **Safer git** — push/pull detect conflicts up front, `undo` rolls back commit/amend/merge/rebase/stash, `reset` is interactive.
-- **Whole workflows, not just commands** — `sync`, `wip`, `branch newd`, `merge to-main` chain the steps you'd otherwise do by hand.
-- **One file, no deps** — pure bash. Drop the binary anywhere on `PATH` and go.
-- **115+ tests** — BATS test suite covers sanitization, git ops, branch logic.
+- **Conventional commits, free** — type/scope/summary picker built-in, with optional ticket prefixes and a multiline editor mode.
+- **AI commit messages** — `gitb c ai` writes the message from your diff. OpenRouter (Gemini/Claude/GPT/…), OpenAI direct, or **fully local via Ollama** — no key, no network, no data leaves your machine.
+- **Safer git** — push/pull detect conflicts up front, `undo` rolls back commit/amend/merge/rebase/stash, `reset` is interactive with a preview.
+- **Whole workflows, not just commands** — `sync`, `wip`, `branch newd`, `merge to-main`, `squash` chain the steps you'd otherwise do by hand.
+- **One file, no deps** — pure bash. Drop the binary anywhere on `PATH` and go. **115+ BATS tests** cover sanitization, git ops, and branch logic.
 
-<picture>
-    <img src=".github/push.gif" width="600" alt="push example">
-</picture>
+<p align="center">
+  <img src=".github/push.gif" width="640" alt="gitb push demo" />
+</p>
 
 ---
 
@@ -125,109 +164,9 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 | **Inspect** | `status` (`st`), `log` (`l`), `reflog` (`rl`), `last-commit` (`lc`), `last-ref` (`lr`) | Pretty repo status, multi-mode log + search, reflog viewer, quick last-commit / last-ref summary |
 | **Hooks** | `hook` (`ho`) | List / create from templates / edit / toggle / remove / test / show — for every git hook |
 | **Repo setup** | `init` (`i`), `origin` (`or`, `o`, `remote`) | `git init` from gitbasher · add/change/rename/remove the remote origin |
-| **Config** | `config` (`cfg`) | User, default branch, separator, editor, ticket prefix, scopes, AI provider/key/model, proxy |
+| **Config** | `config` (`cfg`) | User, default branch, separator, editor, ticket prefix, scopes, AI provider/key/model, proxy, completion |
 
 Total: **23 top-level commands**, **60+ aliases**, **100+ modes**.
-
----
-
-## AI-powered commits
-
-Drop in an API key once (or run a local model with no key at all), then let an LLM write conventional commit messages from your diff.
-
-### Providers
-
-gitbasher supports three providers behind the same OpenAI-style chat-completions API. Default is `openrouter` — existing setups keep working unchanged.
-
-| Provider | Best for | Needs key? |
-|----------|----------|-----------|
-| `openrouter` (default) | Trying many models behind one key (Gemini, Claude, GPT, DeepSeek…) | Yes — [openrouter.ai/keys](https://openrouter.ai/keys) |
-| `openai` | Direct access to GPT-5.4 family at OpenAI's own pricing | Yes — [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
-| `ollama` | **Fully local, fully private** — no key, no network, runs on your machine | No |
-
-### Setup
-
-```bash
-# 1. Pick a provider (skip to use the OpenRouter default)
-gitb cfg provider     # interactive — choose openrouter, openai, or ollama
-
-# 2. For openrouter / openai: paste your key (local repo or global)
-gitb cfg ai
-
-#    For ollama: just make sure the daemon is running and the default model is pulled
-ollama serve &
-ollama pull qwen3:8b
-
-# 3. Optional: HTTP proxy (for restricted regions, openrouter/openai only)
-gitb cfg proxy
-```
-
-For the security-conscious, prefer the env var to avoid the key landing in `~/.gitconfig`:
-```bash
-export GITB_AI_API_KEY='sk-...'
-```
-
-### Custom OpenAI-compatible endpoints
-
-Self-hosted gateways (LiteLLM, vLLM, LM Studio) and remote Ollama hosts work via a base-URL override:
-```bash
-gitb cfg provider                                                  # pick openai or ollama as the closest match
-git config gitbasher.ai-base-url http://my-gateway:4000/v1/chat/completions
-```
-
-### Commands
-
-| Goal | Command | What it does |
-|------|---------|--------------|
-| Staged files ready | `gitb c ai` | AI message from staged diff |
-| Quick fix | `gitb c aif` | `git add .` + AI message |
-| Ship now | `gitb c aip` | AI message + push |
-| Full workflow | `gitb c aifp` | `add .` + AI + push |
-| Manual type/scope | `gitb c ais` | You pick type/scope, AI writes summary |
-| Detailed message | `gitb c aim` | Multiline subject + body |
-| Atomic split (AI) | `gitb c aisplit` | AI groups your diff into one commit per scope, writes each message |
-| Hands-free | `gitb c ff` / `ffp` | `add .` + AI-grouped split + AI messages, no prompts |
-
-Modes are composable: `gitb c ai fast push` is identical to `gitb c aifp`.
-
-### Models
-
-Each task uses a model tuned for speed/cost/quality, picked per provider. Defaults (May 2026):
-
-**OpenRouter** (default provider)
-
-| Task | Default model | Why |
-|------|---------------|-----|
-| `simple` (one-line message) | `google/gemini-3.1-flash-lite-preview` | Cheapest fast tier |
-| `subject` (after manual type/scope) | `google/gemini-3.1-flash-lite-preview` | Short structured output |
-| `full` (header + body) | `google/gemini-3-flash-preview` | Better prose |
-| `grouping` (atomic-split mapping) | `anthropic/claude-haiku-4.5` | Strict instruction following |
-
-**OpenAI** — GPT-5.4 family (released March 2026)
-
-| Task | Default model | Why |
-|------|---------------|-----|
-| `simple` / `subject` | `gpt-5.4-nano` | Built for classification/short well-defined output, ~$0.20 / $1.25 per M tokens |
-| `full` | `gpt-5.4-mini` | Stronger multi-condition instruction following for header + body, ~$0.75 / $4.50 per M |
-| `grouping` | `gpt-5.4-mini` | Holds the strict TSV format under validation, far cheaper than the flagship |
-
-**Ollama** — fully local
-
-| Task | Default model | Why |
-|------|---------------|-----|
-| All tasks | `qwen3:8b` | Best small instruction-follower among 7/8B models; most stable structured output (rarely drops fields in TSV); ~5 GB on disk, ~25 tok/s on a consumer laptop with GPU |
-
-Other strong local picks: `llama3.3:8b` (general-purpose), `qwen2.5-coder:7b` (code-heavy diffs).
-
-Override per task or globally:
-```bash
-gitb cfg model                                          # interactive
-git config gitbasher.ai-model            <model_id>     # global
-git config gitbasher.ai-model-simple     <model_id>     # per-task
-git config gitbasher.ai-model-subject    <model_id>
-git config gitbasher.ai-model-full       <model_id>
-git config gitbasher.ai-model-grouping   <model_id>
-```
 
 ---
 
@@ -309,11 +248,115 @@ gitb b -             # back to previous branch (like cd -)
 
 ---
 
+## AI-powered commits
+
+Drop in an API key once (or run a local model with no key at all), then let an LLM write conventional commit messages from your diff.
+
+### Providers
+
+gitbasher supports three providers behind the same OpenAI-style chat-completions API. Default is `openrouter` — existing setups keep working unchanged.
+
+| Provider | Best for | Needs key? |
+|----------|----------|-----------|
+| `openrouter` (default) | Trying many models behind one key (Gemini, Claude, GPT, DeepSeek…) | Yes — [openrouter.ai/keys](https://openrouter.ai/keys) |
+| `openai` | Direct access to GPT-5.4 family at OpenAI's own pricing | Yes — [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
+| `ollama` | **Fully local, fully private** — no key, no network, runs on your machine | No |
+
+### Setup
+
+```bash
+# 1. Pick a provider (skip to use the OpenRouter default)
+gitb cfg provider     # interactive — choose openrouter, openai, or ollama
+
+# 2. For openrouter / openai: paste your key (local repo or global)
+gitb cfg ai
+
+#    For ollama: just make sure the daemon is running and the default model is pulled
+ollama serve &
+ollama pull qwen3:8b
+
+# 3. Optional: HTTP proxy (for restricted regions, openrouter/openai only)
+gitb cfg proxy
+```
+
+For the security-conscious, prefer the env var to avoid the key landing in `~/.gitconfig`:
+```bash
+export GITB_AI_API_KEY='sk-...'
+```
+
+### Commands
+
+| Goal | Command | What it does |
+|------|---------|--------------|
+| Staged files ready | `gitb c ai` | AI message from staged diff |
+| Quick fix | `gitb c aif` | `git add .` + AI message |
+| Ship now | `gitb c aip` | AI message + push |
+| Full workflow | `gitb c aifp` | `add .` + AI + push |
+| Manual type/scope | `gitb c ais` | You pick type/scope, AI writes summary |
+| Detailed message | `gitb c aim` | Multiline subject + body |
+| Atomic split (AI) | `gitb c aisplit` | AI groups your diff into one commit per scope, writes each message |
+| Hands-free | `gitb c ff` / `ffp` | `add .` + AI-grouped split + AI messages, no prompts |
+
+Modes are composable: `gitb c ai fast push` is identical to `gitb c aifp`.
+
+<details>
+<summary><b>Default models per provider</b> (click to expand)</summary>
+
+Each task uses a model tuned for speed/cost/quality, picked per provider. Defaults (May 2026):
+
+**OpenRouter** (default provider)
+
+| Task | Default model | Why |
+|------|---------------|-----|
+| `simple` (one-line message) | `google/gemini-3.1-flash-lite-preview` | Cheapest fast tier |
+| `subject` (after manual type/scope) | `google/gemini-3.1-flash-lite-preview` | Short structured output |
+| `full` (header + body) | `google/gemini-3-flash-preview` | Better prose |
+| `grouping` (atomic-split mapping) | `anthropic/claude-haiku-4.5` | Strict instruction following |
+
+**OpenAI** — GPT-5.4 family (released March 2026)
+
+| Task | Default model | Why |
+|------|---------------|-----|
+| `simple` / `subject` | `gpt-5.4-nano` | Built for classification/short well-defined output, ~$0.20 / $1.25 per M tokens |
+| `full` | `gpt-5.4-mini` | Stronger multi-condition instruction following for header + body, ~$0.75 / $4.50 per M |
+| `grouping` | `gpt-5.4-mini` | Holds the strict TSV format under validation, far cheaper than the flagship |
+
+**Ollama** — fully local
+
+| Task | Default model | Why |
+|------|---------------|-----|
+| All tasks | `qwen3:8b` | Best small instruction-follower among 7/8B models; most stable structured output (rarely drops fields in TSV); ~5 GB on disk, ~25 tok/s on a consumer laptop with GPU |
+
+Other strong local picks: `llama3.3:8b` (general-purpose), `qwen2.5-coder:7b` (code-heavy diffs).
+
+Override per task or globally:
+```bash
+gitb cfg model                                          # interactive
+git config gitbasher.ai-model            <model_id>     # global
+git config gitbasher.ai-model-simple     <model_id>     # per-task
+git config gitbasher.ai-model-subject    <model_id>
+git config gitbasher.ai-model-full       <model_id>
+git config gitbasher.ai-model-grouping   <model_id>
+```
+
+</details>
+
+<details>
+<summary><b>Custom OpenAI-compatible endpoints</b> (LiteLLM, vLLM, remote Ollama)</summary>
+
+Self-hosted gateways and remote Ollama hosts work via a base-URL override:
+```bash
+gitb cfg provider                                                  # pick openai or ollama as the closest match
+git config gitbasher.ai-base-url http://my-gateway:4000/v1/chat/completions
+```
+
+</details>
+
+---
+
 ## Command reference
 
 > **Tip:** every command accepts `help` (`h`) for inline help: `gitb commit help`, `gitb sync h`.
-
-### Top-level commands
 
 | Command | Aliases | Description |
 |---------|---------|-------------|
@@ -349,6 +392,9 @@ gitb b -             # back to previous branch (like cd -)
 
 > **Multi-word modes.** Modifiers can be written as separate words in any order — `gitb commit ai fast push`, `gitb c ai f p`, and `gitb c aifp` are all equivalent. Modifier words: `ai`/`llm`/`i`, `fast`/`f`, `push`/`pu`/`p`, `scope`/`s`, `msg`/`m`, `staged`, `fixup`/`fix`/`x`, `amend`/`am`/`a`, `split`/`sp`/`sl`, `ticket`/`jira`/`j`/`t`, `last`/`l`, `revert`/`rev`. The `ff`/`ffp` ultrafast modes remain compact-only.
 
+<details>
+<summary>All commit modes (28)</summary>
+
 | Mode | Aliases | Description |
 |------|---------|-------------|
 | `<empty>` | | Select files, build conventional message |
@@ -380,7 +426,12 @@ gitb b -             # back to previous branch (like cd -)
 | `last` | `l` | Edit last commit's message |
 | `revert` | `rev` | Revert a selected commit |
 
+</details>
+
 ### `gitb push`
+
+<details>
+<summary>All push modes</summary>
 
 | Mode | Aliases | Description |
 |------|---------|-------------|
@@ -389,7 +440,12 @@ gitb b -             # back to previous branch (like cd -)
 | `force` | `f` | Force push (use after rebase/amend) |
 | `list` | `log` `l` | List unpushed commits only |
 
+</details>
+
 ### `gitb pull`
+
+<details>
+<summary>All pull modes</summary>
 
 | Mode | Aliases | Description |
 |------|---------|-------------|
@@ -403,7 +459,12 @@ gitb b -             # back to previous branch (like cd -)
 | `interactive` | `ri` `rs` | Interactive rebase + autosquash |
 | `dry` | `d` `dr` | Preview incoming commits without modifying local refs |
 
+</details>
+
 ### `gitb branch`
+
+<details>
+<summary>All branch modes</summary>
 
 | Mode | Aliases | Description |
 |------|---------|-------------|
@@ -419,7 +480,12 @@ gitb b -             # back to previous branch (like cd -)
 | `recent` | `rc` | Pick from recently checked-out branches |
 | `gone` | `g` | Delete locals whose remote tracking branch is gone |
 
+</details>
+
 ### `gitb tag`
+
+<details>
+<summary>All tag modes</summary>
 
 | Mode | Aliases | Description |
 |------|---------|-------------|
@@ -434,7 +500,12 @@ gitb b -             # back to previous branch (like cd -)
 | `list` | `log` `l` | List local tags |
 | `remote` | `fetch` `r` | Fetch and list remote tags |
 
+</details>
+
 ### `gitb merge`
+
+<details>
+<summary>All merge modes</summary>
 
 | Mode | Aliases | Description |
 |------|---------|-------------|
@@ -443,7 +514,12 @@ gitb b -             # back to previous branch (like cd -)
 | `to-main` | `to-master` `tm` | Switch to main, merge current branch in |
 | `remote` | `r` | Fetch + select a remote branch to merge |
 
+</details>
+
 ### `gitb rebase`
+
+<details>
+<summary>All rebase modes</summary>
 
 | Mode | Aliases | Description |
 |------|---------|-------------|
@@ -453,6 +529,8 @@ gitb b -             # back to previous branch (like cd -)
 | `autosquash` | `a` `s` `ia` | Interactive rebase with `--autosquash` |
 | `fastautosquash` | `fast` `sf` `f` | Autosquash without interaction |
 | `pull` | `p` | Take commits from selected branch into current |
+
+</details>
 
 ### `gitb squash`
 
@@ -466,6 +544,9 @@ feature commit they belong to). Range is auto-detected:
 The plan is shown for confirmation before any history is rewritten. If you
 don't like the result, recover with `gitb undo rebase`.
 
+<details>
+<summary>All squash modes</summary>
+
 | Mode | Aliases | Description |
 |------|---------|-------------|
 | `<empty>` | | Generate plan, confirm, then interactive rebase |
@@ -474,9 +555,14 @@ don't like the result, recover with `gitb undo rebase`.
 | `push` | `ps` | After rebase, force-push with `--force-with-lease` |
 | `help` | `h` | Show usage |
 
+</details>
+
 Requires AI to be configured (`gitb cfg ai`).
 
 ### `gitb cherry`
+
+<details>
+<summary>All cherry modes</summary>
 
 | Mode | Aliases | Description |
 |------|---------|-------------|
@@ -487,9 +573,14 @@ Requires AI to be configured (`gitb cfg ai`).
 | `abort` | `a` | Abort current cherry-pick |
 | `continue` | `cont` `c` | Continue after resolving conflicts |
 
+</details>
+
 ### `gitb sync`
 
 Fetch the default branch and update your current branch. Useful mid-feature.
+
+<details>
+<summary>All sync modes</summary>
 
 | Mode | Aliases | Description |
 |------|---------|-------------|
@@ -498,6 +589,8 @@ Fetch the default branch and update your current branch. Useful mid-feature.
 | `merge` | `m` | Use merge instead of rebase |
 | `mergep` | `mp` `pm` | Merge + push |
 | `dry` | `d` `dr` | Preview commits sync would bring in from main without modifying local refs |
+
+</details>
 
 ### `gitb wip`
 
@@ -510,6 +603,9 @@ specified, and `wip down` auto-detects which backend was used.
 | `stash` | `git stash --include-untracked` + force-push `wip/<branch>` to remote as backup | Quick context switch, default |
 | `branch` | Commits all changes onto a `wip/<branch>` branch, leaves current branch clean, optionally pushes | Want history / share work / open a draft PR |
 | `worktree` | Same as branch, but the WIP lives in a sibling worktree so you can keep working on it side-by-side | Long-running parallel work |
+
+<details>
+<summary>All wip up / down modes</summary>
 
 | Command | Aliases | Description |
 |---------|---------|-------------|
@@ -524,9 +620,14 @@ specified, and `wip down` auto-detects which backend was used.
 | `gitb wip down branch` | `d b` | Restore from `wip/<branch>` (squash-merge into working tree) |
 | `gitb wip down worktree` | `d w` `d wt` | Restore from the wip worktree, then remove it |
 
+</details>
+
 For `branch` and `worktree`, `wip down` brings everything (committed + uncommitted) back as plain modifications and deletes the wip branch / worktree (and remote `wip/<branch>` if present).
 
 ### `gitb undo`
+
+<details>
+<summary>All undo modes</summary>
 
 | Mode | Aliases | Description |
 |------|---------|-------------|
@@ -536,7 +637,12 @@ For `branch` and `worktree`, `wip down` brings everything (committed + uncommitt
 | `rebase` | `r` | Abort or undo last rebase (`ORIG_HEAD`) |
 | `stash` | `s` | Re-stash a popped/applied stash |
 
+</details>
+
 ### `gitb reset`
+
+<details>
+<summary>All reset modes</summary>
 
 | Mode | Aliases | Description |
 |------|---------|-------------|
@@ -546,7 +652,12 @@ For `branch` and `worktree`, `wip down` brings everything (committed + uncommitt
 | `interactive` | `i` | Pick commit to reset to, then approve |
 | `ref` | `r` | Reset to a `HEAD` reference with approval (reflog recovery) |
 
+</details>
+
 ### `gitb stash`
+
+<details>
+<summary>All stash modes</summary>
 
 | Mode | Aliases | Description |
 |------|---------|-------------|
@@ -559,11 +670,16 @@ For `branch` and `worktree`, `wip down` brings everything (committed + uncommitt
 | `apply` | `a` | Apply without removing |
 | `drop` | `d` | Delete stash |
 
+</details>
+
 ### `gitb worktree`
 
 Run multiple branches in parallel without stashing or switching: each worktree
 is a real working directory linked to the same `.git`. Great for hotfixes,
 long-running reviews, or comparing branches side-by-side.
+
+<details>
+<summary>All worktree modes</summary>
 
 | Mode | Aliases | Description |
 |------|---------|-------------|
@@ -579,6 +695,8 @@ long-running reviews, or comparing branches side-by-side.
 | `unlock` | `ul` | Unlock a worktree |
 | `prune` | `pr` `p` | Clean up stale worktree records (dry-run preview first) |
 | `path` | `cd` `switch` `sw` | Print the path to a chosen worktree (use with `cd $(...)`) |
+
+</details>
 
 ```bash
 gitb wt add                # new branch + new worktree from current HEAD
@@ -597,6 +715,9 @@ git config --global gitbasher.worktreebase ~/code/worktrees
 
 ### `gitb hook`
 
+<details>
+<summary>All hook modes</summary>
+
 | Mode | Aliases | Description |
 |------|---------|-------------|
 | `<empty>` | | Interactive action menu |
@@ -607,6 +728,8 @@ git config --global gitbasher.worktreebase ~/code/worktrees
 | `remove` | `rm` `r` | Delete hook(s) |
 | `test` | `run` `check` | Test hook execution |
 | `show` | `cat` `view` `s` | Display hook contents |
+
+</details>
 
 ### `gitb init`
 
@@ -626,6 +749,9 @@ configured remote, gitbasher offers to add one interactively. Use
 Add, change, rename, or remove the remote origin. Useful when you create a repo
 without a remote, rename the repo on GitHub/GitLab, or move it to a new host.
 
+<details>
+<summary>All origin modes</summary>
+
 | Mode | Aliases | Description |
 |------|---------|-------------|
 | `<empty>` | `show` `info` | List configured remotes and their URLs |
@@ -634,6 +760,8 @@ without a remote, rename the repo on GitHub/GitLab, or move it to a new host.
 | `rename` | `mv` `ren` | Rename a remote (e.g. `origin` → `upstream`) |
 | `remove` | `rm` `del` `d` | Remove the remote |
 | `help` | `h` | Show help |
+
+</details>
 
 Each mutating mode accepts an optional URL/name as a second argument to skip
 the interactive prompt:
@@ -648,6 +776,9 @@ gitb origin remove                               # delete the remote
 
 ### `gitb config`
 
+<details>
+<summary>All config modes</summary>
+
 | Mode | Aliases | Description |
 |------|---------|-------------|
 | `<empty>` | | Show current configuration |
@@ -661,9 +792,15 @@ gitb origin remove                               # delete the remote
 | `provider` | `prov` | AI provider (openrouter, openai, ollama) |
 | `model` | `m` | Default AI model |
 | `proxy` | `prx` `p` | HTTP proxy for AI calls |
+| `completion` | `comp` | Install / uninstall bash & zsh tab completion |
 | `delete` | `unset` `del` | Remove global config |
 
+</details>
+
 ### `gitb log`
+
+<details>
+<summary>All log modes</summary>
 
 | Mode | Aliases | Description |
 |------|---------|-------------|
@@ -673,6 +810,8 @@ gitb origin remove                               # delete the remote
 | `search` | `s` | Search commits |
 
 **Search sub-modes:** `message`/`msg`/`m`, `author`/`a`, `file`/`f`, `content`/`pickaxe`/`p`, `date`/`d`, `hash`/`commit`/`h`.
+
+</details>
 
 ### Info commands
 
@@ -703,6 +842,12 @@ gitb origin remove                               # delete the remote
 | `gitbasher.ai-model[-task]` | `gitb cfg model` | AI model overrides (per provider) |
 | `gitbasher.proxy` | `gitb cfg proxy` | HTTP proxy for AI calls |
 | `gitbasher.worktreebase` | `git config gitbasher.worktreebase <dir>` | Parent directory for new worktrees (defaults to `..`) |
+
+**Clear gitbasher config** (per-repo settings live with the repo and disappear with it):
+```bash
+git config --global --remove-section gitbasher 2>/dev/null
+git config --global --unset core.editor 2>/dev/null   # only if you set it via gitb cfg editor
+```
 
 **Aliases for shell users:**
 ```bash
@@ -802,19 +947,21 @@ rm -rf ~/.gitbasher                  # remove config (optional)
 
 ## Contributing
 
-PRs welcome. Workflow:
-
-1. Fork and create a feature branch
-2. **Write tests first** (BATS, see [tests/README.md](tests/README.md))
-3. Implement
-4. `make test` — all tests must pass
-5. Open a PR
+PRs welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for the dev setup, BATS test patterns, and commit-message conventions. Curious how the bundle is built or how scripts get sourced into one process? See [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ```bash
 make build               # rebuild dist/gitb
 make test                # run all 115+ tests
 make test-file FILE=test_sanitization.bats
 ```
+
+Workflow:
+
+1. Fork and create a feature branch
+2. **Write tests first** (BATS, see [tests/README.md](tests/README.md))
+3. Implement
+4. `make test` — all tests must pass
+5. Open a PR
 
 **Maintainer:** [@maxbolgarin](https://github.com/maxbolgarin)
 

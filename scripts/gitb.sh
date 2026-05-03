@@ -87,6 +87,7 @@ source scripts/sync.sh || { echo "gitbasher: failed to load scripts/sync.sh" >&2
 source scripts/undo.sh || { echo "gitbasher: failed to load scripts/undo.sh" >&2; exit 1; }
 source scripts/wip.sh || { echo "gitbasher: failed to load scripts/wip.sh" >&2; exit 1; }
 source scripts/gitlog.sh || { echo "gitbasher: failed to load scripts/gitlog.sh" >&2; exit 1; }
+source scripts/worktree.sh || { echo "gitbasher: failed to load scripts/worktree.sh" >&2; exit 1; }
 source scripts/hooks.sh || { echo "gitbasher: failed to load scripts/hooks.sh" >&2; exit 1; }
 source scripts/origin.sh || { echo "gitbasher: failed to load scripts/origin.sh" >&2; exit 1; }
 

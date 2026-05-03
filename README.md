@@ -87,7 +87,7 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 - [Command reference](#command-reference)
   - [commit](#gitb-commit) · [push](#gitb-push) · [pull](#gitb-pull) · [branch](#gitb-branch) · [tag](#gitb-tag) · [merge](#gitb-merge) · [rebase](#gitb-rebase)
   - [cherry](#gitb-cherry) · [sync](#gitb-sync) · [wip](#gitb-wip) · [undo](#gitb-undo) · [reset](#gitb-reset) · [stash](#gitb-stash)
-  - [hook](#gitb-hook) · [config](#gitb-config) · [log](#gitb-log) · [info commands](#info-commands)
+  - [worktree](#gitb-worktree) · [hook](#gitb-hook) · [config](#gitb-config) · [log](#gitb-log) · [info commands](#info-commands)
 - [Configuration](#configuration)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
@@ -121,12 +121,13 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 | **Integration** | `merge` (`m`), `rebase` (`r`), `cherry` (`ch`) | Merge into current / into main / from remote · rebase onto main / interactive / autosquash / fastautosquash / pull-commits · cherry-pick by hash, range, or interactive |
 | **Tags & releases** | `tag` (`t`) | Lightweight, annotated, from-commit, push, push-all, delete, delete-all, list, fetch-remote |
 | **Save & rollback** | `wip` (`up`/`down`), `undo` (`un`), `reset` (`res`), `stash` (`s`) | Stash WIP + push backup branch, restore in one step · undo last commit/amend/merge/rebase/stash · interactive reset · full stash menu |
+| **Worktrees** | `worktree` (`wt`) | Add / list / remove / move / lock / prune git worktrees, with new branch from current/main or from existing/remote branches |
 | **Inspect** | `status` (`st`), `log` (`l`), `reflog` (`rl`), `last-commit` (`lc`), `last-ref` (`lr`) | Pretty repo status, multi-mode log + search, reflog viewer, quick last-commit / last-ref summary |
 | **Hooks** | `hook` (`ho`) | List / create from templates / edit / toggle / remove / test / show — for every git hook |
 | **Repo setup** | `init` (`i`), `origin` (`or`, `o`, `remote`) | `git init` from gitbasher · add/change/rename/remove the remote origin |
 | **Config** | `config` (`cfg`) | User, default branch, separator, editor, ticket prefix, scopes, AI provider/key/model, proxy |
 
-Total: **22 top-level commands**, **60+ aliases**, **100+ modes**.
+Total: **23 top-level commands**, **60+ aliases**, **100+ modes**.
 
 ---
 
@@ -329,6 +330,7 @@ gitb b -             # back to previous branch (like cd -)
 | [`undo`](#gitb-undo) | `un` | Undo last commit / amend / merge / rebase / stash |
 | [`reset`](#gitb-reset) | `res` | Friendly `git reset` with preview, approval, and undo support |
 | [`stash`](#gitb-stash) | `s` `sta` | Full stash menu: select, all, list, pop, apply, show, drop |
+| [`worktree`](#gitb-worktree) | `wt` `tree` | Manage git worktrees: add, list, remove, move, lock, prune |
 | [`hook`](#gitb-hook) | `ho` `hk` | Manage git hooks: list, create, edit, toggle, remove, test, show |
 | [`origin`](#gitb-origin) | `or` `o` `remote` | Add, change, rename, or remove the remote origin |
 | [`init`](#gitb-init) | `i` | `git init` + optional origin setup prompt |
@@ -515,6 +517,42 @@ Stash work-in-progress as a single `wip` stash and back it up to a remote `wip/<
 | `apply` | `a` | Apply without removing |
 | `drop` | `d` | Delete stash |
 
+### `gitb worktree`
+
+Run multiple branches in parallel without stashing or switching: each worktree
+is a real working directory linked to the same `.git`. Great for hotfixes,
+long-running reviews, or comparing branches side-by-side.
+
+| Mode | Aliases | Description |
+|------|---------|-------------|
+| `<empty>` | | Show existing worktrees + interactive menu |
+| `list` | `l` `ls` | List all worktrees with branch and lock state |
+| `add` | `a` `new` `n` `c` | Create worktree with a new branch from current `HEAD` |
+| `addd` | `ad` `nd` `cd` | Fetch, then create worktree with new branch from default branch |
+| `addb` | `ab` `from` `b` | Create worktree from an existing local branch |
+| `addr` | `ar` `remote` `r` | Fetch + create worktree tracking a remote branch |
+| `remove` | `rm` `del` `d` | Pick a worktree to remove (force-prompt on dirty trees) |
+| `move` | `mv` | Move a worktree to a new path |
+| `lock` | | Lock a worktree (with optional reason) |
+| `unlock` | `ul` | Unlock a worktree |
+| `prune` | `pr` `p` | Clean up stale worktree records (dry-run preview first) |
+| `path` | `cd` `switch` `sw` | Print the path to a chosen worktree (use with `cd $(...)`) |
+
+```bash
+gitb wt add                # new branch + new worktree from current HEAD
+gitb wt addd               # new branch + new worktree from updated main
+gitb wt addr               # check out a remote branch into a fresh worktree
+gitb wt remove             # interactive removal (with force prompt if dirty)
+cd "$(gitb wt path)"       # cd into a chosen worktree
+```
+
+By default new worktrees are created at `../<repo>-<branch>`. Override the
+parent directory globally or per-repo:
+
+```bash
+git config --global gitbasher.worktreebase ~/code/worktrees
+```
+
 ### `gitb hook`
 
 | Mode | Aliases | Description |
@@ -622,6 +660,7 @@ gitb origin remove                               # delete the remote
 | `gitbasher.ai-base-url` | `git config` | Custom OpenAI-compatible endpoint (LiteLLM, vLLM, remote Ollama) |
 | `gitbasher.ai-model[-task]` | `gitb cfg model` | AI model overrides (per provider) |
 | `gitbasher.proxy` | `gitb cfg proxy` | HTTP proxy for AI calls |
+| `gitbasher.worktreebase` | `git config gitbasher.worktreebase <dir>` | Parent directory for new worktrees (defaults to `..`) |
 
 **Aliases for shell users:**
 ```bash

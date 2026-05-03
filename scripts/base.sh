@@ -32,6 +32,7 @@ function print_help {
     msg="$msg\nundo_un_Undo commit, amend, merge, rebase, or stash actions"
     msg="$msg\nreset_res_Preview and apply common git reset flows"
     msg="$msg\nstash_s|sta_Manage git stashes"
+    msg="$msg\nworktree_wt|tree_List, add, remove, lock, move, and prune git worktrees"
     msg="$msg\nhook_ho|hk_List, create, edit, toggle, and test git hooks"
     msg="$msg\norigin_or|o|remote_Init, set, change, rename, or remove remotes"
     msg="$msg\nconfig_cf|cfg|conf_Configure gitbasher settings"
@@ -140,6 +141,9 @@ case "$1" in
     ;;
     stash|s|sta)
         stash_script $2
+    ;;
+    worktree|wt|tree)
+        worktree_script "$2"
     ;;
     hook|ho|hk)
         hooks_script $2 $3 $4

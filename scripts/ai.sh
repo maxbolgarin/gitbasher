@@ -2,8 +2,15 @@
 
 ### AI Functions for commit message generation
 
-# OpenRouter API endpoint (OpenAI-compatible)
+# Built-in providers. Each speaks the OpenAI /chat/completions schema, so only
+# the base URL and auth handling differ. Custom base URLs override these via
+# gitbasher.ai-base-url.
 readonly OPENROUTER_API_URL="https://openrouter.ai/api/v1/chat/completions"
+readonly OPENAI_API_URL="https://api.openai.com/v1/chat/completions"
+readonly OLLAMA_API_URL="http://localhost:11434/v1/chat/completions"
+
+# Default provider when gitbasher.ai-provider is unset — keeps existing setups working.
+readonly AI_DEFAULT_PROVIDER="openrouter"
 
 # Sampling temperature for commit-message generation. Low enough to keep the
 # conventional-commit format consistent, high enough that pressing 'r' to
@@ -39,7 +46,57 @@ function set_ai_api_key {
     set_config_value gitbasher.ai-api-key "$1"
 }
 
-### Function to get/set AI model (OpenRouter) — global override.
+### Function to get the configured AI provider (openrouter | openai | ollama).
+# Falls back to AI_DEFAULT_PROVIDER so existing setups keep targeting OpenRouter.
+function get_ai_provider {
+    local provider
+    provider=$(get_config_value gitbasher.ai-provider "$AI_DEFAULT_PROVIDER")
+    # Normalize to lowercase to make case-insensitive matches downstream
+    echo "$provider" | tr '[:upper:]' '[:lower:]'
+}
+
+function set_ai_provider {
+    set_config_value gitbasher.ai-provider "$1"
+}
+
+### Function to get/set a custom AI base URL (overrides the provider's default).
+# Useful for self-hosted OpenAI-compatible gateways (LiteLLM, vLLM, LM Studio, …)
+# or a non-default Ollama host.
+function get_ai_base_url {
+    get_config_value gitbasher.ai-base-url ""
+}
+
+function set_ai_base_url {
+    set_config_value gitbasher.ai-base-url "$1"
+}
+
+### Resolve the chat-completions URL for the active provider.
+# Custom base URL wins; otherwise pick the built-in for the provider.
+function get_ai_api_url {
+    local custom_url
+    custom_url=$(get_ai_base_url)
+    if [ -n "$custom_url" ]; then
+        echo "$custom_url"
+        return
+    fi
+
+    case "$(get_ai_provider)" in
+        openai)  echo "$OPENAI_API_URL" ;;
+        ollama)  echo "$OLLAMA_API_URL" ;;
+        *)       echo "$OPENROUTER_API_URL" ;;
+    esac
+}
+
+### Whether the active provider needs an API key.
+# Local Ollama servers don't authenticate by default.
+function ai_provider_requires_api_key {
+    case "$(get_ai_provider)" in
+        ollama) return 1 ;;
+        *)      return 0 ;;
+    esac
+}
+
+### Function to get/set AI model — global override.
 # When set, it wins over the per-task defaults below for every task. When unset
 # (the typical case for new users), each task uses its own per-task default.
 # Returns: explicit user override or empty when nothing has been set.
@@ -51,7 +108,7 @@ function set_ai_model {
     set_config_value gitbasher.ai-model "$1"
 }
 
-### Per-task default model IDs.
+### Per-task default model IDs (OpenRouter).
 # Picked May 2026 for the speed / cost / quality balance that fits each task:
 #   - simple/subject (short structured output, runs interactively): the cheapest
 #     fast tier with strong format compliance.
@@ -64,6 +121,21 @@ readonly AI_DEFAULT_MODEL_SIMPLE="google/gemini-3.1-flash-lite-preview"
 readonly AI_DEFAULT_MODEL_SUBJECT="google/gemini-3.1-flash-lite-preview"
 readonly AI_DEFAULT_MODEL_FULL="google/gemini-3-flash-preview"
 readonly AI_DEFAULT_MODEL_GROUPING="anthropic/claude-haiku-4.5"
+
+# OpenAI per-task defaults — gpt-5-mini is the cheap+fast tier with strong
+# format compliance; gpt-5 used only for the rarely-fired grouping task.
+readonly AI_DEFAULT_MODEL_SIMPLE_OPENAI="gpt-5-mini"
+readonly AI_DEFAULT_MODEL_SUBJECT_OPENAI="gpt-5-mini"
+readonly AI_DEFAULT_MODEL_FULL_OPENAI="gpt-5-mini"
+readonly AI_DEFAULT_MODEL_GROUPING_OPENAI="gpt-5"
+
+# Ollama per-task defaults — same lightweight model everywhere because users
+# typically only have one or two models pulled. Override with `gitb cfg model`
+# to match what `ollama list` shows on your machine.
+readonly AI_DEFAULT_MODEL_SIMPLE_OLLAMA="llama3.1"
+readonly AI_DEFAULT_MODEL_SUBJECT_OLLAMA="llama3.1"
+readonly AI_DEFAULT_MODEL_FULL_OLLAMA="llama3.1"
+readonly AI_DEFAULT_MODEL_GROUPING_OLLAMA="llama3.1"
 
 ### Resolve the model to use for a specific task.
 # Resolution order:
@@ -88,12 +160,34 @@ function get_ai_model_for {
         return
     fi
 
-    case "$task" in
-        simple)   echo "$AI_DEFAULT_MODEL_SIMPLE" ;;
-        subject)  echo "$AI_DEFAULT_MODEL_SUBJECT" ;;
-        full)     echo "$AI_DEFAULT_MODEL_FULL" ;;
-        grouping) echo "$AI_DEFAULT_MODEL_GROUPING" ;;
-        *)        echo "$AI_DEFAULT_MODEL_SIMPLE" ;;
+    case "$(get_ai_provider)" in
+        openai)
+            case "$task" in
+                simple)   echo "$AI_DEFAULT_MODEL_SIMPLE_OPENAI" ;;
+                subject)  echo "$AI_DEFAULT_MODEL_SUBJECT_OPENAI" ;;
+                full)     echo "$AI_DEFAULT_MODEL_FULL_OPENAI" ;;
+                grouping) echo "$AI_DEFAULT_MODEL_GROUPING_OPENAI" ;;
+                *)        echo "$AI_DEFAULT_MODEL_SIMPLE_OPENAI" ;;
+            esac
+            ;;
+        ollama)
+            case "$task" in
+                simple)   echo "$AI_DEFAULT_MODEL_SIMPLE_OLLAMA" ;;
+                subject)  echo "$AI_DEFAULT_MODEL_SUBJECT_OLLAMA" ;;
+                full)     echo "$AI_DEFAULT_MODEL_FULL_OLLAMA" ;;
+                grouping) echo "$AI_DEFAULT_MODEL_GROUPING_OLLAMA" ;;
+                *)        echo "$AI_DEFAULT_MODEL_SIMPLE_OLLAMA" ;;
+            esac
+            ;;
+        *)
+            case "$task" in
+                simple)   echo "$AI_DEFAULT_MODEL_SIMPLE" ;;
+                subject)  echo "$AI_DEFAULT_MODEL_SUBJECT" ;;
+                full)     echo "$AI_DEFAULT_MODEL_FULL" ;;
+                grouping) echo "$AI_DEFAULT_MODEL_GROUPING" ;;
+                *)        echo "$AI_DEFAULT_MODEL_SIMPLE" ;;
+            esac
+            ;;
     esac
 }
 
@@ -328,42 +422,59 @@ function validate_proxy_url {
 }
 
 ### Function to securely call curl with API key
-# This prevents API key exposure in process lists by using a subshell
+# This prevents API key exposure in process lists by using a subshell.
 # $1: proxy_url (can be empty)
-# $2: api_key value
+# $2: api_key value (empty for unauthenticated providers like local Ollama)
 # $3: json_payload
+# $4: target API URL (full /chat/completions endpoint)
+# $5: provider name — controls which provider-specific headers are sent
 function secure_curl_with_api_key {
     local proxy_url="$1"
     local api_key="$2"
     local json_payload="$3"
-    
+    local api_url="$4"
+    local provider="$5"
+
     # Execute curl in a subshell to minimize API key exposure
     (
         # Unset any potentially exported variables
         unset HISTFILE
-        
+
         # Build curl command with proper array handling
         local curl_cmd=(
             curl -s -X POST
             --connect-timeout 30
             --max-time 60
         )
-        
+
         # Add proxy if specified
         if [ -n "$proxy_url" ]; then
             curl_cmd+=(--proxy "$proxy_url")
         fi
-        
-        # Add remaining options for OpenRouter
+
         curl_cmd+=(
-            "$OPENROUTER_API_URL"
+            "$api_url"
             -H "Content-Type: application/json"
-            -H "Authorization: Bearer $api_key"
-            -H "HTTP-Referer: https://github.com/maxbolgarin/gitbasher"
-            -H "X-Title: gitbasher"
-            -d "$json_payload"
         )
-        
+
+        # Auth header is only sent when we actually have a key. Local Ollama
+        # rejects nothing if it's present, but skipping it keeps the request
+        # clean and avoids leaking unrelated keys to a misconfigured endpoint.
+        if [ -n "$api_key" ]; then
+            curl_cmd+=(-H "Authorization: Bearer $api_key")
+        fi
+
+        # OpenRouter uses these headers for attribution / leaderboards. Other
+        # providers ignore them, but there's no reason to send them either.
+        if [ "$provider" = "openrouter" ]; then
+            curl_cmd+=(
+                -H "HTTP-Referer: https://github.com/maxbolgarin/gitbasher"
+                -H "X-Title: gitbasher"
+            )
+        fi
+
+        curl_cmd+=(-d "$json_payload")
+
         # Execute the curl command
         "${curl_cmd[@]}" 2>&1
     )
@@ -379,13 +490,13 @@ function _json_escape_for_payload {
         | LC_ALL=C awk 'BEGIN{ORS=""} NR>1{print "\\n"} {print}'
 }
 
-### Function to make request to OpenRouter API
+### Function to make a chat-completions request against the configured AI provider.
 # $1: system prompt (instructions: role, task, types, rules, examples, output format)
 # $2: user prompt (data: recent commits, staged files, diff, scopes)
 # $3: max_tokens cap on the response (default: AI_MAX_TOKENS_FULL)
 # $4: model id (default: get_ai_model_for "simple" — keeps single-arg legacy callers working)
 # Returns: AI response text
-function call_openrouter_api {
+function call_ai_api {
     # Set trap to clear sensitive variables on exit/interrupt
     trap 'clear_sensitive_vars' EXIT INT TERM
 
@@ -393,12 +504,15 @@ function call_openrouter_api {
     local user_prompt="$2"
     local max_tokens="${3:-$AI_MAX_TOKENS_FULL}"
     local model="${4:-$(get_ai_model_for simple)}"
+    local provider=$(get_ai_provider)
+    local api_url=$(get_ai_api_url)
     local api_key=$(get_ai_api_key)
     local max_retries=2
     local retry_delay=2
 
-    if [ -z "$api_key" ]; then
-        echo -e "${RED}AI API key not configured. Set it with: gitb config${ENDCOLOR}" >&2
+    # Local providers (Ollama) don't require a key; everyone else does.
+    if [ -z "$api_key" ] && ai_provider_requires_api_key; then
+        echo -e "${RED}AI API key not configured for provider '${provider}'. Set it with: gitb config${ENDCOLOR}" >&2
         clear_sensitive_vars
         return 1
     fi
@@ -444,9 +558,9 @@ function call_openrouter_api {
     # Retry logic for server errors
     while [ $retry_count -le $max_retries ]; do
         if [ -n "$safe_proxy_url" ]; then
-            response=$(secure_curl_with_api_key "$safe_proxy_url" "$api_key" "$json_payload")
+            response=$(secure_curl_with_api_key "$safe_proxy_url" "$api_key" "$json_payload" "$api_url" "$provider")
         else
-            response=$(secure_curl_with_api_key "" "$api_key" "$json_payload")
+            response=$(secure_curl_with_api_key "" "$api_key" "$json_payload" "$api_url" "$provider")
         fi
         
         curl_exit_code=$?
@@ -499,20 +613,27 @@ function call_openrouter_api {
                 echo -e "  📝 Error: $proxy_test" >&2
             fi
         else
+            # Pull just the scheme+host out of the full chat-completions URL so
+            # the connectivity probe targets the right endpoint per provider.
+            local probe_host=$(echo "$api_url" | sed -E 's#^(https?://[^/]+).*#\1#')
             echo -e "  • No proxy configured" >&2
+            echo -e "  • Provider: ${provider}" >&2
             echo -e "${YELLOW}Direct connection troubleshooting:${ENDCOLOR}" >&2
-            echo -e "  • Test connection: ${BOLD}curl --connect-timeout 10 https://openrouter.ai${ENDCOLOR}" >&2
-            
-            # Test direct connectivity to OpenRouter API
-            echo -e "${YELLOW}Testing direct connectivity to OpenRouter...${ENDCOLOR}" >&2
-            local direct_test=$(curl --connect-timeout 5 --max-time 10 -s -I https://openrouter.ai 2>&1)
+            echo -e "  • Test connection: ${BOLD}curl --connect-timeout 10 ${probe_host}${ENDCOLOR}" >&2
+
+            echo -e "${YELLOW}Testing direct connectivity to ${probe_host}...${ENDCOLOR}" >&2
+            local direct_test=$(curl --connect-timeout 5 --max-time 10 -s -I "$probe_host" 2>&1)
             local direct_test_code=$?
             if [ $direct_test_code -eq 0 ]; then
-                echo -e "  ✅ OpenRouter endpoint: Reachable" >&2
+                echo -e "  ✅ ${provider} endpoint: Reachable" >&2
             else
-                echo -e "  ❌ OpenRouter endpoint: Failed (exit code: $direct_test_code)" >&2
+                echo -e "  ❌ ${provider} endpoint: Failed (exit code: $direct_test_code)" >&2
                 echo -e "  📝 Error: $(echo "$direct_test" | head -1)" >&2
-                echo -e "  💡 Consider configuring a proxy: gitb cfg proxy" >&2
+                if [ "$provider" = "ollama" ]; then
+                    echo -e "  💡 Make sure the Ollama daemon is running: ${BOLD}ollama serve${ENDCOLOR}" >&2
+                else
+                    echo -e "  💡 Consider configuring a proxy: gitb cfg proxy" >&2
+                fi
             fi
         fi
         
@@ -587,7 +708,10 @@ function call_openrouter_api {
                 echo -e "${YELLOW}🔐 Authentication error: Invalid or expired API key.${ENDCOLOR}" >&2
                 echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
                 echo -e "${YELLOW}  • Check your API key with: gitb cfg ai${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Get an OpenRouter key at: https://openrouter.ai/keys${ENDCOLOR}" >&2
+                case "$provider" in
+                    openai)     echo -e "${YELLOW}  • Get an OpenAI key at: https://platform.openai.com/api-keys${ENDCOLOR}" >&2 ;;
+                    openrouter) echo -e "${YELLOW}  • Get an OpenRouter key at: https://openrouter.ai/keys${ENDCOLOR}" >&2 ;;
+                esac
                 echo -e "${YELLOW}  • Ensure your key has proper permissions${ENDCOLOR}" >&2
                 ;;
             429)
@@ -680,15 +804,17 @@ function check_ai_available {
         echo -e "${RED}curl is required for AI functionality but not installed${ENDCOLOR}" >&2
         return 1
     fi
-    
-    # Check if API key is configured
-    local api_key=$(get_ai_api_key)
-    if [ -z "$api_key" ]; then
-        echo -e "${RED}AI API key not configured${ENDCOLOR}" >&2
-        echo -e "${YELLOW}Configure it with: gitb cfg ai${ENDCOLOR}" >&2
-        return 1
+
+    # Local providers (Ollama) don't need a key, so skip the key check for them.
+    if ai_provider_requires_api_key; then
+        local api_key=$(get_ai_api_key)
+        if [ -z "$api_key" ]; then
+            echo -e "${RED}AI API key not configured${ENDCOLOR}" >&2
+            echo -e "${YELLOW}Configure it with: gitb cfg ai${ENDCOLOR}" >&2
+            return 1
+        fi
     fi
-    
+
     return 0
 }
 
@@ -919,7 +1045,7 @@ function generate_ai_commit_message {
         *)       max_tokens="$AI_MAX_TOKENS_SIMPLE";  model=$(get_ai_model_for simple) ;;
     esac
 
-    call_openrouter_api "$system_prompt" "$user_prompt" "$max_tokens" "$model"
+    call_ai_api "$system_prompt" "$user_prompt" "$max_tokens" "$model"
 }
 
 ### Function to securely clear sensitive variables

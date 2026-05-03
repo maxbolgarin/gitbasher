@@ -649,7 +649,7 @@ ${ai_msg}"
                     if [ "$normalized_key" = "y" ] || [ -z "$choice" ]; then
                         msg="$ai_msg"
                     elif [ "$normalized_key" = "e" ]; then
-                        read -p "Edit: " -e -i "$ai_msg" manual_input
+                        read_editable_input manual_input "Edit: " "$ai_msg"
                         msg="$manual_input"
                     elif [ "$normalized_key" = "s" ]; then
                         echo -e "${YELLOW}Skipping scope '${scope}' (files left unstaged)${ENDCOLOR}"
@@ -728,7 +728,7 @@ ${ai_msg}"
             fi
 
             echo -e "${YELLOW}Write a summary (Enter to skip group):${ENDCOLOR}"
-            read -p "$prefix" -e manual_input
+            read_editable_input manual_input "$prefix"
             if [ -z "$manual_input" ]; then
                 echo -e "${YELLOW}Skipping scope '${scope}'${ENDCOLOR}"
                 while IFS= read -r f; do
@@ -1014,7 +1014,7 @@ ${ai_commit_message}"
                 echo
             fi
             echo -e "${YELLOW}Edit the AI generated message:${ENDCOLOR}"
-            read -p "" -e -i "$ai_commit_message" commit_message
+            read_editable_input commit_message "" "$ai_commit_message"
         fi
         
         if [ -z "$commit_message" ]; then
@@ -1545,7 +1545,7 @@ function commit_script {
         echo "Press Enter if you want to exit"
 
         while [ true ]; do
-            read -p "$(echo -n -e "${BOLD}git add${ENDCOLOR} ")" -e git_add
+            read_editable_input git_add "$(echo -n -e "${BOLD}git add${ENDCOLOR} ")"
 
             # Sanitize file path input
             if [ "$git_add" == "" ]; then
@@ -1654,7 +1654,7 @@ function commit_script {
         elif [ "$normalized_key" = "e" ]; then
             echo
             echo -e "${YELLOW}Edit the saved commit message:${ENDCOLOR}"
-            read -p "" -e -i "$saved_commit_message" edited_commit_message
+            read_editable_input edited_commit_message "" "$saved_commit_message"
             if [ -n "$edited_commit_message" ]; then
                 commit="$edited_commit_message"
                 echo
@@ -1832,7 +1832,7 @@ function commit_script {
         fi
 
         while [ true ]; do
-            read -p "<scope>: " -e commit_scope
+            read_editable_input commit_scope "<scope>: "
 
             if [ "$commit_scope" == "0" ]; then
                 cleanup_on_exit "$git_add"
@@ -1966,7 +1966,7 @@ ${staged_with_tab}
 
     # Use read from console
     else
-        read -p "$(echo -n -e "${commit}")" -e commit_message
+        read_editable_input commit_message "$(echo -n -e "${commit}")"
         if [ -z "$commit_message" ]; then
             cleanup_on_exit "$git_add"
             exit
@@ -1990,9 +1990,9 @@ ${staged_with_tab}
         echo -e "Press Enter to skip, or 0 to exit without changes"
 
         if [ -n "$ticket_name" ]; then
-            read -p "${ticket_name}${sep}" -e commit_ticket
+            read_editable_input commit_ticket "${ticket_name}${sep}"
         else 
-            read -p "<ticket>: " -e commit_ticket
+            read_editable_input commit_ticket "<ticket>: "
         fi
         if [ "$commit_ticket" == "0" ]; then
             cleanup_on_exit "$git_add"

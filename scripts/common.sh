@@ -482,6 +482,25 @@ function read_key {
     printf -v "$_var" '%s' "$_key"
 }
 
+### Read editable text input, allowing Esc to cancel by submitting empty input.
+# $1: variable name to store input (default: REPLY)
+# $2: optional prompt text
+# $3: optional initial value for readline
+function read_editable_input {
+    local _var="${1:-REPLY}"
+    local _prompt="${2:-}"
+
+    # Readline normally treats Esc as a prefix key. For GitBasher prompts, a
+    # plain Esc should behave like "clear this prompt and submit empty".
+    bind '"\e": "\C-a\C-k\C-m"' 2>/dev/null || true
+
+    if [ $# -ge 3 ]; then
+        IFS= read -r -e -p "$_prompt" -i "$3" "$_var"
+    else
+        IFS= read -r -e -p "$_prompt" "$_var"
+    fi
+}
+
 ### ===== END KEYBOARD INPUT HELPERS =====
 
 

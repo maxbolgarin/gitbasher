@@ -160,7 +160,7 @@ function gitlog_search {
             echo -e "${YELLOW}Search commits by message content:${ENDCOLOR}"
             echo -e "Press Enter to exit without changes"
             
-            read -p "Enter search term: " -e search_term
+            read_editable_input search_term "Enter search term: "
             if [ -z "$search_term" ]; then
                 return
             fi
@@ -183,7 +183,7 @@ function gitlog_search {
             echo -e "${YELLOW}Search commits by author name or email:${ENDCOLOR}"
             echo -e "Press Enter to exit without changes"
             
-            read -p "Enter author name or email: " -e author_term
+            read_editable_input author_term "Enter author name or email: "
             if [ -z "$author_term" ]; then
                 return
             fi
@@ -206,7 +206,7 @@ function gitlog_search {
             echo -e "${YELLOW}Search commits that modified specific file(s):${ENDCOLOR}"
             echo -e "Press Enter to exit without changes"
             
-            read -p "Enter file path or pattern: " -e file_path
+            read_editable_input file_path "Enter file path or pattern: "
             if [ -z "$file_path" ]; then
                 return
             fi
@@ -229,7 +229,7 @@ function gitlog_search {
             echo -e "${YELLOW}Search commits that added or removed specific content:${ENDCOLOR}"
             echo -e "Press Enter to exit without changes"
             
-            read -p "Enter content to search for: " -e content_term
+            read_editable_input content_term "Enter content to search for: "
             if [ -z "$content_term" ]; then
                 return
             fi
@@ -253,8 +253,8 @@ function gitlog_search {
             echo -e "Date formats: YYYY-MM-DD, '2 weeks ago', 'yesterday', etc."
             echo -e "Press Enter to skip a field"
             
-            read -p "Since (start date): " -e since_date
-            read -p "Until (end date): " -e until_date
+            read_editable_input since_date "Since (start date): "
+            read_editable_input until_date "Until (end date): "
             
             if [ -z "$since_date" ] && [ -z "$until_date" ]; then
                 echo -e "${YELLOW}No date range specified${ENDCOLOR}"
@@ -291,7 +291,7 @@ function gitlog_search {
             echo -e "${YELLOW}Search for commits by hash pattern:${ENDCOLOR}"
             echo -e "Press Enter to exit without changes"
             
-            read -p "Enter commit hash (full or partial): " -e hash_term
+            read_editable_input hash_term "Enter commit hash (full or partial): "
             if [ -z "$hash_term" ]; then
                 return
             fi

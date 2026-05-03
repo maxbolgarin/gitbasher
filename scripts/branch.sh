@@ -728,7 +728,7 @@ function branch_script {
         echo -e "You can select one of the ${YELLOW}detected prefixes${ENDCOLOR}: $(echo $res | column -ts'|')"
 
         while [ true ]; do
-            read -p "<prefix>: " choice
+            read_editable_input choice "<prefix>: "
 
             if [ "$choice" == "0" ]; then
                 exit
@@ -775,7 +775,7 @@ function branch_script {
         echo "Press Enter to exit without changes"
 
         printf "${BOLD}git branch${ENDCOLOR}"
-        read -p " ${branch_type_and_sep}" -e branch_name
+        read_editable_input branch_name " ${branch_type_and_sep}"
 
         if [ -z "$branch_name" ]; then
             exit

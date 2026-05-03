@@ -97,7 +97,7 @@ function set_editor {
     echo -e "Enter the binary name (e.g. ${BLUE}vi${ENDCOLOR} or ${BLUE}nano${ENDCOLOR}) — overrides ${YELLOW}core.editor${ENDCOLOR}"
     echo -e "Press Enter to exit without changes"
     echo -e "Current editor: ${YELLOW}${editor}${ENDCOLOR}"
-    read -p "Editor: " choice
+    read_editable_input choice "Editor: "
 
     if [ "$choice" == "" ]; then
         exit
@@ -140,7 +140,7 @@ function set_ticket {
         echo -e "Press Enter to exit without changes, or 0 to remove the existing prefix"
     fi
 
-    read -p "Ticket prefix: " -e ticket_name
+    read_editable_input ticket_name "Ticket prefix: "
 
     if [ "$ticket_name" == "0" ]; then
         unset_config_value gitbasher.ticket
@@ -274,7 +274,7 @@ function configure_ai_provider {
     echo
     echo -e "Press Enter to keep the current provider, or enter 0 to reset to default (${AI_DEFAULT_PROVIDER})"
 
-    read -p "Choice (1-3): " choice
+    read_editable_input choice "Choice (1-3): "
 
     if [ "$choice" == "" ]; then
         exit
@@ -367,7 +367,7 @@ function configure_ai_model {
     echo
     echo -e "Press Enter to exit without changes, or 0 to clear the override (use per-task defaults)"
 
-    read -p "Model ID: " model_input
+    read_editable_input model_input "Model ID: "
 
     if [ "$model_input" == "" ]; then
         exit
@@ -423,7 +423,7 @@ function configure_ai_proxy {
     echo -e ""
     echo -e "Press Enter to exit without changes, or 0 to remove the existing proxy"
 
-    read -p "Proxy URL: " ai_proxy_input
+    read_editable_input ai_proxy_input "Proxy URL: "
 
     if [ "$ai_proxy_input" == "" ]; then
         exit
@@ -482,7 +482,7 @@ function configure_ai_history {
     echo
     echo -e "Press Enter to exit without changes"
 
-    read -p "Number of recent commits to include: " limit_input
+    read_editable_input limit_input "Number of recent commits to include: "
 
     if [ "$limit_input" == "" ]; then
         exit
@@ -543,7 +543,7 @@ function configure_ai_diff {
     echo
     echo -e "Press Enter on either prompt to keep the current value"
 
-    read -p "New diff line limit: " lines_input
+    read_editable_input lines_input "New diff line limit: "
     if [ -n "$lines_input" ]; then
         if ! validate_numeric_input "$lines_input" 10 5000; then
             show_sanitization_error "diff line limit" "Please enter a positive number between 10 and 5000."
@@ -562,7 +562,7 @@ function configure_ai_diff {
         echo -e "${GREEN}✓ Set AI diff line limit to ${lines_input}${ENDCOLOR}"
     fi
 
-    read -p "New diff char cap: " chars_input
+    read_editable_input chars_input "New diff char cap: "
     if [ -n "$chars_input" ]; then
         if ! validate_numeric_input "$chars_input" 1000 200000; then
             show_sanitization_error "diff char cap" "Please enter a positive number between 1000 and 200000."
@@ -612,7 +612,7 @@ function set_scopes {
         echo -e "Press Enter to exit without changes, or 0 to remove existing scopes"
     fi
 
-    read -p "Scopes: " -e scopes_raw
+    read_editable_input scopes_raw "Scopes: "
 
     if [ "$scopes_raw" == "" ]; then
         exit
@@ -779,12 +779,12 @@ function set_user {
     echo
     echo -e "Current name: ${YELLOW}$(get_config_value user.name)${ENDCOLOR}"
     echo -e "Enter new name or press Enter if you don't want to change it"
-    read -p "Name: " -e user_name
+    read_editable_input user_name "Name: "
 
     echo
     echo -e "Current email: ${YELLOW}$(get_config_value user.email)${ENDCOLOR}"
     echo -e "Enter new email or press Enter if you don't want to change it"
-    read -p "Email: " -e user_email
+    read_editable_input user_email "Email: "
 
     if [ "$user_name" == "" ] && [ "$user_email" == "" ]; then
         exit

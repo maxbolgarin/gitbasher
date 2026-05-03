@@ -137,7 +137,7 @@ if [ "$origin_name" == "" ]; then
 
         echo
         
-        read -p "Remote repo URL: " -e remote_url
+        read_editable_input remote_url "Remote repo URL: "
 
         if [ "$remote_url" == "" ]; then
             exit

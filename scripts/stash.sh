@@ -20,7 +20,7 @@ function select_files_for_stash {
     echo "Press Enter to exit without changes"
 
     while [ true ]; do
-        read -p "$(echo -n -e "${BOLD}files to stash${ENDCOLOR} ")" -e git_add
+        read_editable_input git_add "$(echo -n -e "${BOLD}files to stash${ENDCOLOR} ")"
 
         # Sanitize file pattern input
         if [ "$git_add" == "" ]; then
@@ -236,7 +236,7 @@ function stash_script {
         echo -e "${GREEN}$files_to_stash${ENDCOLOR}"
         echo
 
-        read -p "Enter stash message: " stash_message
+        read_editable_input stash_message "Enter stash message: "
         if [ -z "$stash_message" ]; then
             exit 0
         fi
@@ -284,7 +284,7 @@ function stash_script {
             exit
         fi
 
-        read -p "Enter stash message: " stash_message
+        read_editable_input stash_message "Enter stash message: "
         if [ -z "$stash_message" ]; then
             exit 0
         fi

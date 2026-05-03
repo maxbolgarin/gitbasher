@@ -19,7 +19,7 @@ function read_remote_url {
     echo -e "  ${GRAY}ssh://git@server.com/repo.git${ENDCOLOR}"
     echo
     echo -e "Press Enter to cancel"
-    read -p "${prompt_text}: " -e raw_url
+    read_editable_input raw_url "${prompt_text}: "
 
     if [ -z "$raw_url" ]; then
         exit
@@ -244,7 +244,7 @@ function origin_rename {
     local raw_name="$1"
     if [ -z "$raw_name" ]; then
         echo -e "Press Enter to cancel"
-        read -p "New name: " -e raw_name
+        read_editable_input raw_name "New name: "
         if [ -z "$raw_name" ]; then
             exit
         fi

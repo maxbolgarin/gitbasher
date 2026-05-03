@@ -349,7 +349,7 @@ function tag_script {
         prompt="$(echo -n -e "${BOLD}git tag${ENDCOLOR} ")"
     fi
 
-    read -p "$prompt" -e tag_name
+    read_editable_input tag_name "$prompt"
 
     if [ -z "$tag_name" ]; then
         exit

@@ -283,7 +283,7 @@ function prompt_worktree_branch {
         echo -e "You can select one of the ${YELLOW}detected prefixes${ENDCOLOR}: $(echo $res | column -ts'|')"
 
         while [ true ]; do
-            read -p "<prefix>: " choice
+            read_editable_input choice "<prefix>: "
 
             if [ "$choice" == "0" ]; then
                 return 1
@@ -325,7 +325,7 @@ function prompt_worktree_branch {
         echo "Press Enter if you want to exit"
 
         printf "${BOLD}git branch${ENDCOLOR}"
-        read -p " ${branch_type_and_sep}" -e branch_name
+        read_editable_input branch_name " ${branch_type_and_sep}"
 
         if [ -z "$branch_name" ]; then
             return 1
@@ -360,7 +360,7 @@ function prompt_worktree_path {
     echo -e "Press Enter to accept the default, or type a different path"
     echo -e "Default: ${BOLD}${default_path}${ENDCOLOR}"
 
-    read -p "Worktree path: " -e custom_path
+    read_editable_input custom_path "Worktree path: "
 
     if [ -z "$custom_path" ]; then
         wt_path="$default_path"
@@ -654,7 +654,7 @@ function _do_worktree_lock_unlock {
     local reason=""
     if [ "$action" == "lock" ]; then
         echo
-        read -p "Reason for the lock (optional, press Enter to skip): " -e reason
+        read_editable_input reason "Reason for the lock (optional, press Enter to skip): "
         if [ -n "$reason" ]; then
             if ! sanitize_text_input "$reason" 200; then
                 show_sanitization_error "lock reason" "Use printable characters only, max 200 characters."
@@ -710,7 +710,7 @@ function _do_worktree_move {
     echo
     echo -e "${YELLOW}New path for the worktree${ENDCOLOR}"
     echo -e "Current path: ${BOLD}${selected_worktree_path}${NORMAL}"
-    read -p "New path: " -e new_path
+    read_editable_input new_path "New path: "
 
     if [ -z "$new_path" ]; then
         echo -e "${YELLOW}Cancelled${ENDCOLOR}"

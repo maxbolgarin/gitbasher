@@ -49,7 +49,7 @@ Tracks the audit originally produced May 2026. Items marked `[x]` were fixed acr
 ### UX / discoverability
 - [ ] Shell completion scripts (Bash, Zsh, Fish).
 - [ ] `NO_COLOR` / `--no-color` support.
-- [ ] `--dry-run` for destructive operations (`reset`, `rebase`, `sync`).
+- [ ] `--dry-run` for reset
 - [ ] `gitb status` summarising current gitbasher configuration.
 - [ ] Machine-readable `--json` output mode.
 
@@ -60,9 +60,7 @@ Tracks the audit originally produced May 2026. Items marked `[x]` were fixed acr
 - [ ] **`ARCHITECTURE.md`** — explain script structure, sourcing model, build pipeline.
 - [ ] **`.github/ISSUE_TEMPLATE/`** + `PULL_REQUEST_TEMPLATE.md`.
 - [ ] Expand `package.json` keywords and GitHub repository topics.
-- [ ] Homebrew formula / tap.
 - [ ] README troubleshooting section (Bash version, macOS Bash 3 hint, AI key setup, common git error mappings).
-- [ ] Submit to `awesome-git` style curated lists.
 
 ---
 

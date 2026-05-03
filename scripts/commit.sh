@@ -465,6 +465,7 @@ function _restore_split_snapshot {
 
 function print_split_type_menu {
     local scope="$1"
+    local ai_available="$2"
 
     echo -e "${YELLOW}What type of changes for ${BLUE}${scope}${ENDCOLOR}?${ENDCOLOR}"
     echo -e "Final message will be ${YELLOW}<type>${ENDCOLOR}(${BLUE}<scope>${ENDCOLOR}): ${BLUE}<summary>${ENDCOLOR}"
@@ -477,6 +478,9 @@ function print_split_type_menu {
     echo -e "7. ${BLUE}${BOLD}chore${ENDCOLOR}:\tmaintenance and housekeeping"
     echo -e "8. ${BLUE}${BOLD}docs${ENDCOLOR}:\tdocumentation changes"
     echo -e "9. ${BOLD}plain${ENDCOLOR}:\twrite plain commit without type and scope"
+    if [ "$ai_available" = "true" ]; then
+        echo -e "g. ${GREEN}${BOLD}ai${ENDCOLOR}:\t\tgenerate commit message using AI"
+    fi
     echo -e "s. ${YELLOW}${BOLD}skip${ENDCOLOR}:\tSkip this group and leave its files unstaged"
     echo -e "0. ${RED}${BOLD}abort${ENDCOLOR}:\tAbort split and restore original staging"
     echo
@@ -484,6 +488,7 @@ function print_split_type_menu {
 
 function print_commit_type_menu {
     local step="$1"
+    local ai_available="$2"
 
     echo -e "${YELLOW}Step ${step}.${ENDCOLOR} What ${YELLOW}type${ENDCOLOR} of changes do you want to commit?"
     echo -e "Final message will be ${YELLOW}<type>${ENDCOLOR}(${BLUE}<scope>${ENDCOLOR}): ${BLUE}<summary>${ENDCOLOR}"
@@ -496,6 +501,9 @@ function print_commit_type_menu {
     echo -e "7. ${BLUE}${BOLD}chore${ENDCOLOR}:\tmaintenance and housekeeping"
     echo -e "8. ${BLUE}${BOLD}docs${ENDCOLOR}:\tdocumentation changes"
     echo -e "9. ${BOLD}plain${ENDCOLOR}:\twrite plain commit without type and scope"
+    if [ "$ai_available" = "true" ]; then
+        echo -e "g. ${GREEN}${BOLD}ai${ENDCOLOR}:\t\tgenerate commit message using AI"
+    fi
     echo -e "0. ${RED}${BOLD}exit${ENDCOLOR}:\tExit without changes"
 }
 
@@ -528,6 +536,84 @@ function print_split_groups_preview {
             echo -e "    ${file_color}${file}${ENDCOLOR}"
         done <<< "${split_groups[$scope]}"
     done
+}
+
+### Run the AI generate / confirm / regenerate / edit loop for one split scope.
+# Used both when the user invoked AI mode up-front (llm flag) and when they
+# pick 'g' from the per-scope type menu.
+# Sets the caller's $msg variable on success (relies on bash dynamic scoping).
+# $1: scope label (used in messages), $2: scope_for_msg (empty -> no scope),
+# $3: files_str (newline-separated; used to unstage on skip)
+# Returns: 0 success, 1 AI failed/declined, 2 skip scope, 3 abort split
+function run_split_ai_for_scope {
+    local _scope="$1"
+    local _scope_for_msg="$2"
+    local _files_str="$3"
+    local ai_msg choice manual_input
+    local rejected_ai_messages=""
+
+    msg=""
+
+    echo -e "${YELLOW}Generating commit message with AI...${ENDCOLOR}"
+    ai_msg=$(generate_ai_commit_message "simple" "$_scope_for_msg" "$_scope_for_msg" "")
+    if [ $? -ne 0 ] || [ -z "$ai_msg" ]; then
+        echo -e "${RED}✗ AI message generation failed.${ENDCOLOR}"
+        return 1
+    fi
+    ai_msg=$(echo "$ai_msg" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+
+    if [ -n "$auto_accept" ]; then
+        msg="$ai_msg"
+        echo -e "${GREEN}AI message:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
+        return 0
+    fi
+
+    echo
+    echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
+    echo
+    read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) "
+    echo
+    normalize_key "$choice"
+
+    while [ "$normalized_key" = "r" ]; do
+        echo -e "${YELLOW}Regenerating...${ENDCOLOR}"
+        if [ -n "$rejected_ai_messages" ]; then
+            rejected_ai_messages="${rejected_ai_messages}
+${ai_msg}"
+        else
+            rejected_ai_messages="$ai_msg"
+        fi
+        ai_msg=$(generate_ai_commit_message "simple" "$_scope_for_msg" "$_scope_for_msg" "" "$rejected_ai_messages")
+        if [ $? -ne 0 ] || [ -z "$ai_msg" ]; then
+            echo -e "${RED}✗ AI message regeneration failed.${ENDCOLOR}"
+            return 1
+        fi
+        ai_msg=$(echo "$ai_msg" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        echo
+        echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
+        echo
+        read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) "
+        echo
+        normalize_key "$choice"
+    done
+
+    if [ "$normalized_key" = "y" ] || [ -z "$choice" ]; then
+        msg="$ai_msg"
+        return 0
+    elif [ "$normalized_key" = "e" ]; then
+        read_editable_input manual_input "Edit: " "$ai_msg"
+        msg="$manual_input"
+        return 0
+    elif [ "$normalized_key" = "s" ]; then
+        echo -e "${YELLOW}Skipping scope '${_scope}' (files left unstaged)${ENDCOLOR}"
+        while IFS= read -r f; do
+            [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
+        done <<< "$_files_str"
+        return 2
+    elif [ "$choice" = "0" ]; then
+        return 3
+    fi
+    return 1
 }
 
 ### Walk the split groups, generate a message per group (AI when available),
@@ -607,65 +693,17 @@ function perform_commit_split {
         # AI path — only when the user explicitly asked for AI (llm flag set
         # by ai/aisplit/aif/ff/etc). Without llm, we go straight to manual.
         if [ -n "$llm" ] && [ "$ai_ok" = "true" ]; then
-            echo -e "${YELLOW}Generating commit message with AI...${ENDCOLOR}"
-            ai_msg=$(generate_ai_commit_message "simple" "$scope_for_msg" "$scope_for_msg" "")
-            if [ $? -eq 0 ] && [ -n "$ai_msg" ]; then
-                ai_msg=$(echo "$ai_msg" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-
-                if [ -n "$auto_accept" ]; then
-                    msg="$ai_msg"
-                    echo -e "${GREEN}AI message:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
-                else
+            run_split_ai_for_scope "$scope" "$scope_for_msg" "$files_str"
+            case $? in
+                2) continue ;;
+                3)
+                    _restore_split_snapshot "$snapshot_file"
+                    trap - INT TERM
                     echo
-                    echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
-                    echo
-                    read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) "
-                    echo
-                    normalize_key "$choice"
-
-                    local rejected_ai_messages=""
-                    while [ "$normalized_key" = "r" ]; do
-                        echo -e "${YELLOW}Regenerating...${ENDCOLOR}"
-                        if [ -n "$rejected_ai_messages" ]; then
-                            rejected_ai_messages="${rejected_ai_messages}
-${ai_msg}"
-                        else
-                            rejected_ai_messages="$ai_msg"
-                        fi
-                        ai_msg=$(generate_ai_commit_message "simple" "$scope_for_msg" "$scope_for_msg" "" "$rejected_ai_messages")
-                        if [ $? -ne 0 ] || [ -z "$ai_msg" ]; then
-                            ai_msg=""
-                            break
-                        fi
-                        ai_msg=$(echo "$ai_msg" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-                        echo
-                        echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
-                        echo
-                        read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) "
-                        echo
-                        normalize_key "$choice"
-                    done
-
-                    if [ "$normalized_key" = "y" ] || [ -z "$choice" ]; then
-                        msg="$ai_msg"
-                    elif [ "$normalized_key" = "e" ]; then
-                        read_editable_input manual_input "Edit: " "$ai_msg"
-                        msg="$manual_input"
-                    elif [ "$normalized_key" = "s" ]; then
-                        echo -e "${YELLOW}Skipping scope '${scope}' (files left unstaged)${ENDCOLOR}"
-                        while IFS= read -r f; do
-                            [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
-                        done <<< "$files_str"
-                        continue
-                    elif [ "$choice" = "0" ]; then
-                        _restore_split_snapshot "$snapshot_file"
-                        trap - INT TERM
-                        echo
-                        echo -e "${YELLOW}Aborted. Created ${commit_count} commit(s); original staging restored.${ENDCOLOR}"
-                        exit 0
-                    fi
-                fi
-            fi
+                    echo -e "${YELLOW}Aborted. Created ${commit_count} commit(s); original staging restored.${ENDCOLOR}"
+                    exit 0
+                    ;;
+            esac
         fi
 
         # Auto-accept can't fall back to a prompt — fail loudly when AI didn't deliver
@@ -682,12 +720,13 @@ ${ai_msg}"
         if [ -z "$msg" ]; then
             local commit_type=""
             local is_empty_msg=""
-            print_split_type_menu "$scope"
+            echo
+            print_split_type_menu "$scope" "$ai_ok"
 
             local tchoice
             while true; do
                 read_key tchoice
-                if ! sanitize_choice_input "$tchoice" "^[0-9s]$"; then
+                if ! sanitize_choice_input "$tchoice" "^[0-9sg]$"; then
                     continue
                 fi
                 tchoice="$sanitized_choice"
@@ -701,6 +740,28 @@ ${ai_msg}"
                     7) commit_type="chore"; break ;;
                     8) commit_type="docs"; break ;;
                     9) is_empty_msg="true"; break ;;
+                    g)
+                        if [ "$ai_ok" != "true" ]; then
+                            continue
+                        fi
+                        echo
+                        run_split_ai_for_scope "$scope" "$scope_for_msg" "$files_str"
+                        case $? in
+                            0) break ;;
+                            2) continue 2 ;;
+                            3)
+                                _restore_split_snapshot "$snapshot_file"
+                                trap - INT TERM
+                                echo
+                                echo -e "${YELLOW}Aborted. Created ${commit_count} commit(s); original staging restored.${ENDCOLOR}"
+                                exit 0
+                                ;;
+                            *)
+                                echo
+                                print_split_type_menu "$scope" "$ai_ok"
+                                ;;
+                        esac
+                        ;;
                     s)
                         echo -e "${YELLOW}Skipping scope '${scope}' (files left unstaged)${ENDCOLOR}"
                         while IFS= read -r f; do
@@ -718,31 +779,33 @@ ${ai_msg}"
                 esac
             done
 
-            prefix=""
-            if [ -z "$is_empty_msg" ]; then
-                if [ -n "$scope_for_msg" ]; then
-                    prefix="${commit_type}(${scope_for_msg}): "
-                else
-                    prefix="${commit_type}: "
+            if [ -z "$msg" ]; then
+                prefix=""
+                if [ -z "$is_empty_msg" ]; then
+                    if [ -n "$scope_for_msg" ]; then
+                        prefix="${commit_type}(${scope_for_msg}): "
+                    else
+                        prefix="${commit_type}: "
+                    fi
                 fi
-            fi
 
-            echo -e "${YELLOW}Write a summary (Enter to skip group):${ENDCOLOR}"
-            read_editable_input manual_input "$prefix"
-            if [ -z "$manual_input" ]; then
-                echo -e "${YELLOW}Skipping scope '${scope}'${ENDCOLOR}"
-                while IFS= read -r f; do
-                    [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
-                done <<< "$files_str"
-                continue
+                echo -e "${YELLOW}Write a summary (Enter to skip group):${ENDCOLOR}"
+                read_editable_input manual_input "$prefix"
+                if [ -z "$manual_input" ]; then
+                    echo -e "${YELLOW}Skipping scope '${scope}'${ENDCOLOR}"
+                    while IFS= read -r f; do
+                        [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
+                    done <<< "$files_str"
+                    continue
+                fi
+                if ! sanitize_commit_message "$manual_input"; then
+                    show_sanitization_error "commit message" "Use printable characters only, 1-2000 characters."
+                    _restore_split_snapshot "$snapshot_file"
+                    trap - INT TERM
+                    return 1
+                fi
+                msg="${prefix}${sanitized_commit_message}"
             fi
-            if ! sanitize_commit_message "$manual_input"; then
-                show_sanitization_error "commit message" "Use printable characters only, 1-2000 characters."
-                _restore_split_snapshot "$snapshot_file"
-                trap - INT TERM
-                return 1
-            fi
-            msg="${prefix}${sanitized_commit_message}"
         fi
 
         # Make the commit
@@ -1753,7 +1816,11 @@ function commit_script {
     if [ -n "${fast}" ] || [ -n "${staged}" ]; then
         step="1"
     fi
-    print_commit_type_menu "$step"
+    local _ai_available_for_menu="false"
+    if check_ai_available 2>/dev/null; then
+        _ai_available_for_menu="true"
+    fi
+    print_commit_type_menu "$step" "$_ai_available_for_menu"
 
     declare -A types=(
         [1]="feat"
@@ -1774,6 +1841,22 @@ function commit_script {
             echo
             echo -e "${YELLOW}Aborted.${ENDCOLOR}"
             exit
+        fi
+
+        normalize_key "$choice"
+        if [ "$normalized_key" == "g" ]; then
+            if [ "$_ai_available_for_menu" != "true" ]; then
+                continue
+            fi
+            local _ai_mode="simple"
+            if [ -n "${msg}" ]; then
+                _ai_mode="full"
+            fi
+            handle_ai_commit_generation "$step" "$_ai_mode" ""
+            # AI fell back to manual — re-show the type menu and keep reading.
+            echo
+            print_commit_type_menu "$step" "$_ai_available_for_menu"
+            continue
         fi
 
         re='^[0-9]+$'

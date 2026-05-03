@@ -49,6 +49,7 @@ function print_help {
     printf "$row" "$CMD" "hook (ho, hk)"           "Manage git hooks"
     printf "$row" "$CMD" "worktree (wt, tree)"     "Manage git worktrees"
     printf "$row" "$CMD" "config (cf, cfg, conf)"  "Configure gitbasher"
+    printf "$row" "$CMD" "update (up, upd)"        "Check for and install gitbasher updates"
     echo
 
     echo -e "Run ${YELLOW}gitb <command> help${ENDCOLOR} for modes and examples"
@@ -153,6 +154,9 @@ case "$1" in
     ;;
     origin|or|o|remote)
         origin_script "$2" "$3"
+    ;;
+    update|up|upd)
+        update_script "$2"
     ;;
     init|i)
         # git init already ran in gitb.sh; init.sh handles the optional

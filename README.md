@@ -98,7 +98,7 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 
 - **Zero memorization** — no flags to remember, no man pages to grep. Interactive menus where it matters, short aliases where it doesn't.
 - **Conventional commits, free** — type/scope/summary picker built-in, with optional ticket prefixes and multiline editor mode.
-- **AI commit messages** — `gitb c ai` writes the message for you (Gemini / Claude via OpenRouter, fully configurable).
+- **AI commit messages** — `gitb c ai` writes the message for you. Pick your provider: OpenRouter (Gemini / Claude / many), OpenAI direct (GPT-5.4 nano/mini), or **fully local via Ollama** — no key, no network, no data leaves your machine.
 - **Atomic split** — `gitb c split` (or `aisplit`) breaks a messy working tree into one commit per logical scope.
 - **Safer git** — push/pull detect conflicts up front, `undo` rolls back commit/amend/merge/rebase/stash, `reset` is interactive.
 - **Whole workflows, not just commands** — `sync`, `wip`, `branch newd`, `merge to-main` chain the steps you'd otherwise do by hand.
@@ -124,7 +124,7 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 | **Inspect** | `status` (`st`), `log` (`l`), `reflog` (`rl`), `last-commit` (`lc`), `last-ref` (`lr`) | Pretty repo status, multi-mode log + search, reflog viewer, quick last-commit / last-ref summary |
 | **Hooks** | `hook` (`ho`) | List / create from templates / edit / toggle / remove / test / show — for every git hook |
 | **Repo setup** | `init` (`i`), `origin` (`or`, `o`, `remote`) | `git init` from gitbasher · add/change/rename/remove the remote origin |
-| **Config** | `config` (`cfg`) | User, default branch, separator, editor, ticket prefix, scopes, AI key, AI model, proxy |
+| **Config** | `config` (`cfg`) | User, default branch, separator, editor, ticket prefix, scopes, AI provider/key/model, proxy |
 
 Total: **22 top-level commands**, **60+ aliases**, **100+ modes**.
 
@@ -132,17 +132,46 @@ Total: **22 top-level commands**, **60+ aliases**, **100+ modes**.
 
 ## AI-powered commits
 
-Drop in an API key once, then let Claude / Gemini write conventional commit messages from your diff.
+Drop in an API key once (or run a local model with no key at all), then let an LLM write conventional commit messages from your diff.
+
+### Providers
+
+gitbasher supports three providers behind the same OpenAI-style chat-completions API. Default is `openrouter` — existing setups keep working unchanged.
+
+| Provider | Best for | Needs key? |
+|----------|----------|-----------|
+| `openrouter` (default) | Trying many models behind one key (Gemini, Claude, GPT, DeepSeek…) | Yes — [openrouter.ai/keys](https://openrouter.ai/keys) |
+| `openai` | Direct access to GPT-5.4 family at OpenAI's own pricing | Yes — [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
+| `ollama` | **Fully local, fully private** — no key, no network, runs on your machine | No |
 
 ### Setup
 
 ```bash
-# 1. Get a key (free tier available) at https://aistudio.google.com/app/apikey
-#    or use your OpenRouter key for Claude / multi-provider access.
-gitb cfg ai          # paste key — choose local repo or global
+# 1. Pick a provider (skip to use the OpenRouter default)
+gitb cfg provider     # interactive — choose openrouter, openai, or ollama
 
-# 2. Optional: HTTP proxy (for restricted regions)
+# 2. For openrouter / openai: paste your key (local repo or global)
+gitb cfg ai
+
+#    For ollama: just make sure the daemon is running and the default model is pulled
+ollama serve &
+ollama pull qwen3:8b
+
+# 3. Optional: HTTP proxy (for restricted regions, openrouter/openai only)
 gitb cfg proxy
+```
+
+For the security-conscious, prefer the env var to avoid the key landing in `~/.gitconfig`:
+```bash
+export GITB_AI_API_KEY='sk-...'
+```
+
+### Custom OpenAI-compatible endpoints
+
+Self-hosted gateways (LiteLLM, vLLM, LM Studio) and remote Ollama hosts work via a base-URL override:
+```bash
+gitb cfg provider                                                  # pick openai or ollama as the closest match
+git config gitbasher.ai-base-url http://my-gateway:4000/v1/chat/completions
 ```
 
 ### Commands
@@ -162,7 +191,9 @@ Modes are composable: `gitb c ai fast push` is identical to `gitb c aifp`.
 
 ### Models
 
-Each task uses a model tuned for speed/cost/quality. Defaults (May 2026):
+Each task uses a model tuned for speed/cost/quality, picked per provider. Defaults (May 2026):
+
+**OpenRouter** (default provider)
 
 | Task | Default model | Why |
 |------|---------------|-----|
@@ -170,6 +201,22 @@ Each task uses a model tuned for speed/cost/quality. Defaults (May 2026):
 | `subject` (after manual type/scope) | `google/gemini-3.1-flash-lite-preview` | Short structured output |
 | `full` (header + body) | `google/gemini-3-flash-preview` | Better prose |
 | `grouping` (atomic-split mapping) | `anthropic/claude-haiku-4.5` | Strict instruction following |
+
+**OpenAI** — GPT-5.4 family (released March 2026)
+
+| Task | Default model | Why |
+|------|---------------|-----|
+| `simple` / `subject` | `gpt-5.4-nano` | Built for classification/short well-defined output, ~$0.20 / $1.25 per M tokens |
+| `full` | `gpt-5.4-mini` | Stronger multi-condition instruction following for header + body, ~$0.75 / $4.50 per M |
+| `grouping` | `gpt-5.4-mini` | Holds the strict TSV format under validation, far cheaper than the flagship |
+
+**Ollama** — fully local
+
+| Task | Default model | Why |
+|------|---------------|-----|
+| All tasks | `qwen3:8b` | Best small instruction-follower among 7/8B models; most stable structured output (rarely drops fields in TSV); ~5 GB on disk, ~25 tok/s on a consumer laptop with GPU |
+
+Other strong local picks: `llama3.3:8b` (general-purpose), `qwen2.5-coder:7b` (code-heavy diffs).
 
 Override per task or globally:
 ```bash
@@ -531,7 +578,8 @@ gitb origin remove                               # delete the remote
 | `ticket` | `ti` `t` `jira` | Ticket prefix for commits/branches |
 | `scopes` | `sc` `s` | Common scopes |
 | `ai` | `llm` `key` | AI API key |
-| `model` | | Default AI model |
+| `provider` | `prov` | AI provider (openrouter, openai, ollama) |
+| `model` | `m` | Default AI model |
 | `proxy` | `prx` `p` | HTTP proxy for AI calls |
 | `delete` | `unset` `del` | Remove global config |
 
@@ -570,7 +618,9 @@ gitb origin remove                               # delete the remote
 | `gitbasher.ticket` | `gitb cfg ticket` | Ticket prefix (`PROJ-`) |
 | `gitbasher.scopes` | `gitb cfg scopes` | Suggested commit scopes |
 | `gitbasher.ai-api-key` | `gitb cfg ai` | AI provider API key (or `GITB_AI_API_KEY` env) |
-| `gitbasher.ai-model[-task]` | `gitb cfg model` | AI model overrides |
+| `gitbasher.ai-provider` | `gitb cfg provider` | `openrouter` (default), `openai`, or `ollama` |
+| `gitbasher.ai-base-url` | `git config` | Custom OpenAI-compatible endpoint (LiteLLM, vLLM, remote Ollama) |
+| `gitbasher.ai-model[-task]` | `gitb cfg model` | AI model overrides (per provider) |
 | `gitbasher.proxy` | `gitb cfg proxy` | HTTP proxy for AI calls |
 
 **Aliases for shell users:**

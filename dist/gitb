@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-GITBASHER_VERSION="3.10.2-45-g5de9b24"
+GITBASHER_VERSION="3.10.2-48-g2ec88f4"
 if [ "$1" == "init" ] || [ "$1" == "i" ]; then
     git init
 fi
@@ -22,6 +22,17 @@ if ((BASH_VERSINFO[0] < 4)); then
     printf "Or run gitb explicitly with the newer bash when installed:\n    /opt/homebrew/bin/bash $0 \"\$@\"\n\n"
     exit 1; 
 fi
+git_dir=$(git rev-parse --git-dir 2>/dev/null)
+if [ -n "$git_dir" ] && [ -e "$git_dir/index.lock" ]; then
+    printf "\033[33mDetected %s/index.lock from a possibly interrupted git operation.\033[0m\n" "$git_dir"
+    printf "Another git process may be running. Remove the lock and continue?\n"
+    read -p "(y/N) " _gitb_lock_ans
+    case "$_gitb_lock_ans" in
+        y|Y|yes|YES) rm -f "$git_dir/index.lock" ;;
+        *) exit 1 ;;
+    esac
+fi
+unset git_dir _gitb_lock_ans
 RED_ES="\x1b[31m"
 GREEN_ES="\x1b[32m"
 YELLOW_ES="\x1b[33m"
@@ -646,7 +657,7 @@ function git_status {
 }
 function print_staged_files {
     local staged_diff
-    staged_diff=$(git diff --name-status --cached)
+    staged_diff=$(git -c core.quotePath=false diff --name-status --cached)
     if [ -z "$staged_diff" ]; then
         return
     fi
@@ -758,16 +769,16 @@ function get_push_list {
             return
         fi
     fi
-    base_commit=$(diff -u <(git rev-list --first-parent $1 2>/dev/null) <(git rev-list --first-parent $2 2>/dev/null) | sed -ne 's/^ //p' | head -1 || true)
+    base_commit=$(diff -u <(git rev-list --first-parent "$1" 2>/dev/null) <(git rev-list --first-parent "$2" 2>/dev/null) | sed -ne 's/^ //p' | head -1 || true)
     if [ -n "$base_commit" ]; then
-        push_list=$(commit_list 999 "tab" $base_commit..HEAD)
+        push_list=$(commit_list 999 "tab" "$base_commit..HEAD")
         history_from="${base_commit::7}"
     else
         if [ -z "$origin" ]; then
             push_list=""
             history_from=""
         else
-            push_list=$(commit_list 999 "tab" $origin/$2..HEAD)
+            push_list=$(commit_list 999 "tab" "$origin/$2..HEAD")
             history_from="$origin/$2"
         fi
     fi
@@ -1324,6 +1335,7 @@ function secure_curl_with_api_key {
     local api_key="$2"
     local json_payload="$3"
     (
+        { set +x; } 2>/dev/null
         unset HISTFILE
         local curl_cmd=(
             curl -s -X POST
@@ -1753,7 +1765,7 @@ function generate_ai_commit_message {
     local detected_scopes="$2"
     local provided_scopes="$3"
     local commit_prefix="$4"
-    local staged_files=$(git diff --name-only --cached)
+    local staged_files=$(git -c core.quotePath=false diff --name-only --cached)
     if [ -z "$staged_files" ]; then
         echo -e "${RED}No staged files found${ENDCOLOR}" >&2
         return 1
@@ -2492,7 +2504,7 @@ function merge_script {
     if [ -z "$to_main" ]; then
         echo -e "${YELLOW}Checking current branch for remote changes...${ENDCOLOR}"
         current_local_commit=$(git rev-parse HEAD 2>/dev/null)
-        current_remote_commit=$(git ls-remote $origin_name refs/heads/$current_branch 2>/dev/null | cut -f1)
+        current_remote_commit=$(git ls-remote "$origin_name" "refs/heads/$current_branch" 2>/dev/null | cut -f1)
         if [ -z "$current_remote_commit" ]; then
             echo -e "${YELLOW}Remote branch ${origin_name}/${current_branch} not found - proceeding with local merge${ENDCOLOR}"
         elif [ "$current_local_commit" != "$current_remote_commit" ]; then
@@ -2542,7 +2554,7 @@ function merge_script {
         echo
         fetch_output=$(git fetch 2>&1)
         check_code $? "$fetch_output" "fetch remote"
-        prune_output=$(git remote prune $origin_name 2>&1)
+        prune_output=$(git remote prune "$origin_name" 2>&1)
         echo -e "${YELLOW}Select which remote branch to merge into '${current_branch}'${ENDCOLOR}"
         choose_branch "remote"
         merge_branch=${branch_name}
@@ -2560,7 +2572,7 @@ function merge_script {
         if git show-ref --verify --quiet refs/heads/$merge_branch; then
             local_commit=$(git rev-parse refs/heads/$merge_branch 2>/dev/null)
         fi
-        remote_commit=$(git ls-remote $origin_name refs/heads/$merge_branch 2>/dev/null | cut -f1)
+        remote_commit=$(git ls-remote "$origin_name" "refs/heads/$merge_branch" 2>/dev/null | cut -f1)
         if [ -z "$remote_commit" ]; then
             echo -e "${YELLOW}Remote branch ${origin_name}/${merge_branch} not found - proceeding with local merge${ENDCOLOR}"
         elif [ "$local_commit" != "$remote_commit" ]; then
@@ -2616,9 +2628,9 @@ function merge {
         args="--ff-only"
     fi
     if [ "$5" == "true" ]; then
-        merge_output=$(git merge $args $2/$1 2>&1)
+        merge_output=$(git merge $args "$2/$1" 2>&1)
     else
-        merge_output=$(git merge $args $1 2>&1)
+        merge_output=$(git merge $args "$1" 2>&1)
     fi
     merge_code=$?
     if [ $merge_code == 0 ] ; then
@@ -2723,7 +2735,9 @@ function resolve_conflicts {
                         continue
                     elif [ "$choice_resolve" == "2" ]; then
                         echo -e "${YELLOW}Force accepting incoming changes...${ENDCOLOR}"
-                        git ls-files --deleted | xargs -r git rm 2>/dev/null
+                        mapfile -t _deleted < <(git ls-files --deleted)
+                        [ ${#_deleted[@]} -gt 0 ] && git rm -- "${_deleted[@]}" 2>/dev/null
+                        unset _deleted
                         git checkout --theirs . 2>/dev/null
                         git add .
                     elif [ "$choice_resolve" == "3" ]; then
@@ -2788,7 +2802,9 @@ function resolve_conflicts {
                         continue
                     elif [ "$choice_resolve" == "2" ]; then
                         echo -e "${YELLOW}Force accepting current changes...${ENDCOLOR}"
-                        git ls-files --deleted | xargs -r git rm 2>/dev/null
+                        mapfile -t _deleted < <(git ls-files --deleted)
+                        [ ${#_deleted[@]} -gt 0 ] && git rm -- "${_deleted[@]}" 2>/dev/null
+                        unset _deleted
                         git checkout --ours . 2>/dev/null
                         git add .
                     elif [ "$choice_resolve" == "3" ]; then
@@ -2933,7 +2949,7 @@ function rebase_script {
     if [ -z "$autosquash" ] && [ -z "$fastautosquash" ]; then
         echo -e "${YELLOW}Checking current branch for remote changes...${ENDCOLOR}"
         current_local_commit=$(git rev-parse HEAD 2>/dev/null)
-        current_remote_commit=$(git ls-remote $origin_name refs/heads/$current_branch 2>/dev/null | cut -f1)
+        current_remote_commit=$(git ls-remote "$origin_name" "refs/heads/$current_branch" 2>/dev/null | cut -f1)
         if [ -z "$current_remote_commit" ]; then
             echo -e "${YELLOW}Remote branch ${origin_name}/${current_branch} not found - proceeding with local rebase${ENDCOLOR}"
         elif [ "$current_local_commit" != "$current_remote_commit" ]; then
@@ -3031,9 +3047,9 @@ function rebase_script {
         echo -e "${YELLOW}Checking target branch for remote changes...${ENDCOLOR}"
         local_commit=""
         if git show-ref --verify --quiet refs/heads/$new_base_branch; then
-            local_commit=$(git rev-parse refs/heads/$new_base_branch 2>/dev/null)
+            local_commit=$(git rev-parse "refs/heads/$new_base_branch" 2>/dev/null)
         fi
-        remote_commit=$(git ls-remote $origin_name refs/heads/$new_base_branch 2>/dev/null | cut -f1)
+        remote_commit=$(git ls-remote "$origin_name" "refs/heads/$new_base_branch" 2>/dev/null | cut -f1)
         if [ -z "$remote_commit" ]; then
             echo -e "${YELLOW}Remote branch ${origin_name}/${new_base_branch} not found - proceeding with local rebase${ENDCOLOR}"
         elif [ "$local_commit" != "$remote_commit" ]; then
@@ -3359,7 +3375,9 @@ function rebase_conflicts {
                         continue
                     elif [ "$choice_resolve" == "2" ]; then
                         echo -e "${YELLOW}Force accepting incoming changes...${ENDCOLOR}"
-                        git ls-files --deleted | xargs -r git rm 2>/dev/null
+                        mapfile -t _deleted < <(git ls-files --deleted)
+                        [ ${#_deleted[@]} -gt 0 ] && git rm -- "${_deleted[@]}" 2>/dev/null
+                        unset _deleted
                         git checkout --theirs . 2>/dev/null
                         git add .
                     elif [ "$choice_resolve" == "3" ]; then
@@ -3834,9 +3852,9 @@ function pull_script {
             echo -e "${YELLOW}Fetching '$origin_name/$current_branch'...${ENDCOLOR}"
         fi
         echo
-        fetch $current_branch $origin_name $all
+        fetch "$current_branch" "$origin_name" "$all"
         if [ $fetch_code == 0 ] ; then
-            commits=$(commit_list 999 "tab" HEAD..$origin_name/$current_branch)
+            commits=$(commit_list 999 "tab" "HEAD..$origin_name/$current_branch")
             if [ "$commits" != "" ]; then
                 if [ -n "$all" ]; then
                     echo -e "${GREEN}Successfully fetched all!${ENDCOLOR}"
@@ -3863,7 +3881,7 @@ function pull_script {
         update_output=$(git remote update 2>&1)
         update_code=$?
         if [ $update_code == 0 ] ; then
-            commits=$(commit_list 999 "tab" HEAD..$origin_name/$current_branch)
+            commits=$(commit_list 999 "tab" "HEAD..$origin_name/$current_branch")
             if [ "$commits" != "" ]; then
                 echo -e "${GREEN}Successfully updated from remote!${ENDCOLOR}"
                 if [ "$update_output" != "" ]; then
@@ -3893,7 +3911,7 @@ function fetch {
         fetch_output=$(git fetch --all 2>&1)
         fetch_code=$?
     else
-        fetch_output=$(git fetch $2 $1 2>&1)
+        fetch_output=$(git fetch "$2" "$1" 2>&1)
         fetch_code=$?
     fi
     if [ $fetch_code == 0 ] ; then
@@ -3993,7 +4011,7 @@ function pull {
     fi
 }
 function push {
-    push_output=$(git push $1 ${origin_name} ${current_branch} 2>&1)
+    push_output=$(git push $1 "${origin_name}" "${current_branch}" 2>&1)
     push_code=$?
     if [ $push_code -eq 0 ] ; then
         echo -e "${GREEN}Successful push!${ENDCOLOR}"
@@ -4133,12 +4151,12 @@ function push_script {
 }
 function cleanup_on_exit {
     if [ -n "$1" ]; then
-        git restore --staged $1
+        ( set -f; git restore --staged -- $1 2>/dev/null )
     fi
 }
 function detect_scopes_from_staged_files {
     detected_scopes=""
-    local staged_files=$(git diff --name-only --cached)
+    local staged_files=$(git -c core.quotePath=false diff --name-only --cached)
     local max_files_for_scopes=100
     local total_files=$(echo "$staged_files" | wc -l | tr -d ' ')
     if [ "$total_files" -gt "$max_files_for_scopes" ]; then
@@ -4245,7 +4263,7 @@ function build_split_groups_from_staged {
     local -a scopes_arr
     IFS=' ' read -r -a scopes_arr <<< "$detected_scopes"
     local staged_files
-    staged_files=$(git diff --name-only --cached)
+    staged_files=$(git -c core.quotePath=false diff --name-only --cached)
     [ -z "$staged_files" ] && return 1
     local file scope comp comp_lower comp_no_ext_lower assigned
     local -a comps
@@ -4280,11 +4298,11 @@ function build_split_groups_from_staged {
 }
 function is_heuristic_weak {
     local total
-    total=$(git diff --name-only --cached | grep -c .)
+    total=$(git -c core.quotePath=false diff --name-only --cached | grep -c .)
     [ "$total" -lt 4 ] && return 1
     if [ ${#split_group_keys[@]} -le 1 ]; then
         local subdir_count
-        subdir_count=$(git diff --name-only --cached | LC_ALL=C awk -F/ 'NF>=3 {print $1"/"$2}' | sort -u | grep -c .)
+        subdir_count=$(git -c core.quotePath=false diff --name-only --cached | LC_ALL=C awk -F/ 'NF>=3 {print $1"/"$2}' | sort -u | grep -c .)
         [ "$subdir_count" -ge 2 ] && return 0
         return 1
     fi
@@ -4300,7 +4318,7 @@ function is_heuristic_weak {
 }
 function refine_groups_with_ai {
     local staged_files
-    staged_files=$(git diff --name-only --cached)
+    staged_files=$(git -c core.quotePath=false diff --name-only --cached)
     [ -z "$staged_files" ] && return 1
     local diff_stat recent_commits
     diff_stat=$(get_limited_diff_stat_for_ai)
@@ -4381,7 +4399,7 @@ function _restore_split_snapshot {
     local snapshot="$1"
     [ -f "$snapshot" ] || return
     local currently_staged
-    currently_staged=$(git diff --name-only --cached)
+    currently_staged=$(git -c core.quotePath=false diff --name-only --cached)
     if [ -n "$currently_staged" ]; then
         while IFS= read -r f; do
             [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
@@ -4411,7 +4429,7 @@ function print_split_type_menu {
 }
 function perform_commit_split {
     local original_staged
-    original_staged=$(git diff --name-only --cached)
+    original_staged=$(git -c core.quotePath=false diff --name-only --cached)
     if [ -z "$original_staged" ]; then
         echo -e "${RED}No staged files to split${ENDCOLOR}"
         return 1
@@ -4435,7 +4453,7 @@ function perform_commit_split {
         echo
         echo -e "${YELLOW}── Split commit ${idx}/${total}: scope '${scope}' ──${ENDCOLOR}"
         local currently_staged
-        currently_staged=$(git diff --name-only --cached)
+        currently_staged=$(git -c core.quotePath=false diff --name-only --cached)
         if [ -n "$currently_staged" ]; then
             while IFS= read -r f; do
                 [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
@@ -4585,7 +4603,7 @@ function perform_commit_split {
             msg="${prefix}${sanitized_commit_message}"
         fi
         local result
-        result=$(git commit -m """$msg""" 2>&1)
+        result=$(git commit -m "$msg" 2>&1)
         if [ $? -ne 0 ]; then
             echo -e "${RED}Commit failed:${ENDCOLOR}"
             echo "$result"
@@ -4735,7 +4753,7 @@ function handle_ai_commit_generation {
             echo
         fi
         git config gitbasher.cached-commit-message "$commit"
-        result=$(git commit -m """$commit""" 2>&1)
+        result=$(git commit -m "$commit" 2>&1)
         check_code $? "$result" "commit"
         git config --unset gitbasher.cached-git-add 2>/dev/null
         git config --unset gitbasher.cached-commit-message 2>/dev/null
@@ -4784,7 +4802,7 @@ function handle_ai_commit_generation {
         commit="$commit_message"
         echo
         git config gitbasher.cached-commit-message "$commit"
-        result=$(git commit -m """$commit""" 2>&1)
+        result=$(git commit -m "$commit" 2>&1)
         check_code $? "$result" "commit"
         git config --unset gitbasher.cached-git-add 2>/dev/null
         git config --unset gitbasher.cached-commit-message 2>/dev/null
@@ -5026,7 +5044,7 @@ function commit_script {
         exit
     fi
     if [ -n "${staged}" ]; then
-        staged_files_check=$(git diff --name-only --cached)
+        staged_files_check=$(git -c core.quotePath=false diff --name-only --cached)
         if [ -z "$staged_files_check" ]; then
             echo -e "${RED}No staged files found!${ENDCOLOR}"
             exit 1
@@ -5108,7 +5126,7 @@ function commit_script {
             git_add="$sanitized_file_path"
             result=$(git add $git_add 2>&1)
             code=$?
-            staged_files_list="$(git diff --name-only --cached)"
+            staged_files_list="$(git -c core.quotePath=false diff --name-only --cached)"
             if [ $code -eq 0 ] && [ -n "$staged_files_list" ]; then
                 git config gitbasher.cached-git-add "$git_add"
                 break
@@ -5119,7 +5137,7 @@ function commit_script {
                     echo -e "${YELLOW}No files were staged! Trying with wildcard:${ENDCOLOR} ${BOLD}git add $git_add_with_star${ENDCOLOR}"
                     result_star=$(git add $git_add_with_star 2>&1)
                     code_star=$?
-                    staged_files_list_star="$(git diff --name-only --cached)"
+                    staged_files_list_star="$(git -c core.quotePath=false diff --name-only --cached)"
                     if [ $code_star -eq 0 ] && [ -n "$staged_files_list_star" ]; then
                         git config gitbasher.cached-git-add "$git_add_with_star"
                         git_add="$git_add_with_star"
@@ -5137,10 +5155,10 @@ function commit_script {
     fi
     if [ -z "${staged}" ]; then
         echo -e "${YELLOW}Staged files:${ENDCOLOR}"
-        staged_files_list="$(sed 's/^/\t/' <<< "$(git diff --name-only --cached)")"
+        staged_files_list="$(sed 's/^/\t/' <<< "$(git -c core.quotePath=false diff --name-only --cached)")"
         print_staged_files
     else
-        staged_files_list="$(sed 's/^/\t/' <<< "$(git diff --name-only --cached)")"
+        staged_files_list="$(sed 's/^/\t/' <<< "$(git -c core.quotePath=false diff --name-only --cached)")"
     fi
     if [ -z "${amend}" ] && [ -z "${fixup}" ] && [ -z "${msg}" ] && [ -z "${ticket}" ]; then
         _split_auto_yes=""
@@ -5165,7 +5183,7 @@ function commit_script {
         if [ "$normalized_key" = "y" ] || [ -z "$choice" ]; then
             commit="$saved_commit_message"
             echo
-            result=$(git commit -m """$commit""" 2>&1)
+            result=$(git commit -m "$commit" 2>&1)
             check_code $? "$result" "commit"
             git config --unset gitbasher.cached-git-add 2>/dev/null
             git config --unset gitbasher.cached-commit-message 2>/dev/null
@@ -5183,7 +5201,7 @@ function commit_script {
                 commit="$edited_commit_message"
                 echo
                 git config gitbasher.cached-commit-message "$commit"
-                result=$(git commit -m """$commit""" 2>&1)
+                result=$(git commit -m "$commit" 2>&1)
                 check_code $? "$result" "commit"
                 git config --unset gitbasher.cached-git-add 2>/dev/null
                 git config --unset gitbasher.cached-commit-message 2>/dev/null
@@ -5481,7 +5499,7 @@ ${staged_with_tab}
     commit="${commit}${commit_message}"
     echo
     git config gitbasher.cached-commit-message "$commit"
-    result=$(git commit -m """$commit""" 2>&1)
+    result=$(git commit -m "$commit" 2>&1)
     check_code $? "$result" "commit"
     git config --unset gitbasher.cached-git-add 2>/dev/null
     git config --unset gitbasher.cached-commit-message 2>/dev/null
@@ -5645,7 +5663,7 @@ function branch_script {
         exit
     fi
     if [[ -n "${main}" ]]; then
-        switch ${main_branch}
+        switch "${main_branch}"
         exit
     fi
     if [[ -n "${tag}" ]]; then
@@ -5696,7 +5714,7 @@ function branch_script {
         echo
         echo -e "${YELLOW}Checking out to tag ${selected_tag}...${ENDCOLOR}"
         echo
-        checkout_output=$(git checkout $selected_tag 2>&1)
+        checkout_output=$(git checkout "$selected_tag" 2>&1)
         checkout_code=$?
         if [ $checkout_code -eq 0 ]; then
             echo -e "${GREEN}Successfully checked out to tag '${selected_tag}'${ENDCOLOR}"
@@ -5713,18 +5731,18 @@ function branch_script {
         echo -e "${YELLOW}Select a branch to switch from '${current_branch}'${ENDCOLOR}:"
         choose_branch
         echo
-        switch ${branch_name}
+        switch "${branch_name}"
         exit
     elif [[ -z "$new" ]] && [[ -n "$remote" ]] && [[ -z "$delete" ]] && [[ -z "$tag" ]]; then
         echo -e "${YELLOW}Fetching remote...${ENDCOLOR}"
         echo
         fetch_output=$(git fetch 2>&1)
         check_code $? "$fetch_output" "fetch remote"
-        prune_output=$(git remote prune $origin_name 2>&1)
+        prune_output=$(git remote prune "$origin_name" 2>&1)
         echo -e "${YELLOW}Switch from '${current_branch}' to the remote branch${ENDCOLOR}"
         choose_branch "remote"
         echo
-        switch ${branch_name}
+        switch "${branch_name}"
         exit
     elif [[ -z "$new" ]] && [[ -n "$delete" ]] && [[ -z "$tag" ]]; then
         echo -e "${YELLOW}Do you want to delete local branches that don't exist on remote?${ENDCOLOR}"
@@ -5767,7 +5785,7 @@ function branch_script {
                         if is_yes "$delete_choice"; then
                             printf "y\n\n"
                             for branch in "${branches_to_delete[@]}"; do
-                                delete_output=$(git branch -D $branch 2>&1)
+                                delete_output=$(git branch -D "$branch" 2>&1)
                                 delete_code=$?
                                 if [ $delete_code -eq 0 ]; then
                                     echo -e "${GREEN}Branch '$branch' is deleted!${ENDCOLOR}"
@@ -5817,7 +5835,7 @@ function branch_script {
                     for index in "${!branches[@]}"
                     do
                         branch_to_delete="$(echo "${branches[index]}" | xargs)"
-                        delete_output=$(git branch -d $branch_to_delete 2>&1)
+                        delete_output=$(git branch -d "$branch_to_delete" 2>&1)
                         delete_code=$?
                         if [ $delete_code == 0 ]; then
                             echo -e "${GREEN}Branch '$branch_to_delete' is deleted!${ENDCOLOR}"
@@ -5897,7 +5915,7 @@ function branch_script {
         echo -e "${YELLOW}Delete a local branch${ENDCOLOR}"
         choose_branch "delete"
         echo
-        delete_output=$(git branch -d $branch_name 2>&1)
+        delete_output=$(git branch -d "$branch_name" 2>&1)
         delete_code=$?
         if [ "$delete_code" == 0 ]; then
             echo -e "${GREEN}Branch '$branch_name' is deleted!${ENDCOLOR}"
@@ -5909,7 +5927,7 @@ function branch_script {
                 read -n 1 -s choice
                 if is_yes "$choice"; then
                     printf "y\n\n"
-                    delete_output=$(git branch -D $branch_name 2>&1)
+                    delete_output=$(git branch -D "$branch_name" 2>&1)
                     delete_code=$?
                     if [ "$delete_code" != 0 ]; then
                         echo -e "${RED}Cannot delete branch '$branch_name'! Error message:${ENDCOLOR}"
@@ -5928,7 +5946,7 @@ function branch_script {
             echo -e "${delete_output}"
             exit
         fi
-        remote_check=$(git --no-pager log $origin_name/$branch_name..HEAD 2>&1)
+        remote_check=$(git --no-pager log "$origin_name/$branch_name..HEAD" 2>&1)
         if [[ $remote_check != *"unknown revision or path not in the working tree"* ]]; then
             echo
             echo -e "${YELLOW}Do you want to delete this branch in the remote?${ENDCOLOR}"
@@ -5938,7 +5956,7 @@ function branch_script {
                 if is_yes "$choice"; then
                     printf "y\n\n"
                     echo -e "${YELLOW}Deleting...${ENDCOLOR}"
-                    push_output=$(git push $origin_name -d $branch_name 2>&1)
+                    push_output=$(git push "$origin_name" -d "$branch_name" 2>&1)
                     push_code=$?
                     echo
                     if [ "$push_code" != 0 ]; then
@@ -6101,7 +6119,7 @@ function branch_script {
         pull $main_branch $origin_name $editor
         from_branch=$main_branch
     fi
-    create_output=$(git switch -c $branch_name 2>&1)
+    create_output=$(git switch -c "$branch_name" 2>&1)
     create_code=$?
     echo
     if [ $create_code -eq 0 ]; then
@@ -6125,11 +6143,11 @@ function branch_script {
 function push_tag {
     if [ -z "$1" ] || [ "$1" == "" ]; then
         all="true"
-        push_output=$(git push $origin_name --tags 2>&1)
+        push_output=$(git push "$origin_name" --tags 2>&1)
     elif [ -n "$2" ]; then
-        push_output=$(git push --delete $origin_name $1 2>&1)
+        push_output=$(git push --delete "$origin_name" "$1" 2>&1)
     else
-        push_output=$(git push $origin_name $1 2>&1)
+        push_output=$(git push "$origin_name" "$1" 2>&1)
     fi
     push_code=$?
     if [ -n "$delete" ]; then

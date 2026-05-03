@@ -58,6 +58,7 @@ source scripts/cherry.sh
 source scripts/sync.sh
 source scripts/undo.sh
 source scripts/wip.sh
+source scripts/worktree.sh
 source scripts/gitlog.sh
 source scripts/hooks.sh
 source scripts/origin.sh

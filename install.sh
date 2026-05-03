@@ -115,10 +115,12 @@ fi
 
 if [ "$VERSION" = "latest" ]; then
     URL="https://github.com/$REPO/releases/latest/download/gitb"
+    SHA_URL="https://github.com/$REPO/releases/latest/download/gitb.sha256"
 else
     # accept "v1.2.3" or "1.2.3"
     case "$VERSION" in v*) ;; *) VERSION="v$VERSION" ;; esac
     URL="https://github.com/$REPO/releases/download/$VERSION/gitb"
+    SHA_URL="https://github.com/$REPO/releases/download/$VERSION/gitb.sha256"
 fi
 
 info "Installing gitbasher ($VERSION) to ${BOLD}$TARGET_DIR/gitb${OFF}"
@@ -127,18 +129,60 @@ info "Installing gitbasher ($VERSION) to ${BOLD}$TARGET_DIR/gitb${OFF}"
 ### --- download ---
 
 tmp=$(mktemp 2>/dev/null || mktemp -t gitb)
-trap 'rm -f "$tmp"' EXIT
+tmp_sha=$(mktemp 2>/dev/null || mktemp -t gitb.sha256)
+trap 'rm -f "$tmp" "$tmp_sha"' EXIT
 
+# `--max-time 60` keeps a stalled download from hanging the install indefinitely;
+# `--proto '=https' --tlsv1.2` is already there to refuse plaintext downgrades.
 case "$DOWNLOADER" in
-    curl) curl -fSL --proto '=https' --tlsv1.2 -o "$tmp" "$URL" \
+    curl) curl -fSL --proto '=https' --tlsv1.2 --max-time 60 -o "$tmp" "$URL" \
               || die "Download failed: $URL" ;;
-    wget) wget --https-only -qO "$tmp" "$URL" \
+    wget) wget --https-only --timeout=60 -qO "$tmp" "$URL" \
               || die "Download failed: $URL" ;;
 esac
 
 # Sanity check: the file should look like a bash script, not an HTML 404 page.
 head -c 64 "$tmp" | grep -q '^#!.*bash' \
     || die "Downloaded file is not a bash script. Check that release '$VERSION' exists."
+
+### --- verify checksum ---
+# The release pipeline (.releaserc.json) ships a `gitb.sha256` asset alongside
+# `gitb`, formatted as `<sha256>  gitb`. We verify against it; if the asset is
+# missing (e.g. someone published manually) we fall back to a loud warning
+# rather than silently trusting the download — a balance between security and
+# not breaking installs from older or hand-rolled releases.
+
+# Pick whichever sha256 tool the platform has. macOS ships `shasum`; most
+# Linux distros ship `sha256sum`; either works.
+if command -v shasum >/dev/null 2>&1; then
+    SHA_CMD="shasum -a 256"
+elif command -v sha256sum >/dev/null 2>&1; then
+    SHA_CMD="sha256sum"
+else
+    SHA_CMD=""
+fi
+
+if [ -n "$SHA_CMD" ]; then
+    sha_fetch_ok=0
+    case "$DOWNLOADER" in
+        curl) curl -fSL --proto '=https' --tlsv1.2 --max-time 30 -o "$tmp_sha" "$SHA_URL" 2>/dev/null \
+                  && sha_fetch_ok=1 ;;
+        wget) wget --https-only --timeout=30 -qO "$tmp_sha" "$SHA_URL" 2>/dev/null \
+                  && sha_fetch_ok=1 ;;
+    esac
+    if [ "$sha_fetch_ok" = "1" ] && [ -s "$tmp_sha" ]; then
+        expected=$(awk 'NR==1 {print $1}' "$tmp_sha")
+        actual=$($SHA_CMD "$tmp" | awk '{print $1}')
+        if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+            die "Checksum mismatch for $URL (expected $expected, got $actual). Refusing to install."
+        fi
+        ok "Verified SHA-256 checksum"
+    else
+        warn "Could not fetch checksum from $SHA_URL — proceeding without verification."
+    fi
+else
+    warn "Neither shasum nor sha256sum is available — proceeding without verification."
+fi
 
 ### --- install ---
 

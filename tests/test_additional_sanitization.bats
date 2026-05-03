@@ -7,7 +7,7 @@
 load setup_suite
 
 setup() {
-    source_gitbasher
+    source_gitbasher_lite
 }
 
 # ===== sanitize_text_input tests =====
@@ -101,6 +101,27 @@ setup() {
 
 @test "validate_scope_list: rejects double-spaced scopes" {
     ! validate_scope_list "feat  fix"
+}
+
+# Regression tests for the runtime re-validation that init.sh applies on the
+# scopes string read from `git config gitbasher.scopes`. The validator runs
+# at config-write time too (see config.sh:651), but a user can bypass that
+# by editing git config directly — the boundary check guarantees nothing
+# bogus flows into AI prompts.
+
+@test "validate_scope_list: rejects shell-metachar injection attempt" {
+    ! validate_scope_list 'feat $(touch /tmp/pwn) fix'
+    ! validate_scope_list 'feat`whoami` fix'
+    ! validate_scope_list 'feat;fix'
+}
+
+@test "validate_scope_list: rejects newline injection" {
+    ! validate_scope_list $'feat\nfix'
+}
+
+@test "validate_scope_list: rejects HTML/XML tag injection (would break AI prompts)" {
+    ! validate_scope_list 'feat <inject> fix'
+    ! validate_scope_list 'feat </scopes> fix'
 }
 
 # ===== Additional sanitize_git_name tests =====

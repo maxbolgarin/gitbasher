@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-GITBASHER_VERSION="3.10.2-101-g97761b3"
+GITBASHER_VERSION="3.10.2-104-g92af66d"
 if [ "$1" == "init" ] || [ "$1" == "i" ]; then
     git init
 fi
@@ -208,6 +208,23 @@ function show_sanitization_error {
         echo -e "${YELLOW}$error_msg${ENDCOLOR}" >&2
     fi
     echo -e "${YELLOW}Please try again with valid input.${ENDCOLOR}" >&2
+}
+function print_help_header {
+    local pad="$1"
+    printf "  ${YELLOW}%-*s${ENDCOLOR}  ${BLUE}%s${ENDCOLOR}\n" "$pad" "Mode" "Description"
+}
+function print_help_row {
+    local pad="$1"
+    local mode="$2"
+    local aliases="$3"
+    local desc="$4"
+    local label
+    if [ -n "$aliases" ]; then
+        label="${mode} (${aliases})"
+    else
+        label="${mode}"
+    fi
+    printf "  ${BOLD}%-*s${NORMAL}  %b\n" "$pad" "$label" "$desc"
 }
 function normalize_key {
     local key="$1"
@@ -1192,6 +1209,9 @@ function validate_git_url {
     fi
     return 1
 }
+if [ -n "$GITBASHER_SKIP_INIT_QUERIES" ]; then
+    return 0
+fi
 current_branch=$(git branch --show-current)
 main_branch=$(get_config_value gitbasher.branch "main")
 if [[ "$( git branch | grep -E "^[[:space:]*]*main[[:space:]]*$" )" == "" ]] && [[ "$( git branch | grep -E "^[[:space:]*]*master[[:space:]]*$" )" != "" ]]; then
@@ -1250,6 +1270,13 @@ sep=$(get_config_value gitbasher.sep "-")
 editor=$(get_config_value core.editor "vi")
 ticket_name=$(get_config_value gitbasher.ticket "")
 scopes=$(get_config_value gitbasher.scopes "")
+if [ -n "$scopes" ]; then
+    if ! validate_scope_list "$scopes" >/dev/null 2>&1; then
+        scopes=""
+    else
+        scopes="$validated_scopes"
+    fi
+fi
 is_first=$(get_config_value gitbasher.isfirst "true")
 git config --local gitbasher.isfirst "false"
 readonly OPENROUTER_API_URL="https://openrouter.ai/api/v1/chat/completions"
@@ -1602,9 +1629,6 @@ function secure_curl_with_api_key {
             "$api_url"
             -H "Content-Type: application/json"
         )
-        if [ -n "$api_key" ]; then
-            curl_cmd+=(-H "Authorization: Bearer $api_key")
-        fi
         if [ "$provider" = "openrouter" ]; then
             curl_cmd+=(
                 -H "HTTP-Referer: https://github.com/maxbolgarin/gitbasher"
@@ -1612,7 +1636,15 @@ function secure_curl_with_api_key {
             )
         fi
         curl_cmd+=(-d "$json_payload")
-        "${curl_cmd[@]}" 2>&1
+        if [ -n "$api_key" ]; then
+            local escaped_key="${api_key//\\/\\\\}"
+            escaped_key="${escaped_key//\"/\\\"}"
+            "${curl_cmd[@]}" --config - <<EOF 2>&1
+header = "Authorization: Bearer ${escaped_key}"
+EOF
+        else
+            "${curl_cmd[@]}" 2>&1
+        fi
     )
 }
 function _json_escape_for_payload {
@@ -2812,24 +2844,24 @@ function config_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb config <mode>${ENDCOLOR}"
         echo
-        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Print current gitbasher configuration"
-        msg="$msg\n${BOLD}user${ENDCOLOR}_name|email|u_Set user name and email"
-        msg="$msg\n${BOLD}default${ENDCOLOR}_def|d|b|main_Set gitbasher's default branch (local only — does not change the remote)"
-        msg="$msg\n${BOLD}separator${ENDCOLOR}_sep|s_Set the separator between type and name in branches"
-        msg="$msg\n${BOLD}editor${ENDCOLOR}_ed|e_Set the editor for commit messages"
-        msg="$msg\n${BOLD}ticket${ENDCOLOR}_ti|t|jira_Set the ticket prefix used in commits and branches"
-        msg="$msg\n${BOLD}scopes${ENDCOLOR}_sc_Set the list of suggested commit scopes"
-        msg="$msg\n${BOLD}ai${ENDCOLOR}_llm|key_Set the AI API key"
-        msg="$msg\n${BOLD}provider${ENDCOLOR}_prov_Choose the AI provider (openrouter, openai, ollama)"
-        msg="$msg\n${BOLD}model${ENDCOLOR}_m_Set the AI model override"
-        msg="$msg\n${BOLD}proxy${ENDCOLOR}_prx|p_Set an HTTP/SOCKS proxy for AI requests"
-        msg="$msg\n${BOLD}history${ENDCOLOR}_hist_Set how many recent commits to include in AI prompts"
-        msg="$msg\n${BOLD}diff${ENDCOLOR}_payload_Set the diff payload size (lines and char cap) sent to AI"
-        msg="$msg\n${BOLD}auto${ENDCOLOR}_completion|comp_Install/remove tab completion for bash, zsh, or fish"
-        msg="$msg\n${BOLD}delete${ENDCOLOR}_unset|del_Unset a global gitbasher configuration value"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local PAD=26
+        print_help_header $PAD
+        print_help_row $PAD "<empty>"   ""                  "Print current gitbasher configuration"
+        print_help_row $PAD "user"      "name, email, u"    "Set user name and email"
+        print_help_row $PAD "default"   "def, d, b, main"   "Set gitbasher's default branch (local only — does not change the remote)"
+        print_help_row $PAD "separator" "sep, s"            "Set the separator between type and name in branches"
+        print_help_row $PAD "editor"    "ed, e"             "Set the editor for commit messages"
+        print_help_row $PAD "ticket"    "ti, t, jira"       "Set the ticket prefix used in commits and branches"
+        print_help_row $PAD "scopes"    "sc"                "Set the list of suggested commit scopes"
+        print_help_row $PAD "ai"        "llm, key"          "Set the AI API key"
+        print_help_row $PAD "provider"  "prov"              "Choose the AI provider (openrouter, openai, ollama)"
+        print_help_row $PAD "model"     "m"                 "Set the AI model override"
+        print_help_row $PAD "proxy"     "prx, p"            "Set an HTTP/SOCKS proxy for AI requests"
+        print_help_row $PAD "history"   "hist"              "Set how many recent commits to include in AI prompts"
+        print_help_row $PAD "diff"      "payload"           "Set the diff payload size (lines and char cap) sent to AI"
+        print_help_row $PAD "auto"      "completion, comp"  "Install/remove tab completion for bash, zsh, or fish"
+        print_help_row $PAD "delete"    "unset, del"        "Unset a global gitbasher configuration value"
+        print_help_row $PAD "help"      "h"                 "Show this help"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb cfg${ENDCOLOR}            Show current configuration"
@@ -2862,17 +2894,17 @@ function merge_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb merge <mode>${ENDCOLOR}"
         echo
-        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Pick a branch to merge into the current one"
-        msg="$msg\n${BOLD}main${ENDCOLOR}_master|m_Merge $main_branch into the current branch"
-        msg="$msg\n${BOLD}to-main${ENDCOLOR}_to-master|tm_Switch to $main_branch, then merge the current branch into it"
-        msg="$msg\n${BOLD}remote${ENDCOLOR}_r_Fetch $origin_name and pick a remote branch to merge in"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local PAD=26
+        print_help_header $PAD
+        print_help_row $PAD "<empty>" ""               "Pick a branch to merge into the current one"
+        print_help_row $PAD "main"    "master, m"      "Merge $main_branch into the current branch"
+        print_help_row $PAD "to-main" "to-master, tm"  "Switch to $main_branch, then merge the current branch into it"
+        print_help_row $PAD "remote"  "r"              "Fetch $origin_name and pick a remote branch to merge in"
+        print_help_row $PAD "help"    "h"              "Show this help"
         echo
         echo -e "${YELLOW}Conflict resolution${ENDCOLOR} ${BLUE}(during a merge conflict)${ENDCOLOR}"
-        echo -e "  Accept all incoming changes\tKeep changes from the branch being merged in"
-        echo -e "  Accept all current changes\tKeep changes from your current branch"
+        printf "  ${BOLD}%-30s${NORMAL}  %s\n" "Accept all incoming changes" "Keep changes from the branch being merged in"
+        printf "  ${BOLD}%-30s${NORMAL}  %s\n" "Accept all current changes"  "Keep changes from your current branch"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb merge${ENDCOLOR}        Pick a branch and merge it into ${YELLOW}${current_branch:-current}${ENDCOLOR}"
@@ -3225,7 +3257,7 @@ function merge_commit {
         return
     fi
     files_with_conflicts_one_line="$(echo "$2" | tr '\n' ' ' | sed 's/ $//')"
-    files_with_conflicts_new="$(git --no-pager grep -l --name-only -E "[<=>]{7} HEAD" $files_with_conflicts_one_line)"
+    files_with_conflicts_new="$(git --no-pager diff --name-only --diff-filter=U 2>/dev/null)"
     if [ "$files_with_conflicts_new" != "" ]; then
         echo
         echo -e "${YELLOW}There are files with conflicts${ENDCOLOR}"
@@ -3240,14 +3272,15 @@ function merge_commit {
     git add -u
     if [ "$1" == "1" ]; then
         commit_message="$3"
-        result=$(git commit -m "$commit_message" 2>&1)
+        result=$(LC_ALL=C git commit -m "$commit_message" 2>&1)
         commit_status=$?
         if [[ $result != *"not staged for commit"* ]] && [[ $result != *"nothing to commit"* ]]; then
             check_code $commit_status "$result" "create default merge commit"
         fi
     else
         staged_with_tab="$(sed 's/^/####\t/' <<< "$2")"
-        commitmsg_file=$(mktemp "/tmp/commitmsg.XXXXXX")
+        commitmsg_file=$(mktemp "${TMPDIR:-/tmp}/commitmsg.XXXXXX")
+        chmod 600 "$commitmsg_file" 2>/dev/null || true
         trap 'rm -f "$commitmsg_file"' EXIT INT TERM
         echo """
 ####
@@ -3275,7 +3308,7 @@ ${staged_with_tab}
             fi
         done
         rm -f "$commitmsg_file"
-        result=$(git commit -m """$commit_message""" 2>&1)
+        result=$(LC_ALL=C git commit -m """$commit_message""" 2>&1)
         commit_status=$?
         if [[ $result != *"not staged for commit"* ]] && [[ $result != *"nothing to commit"* ]]; then
             check_code $commit_status "$result" "create merge commit"
@@ -3310,19 +3343,19 @@ function rebase_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb rebase <mode>${ENDCOLOR}"
         echo
-        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Pick a base branch and rebase the current branch onto it"
-        msg="$msg\n${BOLD}main${ENDCOLOR}_master|m_Rebase the current branch onto $main_branch"
-        msg="$msg\n${BOLD}interactive${ENDCOLOR}_i_Pick a base commit and rebase interactively"
-        msg="$msg\n${BOLD}autosquash${ENDCOLOR}_a|s|ia_Interactive rebase on local commits with ${BLUE}--autosquash${ENDCOLOR}"
-        msg="$msg\n${BOLD}fastautosquash${ENDCOLOR}_fast|sf|f_Apply fixup commits non-interactively"
-        msg="$msg\n${BOLD}pull${ENDCOLOR}_p_Take all commits from a chosen branch and apply them here"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local PAD=30
+        print_help_header $PAD
+        print_help_row $PAD "<empty>"         ""             "Pick a base branch and rebase the current branch onto it"
+        print_help_row $PAD "main"            "master, m"    "Rebase the current branch onto $main_branch"
+        print_help_row $PAD "interactive"     "i"            "Pick a base commit and rebase interactively"
+        print_help_row $PAD "autosquash"      "a, s, ia"     "Interactive rebase on local commits with ${BLUE}--autosquash${ENDCOLOR}"
+        print_help_row $PAD "fastautosquash"  "fast, sf, f"  "Apply fixup commits non-interactively"
+        print_help_row $PAD "pull"            "p"            "Take all commits from a chosen branch and apply them here"
+        print_help_row $PAD "help"            "h"            "Show this help"
         echo
         echo -e "${YELLOW}Conflict resolution${ENDCOLOR} ${BLUE}(during a rebase conflict)${ENDCOLOR}"
-        echo -e "  Accept all incoming changes\tKeep changes from the branch being rebased onto"
-        echo -e "  Accept all current changes\tKeep changes from your current branch"
+        printf "  ${BOLD}%-30s${NORMAL}  %s\n" "Accept all incoming changes" "Keep changes from the branch being rebased onto"
+        printf "  ${BOLD}%-30s${NORMAL}  %s\n" "Accept all current changes"  "Keep changes from your current branch"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb rebase${ENDCOLOR}        Pick a base branch interactively and rebase onto it"
@@ -3367,8 +3400,8 @@ function rebase_script {
         fi
         echo
     fi
-    is_clean=$(git status | tail -n 1)
-    if [ "$is_clean" != "nothing to commit, working tree clean" ]; then
+    is_clean=$(LC_ALL=C git status --porcelain)
+    if [ -n "$is_clean" ]; then
         echo -e "${RED}✗ Cannot rebase — there are uncommitted changes:"
         git_status
         exit 1
@@ -4609,20 +4642,26 @@ function squash_run_rebase {
 function squash_print_help {
     echo -e "usage: ${YELLOW}gitb squash <mode>${ENDCOLOR}"
     echo
-    msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-    msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Ask AI to group commits in range and rebase interactively"
-    msg="$msg\n${BOLD}preview${ENDCOLOR}_p|dry|show_Show the AI plan without rewriting history"
-    msg="$msg\n${BOLD}yes${ENDCOLOR}_y|fast_Skip the confirmation prompt and apply the plan"
-    msg="$msg\n${BOLD}push${ENDCOLOR}_ps_After rebase, force-push with --force-with-lease"
-    msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-    echo -e "$(echo -e "$msg" | column -ts '_')"
+    local PAD=24
+    print_help_header $PAD
+    print_help_row $PAD "<empty>" ""              "Ask AI to group commits in range and rebase interactively"
+    print_help_row $PAD "preview" "p, dry, show"  "Show the AI plan without rewriting history"
+    print_help_row $PAD "yes"     "y, fast"       "Skip the confirmation prompt and apply the plan"
+    print_help_row $PAD "push"    "ps"            "After rebase, force-push with ${BLUE}--force-with-lease${ENDCOLOR}"
+    print_help_row $PAD "help"    "h"             "Show this help"
     echo
-    echo -e "${YELLOW}Range:${ENDCOLOR}"
-    echo -e "  • On ${BOLD}${main_branch}${NORMAL}: commits since the last tag (or root if none)"
-    echo -e "  • On any other branch: commits since the merge-base with ${BOLD}${main_branch}${NORMAL}"
+    echo -e "${YELLOW}Range${ENDCOLOR}"
+    echo -e "  ${BLUE}•${ENDCOLOR} On ${BOLD}${main_branch}${NORMAL}: commits since the last tag (or root if none)"
+    echo -e "  ${BLUE}•${ENDCOLOR} On any other branch: commits since the merge-base with ${BOLD}${main_branch}${NORMAL}"
     echo
-    echo -e "${YELLOW}Recovery:${ENDCOLOR}"
-    echo -e "  • If the result is wrong, run ${BOLD}gitb undo rebase${NORMAL} to restore the original branch"
+    echo -e "${YELLOW}Recovery${ENDCOLOR}"
+    echo -e "  ${BLUE}•${ENDCOLOR} If the result is wrong, run ${BOLD}gitb undo rebase${NORMAL} to restore the original branch"
+    echo
+    echo -e "${YELLOW}Examples${ENDCOLOR}"
+    echo -e "  ${GREEN}gitb squash${ENDCOLOR}           Group commits with AI and rebase interactively"
+    echo -e "  ${GREEN}gitb squash preview${ENDCOLOR}   See the AI plan without rewriting history"
+    echo -e "  ${GREEN}gitb squash yes${ENDCOLOR}       Apply the plan without confirming"
+    echo -e "  ${GREEN}gitb squash push${ENDCOLOR}      Apply, then force-push the rewritten branch"
 }
 function squash_script {
     local mode_preview="" mode_yes="" mode_push="" help=""
@@ -4728,7 +4767,8 @@ function squash_script {
         fi
         if [ -n "${squash_last_ai_response:-}" ]; then
             local dump_file
-            dump_file=$(mktemp -t gitb-tidy-response.XXXXXX 2>/dev/null) || dump_file="/tmp/gitb-tidy-response.$$"
+            dump_file=$(mktemp "${TMPDIR:-/tmp}/gitb-tidy-response.XXXXXX" 2>/dev/null) || dump_file="${TMPDIR:-/tmp}/gitb-tidy-response.$$"
+            chmod 600 "$dump_file" 2>/dev/null || true
             printf '%s\n' "$squash_last_ai_response" > "$dump_file"
             local total_lines
             total_lines=$(printf '%s\n' "$squash_last_ai_response" | wc -l | tr -d ' ')
@@ -4853,18 +4893,18 @@ function pull_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb pull <mode>${ENDCOLOR}"
         echo
-        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Fetch current branch, fast-forward if possible, otherwise ask"
-        msg="$msg\n${BOLD}fetch${ENDCOLOR}_fe_Fetch current branch without merging"
-        msg="$msg\n${BOLD}all${ENDCOLOR}_fa_Fetch every branch without merging"
-        msg="$msg\n${BOLD}upd${ENDCOLOR}_u_Run ${BLUE}git remote update${ENDCOLOR} to fetch all branches"
-        msg="$msg\n${BOLD}ffonly${ENDCOLOR}_ff_Fetch and merge only if a fast-forward is possible"
-        msg="$msg\n${BOLD}merge${ENDCOLOR}_m_Fetch and merge the current branch"
-        msg="$msg\n${BOLD}rebase${ENDCOLOR}_r_Fetch and rebase the current branch"
-        msg="$msg\n${BOLD}interactive${ENDCOLOR}_ri|rs_Fetch and interactively rebase with ${BLUE}--autosquash${ENDCOLOR}"
-        msg="$msg\n${BOLD}dry${ENDCOLOR}_d|dr_Preview incoming commits without modifying local refs"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local PAD=22
+        print_help_header $PAD
+        print_help_row $PAD "<empty>"      ""       "Fetch current branch, fast-forward if possible, otherwise ask"
+        print_help_row $PAD "fetch"        "fe"     "Fetch current branch without merging"
+        print_help_row $PAD "all"          "fa"     "Fetch every branch without merging"
+        print_help_row $PAD "upd"          "u"      "Run ${BLUE}git remote update${ENDCOLOR} to fetch all branches"
+        print_help_row $PAD "ffonly"       "ff"     "Fetch and merge only if a fast-forward is possible"
+        print_help_row $PAD "merge"        "m"      "Fetch and merge the current branch"
+        print_help_row $PAD "rebase"       "r"      "Fetch and rebase the current branch"
+        print_help_row $PAD "interactive"  "ri, rs" "Fetch and interactively rebase with ${BLUE}--autosquash${ENDCOLOR}"
+        print_help_row $PAD "dry"          "d, dr"  "Preview incoming commits without modifying local refs"
+        print_help_row $PAD "help"         "h"      "Show this help"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb pull${ENDCOLOR}          Fetch + fast-forward, ask if a merge or rebase is needed"
@@ -5095,7 +5135,7 @@ function pull {
     fi
 }
 function push {
-    push_output=$(git push $1 "${origin_name}" "${current_branch}" 2>&1)
+    push_output=$(git push "$@" "${origin_name}" "${current_branch}" 2>&1)
     push_code=$?
     if [ $push_code -eq 0 ] ; then
         echo -e "${GREEN}✓ Pushed to ${origin_name}/${current_branch}${ENDCOLOR}"
@@ -5179,13 +5219,13 @@ function push_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb push <mode>${ENDCOLOR}"
         echo
-        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Show unpushed commits and push the current branch (pulls first if needed)"
-        msg="$msg\n${BOLD}yes${ENDCOLOR}_y_Push without confirmation"
-        msg="$msg\n${BOLD}force${ENDCOLOR}_f_Push with ${RED}--force${ENDCOLOR} (overwrites remote history)"
-        msg="$msg\n${BOLD}list${ENDCOLOR}_log|l_Show unpushed commits without pushing"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local PAD=16
+        print_help_header $PAD
+        print_help_row $PAD "<empty>"  ""       "Show unpushed commits and push the current branch (pulls first if needed)"
+        print_help_row $PAD "yes"      "y"      "Push without confirmation"
+        print_help_row $PAD "force"    "f"      "Push with ${RED}--force-with-lease${ENDCOLOR} (overwrites remote unless someone else has pushed first)"
+        print_help_row $PAD "list"     "log, l" "Show unpushed commits without pushing"
+        print_help_row $PAD "help"     "h"      "Show this help"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb push${ENDCOLOR}         Show unpushed commits, then ask before pushing"
@@ -5210,8 +5250,11 @@ function push_script {
         exit
     fi
     echo
+    force_args=()
+    force_label=""
     if [ -n "${force}" ]; then
-        force_arg=" --force"
+        force_args=(--force-with-lease)
+        force_label=" --force-with-lease"
     fi
     if [ -z "${fast}" ]; then
         if [ -n "${force}" ]; then
@@ -5220,13 +5263,13 @@ function push_script {
         if [ "${current_branch}" == "${main_branch}" ]; then
             echo -e "${RED}⚠  You are about to push directly to the default branch ${YELLOW}${main_branch}${RED}.${ENDCOLOR}"
         fi
-        echo -e "Do you want to push${RED}${force_arg}${ENDCOLOR} these commits to ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} (y/n)?"
+        echo -e "Do you want to push${RED}${force_label}${ENDCOLOR} these commits to ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} (y/n)?"
         yes_no_choice "Pushing..."
     else
         echo -e "${YELLOW}Pushing...${ENDCOLOR}"
         echo
     fi
-    push $force_arg
+    push "${force_args[@]}"
     echo -e "${RED}✗ Cannot push — there are unpulled changes in ${YELLOW}${origin_name}/${current_branch}${RED}.${ENDCOLOR}"
     echo
     if [ -n "${fast}" ]; then
@@ -5241,7 +5284,7 @@ function push_script {
     echo
     echo -e "${YELLOW}Pushing...${ENDCOLOR}"
     echo
-    push $force_arg
+    push "${force_args[@]}"
 }
 function cleanup_on_exit {
     if [ -n "$1" ]; then
@@ -5687,7 +5730,8 @@ function perform_commit_split {
         return 1
     fi
     local snapshot_file
-    snapshot_file=$(mktemp "/tmp/gitb-split-snapshot.XXXXXX")
+    snapshot_file=$(mktemp "${TMPDIR:-/tmp}/gitb-split-snapshot.XXXXXX")
+    chmod 600 "$snapshot_file" 2>/dev/null || true
     printf '%s\n' "$original_staged" > "$snapshot_file"
     trap "_restore_split_snapshot '$snapshot_file'" INT TERM
     local total=${#split_group_keys[@]}
@@ -6004,7 +6048,8 @@ ${ai_commit_message}"
     elif [ "$normalized_key" = "e" ]; then
         if [ "$ai_mode" = "full" ]; then
             echo -e "${YELLOW}Edit the AI generated message:${ENDCOLOR}"
-            commitmsg_file=$(mktemp "/tmp/commitmsg.XXXXXX")
+            commitmsg_file=$(mktemp "${TMPDIR:-/tmp}/commitmsg.XXXXXX")
+            chmod 600 "$commitmsg_file" 2>/dev/null || true
             trap 'rm -f "$commitmsg_file"' EXIT INT TERM
             echo "$ai_commit_message" > $commitmsg_file
             while [ true ]; do
@@ -6294,26 +6339,28 @@ function commit_script {
         echo -e "compact token (${GREEN}aifp${ENDCOLOR}). Aliases are interchangeable."
         echo
         echo -e "${YELLOW}Actions${ENDCOLOR} ${BLUE}(pick one; default is a regular commit)${ENDCOLOR}"
-        msg="${BOLD}<empty>${NORMAL}_ _Interactive commit: choose files, type, scope, and summary"
-        msg="$msg\n${BOLD}split${NORMAL}_sp|sl_Split staged changes into one commit per detected scope"
-        msg="$msg\n${BOLD}fixup${NORMAL}_x|fix_Create a ${GREEN}--fixup${ENDCOLOR} commit against an older commit"
-        msg="$msg\n${BOLD}amend${NORMAL}_a|am_Add changes into the last commit (no message edit)"
-        msg="$msg\n${BOLD}last${NORMAL}_l_Rewrite the last commit message"
-        msg="$msg\n${BOLD}revert${NORMAL}_rev_Revert a commit (${GREEN}git revert --no-edit${ENDCOLOR})"
-        msg="$msg\n${BOLD}ff${NORMAL}_ _Ultrafast: ${BOLD}ai + split + fast${NORMAL} with no prompts (use ${BOLD}ffp${NORMAL} to also push)"
-        msg="$msg\n${BOLD}help${NORMAL}_h|--help|-h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local PAD=22
+        print_help_header $PAD
+        print_help_row $PAD "<empty>" ""               "Interactive commit: choose files, type, scope, and summary"
+        print_help_row $PAD "split"   "sp, sl"         "Split staged changes into one commit per detected scope"
+        print_help_row $PAD "fixup"   "x, fix"         "Create a ${GREEN}--fixup${ENDCOLOR} commit against an older commit"
+        print_help_row $PAD "amend"   "a, am"          "Add changes into the last commit (no message edit)"
+        print_help_row $PAD "last"    "l"              "Rewrite the last commit message"
+        print_help_row $PAD "revert"  "rev"            "Revert a commit (${GREEN}git revert --no-edit${ENDCOLOR})"
+        print_help_row $PAD "ff"      ""               "Ultrafast: ${BOLD}ai + split + fast${NORMAL} with no prompts (use ${BOLD}ffp${NORMAL} to also push)"
+        print_help_row $PAD "help"    "h, --help, -h"  "Show this help"
         echo
         echo -e "${YELLOW}Modifiers${ENDCOLOR} ${BLUE}(stack with an action, any order)${ENDCOLOR}"
-        msg="${BOLD}fast${NORMAL}_f_Stage all changes (${GREEN}git add .${ENDCOLOR}) before committing"
-        msg="$msg\n${BOLD}staged${NORMAL}_st_Use already-staged files (skip the add step)"
-        msg="$msg\n${BOLD}push${NORMAL}_p|pu_Push after the commit succeeds"
-        msg="$msg\n${BOLD}scope${NORMAL}_s_Force a scope: 'type(scope): message' (useful with fast mode)"
-        msg="$msg\n${BOLD}no-split${NORMAL}_nsp|nsl_Disable automatic split detection for this commit"
-        msg="$msg\n${BOLD}ai${NORMAL}_i|llm_Generate the commit message with AI"
-        msg="$msg\n${BOLD}msg${NORMAL}_m_Open \$EDITOR for a multiline message body"
-        msg="$msg\n${BOLD}ticket${NORMAL}_t|j|jira_Append ticket info to the header"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local FPAD=20
+        printf "  ${YELLOW}%-*s${ENDCOLOR}  ${BLUE}%s${ENDCOLOR}\n" "$FPAD" "Flag" "Description"
+        print_help_row $FPAD "fast"     "f"           "Stage all changes (${GREEN}git add .${ENDCOLOR}) before committing"
+        print_help_row $FPAD "staged"   "st"          "Use already-staged files (skip the add step)"
+        print_help_row $FPAD "push"     "p, pu"       "Push after the commit succeeds"
+        print_help_row $FPAD "scope"    "s"           "Force a scope: 'type(scope): message' (useful with fast mode)"
+        print_help_row $FPAD "no-split" "nsp, nsl"    "Disable automatic split detection for this commit"
+        print_help_row $FPAD "ai"       "i, llm"      "Generate the commit message with AI"
+        print_help_row $FPAD "msg"      "m"           "Open \$EDITOR for a multiline message body"
+        print_help_row $FPAD "ticket"   "t, j, jira"  "Append ticket info to the header"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb commit${ENDCOLOR}                  Interactive commit"
@@ -6341,8 +6388,8 @@ function commit_script {
         git commit --amend
         exit
     fi
-    is_clean=$(git status | tail -n 1)
-    if [ "$is_clean" = "nothing to commit, working tree clean" ]; then
+    is_clean=$(LC_ALL=C git status --porcelain)
+    if [ -z "$is_clean" ]; then
         if [ -z "${revert}" ]; then
             git config --unset gitbasher.cached-git-add 2>/dev/null
             echo -e "${GREEN}✓ Nothing to commit — working tree clean${ENDCOLOR}"
@@ -6734,7 +6781,8 @@ function commit_script {
     fi
     echo -e "Press Enter if you want to exit"
     if [ -n "$msg" ]; then
-        commitmsg_file=$(mktemp "/tmp/commitmsg.XXXXXX")
+        commitmsg_file=$(mktemp "${TMPDIR:-/tmp}/commitmsg.XXXXXX")
+        chmod 600 "$commitmsg_file" 2>/dev/null || true
         trap "rm -f '$commitmsg_file'" EXIT INT TERM
         staged_with_tab="$(sed 's/^/####\t/' <<< "${staged_files_list}")"
         echo """
@@ -6891,20 +6939,20 @@ function branch_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb branch <mode>${ENDCOLOR}"
         echo
-        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Pick a local branch to switch to"
-        msg="$msg\n${BOLD}list${ENDCOLOR}_l_List local branches"
-        msg="$msg\n${BOLD}remote${ENDCOLOR}_re|r_Fetch $origin_name and pick a remote branch"
-        msg="$msg\n${BOLD}main${ENDCOLOR}_def|m_Switch to $main_branch without prompting"
-        msg="$msg\n${BOLD}tag${ENDCOLOR}_t_Check out a specific tag"
-        msg="$msg\n${BOLD}new${ENDCOLOR}_n|c_Create a conventionally named branch from the current branch"
-        msg="$msg\n${BOLD}newd${ENDCOLOR}_nd|cd_Switch to $main_branch, pull, and create a new conventionally named branch"
-        msg="$msg\n${BOLD}delete${ENDCOLOR}_del|d_Delete branches (orphaned, merged, or a specific one)"
-        msg="$msg\n${BOLD}prev${ENDCOLOR}_p|-_Switch to the previous branch (like ${BLUE}cd -${ENDCOLOR})"
-        msg="$msg\n${BOLD}recent${ENDCOLOR}_rc_Pick from recently checked-out branches"
-        msg="$msg\n${BOLD}gone${ENDCOLOR}_g_Delete local branches whose remote tracking branch is gone"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local PAD=18
+        print_help_header $PAD
+        print_help_row $PAD "<empty>"  ""        "Pick a local branch to switch to"
+        print_help_row $PAD "list"     "l"       "List local branches"
+        print_help_row $PAD "remote"   "re, r"   "Fetch $origin_name and pick a remote branch"
+        print_help_row $PAD "main"     "def, m"  "Switch to $main_branch without prompting"
+        print_help_row $PAD "tag"      "t"       "Check out a specific tag"
+        print_help_row $PAD "new"      "n, c"    "Create a conventionally named branch from the current branch"
+        print_help_row $PAD "newd"     "nd, cd"  "Switch to $main_branch, pull, and create a conventionally named branch"
+        print_help_row $PAD "delete"   "del, d"  "Delete branches (orphaned, merged, or a specific one)"
+        print_help_row $PAD "prev"     "p, -"    "Switch to the previous branch (like ${BLUE}cd -${ENDCOLOR})"
+        print_help_row $PAD "recent"   "rc"      "Pick from recently checked-out branches"
+        print_help_row $PAD "gone"     "g"       "Delete local branches whose remote tracking branch is gone"
+        print_help_row $PAD "help"     "h"       "Show this help"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb branch${ENDCOLOR}        Pick a local branch to switch to"
@@ -7170,7 +7218,7 @@ function branch_script {
                 read -n 1 -s choice
                 if is_yes "$choice"; then
                     printf "y\n\n"
-                    branches_to_delete="$(git branch --merged | egrep -v "(^\*|master|main|develop|${main_branch})" | xargs)"
+                    branches_to_delete="$(git branch --merged | grep -E -v "(^\*|master|main|develop|${main_branch})" | xargs)"
                     IFS=$' ' read -rd '' -a branches <<<"$branches_to_delete"
                     for index in "${!branches[@]}"
                     do
@@ -7254,7 +7302,7 @@ function branch_script {
         echo -e "${YELLOW}Delete a local branch${ENDCOLOR}"
         choose_branch "delete"
         echo
-        delete_output=$(git branch -d "$branch_name" 2>&1)
+        delete_output=$(LC_ALL=C git branch -d "$branch_name" 2>&1)
         delete_code=$?
         if [ "$delete_code" == 0 ]; then
             echo -e "${GREEN}✓ Deleted branch '$branch_name'${ENDCOLOR}"
@@ -7601,19 +7649,19 @@ function tag_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb tag <mode>${ENDCOLOR}"
         echo
-        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Create a new tag on the last commit"
-        msg="$msg\n${BOLD}annotated${ENDCOLOR}_a|an_Create an annotated tag on the last commit"
-        msg="$msg\n${BOLD}commit${ENDCOLOR}_c|co|cm_Create a tag on a selected commit"
-        msg="$msg\n${BOLD}all${ENDCOLOR}_al_Create an annotated tag on a selected commit"
-        msg="$msg\n${BOLD}push${ENDCOLOR}_ps|ph|p_Pick a local tag and push it to remote"
-        msg="$msg\n${BOLD}push-all${ENDCOLOR}_pa_Push every local tag to remote"
-        msg="$msg\n${BOLD}delete${ENDCOLOR}_del|d_Pick a tag and delete it"
-        msg="$msg\n${BOLD}delete-all${ENDCOLOR}_da_Delete all local tags"
-        msg="$msg\n${BOLD}list${ENDCOLOR}_log|l_List local tags"
-        msg="$msg\n${BOLD}remote${ENDCOLOR}_fetch|r|re_Fetch tags from remote and list them"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local PAD=22
+        print_help_header $PAD
+        print_help_row $PAD "<empty>"     ""              "Create a new tag on the last commit"
+        print_help_row $PAD "annotated"   "a, an"         "Create an annotated tag on the last commit"
+        print_help_row $PAD "commit"      "c, co, cm"     "Create a tag on a selected commit"
+        print_help_row $PAD "all"         "al"            "Create an annotated tag on a selected commit"
+        print_help_row $PAD "push"        "ps, ph, p"     "Pick a local tag and push it to remote"
+        print_help_row $PAD "push-all"    "pa"            "Push every local tag to remote"
+        print_help_row $PAD "delete"      "del, d"        "Pick a tag and delete it"
+        print_help_row $PAD "delete-all"  "da"            "Delete all local tags"
+        print_help_row $PAD "list"        "log, l"        "List local tags"
+        print_help_row $PAD "remote"      "fetch, r, re"  "Fetch tags from remote and list them"
+        print_help_row $PAD "help"        "h"             "Show this help"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb tag${ENDCOLOR}          Tag the current commit (semver-incrementing helper)"
@@ -7748,18 +7796,19 @@ function tag_script {
         exit
     fi
     if [ -n "$annotated" ]; then
-        tag_file=".tagmsg__"
-        touch $tag_file
+        tag_file=$(mktemp "${TMPDIR:-/tmp}/gitb-tagmsg.XXXXXX")
+        chmod 600 "$tag_file" 2>/dev/null || true
+        trap 'rm -f "$tag_file"' EXIT INT TERM
         echo """
 ####
 #### Write some words about the new tag '${tag_name}'
 #### [$current_branch ${commit_hash::7}] ${commit_message}
-#### 
+####
 #### You can place changelog here if this tag for a new release
-""" >> $tag_file
+""" >> "$tag_file"
         while [ true ]; do
-            $editor $tag_file
-            tag_message=$(cat $tag_file | sed '/^#/d')
+            $editor "$tag_file"
+            tag_message=$(sed '/^#/d' "$tag_file")
             if [ -n "$tag_message" ]; then
                 break
             fi
@@ -7768,11 +7817,11 @@ function tag_script {
             echo
             read -n 1 -p "Try again? (y/n) " -s -e choice
             if ! is_yes "$choice"; then
-                find . -name "$tag_file*" -delete
+                rm -f "$tag_file"
                 exit
-            fi    
+            fi
         done
-        find . -name "$tag_file*" -delete
+        rm -f "$tag_file"
     fi
     if [ -z "$select" ]; then
         commit_hash=""
@@ -7838,14 +7887,14 @@ function reset_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb reset <mode>${ENDCOLOR}"
         echo
-        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Reset the last commit ${BLUE}(${YELLOW}git reset --mixed HEAD^${BLUE})${ENDCOLOR} — leaves changes unstaged"
-        msg="$msg\n${BOLD}soft${ENDCOLOR}_s_Reset the last commit ${BLUE}(${YELLOW}git reset --soft HEAD^${BLUE})${ENDCOLOR} — keeps changes staged"
-        msg="$msg\n${BOLD}undo${ENDCOLOR}_u_Undo the last reset ${BLUE}(${YELLOW}git reset --mixed HEAD@{1}${BLUE})${ENDCOLOR}"
-        msg="$msg\n${BOLD}interactive${ENDCOLOR}_i_Pick a commit to reset to, then preview before applying"
-        msg="$msg\n${BOLD}ref${ENDCOLOR}_r_Pick a reflog ref to reset to, then preview before applying"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local PAD=18
+        print_help_header $PAD
+        print_help_row $PAD "<empty>"     ""  "Reset the last commit, leave changes unstaged ${BLUE}(${YELLOW}git reset --mixed HEAD^${BLUE})${ENDCOLOR}"
+        print_help_row $PAD "soft"        "s" "Reset the last commit, keep changes staged ${BLUE}(${YELLOW}git reset --soft HEAD^${BLUE})${ENDCOLOR}"
+        print_help_row $PAD "undo"        "u" "Undo the last reset ${BLUE}(${YELLOW}git reset --mixed HEAD@{1}${BLUE})${ENDCOLOR}"
+        print_help_row $PAD "interactive" "i" "Pick a commit to reset to, then preview before applying"
+        print_help_row $PAD "ref"         "r" "Pick a reflog ref to reset to, then preview before applying"
+        print_help_row $PAD "help"        "h" "Show this help"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb reset${ENDCOLOR}        Drop the last commit, keep its changes unstaged"
@@ -8037,17 +8086,17 @@ function stash_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb stash <mode>${ENDCOLOR}"
         echo
-        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Show the interactive menu"
-        msg="$msg\n${BOLD}all${ENDCOLOR}_ _Stash all changes (including untracked)"
-        msg="$msg\n${BOLD}select${ENDCOLOR}_sel_Pick specific files to stash"
-        msg="$msg\n${BOLD}list${ENDCOLOR}_l_List existing stashes"
-        msg="$msg\n${BOLD}pop${ENDCOLOR}_p_Pop a stash (apply and remove)"
-        msg="$msg\n${BOLD}show${ENDCOLOR}_s_Show the contents of a stash"
-        msg="$msg\n${BOLD}apply${ENDCOLOR}_a_Apply a stash without removing it"
-        msg="$msg\n${BOLD}drop${ENDCOLOR}_d_Drop (delete) a stash"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local PAD=14
+        print_help_header $PAD
+        print_help_row $PAD "<empty>" ""    "Show the interactive menu"
+        print_help_row $PAD "all"     ""    "Stash all changes (including untracked)"
+        print_help_row $PAD "select"  "sel" "Pick specific files to stash"
+        print_help_row $PAD "list"    "l"   "List existing stashes"
+        print_help_row $PAD "pop"     "p"   "Pop a stash (apply and remove)"
+        print_help_row $PAD "show"    "s"   "Show the contents of a stash"
+        print_help_row $PAD "apply"   "a"   "Apply a stash without removing it"
+        print_help_row $PAD "drop"    "d"   "Drop (delete) a stash"
+        print_help_row $PAD "help"    "h"   "Show this help"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb stash${ENDCOLOR}        Open the interactive menu"
@@ -8243,15 +8292,15 @@ function cherry_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb cherry <mode> [args]${ENDCOLOR}"
         echo
-        msg="${YELLOW}Mode${ENDCOLOR}_\t${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Pick a branch and select commits to cherry-pick"
-        msg="$msg\n${BOLD}<commit-hash>${ENDCOLOR}_ _Shortcut for ${BLUE}gitb cherry hash <hash>${ENDCOLOR}"
-        msg="$msg\n${BOLD}hash${ENDCOLOR}_hs_Cherry-pick a specific commit by its hash"
-        msg="$msg\n${BOLD}range${ENDCOLOR}_r_Cherry-pick a range of commits ${BLUE}<from>..<to>${ENDCOLOR}"
-        msg="$msg\n${BOLD}abort${ENDCOLOR}_a_Abort the current cherry-pick"
-        msg="$msg\n${BOLD}continue${ENDCOLOR}_cont|c_Continue cherry-pick after resolving conflicts"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local PAD=20
+        print_help_header $PAD
+        print_help_row $PAD "<empty>"        ""        "Pick a branch and select commits to cherry-pick"
+        print_help_row $PAD "<commit-hash>"  ""        "Shortcut for ${BLUE}gitb cherry hash <hash>${ENDCOLOR}"
+        print_help_row $PAD "hash"           "hs"      "Cherry-pick a specific commit by its hash"
+        print_help_row $PAD "range"          "r"       "Cherry-pick a range of commits ${BLUE}<from>..<to>${ENDCOLOR}"
+        print_help_row $PAD "abort"          "a"       "Abort the current cherry-pick"
+        print_help_row $PAD "continue"       "cont, c" "Continue cherry-pick after resolving conflicts"
+        print_help_row $PAD "help"           "h"       "Show this help"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb cherry${ENDCOLOR}                Pick a branch and choose commits to cherry-pick"
@@ -8553,14 +8602,14 @@ function sync_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb sync <mode>${ENDCOLOR}"
         echo
-        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Fetch $main_branch and rebase the current branch onto it"
-        msg="$msg\n${BOLD}push${ENDCOLOR}_p_Same as <empty>, then force-push the rebased branch"
-        msg="$msg\n${BOLD}merge${ENDCOLOR}_m_Fetch $main_branch and merge it into the current branch"
-        msg="$msg\n${BOLD}mergep${ENDCOLOR}_mp|pm_Same as merge, then push"
-        msg="$msg\n${BOLD}dry${ENDCOLOR}_d|dr_Preview incoming commits without modifying local refs"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local PAD=18
+        print_help_header $PAD
+        print_help_row $PAD "<empty>" ""       "Fetch $main_branch and rebase the current branch onto it"
+        print_help_row $PAD "push"    "p"      "Rebase, then force-push the rebased branch"
+        print_help_row $PAD "merge"   "m"      "Fetch $main_branch and merge it into the current branch"
+        print_help_row $PAD "mergep"  "mp, pm" "Merge $main_branch into current, then push"
+        print_help_row $PAD "dry"     "d, dr"  "Preview incoming commits without modifying local refs"
+        print_help_row $PAD "help"    "h"      "Show this help"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb sync${ENDCOLOR}        Rebase current branch on top of ${YELLOW}$main_branch${ENDCOLOR}"
@@ -8619,8 +8668,8 @@ function sync_script {
         echo -e "Run ${YELLOW}gitb sync${ENDCOLOR} to apply changes"
         exit
     fi
-    is_clean=$(git status | tail -n 1)
-    if [ "$is_clean" != "nothing to commit, working tree clean" ]; then
+    is_clean=$(LC_ALL=C git status --porcelain)
+    if [ -n "$is_clean" ]; then
         echo -e "${RED}✗ Cannot sync — there are uncommitted changes:${ENDCOLOR}"
         git_status
         echo
@@ -8704,14 +8753,14 @@ function undo_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb undo <mode>${ENDCOLOR}"
         echo
-        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_commit|c_Undo the last commit ${BLUE}(${YELLOW}git reset --soft HEAD~1${BLUE})${ENDCOLOR}; keeps changes staged"
-        msg="$msg\n${BOLD}amend${ENDCOLOR}_a_Undo the last amend, restoring the previous commit via reflog"
-        msg="$msg\n${BOLD}merge${ENDCOLOR}_m_Undo the last merge ${BLUE}(${YELLOW}git merge --abort${BLUE} or ${YELLOW}git reset --merge ORIG_HEAD${BLUE})${ENDCOLOR}"
-        msg="$msg\n${BOLD}rebase${ENDCOLOR}_r_Undo the last rebase ${BLUE}(${YELLOW}git rebase --abort${BLUE} or ${YELLOW}git reset --hard ORIG_HEAD${BLUE})${ENDCOLOR}"
-        msg="$msg\n${BOLD}stash${ENDCOLOR}_s_Re-stash changes from the last ${BLUE}stash pop${ENDCOLOR}"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local PAD=22
+        print_help_header $PAD
+        print_help_row $PAD "<empty>" "commit, c" "Undo the last commit, keep its changes staged"
+        print_help_row $PAD "amend"   "a"         "Undo the last amend, restoring the previous commit via reflog"
+        print_help_row $PAD "merge"   "m"         "Abort an in-progress merge, or roll back the last completed merge"
+        print_help_row $PAD "rebase"  "r"         "Abort an in-progress rebase, or roll back the last completed rebase"
+        print_help_row $PAD "stash"   "s"         "Re-stash changes from the last ${BLUE}stash pop${ENDCOLOR}"
+        print_help_row $PAD "help"    "h"         "Show this help"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb undo${ENDCOLOR}          Undo the last commit, keep its changes staged"
@@ -9015,7 +9064,7 @@ function wip_push_stash_backup {
     remote_branch="$(wip_remote_branch)"
     echo -e "${YELLOW}Pushing WIP backup to ${origin_name}/${remote_branch}...${ENDCOLOR}"
     local push_output push_code
-    push_output=$(git push --force "${origin_name}" "stash@{0}:refs/heads/${remote_branch}" 2>&1)
+    push_output=$(git push --force-with-lease "${origin_name}" "stash@{0}:refs/heads/${remote_branch}" 2>&1)
     push_code=$?
     if [ $push_code -eq 0 ]; then
         echo -e "${GREEN}✓ Pushed WIP backup to ${origin_name}/${remote_branch}${ENDCOLOR}"
@@ -9032,7 +9081,7 @@ function wip_push_branch {
     fi
     echo -e "${YELLOW}Pushing ${branch} to ${origin_name}...${ENDCOLOR}"
     local push_output push_code
-    push_output=$(git push --force --set-upstream "${origin_name}" "${branch}" 2>&1)
+    push_output=$(git push --force-with-lease --set-upstream "${origin_name}" "${branch}" 2>&1)
     push_code=$?
     if [ $push_code -eq 0 ]; then
         echo -e "${GREEN}✓ Pushed to ${origin_name}/${branch}${ENDCOLOR}"
@@ -9445,23 +9494,23 @@ function wip_help {
     echo
     echo -e "usage: ${YELLOW}gitb wip <up|down> [stash|branch|worktree] [nopush]${ENDCOLOR}"
     echo
-    msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-    msg="$msg\n${BOLD}up${ENDCOLOR}_u_Save WIP (prompts for backend)"
-    msg="$msg\n${BOLD}up stash${ENDCOLOR}_u s_Save as a stash with optional remote backup branch"
-    msg="$msg\n${BOLD}up branch${ENDCOLOR}_u b_Commit changes onto a wip/<branch> branch (with optional push)"
-    msg="$msg\n${BOLD}up worktree${ENDCOLOR}_u w|wt_Move WIP into a sibling worktree on wip/<branch>"
-    msg="$msg\n${BOLD}up <mode> nopush${ENDCOLOR}_np|n_Skip the push step (works with any backend)"
-    msg="$msg\n${BOLD}down${ENDCOLOR}_d_Restore WIP (auto-detects backend, prompts if ambiguous)"
-    msg="$msg\n${BOLD}down stash${ENDCOLOR}_d s_Restore from the stash"
-    msg="$msg\n${BOLD}down branch${ENDCOLOR}_d b_Restore from the wip/<branch> branch"
-    msg="$msg\n${BOLD}down worktree${ENDCOLOR}_d w|wt_Restore from the wip/<branch> worktree"
-    msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-    echo -e "$(echo -e "$msg" | column -ts'_')"
+    local PAD=26
+    print_help_header $PAD
+    print_help_row $PAD "up"                "u"      "Save WIP (prompts for backend)"
+    print_help_row $PAD "up stash"           "u s"    "Save as a stash with optional remote backup branch"
+    print_help_row $PAD "up branch"          "u b"    "Commit changes onto a wip/<branch> branch (with optional push)"
+    print_help_row $PAD "up worktree"        "u w, wt" "Move WIP into a sibling worktree on wip/<branch>"
+    print_help_row $PAD "up <mode> nopush"   "np, n"  "Skip the push step (works with any backend)"
+    print_help_row $PAD "down"               "d"      "Restore WIP (auto-detects backend, prompts if ambiguous)"
+    print_help_row $PAD "down stash"         "d s"    "Restore from the stash"
+    print_help_row $PAD "down branch"        "d b"    "Restore from the wip/<branch> branch"
+    print_help_row $PAD "down worktree"      "d w, wt" "Restore from the wip/<branch> worktree"
+    print_help_row $PAD "help"               "h"      "Show this help"
     echo
     echo -e "${YELLOW}Backends${ENDCOLOR}"
-    echo -e "  ${BOLD}stash${NORMAL}    Quick & local; pushes ${YELLOW}${origin_name:-origin}/wip/<branch>${ENDCOLOR} as a backup"
-    echo -e "  ${BOLD}branch${NORMAL}   Commits changes onto a ${YELLOW}wip/<branch>${ENDCOLOR} branch; current branch becomes clean"
-    echo -e "  ${BOLD}worktree${NORMAL} Like branch, but WIP lives in a ${YELLOW}sibling worktree${ENDCOLOR} so you can keep working on it"
+    printf "  ${BOLD}%-10s${NORMAL}  %b\n" "stash"    "Quick & local; pushes ${YELLOW}${origin_name:-origin}/wip/<branch>${ENDCOLOR} as a backup"
+    printf "  ${BOLD}%-10s${NORMAL}  %b\n" "branch"   "Commits changes onto a ${YELLOW}wip/<branch>${ENDCOLOR} branch; current branch becomes clean"
+    printf "  ${BOLD}%-10s${NORMAL}  %b\n" "worktree" "Like branch, but WIP lives in a ${YELLOW}sibling worktree${ENDCOLOR} so you can keep working on it"
     echo
     echo -e "${YELLOW}Examples${ENDCOLOR}"
     echo -e "  ${GREEN}gitb wip up${ENDCOLOR}              Pick a backend and save current changes"
@@ -10522,23 +10571,23 @@ function worktree_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb worktree <mode>${ENDCOLOR}"
         echo
-        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Show interactive worktree menu"
-        msg="$msg\n${BOLD}list${ENDCOLOR}_l|ls_List all worktrees"
-        msg="$msg\n${BOLD}add${ENDCOLOR}_a|new|n|c_Create a worktree with a new branch from current HEAD"
-        msg="$msg\n${BOLD}addd${ENDCOLOR}_ad|nd_Fetch + create worktree with new branch from $main_branch"
-        msg="$msg\n${BOLD}addb${ENDCOLOR}_ab|from|b_Create a worktree from an existing local branch"
-        msg="$msg\n${BOLD}addr${ENDCOLOR}_ar|remote|r_Fetch + create worktree tracking a remote branch"
-        msg="$msg\n${BOLD}manage${ENDCOLOR}_m_Pick a worktree, then move / lock / unlock / delete"
-        msg="$msg\n${BOLD}move${ENDCOLOR}_mv_Move a worktree to a new path"
-        msg="$msg\n${BOLD}lock${ENDCOLOR}_ _Lock a worktree (with optional reason)"
-        msg="$msg\n${BOLD}unlock${ENDCOLOR}_ul_Unlock a worktree"
-        msg="$msg\n${BOLD}remove${ENDCOLOR}_rm|del|d_Remove a worktree (interactive picker)"
-        msg="$msg\n${BOLD}prune${ENDCOLOR}_pr|p_Remove stale worktree records"
-        msg="$msg\n${BOLD}path${ENDCOLOR}_sw_Print the path to a chosen worktree"
-        msg="$msg\n${BOLD}goto${ENDCOLOR}_go|g|cd|switch_Open a subshell inside a chosen worktree"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local PAD=26
+        print_help_header $PAD
+        print_help_row $PAD "<empty>" ""                  "Show interactive worktree menu"
+        print_help_row $PAD "list"    "l, ls"             "List all worktrees"
+        print_help_row $PAD "add"     "a, new, n, c"      "Create a worktree with a new branch from current HEAD"
+        print_help_row $PAD "addd"    "ad, nd"            "Fetch + create worktree with new branch from $main_branch"
+        print_help_row $PAD "addb"    "ab, from, b"       "Create a worktree from an existing local branch"
+        print_help_row $PAD "addr"    "ar, remote, r"     "Fetch + create worktree tracking a remote branch"
+        print_help_row $PAD "manage"  "m"                 "Pick a worktree, then move / lock / unlock / delete"
+        print_help_row $PAD "move"    "mv"                "Move a worktree to a new path"
+        print_help_row $PAD "lock"    ""                  "Lock a worktree (with optional reason)"
+        print_help_row $PAD "unlock"  "ul"                "Unlock a worktree"
+        print_help_row $PAD "remove"  "rm, del, d"        "Remove a worktree (interactive picker)"
+        print_help_row $PAD "prune"   "pr, p"             "Remove stale worktree records"
+        print_help_row $PAD "path"    "sw"                "Print the path to a chosen worktree"
+        print_help_row $PAD "goto"    "go, g, cd, switch" "Open a subshell inside a chosen worktree"
+        print_help_row $PAD "help"    "h"                 "Show this help"
         echo
         echo -e "${YELLOW}Tips${ENDCOLOR}"
         echo -e "  ${CYAN}💡${ENDCOLOR} Default worktree path: ${BOLD}<repo>/.worktree/<branch>${NORMAL} (add ${BOLD}.worktree/${NORMAL} to .gitignore)"
@@ -10992,7 +11041,7 @@ if git diff --cached --name-only --quiet; then
     exit 0
 fi
 staged_files=\$(git diff --cached --name-only -z)
-if echo \"\$staged_files\" | xargs -0 grep -l \"TODO\\|FIXME\" 2>/dev/null; then
+if echo \"\$staged_files\" | xargs -0 grep -l --binary-files=without-match \"TODO\\|FIXME\" 2>/dev/null; then
     echo \"⚠️  Warning: Found TODO/FIXME comments in staged files\"
     echo \"Continue anyway? (y/n)\"
     read -n 1 answer
@@ -11459,44 +11508,39 @@ function hooks_script {
             fi
         ;;
         "help"|"h")
-            echo -e "${YELLOW}gitb hook${ENDCOLOR} - Git hooks management"
+            echo -e "${YELLOW}GIT HOOK${ENDCOLOR}"
             echo
-            echo -e "${YELLOW}Usage:${ENDCOLOR}"
-            echo -e "  gitb hook [command] [hook-type] [options]"
+            echo -e "usage: ${YELLOW}gitb hook <mode> [hook-type]${ENDCOLOR}"
             echo
-            echo -e "${YELLOW}Commands:${ENDCOLOR}"
-            echo -e "  ${GREEN}<empty>${ENDCOLOR}           Show interactive action menu"
-            echo -e "  ${GREEN}list, l${ENDCOLOR}           List installed hooks with status"
-            echo -e "  ${GREEN}list samples${ENDCOLOR}      List installed hooks and available samples"
-            echo -e "  ${GREEN}create, new, c${ENDCOLOR}    Create a new hook (interactive selector)"
-            echo -e "  ${GREEN}edit, e${ENDCOLOR}           Edit an existing hook (interactive selector)"
-            echo -e "  ${GREEN}toggle, t${ENDCOLOR}         Enable/disable a hook (interactive selector)"
-            echo -e "  ${GREEN}remove, rm, r${ENDCOLOR}     Remove hook(s) - single or all (interactive selector)"
-            echo -e "  ${GREEN}test, run${ENDCOLOR}         Test a hook by running it (interactive selector)"
-            echo -e "  ${GREEN}show, cat, s${ENDCOLOR}      Show hook content (interactive selector)"
-            echo -e "  ${GREEN}select, sel${ENDCOLOR}       Interactive hook type browser"
-            echo -e "  ${GREEN}install, samples${ENDCOLOR}  Install all available sample hooks"
-            echo -e "  ${GREEN}help, h${ENDCOLOR}           Show this help"
+            local PAD=20
+            print_help_header $PAD
+            print_help_row $PAD "<empty>"      ""        "Show the interactive action menu"
+            print_help_row $PAD "list"         "l"       "List installed hooks with status"
+            print_help_row $PAD "list samples" ""        "List installed hooks alongside available samples"
+            print_help_row $PAD "create"       "new, c"  "Create a new hook (interactive)"
+            print_help_row $PAD "edit"         "e"       "Edit an existing hook (interactive)"
+            print_help_row $PAD "toggle"       "t"       "Enable/disable a hook (interactive)"
+            print_help_row $PAD "remove"       "rm, r"   "Remove a hook or all hooks (interactive)"
+            print_help_row $PAD "test"         "run"     "Run a hook to test it (interactive)"
+            print_help_row $PAD "show"         "cat, s"  "Show a hook's content (interactive)"
+            print_help_row $PAD "select"       "sel"     "Browse hook types interactively"
+            print_help_row $PAD "install"      "samples" "Install all available sample hooks"
+            print_help_row $PAD "help"         "h"       "Show this help"
             echo
-            echo -e "${YELLOW}Hook Types:${ENDCOLOR}"
+            echo -e "${YELLOW}Hook types${ENDCOLOR}"
             echo "$(get_all_hook_types)" | tr ' ' '\n' | sed 's/^/  /'
             echo
-            echo -e "${YELLOW}Templates:${ENDCOLOR}"
-            echo -e "  ${GREEN}basic${ENDCOLOR}                   Basic hook template (default)"
-            echo -e "  ${GREEN}pre-commit-lint${ENDCOLOR}         Pre-commit linting and file checks"
-            echo -e "  ${GREEN}commit-msg-conventional${ENDCOLOR} Conventional commit message validation"
-            echo -e "  ${GREEN}pre-push-protection${ENDCOLOR}     Branch protection for main/master"
+            echo -e "${YELLOW}Templates${ENDCOLOR}"
+            printf "  ${BOLD}%-26s${NORMAL}  %s\n" "basic"                   "Default starter template"
+            printf "  ${BOLD}%-26s${NORMAL}  %s\n" "pre-commit-lint"         "Pre-commit linting and file checks"
+            printf "  ${BOLD}%-26s${NORMAL}  %s\n" "commit-msg-conventional" "Validate Conventional Commits message"
+            printf "  ${BOLD}%-26s${NORMAL}  %s\n" "pre-push-protection"     "Branch protection for main/master"
             echo
-            echo -e "${YELLOW}Examples:${ENDCOLOR}"
-            echo -e "  gitb hook                      # Show interactive action menu"
-            echo -e "  gitb hook list                 # List all hooks"
-            echo -e "  gitb hook create               # Interactive hook creation"
-            echo -e "  gitb hook create pre-commit    # Create specific hook type"
-            echo -e "  gitb hook edit                 # Interactive hook selection"
-            echo -e "  gitb hook select               # Browse hook types interactively"
-            echo -e "  gitb hook test                 # Interactive hook testing"
-            echo -e "  gitb hook remove               # Interactive removal - single or all hooks"
-            echo -e "  gitb hook install              # Install sample hooks"
+            echo -e "${YELLOW}Examples${ENDCOLOR}"
+            echo -e "  ${GREEN}gitb hook${ENDCOLOR}                       Open the interactive action menu"
+            echo -e "  ${GREEN}gitb hook list${ENDCOLOR}                  List installed hooks"
+            echo -e "  ${GREEN}gitb hook create pre-commit${ENDCOLOR}     Create a pre-commit hook directly"
+            echo -e "  ${GREEN}gitb hook install${ENDCOLOR}               Install all sample hooks"
         ;;
         *)
             wrong_mode "hooks" "$mode"
@@ -11759,14 +11803,14 @@ function origin_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb origin <mode> [<url>|<name>]${ENDCOLOR}"
         echo
-        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_show|info_Show configured remotes and useful web links"
-        msg="$msg\n${BOLD}set${ENDCOLOR}_add|new|a_Add a new origin (fails if origin already set)"
-        msg="$msg\n${BOLD}change${ENDCOLOR}_update|c|u|set-url_Change the existing origin URL"
-        msg="$msg\n${BOLD}rename${ENDCOLOR}_mv|ren_Rename a remote (e.g. ${BLUE}origin -> upstream${ENDCOLOR})"
-        msg="$msg\n${BOLD}remove${ENDCOLOR}_rm|del|d_Remove the remote"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts '_')"
+        local PAD=30
+        print_help_header $PAD
+        print_help_row $PAD "<empty>" "show, info"            "Show configured remotes and useful web links"
+        print_help_row $PAD "set"     "add, new, a"           "Add a new origin (fails if origin already set)"
+        print_help_row $PAD "change"  "update, c, u, set-url" "Change the existing origin URL"
+        print_help_row $PAD "rename"  "mv, ren"               "Rename a remote (e.g. ${BLUE}origin → upstream${ENDCOLOR})"
+        print_help_row $PAD "remove"  "rm, del, d"            "Remove the remote"
+        print_help_row $PAD "help"    "h"                     "Show this help"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb origin${ENDCOLOR}                                Show configured remotes"
@@ -11828,14 +11872,14 @@ function _fetch_latest_release {
     local url="https://api.github.com/repos/${GITBASHER_REPO}/releases/latest"
     local body=""
     if command -v curl >/dev/null 2>&1; then
-        body=$(curl -fsSL --max-time 10 -H "Accept: application/vnd.github+json" "$url" 2>&1)
+        body=$(curl -fsSL --proto '=https' --tlsv1.2 --max-time 10 -H "Accept: application/vnd.github+json" "$url" 2>&1)
         if [ $? -ne 0 ]; then
             _gitb_update_fetch_err="$body"
             echo ""
             return 1
         fi
     elif command -v wget >/dev/null 2>&1; then
-        body=$(wget -qO- --timeout=10 --header="Accept: application/vnd.github+json" "$url" 2>&1)
+        body=$(wget -qO- --https-only --timeout=10 --header="Accept: application/vnd.github+json" "$url" 2>&1)
         if [ $? -ne 0 ]; then
             _gitb_update_fetch_err="$body"
             echo ""
@@ -11848,28 +11892,35 @@ function _fetch_latest_release {
     fi
     echo "$body"
 }
-function _extract_tag_name {
-    echo "$1" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' \
+function _extract_release_field {
+    local body="$1"
+    local field="$2"
+    if command -v jq >/dev/null 2>&1; then
+        printf '%s' "$body" | jq -r --arg f "$field" '.[$f] // empty' 2>/dev/null
+        return
+    fi
+    printf '%s' "$body" | grep -o "\"${field}\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" \
               | head -1 \
               | sed -E 's/.*"([^"]+)"$/\1/'
+}
+function _extract_tag_name {
+    _extract_release_field "$1" "tag_name"
 }
 function _extract_release_url {
-    echo "$1" | grep -o '"html_url"[[:space:]]*:[[:space:]]*"[^"]*"' \
-              | head -1 \
-              | sed -E 's/.*"([^"]+)"$/\1/'
+    _extract_release_field "$1" "html_url"
 }
 function _extract_release_date {
-    echo "$1" | grep -o '"published_at"[[:space:]]*:[[:space:]]*"[^"]*"' \
-              | head -1 \
-              | sed -E 's/.*"([^"]+)"$/\1/' \
-              | cut -dT -f1
+    _extract_release_field "$1" "published_at" | cut -dT -f1
 }
 function _gitb_install_path {
     local path
     path=$(command -v gitb 2>/dev/null) || return 1
     [ -z "$path" ] && return 1
-    if command -v readlink >/dev/null 2>&1; then
-        local resolved
+    local resolved=""
+    if command -v realpath >/dev/null 2>&1; then
+        resolved=$(realpath "$path" 2>/dev/null) || resolved=""
+    fi
+    if [ -z "$resolved" ] && command -v readlink >/dev/null 2>&1; then
         resolved=$(readlink -f "$path" 2>/dev/null) || resolved=""
         if [ -z "$resolved" ] && [ -L "$path" ]; then
             resolved=$(readlink "$path" 2>/dev/null)
@@ -11878,8 +11929,8 @@ function _gitb_install_path {
                 *)  resolved="$(dirname "$path")/$resolved" ;;
             esac
         fi
-        [ -n "$resolved" ] && path="$resolved"
     fi
+    [ -n "$resolved" ] && path="$resolved"
     echo "$path"
 }
 function _gitb_is_npm_install {
@@ -11972,12 +12023,12 @@ function update_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb update <mode>${ENDCOLOR}"
         echo
-        local msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Check for a new release and install it"
-        msg="$msg\n${BOLD}check${ENDCOLOR}_c|ch_Only check for a newer release; do not install"
-        msg="$msg\n${BOLD}force${ENDCOLOR}_f|fo_Reinstall the latest release even if already up to date"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local PAD=14
+        print_help_header $PAD
+        print_help_row $PAD "<empty>" ""      "Check for a new release and install it"
+        print_help_row $PAD "check"   "c, ch" "Only check for a newer release; do not install"
+        print_help_row $PAD "force"   "f, fo" "Reinstall the latest release even if already up to date"
+        print_help_row $PAD "help"    "h"     "Show this help"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb update${ENDCOLOR}        Check and install if a newer version is published"
@@ -12270,7 +12321,7 @@ _gitb() {
         case "$canonical" in
             branch|merge|rebase|pull|cherry|log)
                 local branches
-                branches=$(git for-each-ref --format='%(refname:short)' refs/heads 2>/dev/null)
+                branches=$(git for-each-ref --format='%(refname:short)' refs/heads 2>/dev/null | grep -E '^[A-Za-z0-9._/-]+$')
                 COMPREPLY=( $(compgen -W "$branches" -- "$cur") )
                 return 0
                 ;;
@@ -12855,14 +12906,21 @@ function completion_script {
     if [ "$action" = "help" ] || [ "$action" = "h" ]; then
         echo -e "usage: ${YELLOW}gitb config auto <action> [shell]${ENDCOLOR}"
         echo
-        echo -e "Actions:"
-        echo -e "  ${BOLD}up${NORMAL}     Install tab completion (default action; auto-detects shell)"
-        echo -e "  ${BOLD}down${NORMAL}   Remove installed tab completion"
-        echo -e "  ${BOLD}status${NORMAL} Show installation state for bash/zsh/fish"
-        echo -e "  ${BOLD}print${NORMAL}  Print the completion script to stdout (pipe it where you want)"
-        echo -e "  ${BOLD}help${NORMAL}   Show this help"
+        local PAD=14
+        printf "  ${YELLOW}%-*s${ENDCOLOR}  ${BLUE}%s${ENDCOLOR}\n" "$PAD" "Action" "Description"
+        print_help_row $PAD "up"     ""    "Install tab completion (default; auto-detects shell)"
+        print_help_row $PAD "down"   ""    "Remove installed tab completion"
+        print_help_row $PAD "status" "st"  "Show installation state for bash, zsh, and fish"
+        print_help_row $PAD "print"  ""    "Print the completion script to stdout"
+        print_help_row $PAD "help"   "h"   "Show this help"
         echo
-        echo -e "Shells: ${BOLD}bash${NORMAL}, ${BOLD}zsh${NORMAL}, ${BOLD}fish${NORMAL} (defaults to your \$SHELL)"
+        echo -e "${YELLOW}Shells${ENDCOLOR}  ${BOLD}bash${NORMAL}, ${BOLD}zsh${NORMAL}, ${BOLD}fish${NORMAL} (defaults to your \$SHELL)"
+        echo
+        echo -e "${YELLOW}Examples${ENDCOLOR}"
+        echo -e "  ${GREEN}gitb cfg auto${ENDCOLOR}              Install completion for the current shell"
+        echo -e "  ${GREEN}gitb cfg auto up zsh${ENDCOLOR}       Install zsh completion explicitly"
+        echo -e "  ${GREEN}gitb cfg auto down${ENDCOLOR}         Remove the installed completion"
+        echo -e "  ${GREEN}gitb cfg auto status${ENDCOLOR}       Check what's installed for each shell"
         return 0
     fi
     if [ "$action" = "status" ] || [ "$action" = "st" ]; then

@@ -6,7 +6,7 @@
 load setup_suite
 
 setup() {
-    source_gitbasher
+    source_gitbasher_lite
 }
 
 # ===== sanitize_git_name tests =====

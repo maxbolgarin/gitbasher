@@ -51,6 +51,8 @@ There is no per-command process exec — `scripts/gitb.sh` `source`s every other
 
 Source order is deterministic and lives at `scripts/gitb.sh:69-95`. `common.sh` and `init.sh` come first, then domain scripts, then `base.sh` last (so `print_help` sees everything). When a `source` line fails it dies with `exit 1` — see `gitb.sh:69-95` for the guard pattern.
 
+`init.sh` runs git config / remote probes at source time. Tests that only need the validators / sanitizers can short-circuit those by exporting `GITBASHER_SKIP_INIT_QUERIES=1` before sourcing — that's what the `source_gitbasher_lite` helper in `tests/setup_suite.bash` does. The flag is internal to the test layer; production runs never set it.
+
 ### Top-level dispatch
 
 `scripts/base.sh` is the dispatcher: a `case "$1"` block (`base.sh:102-181`) maps each command name and its aliases to the corresponding `*_script` function. The convention: `commit_script`, `push_script`, `branch_script`, etc. — defined in their respective files.

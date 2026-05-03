@@ -58,6 +58,15 @@ source_gitbasher() {
     source "${GITBASHER_ROOT}/scripts/common.sh"
 }
 
+# Source gitbasher helper functions only, skipping the git config queries at the
+# bottom of init.sh. Use this in tests that exercise pure string/parsing helpers
+# and do not need a real git repo or any of the init.sh globals
+# (current_branch, main_branch, origin_name, sep, editor, ticket_name, scopes).
+source_gitbasher_lite() {
+    GITBASHER_SKIP_INIT_QUERIES=1 source "${GITBASHER_ROOT}/scripts/init.sh"
+    source "${GITBASHER_ROOT}/scripts/common.sh"
+}
+
 # Create a test file with content
 create_test_file() {
     local filename="$1"

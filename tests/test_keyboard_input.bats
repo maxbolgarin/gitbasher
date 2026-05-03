@@ -7,7 +7,7 @@
 load setup_suite
 
 setup() {
-    source_gitbasher
+    source_gitbasher_lite
 }
 
 # ===== normalize_key tests =====

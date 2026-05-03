@@ -6,15 +6,9 @@
 load setup_suite
 
 setup() {
-    setup_test_repo
-    source_gitbasher
+    source_gitbasher_lite
     # Source ai.sh for mask_api_key and validate_proxy_url
     source "${GITBASHER_ROOT}/scripts/ai.sh"
-    cd "$TEST_REPO"
-}
-
-teardown() {
-    cleanup_test_repo
 }
 
 # ===== validate_git_url tests =====

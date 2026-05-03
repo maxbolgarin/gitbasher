@@ -28,6 +28,9 @@ setup_suite() {
 # Returns the path to the test repo in TEST_REPO variable
 setup_test_repo() {
     TEST_REPO=$(mktemp -d)
+    # Canonicalize so it matches `git rev-parse --show-toplevel` on macOS
+    # where /var/folders is a symlink to /private/var/folders
+    TEST_REPO=$(cd "$TEST_REPO" && pwd -P)
     export TEST_REPO
 
     cd "$TEST_REPO"

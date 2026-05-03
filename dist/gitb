@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-GITBASHER_VERSION="3.10.2-61-g091036f"
+GITBASHER_VERSION="3.10.2-66-gf3eaabc"
 if [ "$1" == "init" ] || [ "$1" == "i" ]; then
     git init
 fi
@@ -7859,16 +7859,15 @@ function wip_worktree_default_path {
     base=$(get_config_value gitbasher.worktreebase "")
     local repo_root
     repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
-    local repo_dir_name
-    repo_dir_name=$(basename "$repo_root")
     local safe_branch
     safe_branch=$(echo "wip-${current_branch}" | tr '/' '-')
-    if [ -n "$base" ]; then
-        echo "${base%/}/${repo_dir_name}-${safe_branch}"
+    if [ -z "$base" ]; then
+        base=".worktree"
+    fi
+    if [[ "$base" == /* ]]; then
+        echo "${base%/}/${safe_branch}"
     else
-        local parent_dir
-        parent_dir=$(dirname "$repo_root")
-        echo "${parent_dir}/${repo_dir_name}-${safe_branch}"
+        echo "${repo_root}/${base%/}/${safe_branch}"
     fi
 }
 function prompt_wip_backend {
@@ -8271,7 +8270,6 @@ function wip_up {
         else
             prompt_wip_backend
             backend="$wip_backend"
-            echo
         fi
     fi
     case "$backend" in
@@ -8719,6 +8717,7 @@ function list_worktrees_data {
     worktrees_path=()
     worktrees_head=()
     worktrees_info=()
+    worktrees_locked=()
     local raw
     raw=$(git worktree list --porcelain 2>&1)
     if [ $? -ne 0 ]; then
@@ -8743,6 +8742,7 @@ function list_worktrees_data {
         fi
         worktrees_path+=("$cur_path")
         worktrees_head+=("$label")
+        worktrees_locked+=("$cur_locked")
         local marker="  "
         if [ "$cur_path" == "$main_path" ]; then
             marker="* "
@@ -8787,7 +8787,7 @@ function choose_worktree {
     current_path=$(git rev-parse --show-toplevel 2>/dev/null)
     local main_path
     main_path=$(git worktree list --porcelain 2>/dev/null | awk 'NR==1 && /^worktree /{print substr($0,10); exit}')
-    local display_paths=() display_heads=() display_lines=()
+    local display_paths=() display_heads=() display_lines=() display_locked=()
     for index in "${!worktrees_path[@]}"; do
         local p="${worktrees_path[$index]}"
         if [ "$filter" == "removable" ]; then
@@ -8798,6 +8798,7 @@ function choose_worktree {
         display_paths+=("$p")
         display_heads+=("${worktrees_head[$index]}")
         display_lines+=("${worktrees_info[$index]}")
+        display_locked+=("${worktrees_locked[$index]}")
     done
     if [ ${#display_paths[@]} -eq 0 ]; then
         if [ "$filter" == "removable" ]; then
@@ -8825,30 +8826,32 @@ function choose_worktree {
     read_prefix="Select worktree number: "
     choose "${display_paths[@]}"
     selected_worktree_path="$choice_result"
+    selected_worktree_locked=""
     for index in "${!display_paths[@]}"; do
         if [ "${display_paths[$index]}" == "$selected_worktree_path" ]; then
             selected_worktree_head="${display_heads[$index]}"
+            selected_worktree_locked="${display_locked[$index]}"
             break
         fi
     done
     return 0
 }
+#
 function default_worktree_path {
     local branch="$1"
     local base
     base=$(get_config_value gitbasher.worktreebase "")
     local repo_root
     repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
-    local repo_dir_name
-    repo_dir_name=$(basename "$repo_root")
     local safe_branch
     safe_branch=$(echo "$branch" | tr '/' '-')
-    if [ -n "$base" ]; then
+    if [ -z "$base" ]; then
+        base=".worktree"
+    fi
+    if [[ "$base" == /* ]]; then
         echo "${base%/}/${safe_branch}"
     else
-        local parent_dir
-        parent_dir=$(dirname "$repo_root")
-        echo "${parent_dir}/${repo_dir_name}-${safe_branch}"
+        echo "${repo_root}/${base%/}/${safe_branch}"
     fi
 }
 function prompt_worktree_branch {
@@ -9137,12 +9140,7 @@ function worktree_add {
         return 0
     fi
 }
-function worktree_remove {
-    echo -e "${YELLOW}Pick a worktree to remove${ENDCOLOR}"
-    echo
-    if ! choose_worktree "removable"; then
-        return 1
-    fi
+function _do_worktree_remove {
     echo
     echo -e "${YELLOW}Removing worktree at ${BOLD}${selected_worktree_path}${NORMAL}${YELLOW} (${selected_worktree_head})...${ENDCOLOR}"
     local rm_output
@@ -9172,6 +9170,14 @@ function worktree_remove {
     echo "$rm_output"
     return $rm_code
 }
+function worktree_remove {
+    echo -e "${YELLOW}Pick a worktree to remove${ENDCOLOR}"
+    echo
+    if ! choose_worktree "removable"; then
+        return 1
+    fi
+    _do_worktree_remove
+}
 function worktree_prune {
     echo -e "${YELLOW}Pruning stale worktree records...${ENDCOLOR}"
     echo
@@ -9200,13 +9206,8 @@ function worktree_prune {
     echo "$prune_output"
     return $prune_code
 }
-function worktree_lock_unlock {
+function _do_worktree_lock_unlock {
     local action="$1"
-    echo -e "${YELLOW}Pick a worktree to ${action}${ENDCOLOR}"
-    echo
-    if ! choose_worktree; then
-        return 1
-    fi
     local reason=""
     if [ "$action" == "lock" ]; then
         echo
@@ -9239,12 +9240,16 @@ function worktree_lock_unlock {
     echo "$out"
     return $code
 }
-function worktree_move {
-    echo -e "${YELLOW}Pick a worktree to move${ENDCOLOR}"
+function worktree_lock_unlock {
+    local action="$1"
+    echo -e "${YELLOW}Pick a worktree to ${action}${ENDCOLOR}"
     echo
-    if ! choose_worktree "removable"; then
+    if ! choose_worktree; then
         return 1
     fi
+    _do_worktree_lock_unlock "$action"
+}
+function _do_worktree_move {
     echo
     echo -e "${YELLOW}New path for the worktree${ENDCOLOR}"
     echo -e "Current path: ${BOLD}${selected_worktree_path}${NORMAL}"
@@ -9276,6 +9281,49 @@ function worktree_move {
     echo "$mv_output"
     return $mv_code
 }
+function worktree_move {
+    echo -e "${YELLOW}Pick a worktree to move${ENDCOLOR}"
+    echo
+    if ! choose_worktree "removable"; then
+        return 1
+    fi
+    _do_worktree_move
+}
+function worktree_manage {
+    echo -e "${YELLOW}Pick a worktree to manage${ENDCOLOR}"
+    echo
+    if ! choose_worktree "removable"; then
+        return 1
+    fi
+    echo
+    echo -e "${YELLOW}What do you want to do with ${BOLD}${BLUE}${selected_worktree_head}${NORMAL}${YELLOW}?${ENDCOLOR}"
+    echo
+    echo "1. Move it"
+    if [ -n "$selected_worktree_locked" ]; then
+        echo "2. Unlock it"
+    else
+        echo "2. Lock it"
+    fi
+    echo "3. Delete it"
+    echo "0. Exit"
+    echo
+    local choice
+    read -n 1 -s choice
+    read -t 0.01 -s _wt_drain 2>/dev/null
+    case "$choice" in
+        1) _do_worktree_move ;;
+        2)
+            if [ -n "$selected_worktree_locked" ]; then
+                _do_worktree_lock_unlock "unlock"
+            else
+                _do_worktree_lock_unlock "lock"
+            fi
+            ;;
+        3) _do_worktree_remove ;;
+        0) exit ;;
+        *) echo -e "${RED}Invalid option${ENDCOLOR}"; return 1 ;;
+    esac
+}
 function worktree_path {
     echo -e "${YELLOW}Pick a worktree${ENDCOLOR}"
     echo
@@ -9288,11 +9336,37 @@ function worktree_path {
     echo -e "Open it with: ${YELLOW}cd ${selected_worktree_path}${ENDCOLOR}"
     return 0
 }
+function worktree_goto {
+    echo -e "${YELLOW}Pick a worktree to go to${ENDCOLOR}"
+    echo
+    if ! choose_worktree; then
+        return 1
+    fi
+    local current_path
+    current_path=$(git rev-parse --show-toplevel 2>/dev/null)
+    if [ "$selected_worktree_path" == "$current_path" ]; then
+        echo
+        echo -e "${YELLOW}Already inside ${selected_worktree_path}${ENDCOLOR}"
+        return 0
+    fi
+    if [ ! -d "$selected_worktree_path" ]; then
+        echo
+        echo -e "${RED}Path '${selected_worktree_path}' does not exist on disk${ENDCOLOR}"
+        echo -e "Try ${BOLD}gitb worktree prune${NORMAL} to clean up stale records"
+        return 1
+    fi
+    echo
+    echo -e "${GREEN}Entering ${ENDCOLOR}${selected_worktree_path}"
+    echo -e "Type ${YELLOW}exit${ENDCOLOR} or press ${YELLOW}Ctrl-D${ENDCOLOR} to return"
+    echo
+    cd "$selected_worktree_path" || return 1
+    exec "${SHELL:-/bin/bash}"
+}
 function worktree_script {
     case "$1" in
         list|l|ls)              list_mode="true";;
         add|a|new|n|c)          add_mode="true"; add_source="current";;
-        addd|ad|nd|cd)          add_mode="true"; add_source="default";;
+        addd|ad|nd)             add_mode="true"; add_source="default";;
         addb|ab|from|b)         add_mode="true"; add_source="branch";;
         addr|ar|remote|r)       add_mode="true"; add_source="remote";;
         remove|rm|del|d)        remove_mode="true";;
@@ -9300,7 +9374,9 @@ function worktree_script {
         lock)                   lock_mode="true";;
         unlock|ul)              unlock_mode="true";;
         move|mv)                move_mode="true";;
-        path|cd|switch|sw)      path_mode="true";;
+        manage|m)               manage_mode="true";;
+        path|sw)                path_mode="true";;
+        goto|go|g|cd|switch)    goto_mode="true";;
         help|h)                 help="true";;
         "")                     interactive="true";;
         *)                      wrong_mode "worktree" "$1";;
@@ -9325,8 +9401,12 @@ function worktree_script {
         header="$header UNLOCK"
     elif [ -n "$move_mode" ]; then
         header="$header MOVE"
+    elif [ -n "$manage_mode" ]; then
+        header="$header MANAGE"
     elif [ -n "$path_mode" ]; then
         header="$header PATH"
+    elif [ -n "$goto_mode" ]; then
+        header="$header GO TO"
     fi
     echo -e "${YELLOW}${header}${ENDCOLOR}"
     echo
@@ -9337,21 +9417,23 @@ function worktree_script {
         msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Show interactive worktree menu"
         msg="$msg\n${BOLD}list${ENDCOLOR}_l|ls_List all worktrees"
         msg="$msg\n${BOLD}add${ENDCOLOR}_a|new|n|c_Create a worktree with a new branch from current HEAD"
-        msg="$msg\n${BOLD}addd${ENDCOLOR}_ad|nd|cd_Fetch + create worktree with new branch from $main_branch"
+        msg="$msg\n${BOLD}addd${ENDCOLOR}_ad|nd_Fetch + create worktree with new branch from $main_branch"
         msg="$msg\n${BOLD}addb${ENDCOLOR}_ab|from|b_Create a worktree from an existing local branch"
         msg="$msg\n${BOLD}addr${ENDCOLOR}_ar|remote|r_Fetch + create worktree tracking a remote branch"
-        msg="$msg\n${BOLD}remove${ENDCOLOR}_rm|del|d_Remove a worktree (interactive picker)"
+        msg="$msg\n${BOLD}manage${ENDCOLOR}_m_Pick a worktree, then move / lock / unlock / delete"
         msg="$msg\n${BOLD}move${ENDCOLOR}_mv_Move a worktree to a new path"
         msg="$msg\n${BOLD}lock${ENDCOLOR}_ _Lock a worktree (with optional reason)"
         msg="$msg\n${BOLD}unlock${ENDCOLOR}_ul_Unlock a worktree"
+        msg="$msg\n${BOLD}remove${ENDCOLOR}_rm|del|d_Remove a worktree (interactive picker)"
         msg="$msg\n${BOLD}prune${ENDCOLOR}_pr|p_Remove stale worktree records"
-        msg="$msg\n${BOLD}path${ENDCOLOR}_cd|switch|sw_Print the path to a chosen worktree"
+        msg="$msg\n${BOLD}path${ENDCOLOR}_sw_Print the path to a chosen worktree"
+        msg="$msg\n${BOLD}goto${ENDCOLOR}_go|g|cd|switch_Open a subshell inside a chosen worktree"
         msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
         echo -e "$(echo -e "$msg" | column -ts'_')"
         echo
         echo -e "${YELLOW}Tips${ENDCOLOR}"
-        echo -e "  - Default worktree path: ${BOLD}../<repo>-<branch>${NORMAL}"
-        echo -e "  - Override the base directory with ${BOLD}git config gitbasher.worktreebase <dir>${NORMAL}"
+        echo -e "  - Default worktree path: ${BOLD}<repo>/.worktree/<branch>${NORMAL} (add ${BOLD}.worktree/${NORMAL} to .gitignore)"
+        echo -e "  - Override the base directory with ${BOLD}git config gitbasher.worktreebase <dir>${NORMAL} (relative paths resolve against repo root)"
         echo -e "  - Use ${BOLD}cd \$(gitb worktree path)${NORMAL} to jump into a worktree"
         exit
     fi
@@ -9369,24 +9451,19 @@ function worktree_script {
         echo -e "${YELLOW}What do you want to do?${ENDCOLOR}"
         echo
         echo "1. Add a worktree"
-        echo "2. Remove a worktree"
-        echo "3. Move a worktree"
-        echo "4. Lock a worktree"
-        echo "5. Unlock a worktree"
-        echo "6. Prune stale records"
+        echo "2. Go to a worktree"
+        echo "3. Manage a worktree"
+        echo "4. Prune stale records"
         echo "0. Exit"
         echo
         local choice
         read -n 1 -s choice
         read -t 0.01 -s _wt_drain 2>/dev/null
-        echo
         case "$choice" in
             1) add_mode="true";;
-            2) remove_mode="true";;
-            3) move_mode="true";;
-            4) lock_mode="true";;
-            5) unlock_mode="true";;
-            6) prune_mode="true";;
+            2) goto_mode="true";;
+            3) manage_mode="true";;
+            4) prune_mode="true";;
             0) exit;;
             *) echo -e "${RED}Invalid option${ENDCOLOR}"; exit 1;;
         esac
@@ -9402,7 +9479,6 @@ function worktree_script {
             local source_choice
             read -n 1 -s source_choice
             read -t 0.01 -s _wt_drain 2>/dev/null
-            echo
             case "$source_choice" in
                 1) add_source="current";;
                 2) add_source="default";;
@@ -9451,8 +9527,16 @@ function worktree_script {
         worktree_move
         exit
     fi
+    if [ -n "$manage_mode" ]; then
+        worktree_manage
+        exit
+    fi
     if [ -n "$path_mode" ]; then
         worktree_path
+        exit
+    fi
+    if [ -n "$goto_mode" ]; then
+        worktree_goto
         exit
     fi
 }
@@ -10595,49 +10679,51 @@ function print_help {
     echo
     echo -e "usage: ${YELLOW}gitb <command> [mode]${ENDCOLOR}"
     echo
-    msg="${YELLOW}Common flows${ENDCOLOR}_\t${BLUE}What it does${ENDCOLOR}"
-    msg="$msg\n${BOLD}gitb st${NORMAL}_Show repo status and changed files"
-    msg="$msg\n${BOLD}gitb c${NORMAL}_Create an interactive conventional commit"
-    msg="$msg\n${BOLD}gitb c ai${NORMAL}_Generate an AI commit message from staged changes"
-    msg="$msg\n${BOLD}gitb c aip${NORMAL}_Generate an AI commit message, commit, and push"
-    msg="$msg\n${BOLD}gitb sy${NORMAL}_Sync current branch with $main_branch"
-    msg="$msg\n${BOLD}gitb b new${NORMAL}_Create a conventionally named branch"
-    echo -e "$(echo -e "$msg" | column -ts '_')"
+    local CMD=19 ALIAS=11
+    local hdr3="${YELLOW}%-*s${ENDCOLOR}  ${GREEN}%-*s${ENDCOLOR}  ${BLUE}%s${ENDCOLOR}\n"
+    local hdr2="${YELLOW}%-*s${ENDCOLOR}  %-*s  ${BLUE}%s${ENDCOLOR}\n"
+    local row="%-*s  %-*s  %s\n"
+    local rowb="${BOLD}%-*s${NORMAL}  %-*s  %s\n"
+    printf "$hdr2" "$CMD" "Common flows"  "$ALIAS" "" "What it does"
+    printf "$rowb" "$CMD" "gitb status"   "$ALIAS" "" "Show repo status and changed files"
+    printf "$rowb" "$CMD" "gitb commit"   "$ALIAS" "" "Create an interactive conventional commit"
+    printf "$rowb" "$CMD" "gitb c ai"     "$ALIAS" "" "Generate an AI commit message from staged changes"
+    printf "$rowb" "$CMD" "gitb c ai push" "$ALIAS" "" "Generate an AI commit message, commit, and push"
+    printf "$rowb" "$CMD" "gitb sync"       "$ALIAS" "" "Sync current branch with $main_branch"
+    printf "$rowb" "$CMD" "gitb branch new"  "$ALIAS" "" "Create a conventionally named branch"
     echo
-    msg="${YELLOW}Workflow commands${ENDCOLOR}_\t${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-    msg="$msg\ncommit_c|co|com_Create commits: interactive, AI, split, amend, revert"
-    msg="$msg\npush_p|ps|pus_Push changes safely to a remote repository"
-    msg="$msg\npull_pu|pl|pul_Pull changes from a remote repository"
-    msg="$msg\nbranch_b|br|bran_List, switch, create, and clean up branches"
-    msg="$msg\ntag_t|tg_Create, push, list, fetch, and delete tags"
-    msg="$msg\nmerge_m|me_Merge branches into the current branch or $main_branch"
-    msg="$msg\nrebase_r|re|base_Rebase current branch, autosquash, or pull commits"
-    msg="$msg\ncherry_ch|cp_Cherry-pick commits from other branches"
-    msg="$msg\nsync_sy_Sync current branch with $main_branch (fetch + rebase/merge)"
-    msg="$msg\nwip_w_Stash work-in-progress and optionally back it up remotely"
-    msg="$msg\nundo_un_Undo commit, amend, merge, rebase, or stash actions"
-    msg="$msg\nreset_res_Preview and apply common git reset flows"
-    msg="$msg\nstash_s|sta_Manage git stashes"
-    msg="$msg\nworktree_wt|tree_List, add, remove, lock, move, and prune git worktrees"
-    msg="$msg\nhook_ho|hk_List, create, edit, toggle, and test git hooks"
-    msg="$msg\norigin_or|o|remote_Init, set, change, rename, or remove remotes"
-    msg="$msg\nconfig_cf|cfg|conf_Configure gitbasher settings"
-    msg="$msg\n_ _ _"
-    msg="$msg\nprev_-_Switch to the previous branch (like cd -)"
-    msg="$msg\n_ _ _"
-    msg="$msg\n${YELLOW}Info commands${ENDCOLOR}_\t${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-    msg="$msg\nstatus_st_Show repo status and changed files"
-    msg="$msg\nlog_l|lg_View git log with branch selection and comparison"
-    msg="$msg\nreflog_rl|rlg_Open git reflog in a pretty format"
-    msg="$msg\nlast-commit_lc|lastc_Show info about the last commit"
-    msg="$msg\nlast-ref_lr|lastr_Show info about the last reference"
-    echo -e "$(echo -e "$msg" | column -ts '_')"
+    printf "$hdr3" "$CMD" "Workflow commands" "$ALIAS" "Aliases"     "Description"
+    printf "$row"  "$CMD" "commit"            "$ALIAS" "c|co|com"    "Create commits: interactive, AI, split, amend, revert"
+    printf "$row"  "$CMD" "push"              "$ALIAS" "p|ps|pus"    "Push changes safely to a remote repository"
+    printf "$row"  "$CMD" "pull"              "$ALIAS" "pu|pl|pul"   "Pull changes from a remote repository"
+    printf "$row"  "$CMD" "branch"            "$ALIAS" "b|br|bran"   "List, switch, create, and clean up branches"
+    printf "$row"  "$CMD" "tag"               "$ALIAS" "t|tg"        "Create, push, list, fetch, and delete tags"
+    printf "$row"  "$CMD" "merge"             "$ALIAS" "m|me"        "Merge branches into the current branch or $main_branch"
+    printf "$row"  "$CMD" "rebase"            "$ALIAS" "r|re|base"   "Rebase current branch, autosquash, or pull commits"
+    printf "$row"  "$CMD" "cherry"            "$ALIAS" "ch|cp"       "Cherry-pick commits from other branches"
+    printf "$row"  "$CMD" "sync"              "$ALIAS" "sy"          "Sync current branch with $main_branch (fetch + rebase/merge)"
+    printf "$row"  "$CMD" "wip"               "$ALIAS" "w"           "Stash work-in-progress and optionally back it up remotely"
+    printf "$row"  "$CMD" "undo"              "$ALIAS" "un"          "Undo commit, amend, merge, rebase, or stash actions"
+    printf "$row"  "$CMD" "reset"             "$ALIAS" "res"         "Preview and apply common git reset flows"
+    printf "$row"  "$CMD" "stash"             "$ALIAS" "s|sta"       "Manage git stashes"
+    printf "$row"  "$CMD" "worktree"          "$ALIAS" "wt|tree"     "List, add, remove, lock, move, and prune git worktrees"
+    printf "$row"  "$CMD" "hook"              "$ALIAS" "ho|hk"       "List, create, edit, toggle, and test git hooks"
+    printf "$row"  "$CMD" "origin"            "$ALIAS" "or|o|remote" "Init, set, change, rename, or remove remotes"
+    printf "$row"  "$CMD" "config"            "$ALIAS" "cf|cfg|conf" "Configure gitbasher settings"
     echo
-    msg="${YELLOW}Tips${ENDCOLOR}_\t${BLUE}Details${ENDCOLOR}"
-    msg="$msg\n${BOLD}gitb <command> help${NORMAL}_Show command-specific modes and aliases"
-    msg="$msg\n${BOLD}gitb --help${NORMAL}_Show this help"
-    msg="$msg\n${BOLD}gitb -${NORMAL}_Switch to the previous branch"
-    echo -e "$(echo -e "$msg" | column -ts '_')"
+    printf "$row"  "$CMD" "prev"              "$ALIAS" "-"           "Switch to the previous branch (like cd -)"
+    echo
+    printf "$hdr3" "$CMD" "Info commands" "$ALIAS" "Aliases"  "Description"
+    printf "$row"  "$CMD" "status"        "$ALIAS" "st"       "Show repo status and changed files"
+    printf "$row"  "$CMD" "log"           "$ALIAS" "l|lg"     "View git log with branch selection and comparison"
+    printf "$row"  "$CMD" "reflog"        "$ALIAS" "rl|rlg"   "Open git reflog in a pretty format"
+    printf "$row"  "$CMD" "last-commit"   "$ALIAS" "lc|lastc" "Show info about the last commit"
+    printf "$row"  "$CMD" "last-ref"      "$ALIAS" "lr|lastr" "Show info about the last reference"
+    echo
+    printf "$hdr2" "$CMD" "Tips"                "$ALIAS" "" "Details"
+    printf "$rowb" "$CMD" "gitb <command> help" "$ALIAS" "" "Show command-specific modes and aliases"
+    printf "$rowb" "$CMD" "gitb --help"         "$ALIAS" "" "Show this help"
+    printf "$rowb" "$CMD" "gitb -"              "$ALIAS" "" "Switch to the previous branch"
     exit
 }
 project_name="$(get_repo_name)"

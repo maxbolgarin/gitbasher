@@ -767,6 +767,25 @@ gitb cfg proxy        # in restricted regions
 </details>
 
 <details>
+<summary><b>Common git errors and what to run instead</b></summary>
+
+| git complains | gitbasher path |
+|---------------|----------------|
+| `error: failed to push some refs ... non-fast-forward` | `gitb pull` (rebase or merge interactively), then `gitb push` |
+| `Your branch and 'origin/<branch>' have diverged` | `gitb sync` — rebase onto the remote tip after picking strategy |
+| `error: Your local changes ... would be overwritten` | `gitb wip up` (stash / branch / worktree backend), pull, then `gitb wip down` |
+| `fatal: refusing to merge unrelated histories` | `gitb merge` and confirm the unrelated-history prompt, or pick a different base |
+| `fatal: Not possible to fast-forward, aborting.` | `gitb sync` and pick rebase, or `gitb merge` to create a merge commit |
+| `error: cannot rebase: You have unstaged changes` | `gitb wip up` first, rebase, then `gitb wip down` |
+| `Another git process seems to be running ... index.lock` | gitbasher detects this at startup and prompts to remove the stale lock |
+| `error: pathspec '<branch>' did not match any file(s) known to git` | `gitb pull` to fetch, or `gitb b new <branch>` to create a fresh branch with a conventional name |
+| `fatal: detached HEAD` after checkout | gitbasher warns before destructive ops in detached HEAD; use `gitb b` to switch to a real branch first |
+| `gpg: signing failed` on commit | export `GPG_TTY=$(tty)` or run `gitb config` to disable signing per-repo |
+
+If you hit a confusing git error not listed here, run the same flow with `git` directly first — gitbasher passes git's stderr through unchanged, so the underlying message is the source of truth.
+</details>
+
+<details>
 <summary><b>Uninstall</b></summary>
 
 ```bash

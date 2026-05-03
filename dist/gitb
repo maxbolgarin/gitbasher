@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-GITBASHER_VERSION="3.10.2-92-g295b421"
+GITBASHER_VERSION="3.10.2-96-g9eb6e4f"
 if [ "$1" == "init" ] || [ "$1" == "i" ]; then
     git init
 fi
@@ -319,6 +319,16 @@ function read_key {
         fi
     fi
     printf -v "$_var" '%s' "$_key"
+}
+function read_editable_input {
+    local _var="${1:-REPLY}"
+    local _prompt="${2:-}"
+    bind '"\e": "\C-a\C-k\C-m"' 2>/dev/null || true
+    if [ $# -ge 3 ]; then
+        IFS= read -r -e -p "$_prompt" -i "$3" "$_var"
+    else
+        IFS= read -r -e -p "$_prompt" "$_var"
+    fi
 }
 function wrong_mode {
     if [ -n "$2" ]; then
@@ -1144,7 +1154,7 @@ if [ "$origin_name" == "" ]; then
             exit
         fi
         echo
-        read -p "Remote repo URL: " -e remote_url
+        read_editable_input remote_url "Remote repo URL: "
         if [ "$remote_url" == "" ]; then
             exit
         fi
@@ -2001,7 +2011,7 @@ function set_editor {
     echo -e "Enter the binary name (e.g. ${BLUE}vi${ENDCOLOR} or ${BLUE}nano${ENDCOLOR}) — overrides ${YELLOW}core.editor${ENDCOLOR}"
     echo -e "Press Enter to exit without changes"
     echo -e "Current editor: ${YELLOW}${editor}${ENDCOLOR}"
-    read -p "Editor: " choice
+    read_editable_input choice "Editor: "
     if [ "$choice" == "" ]; then
         exit
     fi
@@ -2032,7 +2042,7 @@ function set_ticket {
         echo -e "Current ticket prefix: ${YELLOW}$ticket_name${ENDCOLOR}"
         echo -e "Press Enter to exit without changes, or 0 to remove the existing prefix"
     fi
-    read -p "Ticket prefix: " -e ticket_name
+    read_editable_input ticket_name "Ticket prefix: "
     if [ "$ticket_name" == "0" ]; then
         unset_config_value gitbasher.ticket
         echo
@@ -2133,7 +2143,7 @@ function configure_ai_provider {
     echo -e "  3. ${BLUE}ollama${ENDCOLOR}      Local models via http://localhost:11434 — no API key required"
     echo
     echo -e "Press Enter to keep the current provider, or enter 0 to reset to default (${AI_DEFAULT_PROVIDER})"
-    read -p "Choice (1-3): " choice
+    read_editable_input choice "Choice (1-3): "
     if [ "$choice" == "" ]; then
         exit
     fi
@@ -2214,7 +2224,7 @@ function configure_ai_model {
     esac
     echo
     echo -e "Press Enter to exit without changes, or 0 to clear the override (use per-task defaults)"
-    read -p "Model ID: " model_input
+    read_editable_input model_input "Model ID: "
     if [ "$model_input" == "" ]; then
         exit
     fi
@@ -2255,7 +2265,7 @@ function configure_ai_proxy {
     echo -e "  • ${BLUE}http://[2001:db8::1]:8080${ENDCOLOR} (IPv6)"
     echo -e ""
     echo -e "Press Enter to exit without changes, or 0 to remove the existing proxy"
-    read -p "Proxy URL: " ai_proxy_input
+    read_editable_input ai_proxy_input "Proxy URL: "
     if [ "$ai_proxy_input" == "" ]; then
         exit
     fi
@@ -2300,7 +2310,7 @@ function configure_ai_history {
     echo -e "• Higher values (10-15): Better style learning, uses more tokens"
     echo
     echo -e "Press Enter to exit without changes"
-    read -p "Number of recent commits to include: " limit_input
+    read_editable_input limit_input "Number of recent commits to include: "
     if [ "$limit_input" == "" ]; then
         exit
     fi
@@ -2344,7 +2354,7 @@ function configure_ai_diff {
     echo -e "• Char cap:   ${BLUE}8000-40000${ENDCOLOR} characters (default 20000, ~5000 tokens)"
     echo
     echo -e "Press Enter on either prompt to keep the current value"
-    read -p "New diff line limit: " lines_input
+    read_editable_input lines_input "New diff line limit: "
     if [ -n "$lines_input" ]; then
         if ! validate_numeric_input "$lines_input" 10 5000; then
             show_sanitization_error "diff line limit" "Please enter a positive number between 10 and 5000."
@@ -2362,7 +2372,7 @@ function configure_ai_diff {
         set_ai_diff_limit "$lines_input"
         echo -e "${GREEN}✓ Set AI diff line limit to ${lines_input}${ENDCOLOR}"
     fi
-    read -p "New diff char cap: " chars_input
+    read_editable_input chars_input "New diff char cap: "
     if [ -n "$chars_input" ]; then
         if ! validate_numeric_input "$chars_input" 1000 200000; then
             show_sanitization_error "diff char cap" "Please enter a positive number between 1000 and 200000."
@@ -2406,7 +2416,7 @@ function set_scopes {
     if [ "$scopes" != "" ]; then
         echo -e "Press Enter to exit without changes, or 0 to remove existing scopes"
     fi
-    read -p "Scopes: " -e scopes_raw
+    read_editable_input scopes_raw "Scopes: "
     if [ "$scopes_raw" == "" ]; then
         exit
     fi
@@ -2541,11 +2551,11 @@ function set_user {
     echo
     echo -e "Current name: ${YELLOW}$(get_config_value user.name)${ENDCOLOR}"
     echo -e "Enter new name or press Enter if you don't want to change it"
-    read -p "Name: " -e user_name
+    read_editable_input user_name "Name: "
     echo
     echo -e "Current email: ${YELLOW}$(get_config_value user.email)${ENDCOLOR}"
     echo -e "Enter new email or press Enter if you don't want to change it"
-    read -p "Email: " -e user_email
+    read_editable_input user_email "Email: "
     if [ "$user_name" == "" ] && [ "$user_email" == "" ]; then
         exit
     fi
@@ -5447,7 +5457,7 @@ ${ai_msg}"
                     if [ "$normalized_key" = "y" ] || [ -z "$choice" ]; then
                         msg="$ai_msg"
                     elif [ "$normalized_key" = "e" ]; then
-                        read -p "Edit: " -e -i "$ai_msg" manual_input
+                        read_editable_input manual_input "Edit: " "$ai_msg"
                         msg="$manual_input"
                     elif [ "$normalized_key" = "s" ]; then
                         echo -e "${YELLOW}Skipping scope '${scope}' (files left unstaged)${ENDCOLOR}"
@@ -5518,7 +5528,7 @@ ${ai_msg}"
                 fi
             fi
             echo -e "${YELLOW}Write a summary (Enter to skip group):${ENDCOLOR}"
-            read -p "$prefix" -e manual_input
+            read_editable_input manual_input "$prefix"
             if [ -z "$manual_input" ]; then
                 echo -e "${YELLOW}Skipping scope '${scope}'${ENDCOLOR}"
                 while IFS= read -r f; do
@@ -5725,7 +5735,7 @@ ${ai_commit_message}"
                 echo
             fi
             echo -e "${YELLOW}Edit the AI generated message:${ENDCOLOR}"
-            read -p "" -e -i "$ai_commit_message" commit_message
+            read_editable_input commit_message "" "$ai_commit_message"
         fi
         if [ -z "$commit_message" ]; then
             cleanup_on_exit "$git_add"
@@ -6135,7 +6145,7 @@ function commit_script {
         fi
         echo "Press Enter if you want to exit"
         while [ true ]; do
-            read -p "$(echo -n -e "${BOLD}git add${ENDCOLOR} ")" -e git_add
+            read_editable_input git_add "$(echo -n -e "${BOLD}git add${ENDCOLOR} ")"
             if [ "$git_add" == "" ]; then
                 exit
             fi
@@ -6215,7 +6225,7 @@ function commit_script {
         elif [ "$normalized_key" = "e" ]; then
             echo
             echo -e "${YELLOW}Edit the saved commit message:${ENDCOLOR}"
-            read -p "" -e -i "$saved_commit_message" edited_commit_message
+            read_editable_input edited_commit_message "" "$saved_commit_message"
             if [ -n "$edited_commit_message" ]; then
                 commit="$edited_commit_message"
                 echo
@@ -6348,7 +6358,7 @@ function commit_script {
            echo -e "You can select one of the ${YELLOW}detected scopes${ENDCOLOR}: $(echo $res | column -ts'|')"            
         fi
         while [ true ]; do
-            read -p "<scope>: " -e commit_scope
+            read_editable_input commit_scope "<scope>: "
             if [ "$commit_scope" == "0" ]; then
                 cleanup_on_exit "$git_add"
                 exit
@@ -6460,7 +6470,7 @@ ${staged_with_tab}
         done
         rm -f "$commitmsg_file"
     else
-        read -p "$(echo -n -e "${commit}")" -e commit_message
+        read_editable_input commit_message "$(echo -n -e "${commit}")"
         if [ -z "$commit_message" ]; then
             cleanup_on_exit "$git_add"
             exit
@@ -6478,9 +6488,9 @@ ${staged_with_tab}
         echo -e "It will be appended to the summary header"
         echo -e "Press Enter to skip, or 0 to exit without changes"
         if [ -n "$ticket_name" ]; then
-            read -p "${ticket_name}${sep}" -e commit_ticket
+            read_editable_input commit_ticket "${ticket_name}${sep}"
         else 
-            read -p "<ticket>: " -e commit_ticket
+            read_editable_input commit_ticket "<ticket>: "
         fi
         if [ "$commit_ticket" == "0" ]; then
             cleanup_on_exit "$git_add"
@@ -7072,7 +7082,7 @@ function branch_script {
         prefixes_map["$no_prefix_option"]=""
         echo -e "You can select one of the ${YELLOW}detected prefixes${ENDCOLOR}: $(echo $res | column -ts'|')"
         while [ true ]; do
-            read -p "<prefix>: " choice
+            read_editable_input choice "<prefix>: "
             if [ "$choice" == "0" ]; then
                 exit
             fi
@@ -7109,7 +7119,7 @@ function branch_script {
         echo -e "${YELLOW}Step 2.${ENDCOLOR} Enter the ${YELLOW}name${ENDCOLOR} of the branch"
         echo "Press Enter to exit without changes"
         printf "${BOLD}git branch${ENDCOLOR}"
-        read -p " ${branch_type_and_sep}" -e branch_name
+        read_editable_input branch_name " ${branch_type_and_sep}"
         if [ -z "$branch_name" ]; then
             exit
         fi
@@ -7409,7 +7419,7 @@ function tag_script {
     else
         prompt="$(echo -n -e "${BOLD}git tag${ENDCOLOR} ")"
     fi
-    read -p "$prompt" -e tag_name
+    read_editable_input tag_name "$prompt"
     if [ -z "$tag_name" ]; then
         exit
     fi
@@ -7605,7 +7615,7 @@ function select_files_for_stash {
     echo -e "Enter file patterns or paths to stash (like ${BOLD}git add${ENDCOLOR} command)"
     echo "Press Enter to exit without changes"
     while [ true ]; do
-        read -p "$(echo -n -e "${BOLD}files to stash${ENDCOLOR} ")" -e git_add
+        read_editable_input git_add "$(echo -n -e "${BOLD}files to stash${ENDCOLOR} ")"
         if [ "$git_add" == "" ]; then
             exit
         fi
@@ -7764,7 +7774,7 @@ function stash_script {
         files_to_stash=$(git add --dry-run "$git_add" 2>/dev/null | sed 's/^add /\t/' | sed "s/'//g")
         echo -e "${GREEN}$files_to_stash${ENDCOLOR}"
         echo
-        read -p "Enter stash message: " stash_message
+        read_editable_input stash_message "Enter stash message: "
         if [ -z "$stash_message" ]; then
             exit 0
         fi
@@ -7798,7 +7808,7 @@ function stash_script {
             echo -e "${GREEN}✓ No changes to stash${ENDCOLOR}"
             exit
         fi
-        read -p "Enter stash message: " stash_message
+        read_editable_input stash_message "Enter stash message: "
         if [ -z "$stash_message" ]; then
             exit 0
         fi
@@ -9270,7 +9280,7 @@ function gitlog_search {
             echo
             echo -e "${YELLOW}Search commits by message content:${ENDCOLOR}"
             echo -e "Press Enter to exit without changes"
-            read -p "Enter search term: " -e search_term
+            read_editable_input search_term "Enter search term: "
             if [ -z "$search_term" ]; then
                 return
             fi
@@ -9289,7 +9299,7 @@ function gitlog_search {
             echo
             echo -e "${YELLOW}Search commits by author name or email:${ENDCOLOR}"
             echo -e "Press Enter to exit without changes"
-            read -p "Enter author name or email: " -e author_term
+            read_editable_input author_term "Enter author name or email: "
             if [ -z "$author_term" ]; then
                 return
             fi
@@ -9308,7 +9318,7 @@ function gitlog_search {
             echo
             echo -e "${YELLOW}Search commits that modified specific file(s):${ENDCOLOR}"
             echo -e "Press Enter to exit without changes"
-            read -p "Enter file path or pattern: " -e file_path
+            read_editable_input file_path "Enter file path or pattern: "
             if [ -z "$file_path" ]; then
                 return
             fi
@@ -9327,7 +9337,7 @@ function gitlog_search {
             echo
             echo -e "${YELLOW}Search commits that added or removed specific content:${ENDCOLOR}"
             echo -e "Press Enter to exit without changes"
-            read -p "Enter content to search for: " -e content_term
+            read_editable_input content_term "Enter content to search for: "
             if [ -z "$content_term" ]; then
                 return
             fi
@@ -9347,8 +9357,8 @@ function gitlog_search {
             echo -e "${YELLOW}Search commits within a date range:${ENDCOLOR}"
             echo -e "Date formats: YYYY-MM-DD, '2 weeks ago', 'yesterday', etc."
             echo -e "Press Enter to skip a field"
-            read -p "Since (start date): " -e since_date
-            read -p "Until (end date): " -e until_date
+            read_editable_input since_date "Since (start date): "
+            read_editable_input until_date "Until (end date): "
             if [ -z "$since_date" ] && [ -z "$until_date" ]; then
                 echo -e "${YELLOW}No date range specified${ENDCOLOR}"
                 return
@@ -9378,7 +9388,7 @@ function gitlog_search {
             echo
             echo -e "${YELLOW}Search for commits by hash pattern:${ENDCOLOR}"
             echo -e "Press Enter to exit without changes"
-            read -p "Enter commit hash (full or partial): " -e hash_term
+            read_editable_input hash_term "Enter commit hash (full or partial): "
             if [ -z "$hash_term" ]; then
                 return
             fi
@@ -9705,7 +9715,7 @@ function prompt_worktree_branch {
         prefixes_map["$no_prefix_option"]=""
         echo -e "You can select one of the ${YELLOW}detected prefixes${ENDCOLOR}: $(echo $res | column -ts'|')"
         while [ true ]; do
-            read -p "<prefix>: " choice
+            read_editable_input choice "<prefix>: "
             if [ "$choice" == "0" ]; then
                 return 1
             fi
@@ -9742,7 +9752,7 @@ function prompt_worktree_branch {
         echo -e "${YELLOW}Step 2.${ENDCOLOR} Enter the ${YELLOW}name${ENDCOLOR} of the branch"
         echo "Press Enter if you want to exit"
         printf "${BOLD}git branch${ENDCOLOR}"
-        read -p " ${branch_type_and_sep}" -e branch_name
+        read_editable_input branch_name " ${branch_type_and_sep}"
         if [ -z "$branch_name" ]; then
             return 1
         fi
@@ -9765,7 +9775,7 @@ function prompt_worktree_path {
     echo -e "${YELLOW}Where should the worktree live?${ENDCOLOR}"
     echo -e "Press Enter to accept the default, or type a different path"
     echo -e "Default: ${BOLD}${default_path}${ENDCOLOR}"
-    read -p "Worktree path: " -e custom_path
+    read_editable_input custom_path "Worktree path: "
     if [ -z "$custom_path" ]; then
         wt_path="$default_path"
     else
@@ -9996,7 +10006,7 @@ function _do_worktree_lock_unlock {
     local reason=""
     if [ "$action" == "lock" ]; then
         echo
-        read -p "Reason for the lock (optional, press Enter to skip): " -e reason
+        read_editable_input reason "Reason for the lock (optional, press Enter to skip): "
         if [ -n "$reason" ]; then
             if ! sanitize_text_input "$reason" 200; then
                 show_sanitization_error "lock reason" "Use printable characters only, max 200 characters."
@@ -10038,7 +10048,7 @@ function _do_worktree_move {
     echo
     echo -e "${YELLOW}New path for the worktree${ENDCOLOR}"
     echo -e "Current path: ${BOLD}${selected_worktree_path}${NORMAL}"
-    read -p "New path: " -e new_path
+    read_editable_input new_path "New path: "
     if [ -z "$new_path" ]; then
         echo -e "${YELLOW}Cancelled${ENDCOLOR}"
         return 1
@@ -11187,7 +11197,7 @@ function read_remote_url {
     echo -e "  ${GRAY}ssh://git@server.com/repo.git${ENDCOLOR}"
     echo
     echo -e "Press Enter to cancel"
-    read -p "${prompt_text}: " -e raw_url
+    read_editable_input raw_url "${prompt_text}: "
     if [ -z "$raw_url" ]; then
         exit
     fi
@@ -11363,7 +11373,7 @@ function origin_rename {
     local raw_name="$1"
     if [ -z "$raw_name" ]; then
         echo -e "Press Enter to cancel"
-        read -p "New name: " -e raw_name
+        read_editable_input raw_name "New name: "
         if [ -z "$raw_name" ]; then
             exit
         fi
@@ -11736,7 +11746,6 @@ _gitb() {
                         [ -z "$has_no_split" ]            && flags+=('no-split[disable split]')
                         ;;
                 esac
-                flags+=('help[show help]')
                 _values 'commit flag' $flags
                 return
                 ;;

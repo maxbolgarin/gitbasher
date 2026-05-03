@@ -85,7 +85,7 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 - [AI-powered commits](#ai-powered-commits)
 - [Common workflows](#common-workflows)
 - [Command reference](#command-reference)
-  - [commit](#gitb-commit) · [push](#gitb-push) · [pull](#gitb-pull) · [branch](#gitb-branch) · [tag](#gitb-tag) · [merge](#gitb-merge) · [rebase](#gitb-rebase)
+  - [commit](#gitb-commit) · [push](#gitb-push) · [pull](#gitb-pull) · [branch](#gitb-branch) · [tag](#gitb-tag) · [merge](#gitb-merge) · [rebase](#gitb-rebase) · [squash](#gitb-squash)
   - [cherry](#gitb-cherry) · [sync](#gitb-sync) · [wip](#gitb-wip) · [undo](#gitb-undo) · [reset](#gitb-reset) · [stash](#gitb-stash)
   - [hook](#gitb-hook) · [config](#gitb-config) · [log](#gitb-log) · [info commands](#info-commands)
 - [Configuration](#configuration)
@@ -118,7 +118,7 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 | **Commit** | `commit` (`c`) | Interactive conventional commits, fast-mode, AI messages, atomic split, fixup, amend, last-message edit, revert |
 | **Sync remote** | `push` (`p`), `pull` (`pu`), `sync` (`sy`) | Safe push (with force/list), smart pull (rebase / merge / ff), one-shot rebase-on-main with optional force-push |
 | **Branches** | `branch` (`b`), `prev` (`-`) | List / switch / create-from-current / create-from-updated-main / delete (orphaned, merged, gone) / recent / previous / checkout-tag |
-| **Integration** | `merge` (`m`), `rebase` (`r`), `cherry` (`ch`) | Merge into current / into main / from remote · rebase onto main / interactive / autosquash / fastautosquash / pull-commits · cherry-pick by hash, range, or interactive |
+| **Integration** | `merge` (`m`), `rebase` (`r`), `squash` (`sq`), `cherry` (`ch`) | Merge into current / into main / from remote · rebase onto main / interactive / autosquash / fastautosquash / pull-commits · AI-driven squash of branch commits into changelog-ready history · cherry-pick by hash, range, or interactive |
 | **Tags & releases** | `tag` (`t`) | Lightweight, annotated, from-commit, push, push-all, delete, delete-all, list, fetch-remote |
 | **Save & rollback** | `wip` (`up`/`down`), `undo` (`un`), `reset` (`res`), `stash` (`s`) | Stash WIP + push backup branch, restore in one step · undo last commit/amend/merge/rebase/stash · interactive reset · full stash menu |
 | **Inspect** | `status` (`st`), `log` (`l`), `reflog` (`rl`), `last-commit` (`lc`), `last-ref` (`lr`) | Pretty repo status, multi-mode log + search, reflog viewer, quick last-commit / last-ref summary |
@@ -323,6 +323,7 @@ gitb b -             # back to previous branch (like cd -)
 | [`tag`](#gitb-tag) | `t` `tg` | Create, push, list, delete tags (lightweight & annotated) |
 | [`merge`](#gitb-merge) | `m` `me` | Merge into current, into main, or from remote |
 | [`rebase`](#gitb-rebase) | `r` `re` `base` | Rebase onto main / interactive / autosquash / pull-commits |
+| [`squash`](#gitb-squash) | `sq` `tidy` | AI groups branch commits into clean, changelog-ready history |
 | [`cherry`](#gitb-cherry) | `ch` `cp` | Cherry-pick by hash, range, or interactive picker |
 | [`sync`](#gitb-sync) | `sy` | Fetch main + rebase (or merge) current branch, optional push |
 | [`wip`](#gitb-wip) | `w` | Stash all + backup to remote (`up`) / restore (`down`) |
@@ -450,6 +451,28 @@ gitb b -             # back to previous branch (like cd -)
 | `autosquash` | `a` `s` `ia` | Interactive rebase with `--autosquash` |
 | `fastautosquash` | `fast` `sf` `f` | Autosquash without interaction |
 | `pull` | `p` | Take commits from selected branch into current |
+
+### `gitb squash`
+
+Ask the AI to read commits in the current branch's range and propose a clean,
+changelog-ready history (e.g. fold five `fix typo`/`wip` commits into the one
+feature commit they belong to). Range is auto-detected:
+
+- On the **default branch** — commits since the last tag.
+- On any **other branch** — commits since the merge-base with the default branch.
+
+The plan is shown for confirmation before any history is rewritten. If you
+don't like the result, recover with `gitb undo rebase`.
+
+| Mode | Aliases | Description |
+|------|---------|-------------|
+| `<empty>` | | Generate plan, confirm, then interactive rebase |
+| `preview` | `p` `dry` `show` | Show the AI plan only — don't touch history |
+| `yes` | `y` `fast` | Apply without the confirmation prompt |
+| `push` | `ps` | After rebase, force-push with `--force-with-lease` |
+| `help` | `h` | Show usage |
+
+Requires AI to be configured (`gitb cfg ai`).
 
 ### `gitb cherry`
 

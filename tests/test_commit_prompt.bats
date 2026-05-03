@@ -30,3 +30,21 @@ teardown() {
     [[ "$output" == *"${yellow}${bold}skip${endcolor}"* ]]
     [[ "$output" == *"${red}${bold}abort${endcolor}"* ]]
 }
+
+@test "split groups keep non-ASCII staged paths addable" {
+    mkdir -p docs scripts
+    create_test_file "docs/Guide — Audit.md"
+    create_test_file "scripts/change.sh"
+    git add docs scripts
+
+    build_split_groups_from_staged
+
+    git restore --staged -- docs scripts
+    local scope file
+    for scope in "${split_group_keys[@]}"; do
+        while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            git add -- "$file"
+        done <<< "${split_groups[$scope]}"
+    done
+}

@@ -132,7 +132,7 @@ trap 'rm -f "$tmp"' EXIT
 case "$DOWNLOADER" in
     curl) curl -fSL --proto '=https' --tlsv1.2 -o "$tmp" "$URL" \
               || die "Download failed: $URL" ;;
-    wget) wget -qO "$tmp" "$URL" \
+    wget) wget --https-only -qO "$tmp" "$URL" \
               || die "Download failed: $URL" ;;
 esac
 

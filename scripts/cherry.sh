@@ -51,15 +51,15 @@ function cherry_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb cherry <mode> [args]${ENDCOLOR}"
         echo
-        msg="${YELLOW}Mode${ENDCOLOR}_\t${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Pick a branch and select commits to cherry-pick"
-        msg="$msg\n${BOLD}<commit-hash>${ENDCOLOR}_ _Shortcut for ${BLUE}gitb cherry hash <hash>${ENDCOLOR}"
-        msg="$msg\n${BOLD}hash${ENDCOLOR}_hs_Cherry-pick a specific commit by its hash"
-        msg="$msg\n${BOLD}range${ENDCOLOR}_r_Cherry-pick a range of commits ${BLUE}<from>..<to>${ENDCOLOR}"
-        msg="$msg\n${BOLD}abort${ENDCOLOR}_a_Abort the current cherry-pick"
-        msg="$msg\n${BOLD}continue${ENDCOLOR}_cont|c_Continue cherry-pick after resolving conflicts"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local PAD=20
+        print_help_header $PAD
+        print_help_row $PAD "<empty>"        ""        "Pick a branch and select commits to cherry-pick"
+        print_help_row $PAD "<commit-hash>"  ""        "Shortcut for ${BLUE}gitb cherry hash <hash>${ENDCOLOR}"
+        print_help_row $PAD "hash"           "hs"      "Cherry-pick a specific commit by its hash"
+        print_help_row $PAD "range"          "r"       "Cherry-pick a range of commits ${BLUE}<from>..<to>${ENDCOLOR}"
+        print_help_row $PAD "abort"          "a"       "Abort the current cherry-pick"
+        print_help_row $PAD "continue"       "cont, c" "Continue cherry-pick after resolving conflicts"
+        print_help_row $PAD "help"           "h"       "Show this help"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb cherry${ENDCOLOR}                Pick a branch and choose commits to cherry-pick"

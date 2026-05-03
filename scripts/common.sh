@@ -317,6 +317,47 @@ function show_sanitization_error {
 ### ===== END INPUT SANITIZATION FRAMEWORK =====
 
 
+### ===== HELP TABLE FORMATTERS =====
+### Used by every per-command help block (`gitb <cmd> help`) so the screen is
+### visually consistent with the top-level `print_help` in base.sh: a fixed-
+### width "mode (aliases)" column rendered via printf, then the description.
+### Avoids depending on `column -t`, which would split rows on whatever
+### separator we chose — that historically broke any description containing
+### the separator character (e.g. `ORIG_HEAD` when `_` was the separator).
+
+### Print the column header for a help table.
+# $1: column width for the "mode (aliases)" column, in characters. The same
+#     value must be passed to every print_help_row call so the columns line up.
+function print_help_header {
+    local pad="$1"
+    printf "  ${YELLOW}%-*s${ENDCOLOR}  ${BLUE}%s${ENDCOLOR}\n" "$pad" "Mode" "Description"
+}
+
+### Print one row of a help table.
+# $1: same column width passed to print_help_header (and every other row).
+# $2: mode name (e.g. "annotated", literal "<empty>" for the no-arg case).
+# $3: comma-separated alias list (e.g. "a, an"); empty string when the mode
+#     has no aliases — in that case the parens are omitted entirely.
+# $4: description text. May contain color escapes — uses %b so backslash
+#     escapes (\e, \033) in the expanded ${BLUE}/${YELLOW}/etc. variables get
+#     interpreted, matching the behavior of `echo -e` used elsewhere.
+function print_help_row {
+    local pad="$1"
+    local mode="$2"
+    local aliases="$3"
+    local desc="$4"
+    local label
+    if [ -n "$aliases" ]; then
+        label="${mode} (${aliases})"
+    else
+        label="${mode}"
+    fi
+    printf "  ${BOLD}%-*s${NORMAL}  %b\n" "$pad" "$label" "$desc"
+}
+
+### ===== END HELP TABLE FORMATTERS =====
+
+
 ### ===== KEYBOARD INPUT HELPERS =====
 ### Handle case-insensitive input and alternative keyboard layouts (e.g. Russian)
 

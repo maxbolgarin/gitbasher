@@ -552,7 +552,11 @@ function validate_proxy_url {
 }
 
 ### Function to securely call curl with API key
-# This prevents API key exposure in process lists by using a subshell.
+# Keeps the bearer token out of curl's argv (which is readable via
+# /proc/<pid>/cmdline / `ps -ef` for the lifetime of the request) by passing the
+# Authorization header through `curl --config -` from stdin instead of `-H`.
+# A subshell with `set +x` and `unset HISTFILE` is still used to suppress trace
+# and history side effects.
 # $1: proxy_url (can be empty)
 # $2: api_key value (empty for unauthenticated providers like local Ollama)
 # $3: json_payload
@@ -589,13 +593,6 @@ function secure_curl_with_api_key {
             -H "Content-Type: application/json"
         )
 
-        # Auth header is only sent when we actually have a key. Local Ollama
-        # rejects nothing if it's present, but skipping it keeps the request
-        # clean and avoids leaking unrelated keys to a misconfigured endpoint.
-        if [ -n "$api_key" ]; then
-            curl_cmd+=(-H "Authorization: Bearer $api_key")
-        fi
-
         # OpenRouter uses these headers for attribution / leaderboards. Other
         # providers ignore them, but there's no reason to send them either.
         if [ "$provider" = "openrouter" ]; then
@@ -607,8 +604,21 @@ function secure_curl_with_api_key {
 
         curl_cmd+=(-d "$json_payload")
 
-        # Execute the curl command
-        "${curl_cmd[@]}" 2>&1
+        if [ -n "$api_key" ]; then
+            # Escape any embedded `"` or `\` so the curl config line stays
+            # well-formed even with exotic keys (in practice keys are URL-safe).
+            local escaped_key="${api_key//\\/\\\\}"
+            escaped_key="${escaped_key//\"/\\\"}"
+            # `--config -` reads options from stdin; the heredoc keeps the
+            # bearer token out of argv. curl ignores `--config -` if stdin
+            # produces no header line, so the empty-key branch above is moot
+            # here but kept symmetric for readability.
+            "${curl_cmd[@]}" --config - <<EOF 2>&1
+header = "Authorization: Bearer ${escaped_key}"
+EOF
+        else
+            "${curl_cmd[@]}" 2>&1
+        fi
     )
 }
 

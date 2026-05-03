@@ -44,19 +44,19 @@ function rebase_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb rebase <mode>${ENDCOLOR}"
         echo
-        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Pick a base branch and rebase the current branch onto it"
-        msg="$msg\n${BOLD}main${ENDCOLOR}_master|m_Rebase the current branch onto $main_branch"
-        msg="$msg\n${BOLD}interactive${ENDCOLOR}_i_Pick a base commit and rebase interactively"
-        msg="$msg\n${BOLD}autosquash${ENDCOLOR}_a|s|ia_Interactive rebase on local commits with ${BLUE}--autosquash${ENDCOLOR}"
-        msg="$msg\n${BOLD}fastautosquash${ENDCOLOR}_fast|sf|f_Apply fixup commits non-interactively"
-        msg="$msg\n${BOLD}pull${ENDCOLOR}_p_Take all commits from a chosen branch and apply them here"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local PAD=30
+        print_help_header $PAD
+        print_help_row $PAD "<empty>"         ""             "Pick a base branch and rebase the current branch onto it"
+        print_help_row $PAD "main"            "master, m"    "Rebase the current branch onto $main_branch"
+        print_help_row $PAD "interactive"     "i"            "Pick a base commit and rebase interactively"
+        print_help_row $PAD "autosquash"      "a, s, ia"     "Interactive rebase on local commits with ${BLUE}--autosquash${ENDCOLOR}"
+        print_help_row $PAD "fastautosquash"  "fast, sf, f"  "Apply fixup commits non-interactively"
+        print_help_row $PAD "pull"            "p"            "Take all commits from a chosen branch and apply them here"
+        print_help_row $PAD "help"            "h"            "Show this help"
         echo
         echo -e "${YELLOW}Conflict resolution${ENDCOLOR} ${BLUE}(during a rebase conflict)${ENDCOLOR}"
-        echo -e "  Accept all incoming changes\tKeep changes from the branch being rebased onto"
-        echo -e "  Accept all current changes\tKeep changes from your current branch"
+        printf "  ${BOLD}%-30s${NORMAL}  %s\n" "Accept all incoming changes" "Keep changes from the branch being rebased onto"
+        printf "  ${BOLD}%-30s${NORMAL}  %s\n" "Accept all current changes"  "Keep changes from your current branch"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb rebase${ENDCOLOR}        Pick a base branch interactively and rebase onto it"
@@ -115,8 +115,10 @@ function rebase_script {
     fi
 
 
-    is_clean=$(git status | tail -n 1)
-    if [ "$is_clean" != "nothing to commit, working tree clean" ]; then
+    # Use --porcelain so the check is stable across locales (the human-readable
+    # `git status` summary translates "nothing to commit, working tree clean").
+    is_clean=$(LC_ALL=C git status --porcelain)
+    if [ -n "$is_clean" ]; then
         echo -e "${RED}✗ Cannot rebase — there are uncommitted changes:"
         git_status
         exit 1

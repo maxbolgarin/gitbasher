@@ -176,17 +176,17 @@ function stash_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb stash <mode>${ENDCOLOR}"
         echo
-        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Show the interactive menu"
-        msg="$msg\n${BOLD}all${ENDCOLOR}_ _Stash all changes (including untracked)"
-        msg="$msg\n${BOLD}select${ENDCOLOR}_sel_Pick specific files to stash"
-        msg="$msg\n${BOLD}list${ENDCOLOR}_l_List existing stashes"
-        msg="$msg\n${BOLD}pop${ENDCOLOR}_p_Pop a stash (apply and remove)"
-        msg="$msg\n${BOLD}show${ENDCOLOR}_s_Show the contents of a stash"
-        msg="$msg\n${BOLD}apply${ENDCOLOR}_a_Apply a stash without removing it"
-        msg="$msg\n${BOLD}drop${ENDCOLOR}_d_Drop (delete) a stash"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local PAD=14
+        print_help_header $PAD
+        print_help_row $PAD "<empty>" ""    "Show the interactive menu"
+        print_help_row $PAD "all"     ""    "Stash all changes (including untracked)"
+        print_help_row $PAD "select"  "sel" "Pick specific files to stash"
+        print_help_row $PAD "list"    "l"   "List existing stashes"
+        print_help_row $PAD "pop"     "p"   "Pop a stash (apply and remove)"
+        print_help_row $PAD "show"    "s"   "Show the contents of a stash"
+        print_help_row $PAD "apply"   "a"   "Apply a stash without removing it"
+        print_help_row $PAD "drop"    "d"   "Drop (delete) a stash"
+        print_help_row $PAD "help"    "h"   "Show this help"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb stash${ENDCOLOR}        Open the interactive menu"

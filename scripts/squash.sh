@@ -618,20 +618,26 @@ function squash_run_rebase {
 function squash_print_help {
     echo -e "usage: ${YELLOW}gitb squash <mode>${ENDCOLOR}"
     echo
-    msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-    msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Ask AI to group commits in range and rebase interactively"
-    msg="$msg\n${BOLD}preview${ENDCOLOR}_p|dry|show_Show the AI plan without rewriting history"
-    msg="$msg\n${BOLD}yes${ENDCOLOR}_y|fast_Skip the confirmation prompt and apply the plan"
-    msg="$msg\n${BOLD}push${ENDCOLOR}_ps_After rebase, force-push with --force-with-lease"
-    msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-    echo -e "$(echo -e "$msg" | column -ts '_')"
+    local PAD=24
+    print_help_header $PAD
+    print_help_row $PAD "<empty>" ""              "Ask AI to group commits in range and rebase interactively"
+    print_help_row $PAD "preview" "p, dry, show"  "Show the AI plan without rewriting history"
+    print_help_row $PAD "yes"     "y, fast"       "Skip the confirmation prompt and apply the plan"
+    print_help_row $PAD "push"    "ps"            "After rebase, force-push with ${BLUE}--force-with-lease${ENDCOLOR}"
+    print_help_row $PAD "help"    "h"             "Show this help"
     echo
-    echo -e "${YELLOW}Range:${ENDCOLOR}"
-    echo -e "  • On ${BOLD}${main_branch}${NORMAL}: commits since the last tag (or root if none)"
-    echo -e "  • On any other branch: commits since the merge-base with ${BOLD}${main_branch}${NORMAL}"
+    echo -e "${YELLOW}Range${ENDCOLOR}"
+    echo -e "  ${BLUE}•${ENDCOLOR} On ${BOLD}${main_branch}${NORMAL}: commits since the last tag (or root if none)"
+    echo -e "  ${BLUE}•${ENDCOLOR} On any other branch: commits since the merge-base with ${BOLD}${main_branch}${NORMAL}"
     echo
-    echo -e "${YELLOW}Recovery:${ENDCOLOR}"
-    echo -e "  • If the result is wrong, run ${BOLD}gitb undo rebase${NORMAL} to restore the original branch"
+    echo -e "${YELLOW}Recovery${ENDCOLOR}"
+    echo -e "  ${BLUE}•${ENDCOLOR} If the result is wrong, run ${BOLD}gitb undo rebase${NORMAL} to restore the original branch"
+    echo
+    echo -e "${YELLOW}Examples${ENDCOLOR}"
+    echo -e "  ${GREEN}gitb squash${ENDCOLOR}           Group commits with AI and rebase interactively"
+    echo -e "  ${GREEN}gitb squash preview${ENDCOLOR}   See the AI plan without rewriting history"
+    echo -e "  ${GREEN}gitb squash yes${ENDCOLOR}       Apply the plan without confirming"
+    echo -e "  ${GREEN}gitb squash push${ENDCOLOR}      Apply, then force-push the rewritten branch"
 }
 
 
@@ -765,7 +771,11 @@ function squash_script {
         fi
         if [ -n "${squash_last_ai_response:-}" ]; then
             local dump_file
-            dump_file=$(mktemp -t gitb-tidy-response.XXXXXX 2>/dev/null) || dump_file="/tmp/gitb-tidy-response.$$"
+            # Explicit `${TMPDIR:-/tmp}/...XXXXXX` form so mktemp behaves the
+            # same on BSD (macOS) and GNU; `mktemp -t prefix` differs across
+            # those two and produced odd filenames on macOS.
+            dump_file=$(mktemp "${TMPDIR:-/tmp}/gitb-tidy-response.XXXXXX" 2>/dev/null) || dump_file="${TMPDIR:-/tmp}/gitb-tidy-response.$$"
+            chmod 600 "$dump_file" 2>/dev/null || true
             printf '%s\n' "$squash_last_ai_response" > "$dump_file"
             local total_lines
             total_lines=$(printf '%s\n' "$squash_last_ai_response" | wc -l | tr -d ' ')

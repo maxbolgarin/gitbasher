@@ -46,14 +46,14 @@ function reset_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb reset <mode>${ENDCOLOR}"
         echo
-        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Reset the last commit ${BLUE}(${YELLOW}git reset --mixed HEAD^${BLUE})${ENDCOLOR} — leaves changes unstaged"
-        msg="$msg\n${BOLD}soft${ENDCOLOR}_s_Reset the last commit ${BLUE}(${YELLOW}git reset --soft HEAD^${BLUE})${ENDCOLOR} — keeps changes staged"
-        msg="$msg\n${BOLD}undo${ENDCOLOR}_u_Undo the last reset ${BLUE}(${YELLOW}git reset --mixed HEAD@{1}${BLUE})${ENDCOLOR}"
-        msg="$msg\n${BOLD}interactive${ENDCOLOR}_i_Pick a commit to reset to, then preview before applying"
-        msg="$msg\n${BOLD}ref${ENDCOLOR}_r_Pick a reflog ref to reset to, then preview before applying"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local PAD=18
+        print_help_header $PAD
+        print_help_row $PAD "<empty>"     ""  "Reset the last commit, leave changes unstaged ${BLUE}(${YELLOW}git reset --mixed HEAD^${BLUE})${ENDCOLOR}"
+        print_help_row $PAD "soft"        "s" "Reset the last commit, keep changes staged ${BLUE}(${YELLOW}git reset --soft HEAD^${BLUE})${ENDCOLOR}"
+        print_help_row $PAD "undo"        "u" "Undo the last reset ${BLUE}(${YELLOW}git reset --mixed HEAD@{1}${BLUE})${ENDCOLOR}"
+        print_help_row $PAD "interactive" "i" "Pick a commit to reset to, then preview before applying"
+        print_help_row $PAD "ref"         "r" "Pick a reflog ref to reset to, then preview before applying"
+        print_help_row $PAD "help"        "h" "Show this help"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb reset${ENDCOLOR}        Drop the last commit, keep its changes unstaged"

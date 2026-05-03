@@ -38,17 +38,17 @@ function merge_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb merge <mode>${ENDCOLOR}"
         echo
-        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Pick a branch to merge into the current one"
-        msg="$msg\n${BOLD}main${ENDCOLOR}_master|m_Merge $main_branch into the current branch"
-        msg="$msg\n${BOLD}to-main${ENDCOLOR}_to-master|tm_Switch to $main_branch, then merge the current branch into it"
-        msg="$msg\n${BOLD}remote${ENDCOLOR}_r_Fetch $origin_name and pick a remote branch to merge in"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local PAD=26
+        print_help_header $PAD
+        print_help_row $PAD "<empty>" ""               "Pick a branch to merge into the current one"
+        print_help_row $PAD "main"    "master, m"      "Merge $main_branch into the current branch"
+        print_help_row $PAD "to-main" "to-master, tm"  "Switch to $main_branch, then merge the current branch into it"
+        print_help_row $PAD "remote"  "r"              "Fetch $origin_name and pick a remote branch to merge in"
+        print_help_row $PAD "help"    "h"              "Show this help"
         echo
         echo -e "${YELLOW}Conflict resolution${ENDCOLOR} ${BLUE}(during a merge conflict)${ENDCOLOR}"
-        echo -e "  Accept all incoming changes\tKeep changes from the branch being merged in"
-        echo -e "  Accept all current changes\tKeep changes from your current branch"
+        printf "  ${BOLD}%-30s${NORMAL}  %s\n" "Accept all incoming changes" "Keep changes from the branch being merged in"
+        printf "  ${BOLD}%-30s${NORMAL}  %s\n" "Accept all current changes"  "Keep changes from your current branch"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb merge${ENDCOLOR}        Pick a branch and merge it into ${YELLOW}${current_branch:-current}${ENDCOLOR}"
@@ -525,8 +525,11 @@ function merge_commit {
     fi
 
     ### Check if there are files with conflicts
+    # Use git's native unmerged listing (--diff-filter=U) instead of parsing
+    # `git grep` with a space-joined file list — that pattern silently breaks
+    # when paths contain spaces.
     files_with_conflicts_one_line="$(echo "$2" | tr '\n' ' ' | sed 's/ $//')"
-    files_with_conflicts_new="$(git --no-pager grep -l --name-only -E "[<=>]{7} HEAD" $files_with_conflicts_one_line)"
+    files_with_conflicts_new="$(git --no-pager diff --name-only --diff-filter=U 2>/dev/null)"
     if [ "$files_with_conflicts_new" != "" ]; then
         echo
         echo -e "${YELLOW}There are files with conflicts${ENDCOLOR}"
@@ -549,7 +552,8 @@ function merge_commit {
     ### 1. Commit with default message
     if [ "$1" == "1" ]; then
         commit_message="$3"
-        result=$(git commit -m "$commit_message" 2>&1)
+        # LC_ALL=C so the substring checks below are locale-stable.
+        result=$(LC_ALL=C git commit -m "$commit_message" 2>&1)
         commit_status=$?
         if [[ $result != *"not staged for commit"* ]] && [[ $result != *"nothing to commit"* ]]; then
             check_code $commit_status "$result" "create default merge commit"
@@ -559,7 +563,8 @@ function merge_commit {
     ### 2. Commit with entered message
     else
         staged_with_tab="$(sed 's/^/####\t/' <<< "$2")"
-        commitmsg_file=$(mktemp "/tmp/commitmsg.XXXXXX")
+        commitmsg_file=$(mktemp "${TMPDIR:-/tmp}/commitmsg.XXXXXX")
+        chmod 600 "$commitmsg_file" 2>/dev/null || true
         trap 'rm -f "$commitmsg_file"' EXIT INT TERM
         echo """
 ####
@@ -591,7 +596,8 @@ ${staged_with_tab}
 
         rm -f "$commitmsg_file"
 
-        result=$(git commit -m """$commit_message""" 2>&1)
+        # LC_ALL=C so the substring checks below are locale-stable.
+        result=$(LC_ALL=C git commit -m """$commit_message""" 2>&1)
         commit_status=$?
 
         if [[ $result != *"not staged for commit"* ]] && [[ $result != *"nothing to commit"* ]]; then

@@ -630,7 +630,8 @@ function perform_commit_split {
     fi
 
     local snapshot_file
-    snapshot_file=$(mktemp "/tmp/gitb-split-snapshot.XXXXXX")
+    snapshot_file=$(mktemp "${TMPDIR:-/tmp}/gitb-split-snapshot.XXXXXX")
+    chmod 600 "$snapshot_file" 2>/dev/null || true
     printf '%s\n' "$original_staged" > "$snapshot_file"
     # Restore staging if the user kills the process mid-split
     trap "_restore_split_snapshot '$snapshot_file'" INT TERM
@@ -1047,7 +1048,8 @@ ${ai_commit_message}"
         if [ "$ai_mode" = "full" ]; then
             echo -e "${YELLOW}Edit the AI generated message:${ENDCOLOR}"
             # Create temp file with AI message
-            commitmsg_file=$(mktemp "/tmp/commitmsg.XXXXXX")
+            commitmsg_file=$(mktemp "${TMPDIR:-/tmp}/commitmsg.XXXXXX")
+            chmod 600 "$commitmsg_file" 2>/dev/null || true
             trap 'rm -f "$commitmsg_file"' EXIT INT TERM
             echo "$ai_commit_message" > $commitmsg_file
 
@@ -1420,26 +1422,28 @@ function commit_script {
         echo -e "compact token (${GREEN}aifp${ENDCOLOR}). Aliases are interchangeable."
         echo
         echo -e "${YELLOW}Actions${ENDCOLOR} ${BLUE}(pick one; default is a regular commit)${ENDCOLOR}"
-        msg="${BOLD}<empty>${NORMAL}_ _Interactive commit: choose files, type, scope, and summary"
-        msg="$msg\n${BOLD}split${NORMAL}_sp|sl_Split staged changes into one commit per detected scope"
-        msg="$msg\n${BOLD}fixup${NORMAL}_x|fix_Create a ${GREEN}--fixup${ENDCOLOR} commit against an older commit"
-        msg="$msg\n${BOLD}amend${NORMAL}_a|am_Add changes into the last commit (no message edit)"
-        msg="$msg\n${BOLD}last${NORMAL}_l_Rewrite the last commit message"
-        msg="$msg\n${BOLD}revert${NORMAL}_rev_Revert a commit (${GREEN}git revert --no-edit${ENDCOLOR})"
-        msg="$msg\n${BOLD}ff${NORMAL}_ _Ultrafast: ${BOLD}ai + split + fast${NORMAL} with no prompts (use ${BOLD}ffp${NORMAL} to also push)"
-        msg="$msg\n${BOLD}help${NORMAL}_h|--help|-h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local PAD=22
+        print_help_header $PAD
+        print_help_row $PAD "<empty>" ""               "Interactive commit: choose files, type, scope, and summary"
+        print_help_row $PAD "split"   "sp, sl"         "Split staged changes into one commit per detected scope"
+        print_help_row $PAD "fixup"   "x, fix"         "Create a ${GREEN}--fixup${ENDCOLOR} commit against an older commit"
+        print_help_row $PAD "amend"   "a, am"          "Add changes into the last commit (no message edit)"
+        print_help_row $PAD "last"    "l"              "Rewrite the last commit message"
+        print_help_row $PAD "revert"  "rev"            "Revert a commit (${GREEN}git revert --no-edit${ENDCOLOR})"
+        print_help_row $PAD "ff"      ""               "Ultrafast: ${BOLD}ai + split + fast${NORMAL} with no prompts (use ${BOLD}ffp${NORMAL} to also push)"
+        print_help_row $PAD "help"    "h, --help, -h"  "Show this help"
         echo
         echo -e "${YELLOW}Modifiers${ENDCOLOR} ${BLUE}(stack with an action, any order)${ENDCOLOR}"
-        msg="${BOLD}fast${NORMAL}_f_Stage all changes (${GREEN}git add .${ENDCOLOR}) before committing"
-        msg="$msg\n${BOLD}staged${NORMAL}_st_Use already-staged files (skip the add step)"
-        msg="$msg\n${BOLD}push${NORMAL}_p|pu_Push after the commit succeeds"
-        msg="$msg\n${BOLD}scope${NORMAL}_s_Force a scope: 'type(scope): message' (useful with fast mode)"
-        msg="$msg\n${BOLD}no-split${NORMAL}_nsp|nsl_Disable automatic split detection for this commit"
-        msg="$msg\n${BOLD}ai${NORMAL}_i|llm_Generate the commit message with AI"
-        msg="$msg\n${BOLD}msg${NORMAL}_m_Open \$EDITOR for a multiline message body"
-        msg="$msg\n${BOLD}ticket${NORMAL}_t|j|jira_Append ticket info to the header"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local FPAD=20
+        printf "  ${YELLOW}%-*s${ENDCOLOR}  ${BLUE}%s${ENDCOLOR}\n" "$FPAD" "Flag" "Description"
+        print_help_row $FPAD "fast"     "f"           "Stage all changes (${GREEN}git add .${ENDCOLOR}) before committing"
+        print_help_row $FPAD "staged"   "st"          "Use already-staged files (skip the add step)"
+        print_help_row $FPAD "push"     "p, pu"       "Push after the commit succeeds"
+        print_help_row $FPAD "scope"    "s"           "Force a scope: 'type(scope): message' (useful with fast mode)"
+        print_help_row $FPAD "no-split" "nsp, nsl"    "Disable automatic split detection for this commit"
+        print_help_row $FPAD "ai"       "i, llm"      "Generate the commit message with AI"
+        print_help_row $FPAD "msg"      "m"           "Open \$EDITOR for a multiline message body"
+        print_help_row $FPAD "ticket"   "t, j, jira"  "Append ticket info to the header"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb commit${ENDCOLOR}                  Interactive commit"
@@ -1481,8 +1485,9 @@ function commit_script {
 
 
     ### Check if there are unstaged files
-    is_clean=$(git status | tail -n 1)
-    if [ "$is_clean" = "nothing to commit, working tree clean" ]; then
+    # --porcelain output is locale-stable; empty == clean working tree.
+    is_clean=$(LC_ALL=C git status --porcelain)
+    if [ -z "$is_clean" ]; then
         if [ -z "${revert}" ]; then
             # Clean up cached git add when working tree is clean
             git config --unset gitbasher.cached-git-add 2>/dev/null
@@ -1993,7 +1998,8 @@ function commit_script {
     echo -e "Press Enter if you want to exit"
     # Use an editor and commitmsg file
     if [ -n "$msg" ]; then
-        commitmsg_file=$(mktemp "/tmp/commitmsg.XXXXXX")
+        commitmsg_file=$(mktemp "${TMPDIR:-/tmp}/commitmsg.XXXXXX")
+        chmod 600 "$commitmsg_file" 2>/dev/null || true
         trap "rm -f '$commitmsg_file'" EXIT INT TERM
         staged_with_tab="$(sed 's/^/####\t/' <<< "${staged_files_list}")"
 

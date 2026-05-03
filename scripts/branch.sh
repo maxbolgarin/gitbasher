@@ -69,20 +69,20 @@ function branch_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb branch <mode>${ENDCOLOR}"
         echo
-        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Pick a local branch to switch to"
-        msg="$msg\n${BOLD}list${ENDCOLOR}_l_List local branches"
-        msg="$msg\n${BOLD}remote${ENDCOLOR}_re|r_Fetch $origin_name and pick a remote branch"
-        msg="$msg\n${BOLD}main${ENDCOLOR}_def|m_Switch to $main_branch without prompting"
-        msg="$msg\n${BOLD}tag${ENDCOLOR}_t_Check out a specific tag"
-        msg="$msg\n${BOLD}new${ENDCOLOR}_n|c_Create a conventionally named branch from the current branch"
-        msg="$msg\n${BOLD}newd${ENDCOLOR}_nd|cd_Switch to $main_branch, pull, and create a new conventionally named branch"
-        msg="$msg\n${BOLD}delete${ENDCOLOR}_del|d_Delete branches (orphaned, merged, or a specific one)"
-        msg="$msg\n${BOLD}prev${ENDCOLOR}_p|-_Switch to the previous branch (like ${BLUE}cd -${ENDCOLOR})"
-        msg="$msg\n${BOLD}recent${ENDCOLOR}_rc_Pick from recently checked-out branches"
-        msg="$msg\n${BOLD}gone${ENDCOLOR}_g_Delete local branches whose remote tracking branch is gone"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local PAD=18
+        print_help_header $PAD
+        print_help_row $PAD "<empty>"  ""        "Pick a local branch to switch to"
+        print_help_row $PAD "list"     "l"       "List local branches"
+        print_help_row $PAD "remote"   "re, r"   "Fetch $origin_name and pick a remote branch"
+        print_help_row $PAD "main"     "def, m"  "Switch to $main_branch without prompting"
+        print_help_row $PAD "tag"      "t"       "Check out a specific tag"
+        print_help_row $PAD "new"      "n, c"    "Create a conventionally named branch from the current branch"
+        print_help_row $PAD "newd"     "nd, cd"  "Switch to $main_branch, pull, and create a conventionally named branch"
+        print_help_row $PAD "delete"   "del, d"  "Delete branches (orphaned, merged, or a specific one)"
+        print_help_row $PAD "prev"     "p, -"    "Switch to the previous branch (like ${BLUE}cd -${ENDCOLOR})"
+        print_help_row $PAD "recent"   "rc"      "Pick from recently checked-out branches"
+        print_help_row $PAD "gone"     "g"       "Delete local branches whose remote tracking branch is gone"
+        print_help_row $PAD "help"     "h"       "Show this help"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb branch${ENDCOLOR}        Pick a local branch to switch to"
@@ -436,7 +436,7 @@ function branch_script {
                 read -n 1 -s choice
                 if is_yes "$choice"; then
                     printf "y\n\n"
-                    branches_to_delete="$(git branch --merged | egrep -v "(^\*|master|main|develop|${main_branch})" | xargs)"
+                    branches_to_delete="$(git branch --merged | grep -E -v "(^\*|master|main|develop|${main_branch})" | xargs)"
                     IFS=$' ' read -rd '' -a branches <<<"$branches_to_delete"
                     for index in "${!branches[@]}"
                     do
@@ -543,7 +543,9 @@ function branch_script {
 
         echo
 
-        delete_output=$(git branch -d "$branch_name" 2>&1)
+        # LC_ALL=C so the "is not fully merged" substring check below stays
+        # stable under non-English git locales (de/fr/ja translate this string).
+        delete_output=$(LC_ALL=C git branch -d "$branch_name" 2>&1)
         delete_code=$?
 
         if [ "$delete_code" == 0 ]; then

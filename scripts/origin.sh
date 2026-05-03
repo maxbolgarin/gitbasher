@@ -340,14 +340,14 @@ function origin_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb origin <mode> [<url>|<name>]${ENDCOLOR}"
         echo
-        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_show|info_Show configured remotes and useful web links"
-        msg="$msg\n${BOLD}set${ENDCOLOR}_add|new|a_Add a new origin (fails if origin already set)"
-        msg="$msg\n${BOLD}change${ENDCOLOR}_update|c|u|set-url_Change the existing origin URL"
-        msg="$msg\n${BOLD}rename${ENDCOLOR}_mv|ren_Rename a remote (e.g. ${BLUE}origin -> upstream${ENDCOLOR})"
-        msg="$msg\n${BOLD}remove${ENDCOLOR}_rm|del|d_Remove the remote"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts '_')"
+        local PAD=30
+        print_help_header $PAD
+        print_help_row $PAD "<empty>" "show, info"            "Show configured remotes and useful web links"
+        print_help_row $PAD "set"     "add, new, a"           "Add a new origin (fails if origin already set)"
+        print_help_row $PAD "change"  "update, c, u, set-url" "Change the existing origin URL"
+        print_help_row $PAD "rename"  "mv, ren"               "Rename a remote (e.g. ${BLUE}origin → upstream${ENDCOLOR})"
+        print_help_row $PAD "remove"  "rm, del, d"            "Remove the remote"
+        print_help_row $PAD "help"    "h"                     "Show this help"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb origin${ENDCOLOR}                                Show configured remotes"

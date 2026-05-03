@@ -172,7 +172,12 @@ _gitb() {
         case "$canonical" in
             branch|merge|rebase|pull|cherry|log)
                 local branches
-                branches=$(git for-each-ref --format='%(refname:short)' refs/heads 2>/dev/null)
+                # Filter for "tab-friendly" branch names — git permits some
+                # shell-special characters (e.g. `$`, backticks) inside refs,
+                # and feeding them into `compgen -W` then through unquoted
+                # COMPREPLY=( $(...) ) opens a small pathological window. The
+                # user can still complete weird names by typing them out.
+                branches=$(git for-each-ref --format='%(refname:short)' refs/heads 2>/dev/null | grep -E '^[A-Za-z0-9._/-]+$')
                 COMPREPLY=( $(compgen -W "$branches" -- "$cur") )
                 return 0
                 ;;
@@ -795,14 +800,21 @@ function completion_script {
     if [ "$action" = "help" ] || [ "$action" = "h" ]; then
         echo -e "usage: ${YELLOW}gitb config auto <action> [shell]${ENDCOLOR}"
         echo
-        echo -e "Actions:"
-        echo -e "  ${BOLD}up${NORMAL}     Install tab completion (default action; auto-detects shell)"
-        echo -e "  ${BOLD}down${NORMAL}   Remove installed tab completion"
-        echo -e "  ${BOLD}status${NORMAL} Show installation state for bash/zsh/fish"
-        echo -e "  ${BOLD}print${NORMAL}  Print the completion script to stdout (pipe it where you want)"
-        echo -e "  ${BOLD}help${NORMAL}   Show this help"
+        local PAD=14
+        printf "  ${YELLOW}%-*s${ENDCOLOR}  ${BLUE}%s${ENDCOLOR}\n" "$PAD" "Action" "Description"
+        print_help_row $PAD "up"     ""    "Install tab completion (default; auto-detects shell)"
+        print_help_row $PAD "down"   ""    "Remove installed tab completion"
+        print_help_row $PAD "status" "st"  "Show installation state for bash, zsh, and fish"
+        print_help_row $PAD "print"  ""    "Print the completion script to stdout"
+        print_help_row $PAD "help"   "h"   "Show this help"
         echo
-        echo -e "Shells: ${BOLD}bash${NORMAL}, ${BOLD}zsh${NORMAL}, ${BOLD}fish${NORMAL} (defaults to your \$SHELL)"
+        echo -e "${YELLOW}Shells${ENDCOLOR}  ${BOLD}bash${NORMAL}, ${BOLD}zsh${NORMAL}, ${BOLD}fish${NORMAL} (defaults to your \$SHELL)"
+        echo
+        echo -e "${YELLOW}Examples${ENDCOLOR}"
+        echo -e "  ${GREEN}gitb cfg auto${ENDCOLOR}              Install completion for the current shell"
+        echo -e "  ${GREEN}gitb cfg auto up zsh${ENDCOLOR}       Install zsh completion explicitly"
+        echo -e "  ${GREEN}gitb cfg auto down${ENDCOLOR}         Remove the installed completion"
+        echo -e "  ${GREEN}gitb cfg auto status${ENDCOLOR}       Check what's installed for each shell"
         return 0
     fi
 

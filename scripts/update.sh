@@ -59,14 +59,14 @@ function _fetch_latest_release {
     local body=""
 
     if command -v curl >/dev/null 2>&1; then
-        body=$(curl -fsSL --max-time 10 -H "Accept: application/vnd.github+json" "$url" 2>&1)
+        body=$(curl -fsSL --proto '=https' --tlsv1.2 --max-time 10 -H "Accept: application/vnd.github+json" "$url" 2>&1)
         if [ $? -ne 0 ]; then
             _gitb_update_fetch_err="$body"
             echo ""
             return 1
         fi
     elif command -v wget >/dev/null 2>&1; then
-        body=$(wget -qO- --timeout=10 --header="Accept: application/vnd.github+json" "$url" 2>&1)
+        body=$(wget -qO- --https-only --timeout=10 --header="Accept: application/vnd.github+json" "$url" 2>&1)
         if [ $? -ne 0 ]; then
             _gitb_update_fetch_err="$body"
             echo ""
@@ -82,31 +82,46 @@ function _fetch_latest_release {
 }
 
 
-### Pull the tag_name field out of a GitHub release JSON blob without jq.
+### Pull a top-level string field out of a GitHub release JSON blob.
+# Prefers jq when available (handles escaped quotes, unicode, future field
+# additions); falls back to a grep+sed pair that's good enough for GitHub's
+# stable schema. Used by the more-specific helpers below.
+# $1: JSON body
+# $2: field name (e.g. "tag_name", "html_url", "published_at")
+function _extract_release_field {
+    local body="$1"
+    local field="$2"
+    if command -v jq >/dev/null 2>&1; then
+        # `// empty` ensures a missing/null field returns "" rather than the
+        # literal string "null", which the legacy regex form also avoided.
+        printf '%s' "$body" | jq -r --arg f "$field" '.[$f] // empty' 2>/dev/null
+        return
+    fi
+    printf '%s' "$body" | grep -o "\"${field}\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" \
+              | head -1 \
+              | sed -E 's/.*"([^"]+)"$/\1/'
+}
+
+
+### Pull the tag_name field out of a GitHub release JSON blob.
 # $1: JSON body
 function _extract_tag_name {
-    echo "$1" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' \
-              | head -1 \
-              | sed -E 's/.*"([^"]+)"$/\1/'
+    _extract_release_field "$1" "tag_name"
 }
 
 
-### Pull the html_url field out of a GitHub release JSON blob without jq.
+### Pull the html_url field out of a GitHub release JSON blob.
 # $1: JSON body
 function _extract_release_url {
-    echo "$1" | grep -o '"html_url"[[:space:]]*:[[:space:]]*"[^"]*"' \
-              | head -1 \
-              | sed -E 's/.*"([^"]+)"$/\1/'
+    _extract_release_field "$1" "html_url"
 }
 
 
-### Pull the published_at date out of a GitHub release JSON blob without jq.
+### Pull the published_at date out of a GitHub release JSON blob.
+# Returns just the date portion (YYYY-MM-DD) of the ISO-8601 timestamp.
 # $1: JSON body
 function _extract_release_date {
-    echo "$1" | grep -o '"published_at"[[:space:]]*:[[:space:]]*"[^"]*"' \
-              | head -1 \
-              | sed -E 's/.*"([^"]+)"$/\1/' \
-              | cut -dT -f1
+    _extract_release_field "$1" "published_at" | cut -dT -f1
 }
 
 
@@ -118,8 +133,15 @@ function _gitb_install_path {
     path=$(command -v gitb 2>/dev/null) || return 1
     [ -z "$path" ] && return 1
     # Resolve symlinks where possible so we update the real file, not a shim.
-    if command -v readlink >/dev/null 2>&1; then
-        local resolved
+    # `realpath` is the most portable (POSIX-2024, also macOS 10.13+, Linux);
+    # `readlink -f` is GNU-only and silently does nothing on BSD (where the
+    # `-f` flag means something different). Fall back to a manual one-step
+    # resolution if neither is available.
+    local resolved=""
+    if command -v realpath >/dev/null 2>&1; then
+        resolved=$(realpath "$path" 2>/dev/null) || resolved=""
+    fi
+    if [ -z "$resolved" ] && command -v readlink >/dev/null 2>&1; then
         resolved=$(readlink -f "$path" 2>/dev/null) || resolved=""
         if [ -z "$resolved" ] && [ -L "$path" ]; then
             resolved=$(readlink "$path" 2>/dev/null)
@@ -128,8 +150,8 @@ function _gitb_install_path {
                 *)  resolved="$(dirname "$path")/$resolved" ;;
             esac
         fi
-        [ -n "$resolved" ] && path="$resolved"
     fi
+    [ -n "$resolved" ] && path="$resolved"
     echo "$path"
 }
 
@@ -259,12 +281,12 @@ function update_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb update <mode>${ENDCOLOR}"
         echo
-        local msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Check for a new release and install it"
-        msg="$msg\n${BOLD}check${ENDCOLOR}_c|ch_Only check for a newer release; do not install"
-        msg="$msg\n${BOLD}force${ENDCOLOR}_f|fo_Reinstall the latest release even if already up to date"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local PAD=14
+        print_help_header $PAD
+        print_help_row $PAD "<empty>" ""      "Check for a new release and install it"
+        print_help_row $PAD "check"   "c, ch" "Only check for a newer release; do not install"
+        print_help_row $PAD "force"   "f, fo" "Reinstall the latest release even if already up to date"
+        print_help_row $PAD "help"    "h"     "Show this help"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb update${ENDCOLOR}        Check and install if a newer version is published"

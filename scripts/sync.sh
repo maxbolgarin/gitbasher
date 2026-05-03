@@ -45,14 +45,14 @@ function sync_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb sync <mode>${ENDCOLOR}"
         echo
-        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Fetch $main_branch and rebase the current branch onto it"
-        msg="$msg\n${BOLD}push${ENDCOLOR}_p_Same as <empty>, then force-push the rebased branch"
-        msg="$msg\n${BOLD}merge${ENDCOLOR}_m_Fetch $main_branch and merge it into the current branch"
-        msg="$msg\n${BOLD}mergep${ENDCOLOR}_mp|pm_Same as merge, then push"
-        msg="$msg\n${BOLD}dry${ENDCOLOR}_d|dr_Preview incoming commits without modifying local refs"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local PAD=18
+        print_help_header $PAD
+        print_help_row $PAD "<empty>" ""       "Fetch $main_branch and rebase the current branch onto it"
+        print_help_row $PAD "push"    "p"      "Rebase, then force-push the rebased branch"
+        print_help_row $PAD "merge"   "m"      "Fetch $main_branch and merge it into the current branch"
+        print_help_row $PAD "mergep"  "mp, pm" "Merge $main_branch into current, then push"
+        print_help_row $PAD "dry"     "d, dr"  "Preview incoming commits without modifying local refs"
+        print_help_row $PAD "help"    "h"      "Show this help"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb sync${ENDCOLOR}        Rebase current branch on top of ${YELLOW}$main_branch${ENDCOLOR}"
@@ -134,8 +134,9 @@ function sync_script {
 
 
     ### Check for uncommitted changes
-    is_clean=$(git status | tail -n 1)
-    if [ "$is_clean" != "nothing to commit, working tree clean" ]; then
+    # --porcelain output is locale-stable; empty == clean working tree.
+    is_clean=$(LC_ALL=C git status --porcelain)
+    if [ -n "$is_clean" ]; then
         echo -e "${RED}✗ Cannot sync — there are uncommitted changes:${ENDCOLOR}"
         git_status
         echo

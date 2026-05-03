@@ -62,18 +62,18 @@ function pull_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb pull <mode>${ENDCOLOR}"
         echo
-        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Fetch current branch, fast-forward if possible, otherwise ask"
-        msg="$msg\n${BOLD}fetch${ENDCOLOR}_fe_Fetch current branch without merging"
-        msg="$msg\n${BOLD}all${ENDCOLOR}_fa_Fetch every branch without merging"
-        msg="$msg\n${BOLD}upd${ENDCOLOR}_u_Run ${BLUE}git remote update${ENDCOLOR} to fetch all branches"
-        msg="$msg\n${BOLD}ffonly${ENDCOLOR}_ff_Fetch and merge only if a fast-forward is possible"
-        msg="$msg\n${BOLD}merge${ENDCOLOR}_m_Fetch and merge the current branch"
-        msg="$msg\n${BOLD}rebase${ENDCOLOR}_r_Fetch and rebase the current branch"
-        msg="$msg\n${BOLD}interactive${ENDCOLOR}_ri|rs_Fetch and interactively rebase with ${BLUE}--autosquash${ENDCOLOR}"
-        msg="$msg\n${BOLD}dry${ENDCOLOR}_d|dr_Preview incoming commits without modifying local refs"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local PAD=22
+        print_help_header $PAD
+        print_help_row $PAD "<empty>"      ""       "Fetch current branch, fast-forward if possible, otherwise ask"
+        print_help_row $PAD "fetch"        "fe"     "Fetch current branch without merging"
+        print_help_row $PAD "all"          "fa"     "Fetch every branch without merging"
+        print_help_row $PAD "upd"          "u"      "Run ${BLUE}git remote update${ENDCOLOR} to fetch all branches"
+        print_help_row $PAD "ffonly"       "ff"     "Fetch and merge only if a fast-forward is possible"
+        print_help_row $PAD "merge"        "m"      "Fetch and merge the current branch"
+        print_help_row $PAD "rebase"       "r"      "Fetch and rebase the current branch"
+        print_help_row $PAD "interactive"  "ri, rs" "Fetch and interactively rebase with ${BLUE}--autosquash${ENDCOLOR}"
+        print_help_row $PAD "dry"          "d, dr"  "Preview incoming commits without modifying local refs"
+        print_help_row $PAD "help"         "h"      "Show this help"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb pull${ENDCOLOR}          Fetch + fast-forward, ask if a merge or rebase is needed"

@@ -431,7 +431,9 @@ fi
 staged_files=\$(git diff --cached --name-only -z)
 
 # Check for TODO/FIXME comments in staged files
-if echo \"\$staged_files\" | xargs -0 grep -l \"TODO\\|FIXME\" 2>/dev/null; then
+# --binary-files=without-match keeps grep from spamming \"binary file matches\"
+# lines for any binary blob that happens to be staged.
+if echo \"\$staged_files\" | xargs -0 grep -l --binary-files=without-match \"TODO\\|FIXME\" 2>/dev/null; then
     echo \"⚠️  Warning: Found TODO/FIXME comments in staged files\"
     echo \"Continue anyway? (y/n)\"
     read -n 1 answer
@@ -1006,44 +1008,39 @@ function hooks_script {
             fi
         ;;
         "help"|"h")
-            echo -e "${YELLOW}gitb hook${ENDCOLOR} - Git hooks management"
+            echo -e "${YELLOW}GIT HOOK${ENDCOLOR}"
             echo
-            echo -e "${YELLOW}Usage:${ENDCOLOR}"
-            echo -e "  gitb hook [command] [hook-type] [options]"
+            echo -e "usage: ${YELLOW}gitb hook <mode> [hook-type]${ENDCOLOR}"
             echo
-            echo -e "${YELLOW}Commands:${ENDCOLOR}"
-            echo -e "  ${GREEN}<empty>${ENDCOLOR}           Show interactive action menu"
-            echo -e "  ${GREEN}list, l${ENDCOLOR}           List installed hooks with status"
-            echo -e "  ${GREEN}list samples${ENDCOLOR}      List installed hooks and available samples"
-            echo -e "  ${GREEN}create, new, c${ENDCOLOR}    Create a new hook (interactive selector)"
-            echo -e "  ${GREEN}edit, e${ENDCOLOR}           Edit an existing hook (interactive selector)"
-            echo -e "  ${GREEN}toggle, t${ENDCOLOR}         Enable/disable a hook (interactive selector)"
-            echo -e "  ${GREEN}remove, rm, r${ENDCOLOR}     Remove hook(s) - single or all (interactive selector)"
-            echo -e "  ${GREEN}test, run${ENDCOLOR}         Test a hook by running it (interactive selector)"
-            echo -e "  ${GREEN}show, cat, s${ENDCOLOR}      Show hook content (interactive selector)"
-            echo -e "  ${GREEN}select, sel${ENDCOLOR}       Interactive hook type browser"
-            echo -e "  ${GREEN}install, samples${ENDCOLOR}  Install all available sample hooks"
-            echo -e "  ${GREEN}help, h${ENDCOLOR}           Show this help"
+            local PAD=20
+            print_help_header $PAD
+            print_help_row $PAD "<empty>"      ""        "Show the interactive action menu"
+            print_help_row $PAD "list"         "l"       "List installed hooks with status"
+            print_help_row $PAD "list samples" ""        "List installed hooks alongside available samples"
+            print_help_row $PAD "create"       "new, c"  "Create a new hook (interactive)"
+            print_help_row $PAD "edit"         "e"       "Edit an existing hook (interactive)"
+            print_help_row $PAD "toggle"       "t"       "Enable/disable a hook (interactive)"
+            print_help_row $PAD "remove"       "rm, r"   "Remove a hook or all hooks (interactive)"
+            print_help_row $PAD "test"         "run"     "Run a hook to test it (interactive)"
+            print_help_row $PAD "show"         "cat, s"  "Show a hook's content (interactive)"
+            print_help_row $PAD "select"       "sel"     "Browse hook types interactively"
+            print_help_row $PAD "install"      "samples" "Install all available sample hooks"
+            print_help_row $PAD "help"         "h"       "Show this help"
             echo
-            echo -e "${YELLOW}Hook Types:${ENDCOLOR}"
+            echo -e "${YELLOW}Hook types${ENDCOLOR}"
             echo "$(get_all_hook_types)" | tr ' ' '\n' | sed 's/^/  /'
             echo
-            echo -e "${YELLOW}Templates:${ENDCOLOR}"
-            echo -e "  ${GREEN}basic${ENDCOLOR}                   Basic hook template (default)"
-            echo -e "  ${GREEN}pre-commit-lint${ENDCOLOR}         Pre-commit linting and file checks"
-            echo -e "  ${GREEN}commit-msg-conventional${ENDCOLOR} Conventional commit message validation"
-            echo -e "  ${GREEN}pre-push-protection${ENDCOLOR}     Branch protection for main/master"
+            echo -e "${YELLOW}Templates${ENDCOLOR}"
+            printf "  ${BOLD}%-26s${NORMAL}  %s\n" "basic"                   "Default starter template"
+            printf "  ${BOLD}%-26s${NORMAL}  %s\n" "pre-commit-lint"         "Pre-commit linting and file checks"
+            printf "  ${BOLD}%-26s${NORMAL}  %s\n" "commit-msg-conventional" "Validate Conventional Commits message"
+            printf "  ${BOLD}%-26s${NORMAL}  %s\n" "pre-push-protection"     "Branch protection for main/master"
             echo
-            echo -e "${YELLOW}Examples:${ENDCOLOR}"
-            echo -e "  gitb hook                      # Show interactive action menu"
-            echo -e "  gitb hook list                 # List all hooks"
-            echo -e "  gitb hook create               # Interactive hook creation"
-            echo -e "  gitb hook create pre-commit    # Create specific hook type"
-            echo -e "  gitb hook edit                 # Interactive hook selection"
-            echo -e "  gitb hook select               # Browse hook types interactively"
-            echo -e "  gitb hook test                 # Interactive hook testing"
-            echo -e "  gitb hook remove               # Interactive removal - single or all hooks"
-            echo -e "  gitb hook install              # Install sample hooks"
+            echo -e "${YELLOW}Examples${ENDCOLOR}"
+            echo -e "  ${GREEN}gitb hook${ENDCOLOR}                       Open the interactive action menu"
+            echo -e "  ${GREEN}gitb hook list${ENDCOLOR}                  List installed hooks"
+            echo -e "  ${GREEN}gitb hook create pre-commit${ENDCOLOR}     Create a pre-commit hook directly"
+            echo -e "  ${GREEN}gitb hook install${ENDCOLOR}               Install all sample hooks"
         ;;
         *)
             wrong_mode "hooks" "$mode"

@@ -8,7 +8,9 @@
 
 ### Use this function to push changes to origin
 ### It will exit if everyrhing is ok or there is a critical error, return if there is unpulled changes
-# $1: arguments
+# $@: extra args forwarded to `git push` (e.g. --force-with-lease). Pass as
+#     individual array elements; this avoids word-splitting bugs and makes it
+#     impossible for an empty/spaced arg to silently land as a phantom argument.
 # Using of global:
 #     * current_branch
 #     * main_branch
@@ -17,7 +19,7 @@
 #     * push_output
 #     * push_code
 function push {
-    push_output=$(git push $1 "${origin_name}" "${current_branch}" 2>&1)
+    push_output=$(git push "$@" "${origin_name}" "${current_branch}" 2>&1)
     push_code=$?
 
     if [ $push_code -eq 0 ] ; then
@@ -128,13 +130,13 @@ function push_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb push <mode>${ENDCOLOR}"
         echo
-        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Show unpushed commits and push the current branch (pulls first if needed)"
-        msg="$msg\n${BOLD}yes${ENDCOLOR}_y_Push without confirmation"
-        msg="$msg\n${BOLD}force${ENDCOLOR}_f_Push with ${RED}--force${ENDCOLOR} (overwrites remote history)"
-        msg="$msg\n${BOLD}list${ENDCOLOR}_log|l_Show unpushed commits without pushing"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local PAD=16
+        print_help_header $PAD
+        print_help_row $PAD "<empty>"  ""       "Show unpushed commits and push the current branch (pulls first if needed)"
+        print_help_row $PAD "yes"      "y"      "Push without confirmation"
+        print_help_row $PAD "force"    "f"      "Push with ${RED}--force-with-lease${ENDCOLOR} (overwrites remote unless someone else has pushed first)"
+        print_help_row $PAD "list"     "log, l" "Show unpushed commits without pushing"
+        print_help_row $PAD "help"     "h"      "Show this help"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb push${ENDCOLOR}         Show unpushed commits, then ask before pushing"
@@ -174,8 +176,15 @@ function push_script {
 
     echo
 
+    # `--force-with-lease` refuses to clobber commits that landed on the remote
+    # since our last fetch — strictly safer than a bare `--force`. Users who
+    # genuinely want to overwrite something newer can run `git push --force`
+    # directly; we never expose the unconditional form here.
+    force_args=()
+    force_label=""
     if [ -n "${force}" ]; then
-        force_arg=" --force"
+        force_args=(--force-with-lease)
+        force_label=" --force-with-lease"
     fi
 
     ### If not in fast mode - ask if user wants to push
@@ -186,7 +195,7 @@ function push_script {
         if [ "${current_branch}" == "${main_branch}" ]; then
             echo -e "${RED}⚠  You are about to push directly to the default branch ${YELLOW}${main_branch}${RED}.${ENDCOLOR}"
         fi
-        echo -e "Do you want to push${RED}${force_arg}${ENDCOLOR} these commits to ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} (y/n)?"
+        echo -e "Do you want to push${RED}${force_label}${ENDCOLOR} these commits to ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} (y/n)?"
         yes_no_choice "Pushing..."
     else
         echo -e "${YELLOW}Pushing...${ENDCOLOR}"
@@ -195,7 +204,7 @@ function push_script {
 
 
     ### Pushing
-    push $force_arg
+    push "${force_args[@]}"
 
 
     ### Get push error - there is unpulled changes
@@ -216,5 +225,5 @@ function push_script {
     echo
     echo -e "${YELLOW}Pushing...${ENDCOLOR}"
     echo
-    push $force_arg
+    push "${force_args[@]}"
 }

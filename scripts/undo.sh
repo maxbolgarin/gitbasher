@@ -45,14 +45,14 @@ function undo_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb undo <mode>${ENDCOLOR}"
         echo
-        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_commit|c_Undo the last commit ${BLUE}(${YELLOW}git reset --soft HEAD~1${BLUE})${ENDCOLOR}; keeps changes staged"
-        msg="$msg\n${BOLD}amend${ENDCOLOR}_a_Undo the last amend, restoring the previous commit via reflog"
-        msg="$msg\n${BOLD}merge${ENDCOLOR}_m_Undo the last merge ${BLUE}(${YELLOW}git merge --abort${BLUE} or ${YELLOW}git reset --merge ORIG_HEAD${BLUE})${ENDCOLOR}"
-        msg="$msg\n${BOLD}rebase${ENDCOLOR}_r_Undo the last rebase ${BLUE}(${YELLOW}git rebase --abort${BLUE} or ${YELLOW}git reset --hard ORIG_HEAD${BLUE})${ENDCOLOR}"
-        msg="$msg\n${BOLD}stash${ENDCOLOR}_s_Re-stash changes from the last ${BLUE}stash pop${ENDCOLOR}"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local PAD=22
+        print_help_header $PAD
+        print_help_row $PAD "<empty>" "commit, c" "Undo the last commit, keep its changes staged"
+        print_help_row $PAD "amend"   "a"         "Undo the last amend, restoring the previous commit via reflog"
+        print_help_row $PAD "merge"   "m"         "Abort an in-progress merge, or roll back the last completed merge"
+        print_help_row $PAD "rebase"  "r"         "Abort an in-progress rebase, or roll back the last completed rebase"
+        print_help_row $PAD "stash"   "s"         "Re-stash changes from the last ${BLUE}stash pop${ENDCOLOR}"
+        print_help_row $PAD "help"    "h"         "Show this help"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb undo${ENDCOLOR}          Undo the last commit, keep its changes staged"

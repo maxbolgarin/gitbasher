@@ -104,6 +104,17 @@ function validate_git_url {
 }
 
 
+# GITBASHER_SKIP_INIT_QUERIES — internal, test-only. Set by the bats helper
+# `source_gitbasher_lite` (tests/setup_suite.bash) so that pure string-helper
+# tests (sanitization, URL validation, keyboard handling) can source the
+# helper functions above without paying the ~150ms tax of probing git config
+# / remotes / branches. Not a user-facing knob; values other than empty are
+# treated as "skip", but no public guarantee is made about specific values.
+if [ -n "$GITBASHER_SKIP_INIT_QUERIES" ]; then
+    return 0
+fi
+
+
 ### Branches
 current_branch=$(git branch --show-current)
 
@@ -183,6 +194,19 @@ sep=$(get_config_value gitbasher.sep "-")
 editor=$(get_config_value core.editor "vi")
 ticket_name=$(get_config_value gitbasher.ticket "")
 scopes=$(get_config_value gitbasher.scopes "")
+
+# Re-validate scopes at the read boundary. `gitb cfg scopes` validates inputs
+# at write time, but a user can also `git config gitbasher.scopes "..."`
+# directly and bypass that. Anything that ends up here flows into AI prompts,
+# so we silently drop invalid values rather than risk prompt injection or
+# corrupted scope tags in commit messages.
+if [ -n "$scopes" ]; then
+    if ! validate_scope_list "$scopes" >/dev/null 2>&1; then
+        scopes=""
+    else
+        scopes="$validated_scopes"
+    fi
+fi
 
 
 ### Is this is a first run of gitbasher in this project?

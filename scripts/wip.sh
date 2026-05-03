@@ -153,7 +153,10 @@ function wip_push_stash_backup {
     remote_branch="$(wip_remote_branch)"
     echo -e "${YELLOW}Pushing WIP backup to ${origin_name}/${remote_branch}...${ENDCOLOR}"
     local push_output push_code
-    push_output=$(git push --force "${origin_name}" "stash@{0}:refs/heads/${remote_branch}" 2>&1)
+    # --force-with-lease refuses to clobber a backup branch someone else may
+    # have pushed; falls back to creating it on first run. Strictly safer than
+    # bare --force without changing the wip flow's intent.
+    push_output=$(git push --force-with-lease "${origin_name}" "stash@{0}:refs/heads/${remote_branch}" 2>&1)
     push_code=$?
     if [ $push_code -eq 0 ]; then
         echo -e "${GREEN}✓ Pushed WIP backup to ${origin_name}/${remote_branch}${ENDCOLOR}"
@@ -173,7 +176,9 @@ function wip_push_branch {
     fi
     echo -e "${YELLOW}Pushing ${branch} to ${origin_name}...${ENDCOLOR}"
     local push_output push_code
-    push_output=$(git push --force --set-upstream "${origin_name}" "${branch}" 2>&1)
+    # See note in wip_push_stash_backup — prefer --force-with-lease so we
+    # don't silently overwrite a wip branch updated from another machine.
+    push_output=$(git push --force-with-lease --set-upstream "${origin_name}" "${branch}" 2>&1)
     push_code=$?
     if [ $push_code -eq 0 ]; then
         echo -e "${GREEN}✓ Pushed to ${origin_name}/${branch}${ENDCOLOR}"
@@ -695,23 +700,23 @@ function wip_help {
     echo
     echo -e "usage: ${YELLOW}gitb wip <up|down> [stash|branch|worktree] [nopush]${ENDCOLOR}"
     echo
-    msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-    msg="$msg\n${BOLD}up${ENDCOLOR}_u_Save WIP (prompts for backend)"
-    msg="$msg\n${BOLD}up stash${ENDCOLOR}_u s_Save as a stash with optional remote backup branch"
-    msg="$msg\n${BOLD}up branch${ENDCOLOR}_u b_Commit changes onto a wip/<branch> branch (with optional push)"
-    msg="$msg\n${BOLD}up worktree${ENDCOLOR}_u w|wt_Move WIP into a sibling worktree on wip/<branch>"
-    msg="$msg\n${BOLD}up <mode> nopush${ENDCOLOR}_np|n_Skip the push step (works with any backend)"
-    msg="$msg\n${BOLD}down${ENDCOLOR}_d_Restore WIP (auto-detects backend, prompts if ambiguous)"
-    msg="$msg\n${BOLD}down stash${ENDCOLOR}_d s_Restore from the stash"
-    msg="$msg\n${BOLD}down branch${ENDCOLOR}_d b_Restore from the wip/<branch> branch"
-    msg="$msg\n${BOLD}down worktree${ENDCOLOR}_d w|wt_Restore from the wip/<branch> worktree"
-    msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-    echo -e "$(echo -e "$msg" | column -ts'_')"
+    local PAD=26
+    print_help_header $PAD
+    print_help_row $PAD "up"                "u"      "Save WIP (prompts for backend)"
+    print_help_row $PAD "up stash"           "u s"    "Save as a stash with optional remote backup branch"
+    print_help_row $PAD "up branch"          "u b"    "Commit changes onto a wip/<branch> branch (with optional push)"
+    print_help_row $PAD "up worktree"        "u w, wt" "Move WIP into a sibling worktree on wip/<branch>"
+    print_help_row $PAD "up <mode> nopush"   "np, n"  "Skip the push step (works with any backend)"
+    print_help_row $PAD "down"               "d"      "Restore WIP (auto-detects backend, prompts if ambiguous)"
+    print_help_row $PAD "down stash"         "d s"    "Restore from the stash"
+    print_help_row $PAD "down branch"        "d b"    "Restore from the wip/<branch> branch"
+    print_help_row $PAD "down worktree"      "d w, wt" "Restore from the wip/<branch> worktree"
+    print_help_row $PAD "help"               "h"      "Show this help"
     echo
     echo -e "${YELLOW}Backends${ENDCOLOR}"
-    echo -e "  ${BOLD}stash${NORMAL}    Quick & local; pushes ${YELLOW}${origin_name:-origin}/wip/<branch>${ENDCOLOR} as a backup"
-    echo -e "  ${BOLD}branch${NORMAL}   Commits changes onto a ${YELLOW}wip/<branch>${ENDCOLOR} branch; current branch becomes clean"
-    echo -e "  ${BOLD}worktree${NORMAL} Like branch, but WIP lives in a ${YELLOW}sibling worktree${ENDCOLOR} so you can keep working on it"
+    printf "  ${BOLD}%-10s${NORMAL}  %b\n" "stash"    "Quick & local; pushes ${YELLOW}${origin_name:-origin}/wip/<branch>${ENDCOLOR} as a backup"
+    printf "  ${BOLD}%-10s${NORMAL}  %b\n" "branch"   "Commits changes onto a ${YELLOW}wip/<branch>${ENDCOLOR} branch; current branch becomes clean"
+    printf "  ${BOLD}%-10s${NORMAL}  %b\n" "worktree" "Like branch, but WIP lives in a ${YELLOW}sibling worktree${ENDCOLOR} so you can keep working on it"
     echo
     echo -e "${YELLOW}Examples${ENDCOLOR}"
     echo -e "  ${GREEN}gitb wip up${ENDCOLOR}              Pick a backend and save current changes"

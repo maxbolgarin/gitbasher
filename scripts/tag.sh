@@ -173,19 +173,19 @@ function tag_script {
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb tag <mode>${ENDCOLOR}"
         echo
-        msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Create a new tag on the last commit"
-        msg="$msg\n${BOLD}annotated${ENDCOLOR}_a|an_Create an annotated tag on the last commit"
-        msg="$msg\n${BOLD}commit${ENDCOLOR}_c|co|cm_Create a tag on a selected commit"
-        msg="$msg\n${BOLD}all${ENDCOLOR}_al_Create an annotated tag on a selected commit"
-        msg="$msg\n${BOLD}push${ENDCOLOR}_ps|ph|p_Pick a local tag and push it to remote"
-        msg="$msg\n${BOLD}push-all${ENDCOLOR}_pa_Push every local tag to remote"
-        msg="$msg\n${BOLD}delete${ENDCOLOR}_del|d_Pick a tag and delete it"
-        msg="$msg\n${BOLD}delete-all${ENDCOLOR}_da_Delete all local tags"
-        msg="$msg\n${BOLD}list${ENDCOLOR}_log|l_List local tags"
-        msg="$msg\n${BOLD}remote${ENDCOLOR}_fetch|r|re_Fetch tags from remote and list them"
-        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
-        echo -e "$(echo -e "$msg" | column -ts'_')"
+        local PAD=22
+        print_help_header $PAD
+        print_help_row $PAD "<empty>"     ""              "Create a new tag on the last commit"
+        print_help_row $PAD "annotated"   "a, an"         "Create an annotated tag on the last commit"
+        print_help_row $PAD "commit"      "c, co, cm"     "Create a tag on a selected commit"
+        print_help_row $PAD "all"         "al"            "Create an annotated tag on a selected commit"
+        print_help_row $PAD "push"        "ps, ph, p"     "Pick a local tag and push it to remote"
+        print_help_row $PAD "push-all"    "pa"            "Push every local tag to remote"
+        print_help_row $PAD "delete"      "del, d"        "Pick a tag and delete it"
+        print_help_row $PAD "delete-all"  "da"            "Delete all local tags"
+        print_help_row $PAD "list"        "log, l"        "List local tags"
+        print_help_row $PAD "remote"      "fetch, r, re"  "Fetch tags from remote and list them"
+        print_help_row $PAD "help"        "h"             "Show this help"
         echo
         echo -e "${YELLOW}Examples${ENDCOLOR}"
         echo -e "  ${GREEN}gitb tag${ENDCOLOR}          Tag the current commit (semver-incrementing helper)"
@@ -370,20 +370,27 @@ function tag_script {
 
     ### If annotated - enter tag message
     if [ -n "$annotated" ]; then
-        tag_file=".tagmsg__"
-        touch $tag_file
+        # mktemp in $TMPDIR with a random suffix prevents two concurrent
+        # `gitb tag` runs from clobbering each other's draft, and keeps the
+        # draft out of the user's working tree (the previous `.tagmsg__` lived
+        # in CWD and was cleaned up via `find . -name "$tag_file*" -delete`,
+        # which would also nuke any unrelated file whose name happened to
+        # start with `.tagmsg__`).
+        tag_file=$(mktemp "${TMPDIR:-/tmp}/gitb-tagmsg.XXXXXX")
+        chmod 600 "$tag_file" 2>/dev/null || true
+        trap 'rm -f "$tag_file"' EXIT INT TERM
 
         echo """
 ####
 #### Write some words about the new tag '${tag_name}'
 #### [$current_branch ${commit_hash::7}] ${commit_message}
-#### 
+####
 #### You can place changelog here if this tag for a new release
-""" >> $tag_file
+""" >> "$tag_file"
 
         while [ true ]; do
-            $editor $tag_file
-            tag_message=$(cat $tag_file | sed '/^#/d')
+            $editor "$tag_file"
+            tag_message=$(sed '/^#/d' "$tag_file")
 
             if [ -n "$tag_message" ]; then
                 break
@@ -393,12 +400,12 @@ function tag_script {
             echo
             read -n 1 -p "Try again? (y/n) " -s -e choice
             if ! is_yes "$choice"; then
-                find . -name "$tag_file*" -delete
+                rm -f "$tag_file"
                 exit
-            fi    
+            fi
         done
 
-        find . -name "$tag_file*" -delete
+        rm -f "$tag_file"
     fi
 
 

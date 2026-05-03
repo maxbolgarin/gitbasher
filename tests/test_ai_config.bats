@@ -7,6 +7,7 @@
 load setup_suite
 
 setup() {
+    export GIT_CONFIG_GLOBAL=/dev/null
     setup_test_repo
     source_gitbasher
     source "${GITBASHER_ROOT}/scripts/ai.sh"
@@ -129,6 +130,22 @@ teardown() {
     set_ai_diff_max_chars "30000" >/dev/null
     val=$(get_ai_diff_max_chars)
     [ "$val" = "30000" ]
+}
+
+@test "generate_ai_commit_message includes rejected messages when regenerating" {
+    create_test_file "feature.txt" "new feature"
+    git add feature.txt
+
+    call_ai_api() {
+        printf '%s' "$2"
+    }
+
+    run generate_ai_commit_message "simple" "" "" "" "refactor: reuse previous subject"
+
+    assert_success
+    [[ "$output" == *"<rejected_commit_messages>"* ]]
+    [[ "$output" == *"refactor: reuse previous subject"* ]]
+    [[ "$output" == *"Do not repeat"* ]]
 }
 
 @test "get_ai_commit_history_limit: returns default of 10" {

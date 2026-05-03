@@ -318,7 +318,7 @@ gitb b -             # back to previous branch (like cd -)
 |---------|---------|-------------|
 | [`commit`](#gitb-commit) | `c` `co` `com` | Create commits (interactive, fast, AI, split, fixup, amend, revert, …) |
 | [`push`](#gitb-push) | `p` `ps` `pus` | Push with conflict handling, force, or list-only |
-| [`pull`](#gitb-pull) | `pu` `pl` `pul` | Smart pull: rebase / merge / ff / fetch-only / interactive |
+| [`pull`](#gitb-pull) | `pu` `pl` `pul` | Smart pull: rebase / merge / ff / fetch-only / interactive / dry-run |
 | [`branch`](#gitb-branch) | `b` `br` `bran` | Switch / list / create / delete / recent / gone / checkout-tag |
 | [`tag`](#gitb-tag) | `t` `tg` | Create, push, list, delete tags (lightweight & annotated) |
 | [`merge`](#gitb-merge) | `m` `me` | Merge into current, into main, or from remote |
@@ -398,6 +398,7 @@ gitb b -             # back to previous branch (like cd -)
 | `merge` | `m` | Always create merge commit |
 | `rebase` | `r` | Rebase current onto remote |
 | `interactive` | `ri` `rs` | Interactive rebase + autosquash |
+| `dry` | `d` `dr` | Preview incoming commits without modifying local refs |
 
 ### `gitb branch`
 
@@ -471,6 +472,7 @@ Fetch the default branch and update your current branch. Useful mid-feature.
 | `push` | `p` | …then force-push |
 | `merge` | `m` | Use merge instead of rebase |
 | `mergep` | `mp` `pm` | Merge + push |
+| `dry` | `d` `dr` | Preview commits sync would bring in from main without modifying local refs |
 
 ### `gitb wip`
 

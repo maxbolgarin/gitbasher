@@ -176,15 +176,32 @@ function set_ticket {
 function configure_ai_key {
     echo -e "${YELLOW}Enter AI API key${ENDCOLOR}"
     echo
-    
+
+    local provider=$(get_ai_provider)
+
+    # Local providers don't take a key — short-circuit instead of prompting for nothing.
+    if [ "$provider" = "ollama" ]; then
+        echo -e "${YELLOW}Provider '${provider}' does not require an API key.${ENDCOLOR}"
+        echo -e "Switch providers with ${BLUE}gitb cfg provider${ENDCOLOR} if you want to enter one."
+        exit
+    fi
+
     ai_api_key=$(get_ai_api_key)
     if [ -z "$ai_api_key" ]; then
         echo -e "${YELLOW}AI API key is not set${ENDCOLOR}"
     else
         echo -e "AI API key is ${GREEN}configured${ENDCOLOR}: ${BLUE}$(mask_api_key "$ai_api_key")${ENDCOLOR}"
     fi
-    echo -e "Enter your ${YELLOW}OpenRouter API key${ENDCOLOR} to enable AI commit message generation"
-    echo -e "Get your API key from: ${BLUE}https://openrouter.ai/keys${ENDCOLOR}"
+    case "$provider" in
+        openai)
+            echo -e "Enter your ${YELLOW}OpenAI API key${ENDCOLOR} to enable AI commit message generation"
+            echo -e "Get your API key from: ${BLUE}https://platform.openai.com/api-keys${ENDCOLOR}"
+            ;;
+        *)
+            echo -e "Enter your ${YELLOW}OpenRouter API key${ENDCOLOR} to enable AI commit message generation"
+            echo -e "Get your API key from: ${BLUE}https://openrouter.ai/keys${ENDCOLOR}"
+            ;;
+    esac
     echo
     echo -e "${YELLOW}Security Note:${ENDCOLOR} For better security, consider using environment variable:"
     echo -e "  ${BLUE}export GITB_AI_API_KEY='your-api-key'${ENDCOLOR}"
@@ -213,7 +230,7 @@ function configure_ai_key {
 
     # Basic validation - check for reasonable API key format
     if [[ ! "$ai_key_input" =~ ^[a-zA-Z0-9._-]{20,}$ ]]; then
-        echo -e "${RED}Warning: API key format doesn't look like a valid OpenRouter key${ENDCOLOR}" >&2
+        echo -e "${RED}Warning: API key format doesn't look like a valid ${provider} key${ENDCOLOR}" >&2
         read -n 1 -p "Continue anyway? (y/n) " -s choice
         echo
         if ! is_yes "$choice"; then
@@ -230,6 +247,79 @@ function configure_ai_key {
     echo -e "${YELLOW}   Consider using environment variable GITB_AI_API_KEY instead for better security${ENDCOLOR}"
     yes_no_choice "\nSet AI API key globally" "true"
     ai_api_key=$(set_config_value gitbasher.ai-api-key "$ai_key_input" "true")
+}
+
+
+### Function asks user to choose the AI provider.
+# Provider determines which API endpoint, auth scheme, and per-task default
+# models are used. Custom OpenAI-compatible gateways can be reached by leaving
+# the provider as openai/openrouter and overriding gitbasher.ai-base-url.
+function configure_ai_provider {
+    echo -e "${YELLOW}Choose AI Provider${ENDCOLOR}"
+    echo
+
+    local current_provider=$(get_ai_provider)
+    local current_base_url=$(get_ai_base_url)
+
+    echo -e "Current provider: ${GREEN}${current_provider}${ENDCOLOR}"
+    if [ -n "$current_base_url" ]; then
+        echo -e "Custom base URL: ${GREEN}${current_base_url}${ENDCOLOR}"
+    fi
+    echo
+
+    echo -e "Options:"
+    echo -e "  1. ${BLUE}openrouter${ENDCOLOR}  Aggregator with hundreds of models — needs an API key"
+    echo -e "  2. ${BLUE}openai${ENDCOLOR}      OpenAI direct (GPT-5 family) — needs an API key"
+    echo -e "  3. ${BLUE}ollama${ENDCOLOR}      Local models via http://localhost:11434 — no API key required"
+    echo
+    echo -e "Press Enter to keep the current provider, or enter 0 to reset to default (${AI_DEFAULT_PROVIDER})"
+
+    read -p "Choice (1-3): " choice
+
+    if [ "$choice" == "" ]; then
+        exit
+    fi
+
+    if [ "$choice" == "0" ]; then
+        git config --unset gitbasher.ai-provider 2>/dev/null
+        git config --global --unset gitbasher.ai-provider 2>/dev/null
+        echo
+        echo -e "${GREEN}Provider reset to default (${AI_DEFAULT_PROVIDER}).${ENDCOLOR}"
+        exit
+    fi
+
+    local new_provider
+    case "$choice" in
+        1) new_provider="openrouter" ;;
+        2) new_provider="openai" ;;
+        3) new_provider="ollama" ;;
+        *)
+            echo -e "${RED}Invalid choice${ENDCOLOR}" >&2
+            exit 1
+            ;;
+    esac
+
+    set_ai_provider "$new_provider"
+    echo -e "${GREEN}AI provider set to '${new_provider}' for '${project_name}' repo${ENDCOLOR}"
+
+    # Provider-specific follow-up hints so users aren't left guessing.
+    case "$new_provider" in
+        openai)
+            echo -e "Next: set your key with ${BLUE}gitb cfg ai${ENDCOLOR} (https://platform.openai.com/api-keys)"
+            ;;
+        openrouter)
+            echo -e "Next: set your key with ${BLUE}gitb cfg ai${ENDCOLOR} (https://openrouter.ai/keys)"
+            ;;
+        ollama)
+            echo -e "Make sure the Ollama daemon is running (${BLUE}ollama serve${ENDCOLOR}) and a model is pulled (${BLUE}ollama pull llama3.1${ENDCOLOR})."
+            echo -e "Pick a different model with ${BLUE}gitb cfg model${ENDCOLOR} if you have something else installed."
+            ;;
+    esac
+    echo
+
+    echo -e "Do you want to set this provider ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+    yes_no_choice "\nSet AI provider globally" "true"
+    set_config_value gitbasher.ai-provider "$new_provider" "true"
 }
 
 
@@ -253,12 +343,27 @@ function configure_ai_model {
     echo -e "Per-task overrides can be set directly with git config:"
     echo -e "  ${BLUE}git config gitbasher.ai-model-simple <model_id>${ENDCOLOR}    (and -subject / -full / -grouping)"
     echo
-    echo -e "Popular models:"
-    echo -e "  • ${BLUE}openrouter/auto${ENDCOLOR} - Auto-select best available model"
-    echo -e "  • ${BLUE}google/gemini-3.1-flash-lite-preview${ENDCOLOR} - Fastest, cheapest"
-    echo -e "  • ${BLUE}google/gemini-3-flash-preview${ENDCOLOR} - Better body prose"
-    echo -e "  • ${BLUE}anthropic/claude-haiku-4.5${ENDCOLOR} - Strict instruction following"
-    echo -e "  • ${BLUE}openai/gpt-5-mini${ENDCOLOR} - Strong reasoning, low cost"
+    echo -e "Popular models for provider '${GREEN}$(get_ai_provider)${ENDCOLOR}':"
+    case "$(get_ai_provider)" in
+        openai)
+            echo -e "  • ${BLUE}gpt-5-mini${ENDCOLOR} - Cheap+fast, strong format compliance"
+            echo -e "  • ${BLUE}gpt-5${ENDCOLOR} - Best reasoning, higher cost"
+            echo -e "  • ${BLUE}gpt-4.1-mini${ENDCOLOR} - Older fast tier, very cheap"
+            ;;
+        ollama)
+            echo -e "  • ${BLUE}llama3.1${ENDCOLOR} - General-purpose 8B default"
+            echo -e "  • ${BLUE}qwen2.5-coder${ENDCOLOR} - Code-focused"
+            echo -e "  • ${BLUE}mistral${ENDCOLOR} - Lightweight alternative"
+            echo -e "  Run ${BLUE}ollama list${ENDCOLOR} to see what you have pulled locally."
+            ;;
+        *)
+            echo -e "  • ${BLUE}openrouter/auto${ENDCOLOR} - Auto-select best available model"
+            echo -e "  • ${BLUE}google/gemini-3.1-flash-lite-preview${ENDCOLOR} - Fastest, cheapest"
+            echo -e "  • ${BLUE}google/gemini-3-flash-preview${ENDCOLOR} - Better body prose"
+            echo -e "  • ${BLUE}anthropic/claude-haiku-4.5${ENDCOLOR} - Strict instruction following"
+            echo -e "  • ${BLUE}openai/gpt-5-mini${ENDCOLOR} - Strong reasoning, low cost"
+            ;;
+    esac
     echo
     echo -e "Press Enter to exit without changes or enter 0 to clear the override (back to per-task defaults)"
 
@@ -732,6 +837,7 @@ function config_script {
         ticket|jira|ti|t)     set_ticket_cfg="true";;
         scopes|scope|sc|s)    set_scopes_cfg="true";;
         ai|llm|key)           set_ai_cfg="true";;
+        provider|prov)        set_ai_provider_cfg="true";;
         model|m)              set_ai_model_cfg="true";;
         proxy|prx|p)          set_proxy_cfg="true";;
         history|hist)         set_ai_history_cfg="true";;
@@ -756,6 +862,8 @@ function config_script {
         header="$header SCOPES LIST"
     elif [ -n "${set_ai_cfg}" ]; then
         header="$header AI API KEY"
+    elif [ -n "${set_ai_provider_cfg}" ]; then
+        header="$header AI PROVIDER"
     elif [ -n "${set_ai_model_cfg}" ]; then
         header="$header AI MODEL"
     elif [ -n "${set_proxy_cfg}" ]; then
@@ -808,6 +916,11 @@ function config_script {
         exit
     fi
 
+    if [ "$set_ai_provider_cfg" == "true" ]; then
+        configure_ai_provider
+        exit
+    fi
+
     if [ "$set_ai_model_cfg" == "true" ]; then
         configure_ai_model
         exit
@@ -845,7 +958,8 @@ function config_script {
         msg="$msg\n${BOLD}ticket${ENDCOLOR}_ti|t|jira_Set ticket prefix to help with commit/branch building"
         msg="$msg\n${BOLD}scopes${ENDCOLOR}_sc_Set a list of scopes to help with commit building"
         msg="$msg\n${BOLD}ai${ENDCOLOR}_llm|key_Set AI API key for commit message generation"
-        msg="$msg\n${BOLD}model${ENDCOLOR}_m_Set AI model for OpenRouter"
+        msg="$msg\n${BOLD}provider${ENDCOLOR}_prov_Choose AI provider (openrouter, openai, ollama)"
+        msg="$msg\n${BOLD}model${ENDCOLOR}_m_Set AI model for the active provider"
         msg="$msg\n${BOLD}proxy${ENDCOLOR}_prx|p_Set HTTP proxy for AI requests (bypass geo-restrictions)"
         msg="$msg\n${BOLD}history${ENDCOLOR}_hist_Set number of recent commits to include in AI prompts"
         msg="$msg\n${BOLD}diff${ENDCOLOR}_payload_Set diff payload size (lines and char cap) sent to AI"

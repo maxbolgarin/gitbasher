@@ -308,7 +308,7 @@ ${heuristic_hint}
 Output TSV (scope<TAB>file) for every staged file. No prose."
 
     local ai_response
-    ai_response=$(call_openrouter_api "$system_prompt" "$user_prompt" "$AI_MAX_TOKENS_FULL" "$(get_ai_model_for grouping)" 2>/dev/null)
+    ai_response=$(call_ai_api "$system_prompt" "$user_prompt" "$AI_MAX_TOKENS_FULL" "$(get_ai_model_for grouping)" 2>/dev/null)
     if [ $? -ne 0 ] || [ -z "$ai_response" ]; then
         return 1
     fi

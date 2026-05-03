@@ -802,12 +802,20 @@ function print_configuration {
     if [ "$scopes" != "" ]; then
         echo -e "\tscopes:\t\t${YELLOW}$scopes${ENDCOLOR}"
     fi
+    local ai_provider=$(get_ai_provider)
+    echo -e "\tAI provider:\t${GREEN}$ai_provider${ENDCOLOR}"
+    local ai_base_url=$(get_ai_base_url)
+    if [ -n "$ai_base_url" ]; then
+        echo -e "\tAI base URL:\t${GREEN}$ai_base_url${ENDCOLOR}"
+    fi
     local ai_key=$(get_ai_api_key)
     if [ -n "$ai_key" ]; then
         ai_key=$(mask_api_key "$ai_key")
         echo -e "\tAI key:\t\t${GREEN}$ai_key${ENDCOLOR}"
-    else
+    elif ai_provider_requires_api_key; then
         echo -e "\tAI key:\t\t${RED}not set${ENDCOLOR}"
+    else
+        echo -e "\tAI key:\t\t${GRAY}not required for $ai_provider${ENDCOLOR}"
     fi
     local ai_model=$(get_ai_model)
     if [ -n "$ai_model" ]; then

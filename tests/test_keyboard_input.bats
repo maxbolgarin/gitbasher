@@ -213,3 +213,63 @@ setup() {
     [ "${lines[0]}" = "3" ]
     [ "${lines[1]}" = "1" ]
 }
+
+@test "read_editable_input: Esc submits empty input" {
+    run python3 - <<'PY'
+import os
+import pty
+import select
+import subprocess
+import sys
+import time
+
+root = os.environ["GITBASHER_ROOT"]
+script = f'''
+set -e
+source "{root}/scripts/init.sh"
+source "{root}/scripts/common.sh"
+read_editable_input value "Prompt: " "prefilled"
+printf "\\n<%s>\\n" "$value"
+'''
+
+master, slave = pty.openpty()
+proc = subprocess.Popen(
+    ["bash", "-lc", script],
+    stdin=slave,
+    stdout=slave,
+    stderr=slave,
+    close_fds=True,
+)
+os.close(slave)
+
+output = b""
+sent_escape = False
+deadline = time.time() + 5
+
+while time.time() < deadline:
+    ready, _, _ = select.select([master], [], [], 0.05)
+    if ready:
+        try:
+            chunk = os.read(master, 1024)
+        except OSError:
+            break
+        if not chunk:
+            break
+        output += chunk
+        if b"Prompt:" in output and not sent_escape:
+            os.write(master, b"\x1b")
+            sent_escape = True
+
+    if proc.poll() is not None:
+        break
+
+if proc.poll() is None:
+    proc.kill()
+    proc.wait()
+
+sys.stdout.write(output.decode("utf-8", errors="replace"))
+sys.exit(proc.returncode)
+PY
+    assert_success
+    [[ "$output" == *"<>"* ]]
+}

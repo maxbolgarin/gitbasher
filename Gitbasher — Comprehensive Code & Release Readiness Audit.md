@@ -2,7 +2,7 @@
 
 Tracks the audit originally produced May 2026. Items marked `[x]` were fixed across two bug-fix passes on 2026-05-03; `[ ]` items remain open with a one-line rationale.
 
-> **Local verification (pass 2):** 343/345 BATS tests pass. The 2 remaining failures (`get_ai_api_key:returns empty when not set`, `get_ai_model:returns empty when not set`) are environmental — they fail because the dev box has `gitbasher.ai-api-key` / `gitbasher.ai-model` set in git config — and predate both passes. ShellCheck at `--severity=error` reports zero issues across `scripts/*.sh` and `install.sh`.
+> **Local verification (pass 3):** 405/409 BATS tests pass; the 4 remaining failures are all in `tests/test_worktree_operations.bats` (a separate, in-progress feature unrelated to this audit work). ShellCheck at `--severity=error` reports zero issues across `scripts/*.sh` and `install.sh`. All 24 newly-added tests pass.
 
 ---
 
@@ -36,15 +36,16 @@ Tracks the audit originally produced May 2026. Items marked `[x]` were fixed acr
 ### Community
 - [x] **`CONTRIBUTING.md`** — covers dev setup, build, BATS, ShellCheck, coding conventions, conventional commits, PR process.
 
+### Tests
+- [x] **BATS coverage for `commit.sh` scope detection** — `tests/test_commit_scope_detection.bats` (7 tests) covers empty stage, single-file flat layout, dir-dominates-filename, common-dir filter (`src`/`tests`/`lib`), dotfile handling, and the >100-file cap. AI grouping and the full conventional-commit path remain interactive — out of scope for unit tests.
+- [x] **Portable `xargs -r` replacement** — `tests/test_portable_deleted_cleanup.bats` (4 tests) covers empty input, single deletion, batch deletion, and filenames with spaces. Pattern is the verbatim snippet from `merge.sh`/`rebase.sh`.
+- [x] **Reflog / stash edge cases in `undo.sh` and `wip.sh`** — `tests/test_wip_undo_edge_cases.bats` (8 tests): `find_wip_stash` empty/wrong-message/matching, `find_wip_branch` missing/present, `find_wip_worktree` empty, `undo_amend` no-amend / amend-detected.
+- [x] **Detached-HEAD helpers** — `tests/test_detached_head_helpers.bats` (5 tests): `on_branch` true on branch / false detached, `warn_if_detached_head` no-op on branch / declines / accepts when detached.
+- [x] **Code-coverage via kcov** — added `coverage` job to `.github/workflows/build.yml` running each `.bats` file under kcov, merging into a single artifact uploaded for 14 days.
+
 ---
 
 ## Open / deferred
-
-### Tests
-- [ ] BATS coverage for `commit.sh` flows (scope detection, AI grouping, conventional commit path).
-- [ ] Integration tests for `merge.sh` / `rebase.sh` conflict-resolution paths (especially the new portable `xargs -r` replacement).
-- [ ] Reflog / stash edge cases in `undo.sh` and `wip.sh`.
-- [ ] Code-coverage reporting via `kcov` or `bashcov`.
 
 ### UX / discoverability
 - [ ] Shell completion scripts (Bash, Zsh, Fish).

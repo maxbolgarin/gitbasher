@@ -69,7 +69,7 @@ function rebase_script {
         current_local_commit=$(git rev-parse HEAD 2>/dev/null)
         
         # Get the remote commit hash for current branch
-        current_remote_commit=$(git ls-remote $origin_name refs/heads/$current_branch 2>/dev/null | cut -f1)
+        current_remote_commit=$(git ls-remote "$origin_name" "refs/heads/$current_branch" 2>/dev/null | cut -f1)
         
         if [ -z "$current_remote_commit" ]; then
             echo -e "${YELLOW}Remote branch ${origin_name}/${current_branch} not found - proceeding with local rebase${ENDCOLOR}"
@@ -200,11 +200,11 @@ function rebase_script {
         # Get the current local commit hash for the target branch
         local_commit=""
         if git show-ref --verify --quiet refs/heads/$new_base_branch; then
-            local_commit=$(git rev-parse refs/heads/$new_base_branch 2>/dev/null)
+            local_commit=$(git rev-parse "refs/heads/$new_base_branch" 2>/dev/null)
         fi
         
         # Get the remote commit hash for target branch
-        remote_commit=$(git ls-remote $origin_name refs/heads/$new_base_branch 2>/dev/null | cut -f1)
+        remote_commit=$(git ls-remote "$origin_name" "refs/heads/$new_base_branch" 2>/dev/null | cut -f1)
         
         if [ -z "$remote_commit" ]; then
             echo -e "${YELLOW}Remote branch ${origin_name}/${new_base_branch} not found - proceeding with local rebase${ENDCOLOR}"
@@ -626,8 +626,10 @@ function rebase_conflicts {
                         continue
                     elif [ "$choice_resolve" == "2" ]; then
                         echo -e "${YELLOW}Force accepting incoming changes...${ENDCOLOR}"
-                        # Force remove files that don't exist in theirs
-                        git ls-files --deleted | xargs -r git rm 2>/dev/null
+                        # Force remove files that don't exist in theirs (portable across GNU/BSD)
+                        mapfile -t _deleted < <(git ls-files --deleted)
+                        [ ${#_deleted[@]} -gt 0 ] && git rm -- "${_deleted[@]}" 2>/dev/null
+                        unset _deleted
                         git checkout --theirs . 2>/dev/null
                         git add .
                     elif [ "$choice_resolve" == "3" ]; then

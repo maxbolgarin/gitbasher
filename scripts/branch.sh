@@ -208,7 +208,7 @@ function branch_script {
 
     ### Run switch to main logic
     if [[ -n "${main}" ]]; then
-        switch ${main_branch}
+        switch "${main_branch}"
         exit
     fi
 
@@ -274,7 +274,7 @@ function branch_script {
         echo -e "${YELLOW}Checking out to tag ${selected_tag}...${ENDCOLOR}"
         echo
         
-        checkout_output=$(git checkout $selected_tag 2>&1)
+        checkout_output=$(git checkout "$selected_tag" 2>&1)
         checkout_code=$?
 
         if [ $checkout_code -eq 0 ]; then
@@ -299,7 +299,7 @@ function branch_script {
 
         echo
 
-        switch ${branch_name}
+        switch "${branch_name}"
         exit
 
 
@@ -311,7 +311,7 @@ function branch_script {
         fetch_output=$(git fetch 2>&1)
         check_code $? "$fetch_output" "fetch remote"
 
-        prune_output=$(git remote prune $origin_name 2>&1)
+        prune_output=$(git remote prune "$origin_name" 2>&1)
 
         echo -e "${YELLOW}Switch from '${current_branch}' to the remote branch${ENDCOLOR}"
         
@@ -319,7 +319,7 @@ function branch_script {
 
         echo
 
-        switch ${branch_name}
+        switch "${branch_name}"
         exit
 
 
@@ -379,7 +379,7 @@ function branch_script {
                         if is_yes "$delete_choice"; then
                             printf "y\n\n"
                             for branch in "${branches_to_delete[@]}"; do
-                                delete_output=$(git branch -D $branch 2>&1)
+                                delete_output=$(git branch -D "$branch" 2>&1)
                                 delete_code=$?
                                 if [ $delete_code -eq 0 ]; then
                                     echo -e "${GREEN}Branch '$branch' is deleted!${ENDCOLOR}"
@@ -435,7 +435,7 @@ function branch_script {
                     for index in "${!branches[@]}"
                     do
                         branch_to_delete="$(echo "${branches[index]}" | xargs)"
-                        delete_output=$(git branch -d $branch_to_delete 2>&1)
+                        delete_output=$(git branch -d "$branch_to_delete" 2>&1)
                         delete_code=$?
                         if [ $delete_code == 0 ]; then
                             echo -e "${GREEN}Branch '$branch_to_delete' is deleted!${ENDCOLOR}"
@@ -538,7 +538,7 @@ function branch_script {
 
         echo
 
-        delete_output=$(git branch -d $branch_name 2>&1)
+        delete_output=$(git branch -d "$branch_name" 2>&1)
         delete_code=$?
 
         if [ "$delete_code" == 0 ]; then
@@ -554,7 +554,7 @@ function branch_script {
                 read -n 1 -s choice
                 if is_yes "$choice"; then
                     printf "y\n\n"
-                    delete_output=$(git branch -D $branch_name 2>&1)
+                    delete_output=$(git branch -D "$branch_name" 2>&1)
                     delete_code=$?
                     if [ "$delete_code" != 0 ]; then
                         echo -e "${RED}Cannot delete branch '$branch_name'! Error message:${ENDCOLOR}"
@@ -576,7 +576,7 @@ function branch_script {
             exit
         fi
 
-        remote_check=$(git --no-pager log $origin_name/$branch_name..HEAD 2>&1)
+        remote_check=$(git --no-pager log "$origin_name/$branch_name..HEAD" 2>&1)
         if [[ $remote_check != *"unknown revision or path not in the working tree"* ]]; then
             echo
             echo -e "${YELLOW}Do you want to delete this branch in the remote?${ENDCOLOR}"
@@ -589,7 +589,7 @@ function branch_script {
                     printf "y\n\n"
                     echo -e "${YELLOW}Deleting...${ENDCOLOR}"
 
-                    push_output=$(git push $origin_name -d $branch_name 2>&1)
+                    push_output=$(git push "$origin_name" -d "$branch_name" 2>&1)
                     push_code=$?
 
                     echo
@@ -810,7 +810,7 @@ function branch_script {
 
 
     ### Create a new branch and switch to it
-    create_output=$(git switch -c $branch_name 2>&1)
+    create_output=$(git switch -c "$branch_name" 2>&1)
     create_code=$?
 
     echo

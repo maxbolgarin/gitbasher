@@ -446,6 +446,8 @@ function secure_curl_with_api_key {
 
     # Execute curl in a subshell to minimize API key exposure
     (
+        # Disable shell tracing inside the subshell so the API key cannot leak via `set -x` output
+        { set +x; } 2>/dev/null
         # Unset any potentially exported variables
         unset HISTFILE
 
@@ -1037,7 +1039,7 @@ function generate_ai_commit_message {
     local provided_scopes="$3"
     local commit_prefix="$4"
 
-    local staged_files=$(git diff --name-only --cached)
+    local staged_files=$(git -c core.quotePath=false diff --name-only --cached)
     if [ -z "$staged_files" ]; then
         echo -e "${RED}No staged files found${ENDCOLOR}" >&2
         return 1

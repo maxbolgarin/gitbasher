@@ -61,7 +61,7 @@ function merge_script {
         current_local_commit=$(git rev-parse HEAD 2>/dev/null)
         
         # Get the remote commit hash for current branch
-        current_remote_commit=$(git ls-remote $origin_name refs/heads/$current_branch 2>/dev/null | cut -f1)
+        current_remote_commit=$(git ls-remote "$origin_name" "refs/heads/$current_branch" 2>/dev/null | cut -f1)
         
         if [ -z "$current_remote_commit" ]; then
             echo -e "${YELLOW}Remote branch ${origin_name}/${current_branch} not found - proceeding with local merge${ENDCOLOR}"
@@ -123,7 +123,7 @@ function merge_script {
         fetch_output=$(git fetch 2>&1)
         check_code $? "$fetch_output" "fetch remote"
 
-        prune_output=$(git remote prune $origin_name 2>&1)
+        prune_output=$(git remote prune "$origin_name" 2>&1)
 
         echo -e "${YELLOW}Select which remote branch to merge into '${current_branch}'${ENDCOLOR}"
         
@@ -152,7 +152,7 @@ function merge_script {
         fi
         
         # Get the remote commit hash
-        remote_commit=$(git ls-remote $origin_name refs/heads/$merge_branch 2>/dev/null | cut -f1)
+        remote_commit=$(git ls-remote "$origin_name" "refs/heads/$merge_branch" 2>/dev/null | cut -f1)
         
         if [ -z "$remote_commit" ]; then
             echo -e "${YELLOW}Remote branch ${origin_name}/${merge_branch} not found - proceeding with local merge${ENDCOLOR}"
@@ -239,9 +239,9 @@ function merge {
         args="--ff-only"
     fi
     if [ "$5" == "true" ]; then
-        merge_output=$(git merge $args $2/$1 2>&1)
+        merge_output=$(git merge $args "$2/$1" 2>&1)
     else
-        merge_output=$(git merge $args $1 2>&1)
+        merge_output=$(git merge $args "$1" 2>&1)
     fi
     merge_code=$?
 
@@ -377,8 +377,10 @@ function resolve_conflicts {
                         continue
                     elif [ "$choice_resolve" == "2" ]; then
                         echo -e "${YELLOW}Force accepting incoming changes...${ENDCOLOR}"
-                        # Force remove files that don't exist in theirs
-                        git ls-files --deleted | xargs -r git rm 2>/dev/null
+                        # Force remove files that don't exist in theirs (portable across GNU/BSD)
+                        mapfile -t _deleted < <(git ls-files --deleted)
+                        [ ${#_deleted[@]} -gt 0 ] && git rm -- "${_deleted[@]}" 2>/dev/null
+                        unset _deleted
                         git checkout --theirs . 2>/dev/null
                         git add .
                     elif [ "$choice_resolve" == "3" ]; then
@@ -453,8 +455,10 @@ function resolve_conflicts {
                         continue
                     elif [ "$choice_resolve" == "2" ]; then
                         echo -e "${YELLOW}Force accepting current changes...${ENDCOLOR}"
-                        # Force remove files that don't exist in ours
-                        git ls-files --deleted | xargs -r git rm 2>/dev/null
+                        # Force remove files that don't exist in ours (portable across GNU/BSD)
+                        mapfile -t _deleted < <(git ls-files --deleted)
+                        [ ${#_deleted[@]} -gt 0 ] && git rm -- "${_deleted[@]}" 2>/dev/null
+                        unset _deleted
                         git checkout --ours . 2>/dev/null
                         git add .
                     elif [ "$choice_resolve" == "3" ]; then

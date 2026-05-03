@@ -975,7 +975,7 @@ function git_status {
 # Added: green, Modified: yellow, Deleted: red
 function print_staged_files {
     local staged_diff
-    staged_diff=$(git diff --name-status --cached)
+    staged_diff=$(git -c core.quotePath=false diff --name-status --cached)
     if [ -z "$staged_diff" ]; then
         return
     fi
@@ -1144,9 +1144,9 @@ function get_push_list {
         fi
     fi
     
-    base_commit=$(diff -u <(git rev-list --first-parent $1 2>/dev/null) <(git rev-list --first-parent $2 2>/dev/null) | sed -ne 's/^ //p' | head -1 || true)
+    base_commit=$(diff -u <(git rev-list --first-parent "$1" 2>/dev/null) <(git rev-list --first-parent "$2" 2>/dev/null) | sed -ne 's/^ //p' | head -1 || true)
     if [ -n "$base_commit" ]; then
-        push_list=$(commit_list 999 "tab" $base_commit..HEAD)
+        push_list=$(commit_list 999 "tab" "$base_commit..HEAD")
         history_from="${base_commit::7}"
     else
         # If no base commit found and origin_name is empty, use HEAD
@@ -1154,7 +1154,7 @@ function get_push_list {
             push_list=""
             history_from=""
         else
-            push_list=$(commit_list 999 "tab" $origin/$2..HEAD)
+            push_list=$(commit_list 999 "tab" "$origin/$2..HEAD")
             history_from="$origin/$2"
         fi
     fi

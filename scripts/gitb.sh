@@ -35,31 +35,48 @@ if ((BASH_VERSINFO[0] < 4)); then
 fi
 
 
+### Detect a stale .git/index.lock from a previously interrupted git operation
+git_dir=$(git rev-parse --git-dir 2>/dev/null)
+if [ -n "$git_dir" ] && [ -e "$git_dir/index.lock" ]; then
+    printf "\033[33mDetected %s/index.lock from a possibly interrupted git operation.\033[0m\n" "$git_dir"
+    printf "Another git process may be running. Remove the lock and continue?\n"
+    read -p "(y/N) " _gitb_lock_ans
+    case "$_gitb_lock_ans" in
+        y|Y|yes|YES) rm -f "$git_dir/index.lock" ;;
+        *) exit 1 ;;
+    esac
+fi
+unset git_dir _gitb_lock_ans
+
+
 ### Init gitbasher
 # common.sh is sourced first so init.sh can use helpers like is_yes during the
-# interactive remote setup prompt
-source scripts/common.sh
-source scripts/init.sh
+# interactive remote setup prompt.
+# The trailing `|| { ...; exit 1; }` only triggers when running scripts/gitb.sh
+# directly during development; dist/build.sh inlines each source target so the
+# bundled `gitb` binary cannot encounter a missing-file failure.
+source scripts/common.sh || { echo "gitbasher: failed to load scripts/common.sh" >&2; exit 1; }
+source scripts/init.sh || { echo "gitbasher: failed to load scripts/init.sh" >&2; exit 1; }
 
 
 ### Include all scripts
-source scripts/ai.sh
-source scripts/config.sh
-source scripts/merge.sh
-source scripts/rebase.sh
-source scripts/pull.sh
-source scripts/push.sh
-source scripts/commit.sh
-source scripts/branch.sh
-source scripts/tag.sh
-source scripts/reset.sh
-source scripts/stash.sh
-source scripts/cherry.sh
-source scripts/sync.sh
-source scripts/undo.sh
-source scripts/wip.sh
-source scripts/gitlog.sh
-source scripts/hooks.sh
-source scripts/origin.sh
+source scripts/ai.sh || { echo "gitbasher: failed to load scripts/ai.sh" >&2; exit 1; }
+source scripts/config.sh || { echo "gitbasher: failed to load scripts/config.sh" >&2; exit 1; }
+source scripts/merge.sh || { echo "gitbasher: failed to load scripts/merge.sh" >&2; exit 1; }
+source scripts/rebase.sh || { echo "gitbasher: failed to load scripts/rebase.sh" >&2; exit 1; }
+source scripts/pull.sh || { echo "gitbasher: failed to load scripts/pull.sh" >&2; exit 1; }
+source scripts/push.sh || { echo "gitbasher: failed to load scripts/push.sh" >&2; exit 1; }
+source scripts/commit.sh || { echo "gitbasher: failed to load scripts/commit.sh" >&2; exit 1; }
+source scripts/branch.sh || { echo "gitbasher: failed to load scripts/branch.sh" >&2; exit 1; }
+source scripts/tag.sh || { echo "gitbasher: failed to load scripts/tag.sh" >&2; exit 1; }
+source scripts/reset.sh || { echo "gitbasher: failed to load scripts/reset.sh" >&2; exit 1; }
+source scripts/stash.sh || { echo "gitbasher: failed to load scripts/stash.sh" >&2; exit 1; }
+source scripts/cherry.sh || { echo "gitbasher: failed to load scripts/cherry.sh" >&2; exit 1; }
+source scripts/sync.sh || { echo "gitbasher: failed to load scripts/sync.sh" >&2; exit 1; }
+source scripts/undo.sh || { echo "gitbasher: failed to load scripts/undo.sh" >&2; exit 1; }
+source scripts/wip.sh || { echo "gitbasher: failed to load scripts/wip.sh" >&2; exit 1; }
+source scripts/gitlog.sh || { echo "gitbasher: failed to load scripts/gitlog.sh" >&2; exit 1; }
+source scripts/hooks.sh || { echo "gitbasher: failed to load scripts/hooks.sh" >&2; exit 1; }
+source scripts/origin.sh || { echo "gitbasher: failed to load scripts/origin.sh" >&2; exit 1; }
 
-source scripts/base.sh
+source scripts/base.sh || { echo "gitbasher: failed to load scripts/base.sh" >&2; exit 1; }

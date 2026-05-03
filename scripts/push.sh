@@ -17,7 +17,7 @@
 #     * push_output
 #     * push_code
 function push {
-    push_output=$(git push $1 ${origin_name} ${current_branch} 2>&1)
+    push_output=$(git push $1 "${origin_name}" "${current_branch}" 2>&1)
     push_code=$?
 
     if [ $push_code -eq 0 ] ; then

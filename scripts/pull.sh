@@ -94,10 +94,10 @@ function pull_script {
         fi
         echo
 
-        fetch $current_branch $origin_name $all
+        fetch "$current_branch" "$origin_name" "$all"
 
         if [ $fetch_code == 0 ] ; then
-            commits=$(commit_list 999 "tab" HEAD..$origin_name/$current_branch)
+            commits=$(commit_list 999 "tab" "HEAD..$origin_name/$current_branch")
             if [ "$commits" != "" ]; then
                 if [ -n "$all" ]; then
                     echo -e "${GREEN}Successfully fetched all!${ENDCOLOR}"
@@ -127,7 +127,7 @@ function pull_script {
         update_code=$?
         
         if [ $update_code == 0 ] ; then
-            commits=$(commit_list 999 "tab" HEAD..$origin_name/$current_branch)
+            commits=$(commit_list 999 "tab" "HEAD..$origin_name/$current_branch")
             if [ "$commits" != "" ]; then
                 echo -e "${GREEN}Successfully updated from remote!${ENDCOLOR}"
                 if [ "$update_output" != "" ]; then
@@ -167,7 +167,7 @@ function fetch {
         fetch_output=$(git fetch --all 2>&1)
         fetch_code=$?
     else
-        fetch_output=$(git fetch $2 $1 2>&1)
+        fetch_output=$(git fetch "$2" "$1" 2>&1)
         fetch_code=$?
     fi
 

@@ -9,7 +9,10 @@
 # $1: git_add arguments
 function cleanup_on_exit {
     if [ -n "$1" ]; then
-        git restore --staged $1
+        # Word-splitting on $1 is intentional: it may hold multiple space-separated paths
+        # from `git add`. Use a subshell with `set -f` so globbing cannot silently expand
+        # patterns against CWD, and `--` so paths starting with `-` are not parsed as options.
+        ( set -f; git restore --staged -- $1 2>/dev/null )
     fi
 }
 
@@ -17,7 +20,7 @@ function cleanup_on_exit {
 # Returns: detected_scopes variable set with space-separated scope names
 function detect_scopes_from_staged_files {
     detected_scopes=""
-    local staged_files=$(git diff --name-only --cached)
+    local staged_files=$(git -c core.quotePath=false diff --name-only --cached)
 
     # Limit the number of files to process for scope detection (performance)
     local max_files_for_scopes=100
@@ -184,7 +187,7 @@ function build_split_groups_from_staged {
     IFS=' ' read -r -a scopes_arr <<< "$detected_scopes"
 
     local staged_files
-    staged_files=$(git diff --name-only --cached)
+    staged_files=$(git -c core.quotePath=false diff --name-only --cached)
     [ -z "$staged_files" ] && return 1
 
     local file scope comp comp_lower comp_no_ext_lower assigned
@@ -236,7 +239,7 @@ function build_split_groups_from_staged {
 # Returns 0 (true) if weak, 1 (false) if heuristic looks fine.
 function is_heuristic_weak {
     local total
-    total=$(git diff --name-only --cached | grep -c .)
+    total=$(git -c core.quotePath=false diff --name-only --cached | grep -c .)
     [ "$total" -lt 4 ] && return 1
 
     if [ ${#split_group_keys[@]} -le 1 ]; then
@@ -244,7 +247,7 @@ function is_heuristic_weak {
         # files like auth/file1.go don't have a sub-scope to discover, so
         # counting them would produce false weakness signals.
         local subdir_count
-        subdir_count=$(git diff --name-only --cached | LC_ALL=C awk -F/ 'NF>=3 {print $1"/"$2}' | sort -u | grep -c .)
+        subdir_count=$(git -c core.quotePath=false diff --name-only --cached | LC_ALL=C awk -F/ 'NF>=3 {print $1"/"$2}' | sort -u | grep -c .)
         [ "$subdir_count" -ge 2 ] && return 0
         return 1
     fi
@@ -269,7 +272,7 @@ function is_heuristic_weak {
 # Returns 0 on success, 1 on AI failure or unparseable output (caller falls back).
 function refine_groups_with_ai {
     local staged_files
-    staged_files=$(git diff --name-only --cached)
+    staged_files=$(git -c core.quotePath=false diff --name-only --cached)
     [ -z "$staged_files" ] && return 1
 
     local diff_stat recent_commits
@@ -391,7 +394,7 @@ function _restore_split_snapshot {
 
     # First, unstage anything currently staged so we start from a clean slate
     local currently_staged
-    currently_staged=$(git diff --name-only --cached)
+    currently_staged=$(git -c core.quotePath=false diff --name-only --cached)
     if [ -n "$currently_staged" ]; then
         while IFS= read -r f; do
             [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
@@ -432,7 +435,7 @@ function print_split_type_menu {
 # Returns 1 (and restores staging) on failure so caller can fall through.
 function perform_commit_split {
     local original_staged
-    original_staged=$(git diff --name-only --cached)
+    original_staged=$(git -c core.quotePath=false diff --name-only --cached)
     if [ -z "$original_staged" ]; then
         echo -e "${RED}No staged files to split${ENDCOLOR}"
         return 1
@@ -463,7 +466,7 @@ function perform_commit_split {
 
         # Reset everything that's currently staged, then stage only this group
         local currently_staged
-        currently_staged=$(git diff --name-only --cached)
+        currently_staged=$(git -c core.quotePath=false diff --name-only --cached)
         if [ -n "$currently_staged" ]; then
             while IFS= read -r f; do
                 [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
@@ -636,7 +639,7 @@ function perform_commit_split {
 
         # Make the commit
         local result
-        result=$(git commit -m """$msg""" 2>&1)
+        result=$(git commit -m "$msg" 2>&1)
         if [ $? -ne 0 ]; then
             echo -e "${RED}Commit failed:${ENDCOLOR}"
             echo "$result"
@@ -854,7 +857,7 @@ function handle_ai_commit_generation {
         fi
         # Save commit message in case commit fails (e.g. pre-commit hook)
         git config gitbasher.cached-commit-message "$commit"
-        result=$(git commit -m """$commit""" 2>&1)
+        result=$(git commit -m "$commit" 2>&1)
         check_code $? "$result" "commit"
 
         # Clean up cached git add and commit message on successful commit
@@ -916,7 +919,7 @@ function handle_ai_commit_generation {
         echo
         # Save commit message in case commit fails (e.g. pre-commit hook)
         git config gitbasher.cached-commit-message "$commit"
-        result=$(git commit -m """$commit""" 2>&1)
+        result=$(git commit -m "$commit" 2>&1)
         check_code $? "$result" "commit"
 
         # Clean up cached git add and commit message on successful commit
@@ -1229,7 +1232,7 @@ function commit_script {
 
     ### Check for staged files when using staged mode
     if [ -n "${staged}" ]; then
-        staged_files_check=$(git diff --name-only --cached)
+        staged_files_check=$(git -c core.quotePath=false diff --name-only --cached)
         if [ -z "$staged_files_check" ]; then
             echo -e "${RED}No staged files found!${ENDCOLOR}"
             exit 1
@@ -1335,7 +1338,7 @@ function commit_script {
 
             result=$(git add $git_add 2>&1)
             code=$?
-            staged_files_list="$(git diff --name-only --cached)"
+            staged_files_list="$(git -c core.quotePath=false diff --name-only --cached)"
             if [ $code -eq 0 ] && [ -n "$staged_files_list" ]; then
                 # Save git add arguments for potential retry
                 git config gitbasher.cached-git-add "$git_add"
@@ -1350,7 +1353,7 @@ function commit_script {
                    
                     result_star=$(git add $git_add_with_star 2>&1)
                     code_star=$?
-                    staged_files_list_star="$(git diff --name-only --cached)"
+                    staged_files_list_star="$(git -c core.quotePath=false diff --name-only --cached)"
                     if [ $code_star -eq 0 ] && [ -n "$staged_files_list_star" ]; then
                         # Save the successful git add arguments for potential retry
                         git config gitbasher.cached-git-add "$git_add_with_star"
@@ -1372,11 +1375,11 @@ function commit_script {
     ### Print staged files that we add at step 1
     if [ -z "${staged}" ]; then
         echo -e "${YELLOW}Staged files:${ENDCOLOR}"
-        staged_files_list="$(sed 's/^/\t/' <<< "$(git diff --name-only --cached)")"
+        staged_files_list="$(sed 's/^/\t/' <<< "$(git -c core.quotePath=false diff --name-only --cached)")"
         print_staged_files
     else
         # Still need to set the staged files list for later use (editor template)
-        staged_files_list="$(sed 's/^/\t/' <<< "$(git diff --name-only --cached)")"
+        staged_files_list="$(sed 's/^/\t/' <<< "$(git -c core.quotePath=false diff --name-only --cached)")"
     fi
 
 
@@ -1413,7 +1416,7 @@ function commit_script {
         if [ "$normalized_key" = "y" ] || [ -z "$choice" ]; then
             commit="$saved_commit_message"
             echo
-            result=$(git commit -m """$commit""" 2>&1)
+            result=$(git commit -m "$commit" 2>&1)
             check_code $? "$result" "commit"
 
             # Clean up cached git add and commit message on successful commit
@@ -1436,7 +1439,7 @@ function commit_script {
                 echo
                 # Save edited message in case this commit also fails
                 git config gitbasher.cached-commit-message "$commit"
-                result=$(git commit -m """$commit""" 2>&1)
+                result=$(git commit -m "$commit" 2>&1)
                 check_code $? "$result" "commit"
 
                 # Clean up cached git add and commit message on successful commit
@@ -1815,7 +1818,7 @@ ${staged_with_tab}
 
     # Save commit message in case commit fails (e.g. pre-commit hook)
     git config gitbasher.cached-commit-message "$commit"
-    result=$(git commit -m """$commit""" 2>&1)
+    result=$(git commit -m "$commit" 2>&1)
     check_code $? "$result" "commit"
 
     # Clean up cached git add and commit message on successful commit

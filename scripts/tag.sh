@@ -14,11 +14,11 @@
 function push_tag {
     if [ -z "$1" ] || [ "$1" == "" ]; then
         all="true"
-        push_output=$(git push $origin_name --tags 2>&1)
+        push_output=$(git push "$origin_name" --tags 2>&1)
     elif [ -n "$2" ]; then
-        push_output=$(git push --delete $origin_name $1 2>&1)
+        push_output=$(git push --delete "$origin_name" "$1" 2>&1)
     else
-        push_output=$(git push $origin_name $1 2>&1)
+        push_output=$(git push "$origin_name" "$1" 2>&1)
     fi
     push_code=$?
 

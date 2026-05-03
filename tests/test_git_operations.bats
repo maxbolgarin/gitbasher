@@ -222,7 +222,7 @@ teardown() {
     [[ "$output" =~ "Current HEAD:" ]]
     [[ "$output" =~ "Reset target:" ]]
     [[ "$output" =~ "Reset type:" ]]
-    [[ "$output" =~ "Do you want to continue" ]]
+    [[ "$output" =~ "Are you sure you want to continue" ]]
 
     count=$(git rev-list --count HEAD)
     [ "$count" -eq 1 ]
@@ -237,7 +237,7 @@ teardown() {
     run bash -c 'printf "n" | (source "$GITBASHER_ROOT/scripts/init.sh"; source "$GITBASHER_ROOT/scripts/common.sh"; source "$GITBASHER_ROOT/scripts/reset.sh"; cd "$TEST_REPO"; reset_script)'
 
     assert_success
-    [[ "$output" =~ "Do you want to continue" ]]
+    [[ "$output" =~ "Are you sure you want to continue" ]]
     current_head=$(git rev-parse HEAD)
     [ "$current_head" = "$original_head" ]
 }

@@ -38,15 +38,16 @@ make_embedded_repo() {
     [[ "$staged_files" != *".worktree/test"* ]]
 }
 
-@test "fast staging renders embedded repository warning and hints in red" {
+@test "fast staging colors embedded repository warning yellow and hint cyan" {
     create_test_file "regular.txt" "regular"
     make_embedded_repo ".worktree/test"
 
     run stage_fast_changes
 
     assert_success
-    red=$(printf '%b' "$RED")
+    yellow=$(printf '%b' "$YELLOW")
+    cyan=$(printf '%b' "$CYAN")
     endcolor=$(printf '%b' "$ENDCOLOR")
-    [[ "$output" == *"${red}warning: adding embedded git repository: .worktree/test${endcolor}"* ]]
-    [[ "$output" == *"${red}hint: You've added another git repository inside your current repository.${endcolor}"* ]]
+    [[ "$output" == *"${yellow}warning: adding embedded git repository: .worktree/test${endcolor}"* ]]
+    [[ "$output" == *"${cyan}hint: You've added another git repository inside your current repository.${endcolor}"* ]]
 }

@@ -311,7 +311,7 @@ function configure_ai_provider {
             echo -e "Next: set your key with ${BLUE}gitb cfg ai${ENDCOLOR} (https://openrouter.ai/keys)"
             ;;
         ollama)
-            echo -e "Make sure the Ollama daemon is running (${BLUE}ollama serve${ENDCOLOR}) and a model is pulled (${BLUE}ollama pull llama3.1${ENDCOLOR})."
+            echo -e "Make sure the Ollama daemon is running (${BLUE}ollama serve${ENDCOLOR}) and a model is pulled (${BLUE}ollama pull qwen3:8b${ENDCOLOR})."
             echo -e "Pick a different model with ${BLUE}gitb cfg model${ENDCOLOR} if you have something else installed."
             ;;
     esac
@@ -346,14 +346,14 @@ function configure_ai_model {
     echo -e "Popular models for provider '${GREEN}$(get_ai_provider)${ENDCOLOR}':"
     case "$(get_ai_provider)" in
         openai)
-            echo -e "  • ${BLUE}gpt-5-mini${ENDCOLOR} - Cheap+fast, strong format compliance"
-            echo -e "  • ${BLUE}gpt-5${ENDCOLOR} - Best reasoning, higher cost"
-            echo -e "  • ${BLUE}gpt-4.1-mini${ENDCOLOR} - Older fast tier, very cheap"
+            echo -e "  • ${BLUE}gpt-5.4-nano${ENDCOLOR} - Cheapest+fastest, ideal for one-line subjects (~\$0.20/\$1.25 per M)"
+            echo -e "  • ${BLUE}gpt-5.4-mini${ENDCOLOR} - Balanced for full-body prose and strict TSV output (~\$0.75/\$4.50 per M)"
+            echo -e "  • ${BLUE}gpt-5.4${ENDCOLOR} - Flagship, only worth it for the hardest grouping cases"
             ;;
         ollama)
-            echo -e "  • ${BLUE}llama3.1${ENDCOLOR} - General-purpose 8B default"
-            echo -e "  • ${BLUE}qwen2.5-coder${ENDCOLOR} - Code-focused"
-            echo -e "  • ${BLUE}mistral${ENDCOLOR} - Lightweight alternative"
+            echo -e "  • ${BLUE}qwen3:8b${ENDCOLOR} - Best small instruction-follower; most stable structured output"
+            echo -e "  • ${BLUE}llama3.3:8b${ENDCOLOR} - Solid general-purpose alternative"
+            echo -e "  • ${BLUE}qwen2.5-coder:7b${ENDCOLOR} - Code-focused; good when most diffs are code"
             echo -e "  Run ${BLUE}ollama list${ENDCOLOR} to see what you have pulled locally."
             ;;
         *)
@@ -361,7 +361,7 @@ function configure_ai_model {
             echo -e "  • ${BLUE}google/gemini-3.1-flash-lite-preview${ENDCOLOR} - Fastest, cheapest"
             echo -e "  • ${BLUE}google/gemini-3-flash-preview${ENDCOLOR} - Better body prose"
             echo -e "  • ${BLUE}anthropic/claude-haiku-4.5${ENDCOLOR} - Strict instruction following"
-            echo -e "  • ${BLUE}openai/gpt-5-mini${ENDCOLOR} - Strong reasoning, low cost"
+            echo -e "  • ${BLUE}openai/gpt-5.4-mini${ENDCOLOR} - Strong reasoning, low cost"
             ;;
     esac
     echo

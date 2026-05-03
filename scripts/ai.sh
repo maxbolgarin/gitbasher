@@ -122,20 +122,29 @@ readonly AI_DEFAULT_MODEL_SUBJECT="google/gemini-3.1-flash-lite-preview"
 readonly AI_DEFAULT_MODEL_FULL="google/gemini-3-flash-preview"
 readonly AI_DEFAULT_MODEL_GROUPING="anthropic/claude-haiku-4.5"
 
-# OpenAI per-task defaults — gpt-5-mini is the cheap+fast tier with strong
-# format compliance; gpt-5 used only for the rarely-fired grouping task.
-readonly AI_DEFAULT_MODEL_SIMPLE_OPENAI="gpt-5-mini"
-readonly AI_DEFAULT_MODEL_SUBJECT_OPENAI="gpt-5-mini"
-readonly AI_DEFAULT_MODEL_FULL_OPENAI="gpt-5-mini"
-readonly AI_DEFAULT_MODEL_GROUPING_OPENAI="gpt-5"
+# OpenAI per-task defaults (May 2026, GPT-5.4 family).
+#   - nano ($0.20 / $1.25 per M tokens): tuned for classification, data
+#     extraction, ranking, and short well-defined interactions — exactly
+#     matches the simple/subject one-line output. Use here.
+#   - mini ($0.75 / $4.50 per M): handles multi-condition instructions and
+#     formatting requirements applied simultaneously — right tier for full-mode
+#     prose and the validated TSV grouping output, both far cheaper than the
+#     gpt-5.4 flagship without losing format compliance.
+readonly AI_DEFAULT_MODEL_SIMPLE_OPENAI="gpt-5.4-nano"
+readonly AI_DEFAULT_MODEL_SUBJECT_OPENAI="gpt-5.4-nano"
+readonly AI_DEFAULT_MODEL_FULL_OPENAI="gpt-5.4-mini"
+readonly AI_DEFAULT_MODEL_GROUPING_OPENAI="gpt-5.4-mini"
 
-# Ollama per-task defaults — same lightweight model everywhere because users
-# typically only have one or two models pulled. Override with `gitb cfg model`
-# to match what `ollama list` shows on your machine.
-readonly AI_DEFAULT_MODEL_SIMPLE_OLLAMA="llama3.1"
-readonly AI_DEFAULT_MODEL_SUBJECT_OLLAMA="llama3.1"
-readonly AI_DEFAULT_MODEL_FULL_OLLAMA="llama3.1"
-readonly AI_DEFAULT_MODEL_GROUPING_OLLAMA="llama3.1"
+# Ollama per-task default (May 2026): qwen3:8b leads the 7/8B class on
+# instruction-following benchmarks and produces the most stable structured
+# output among locally-runnable models (it stays in the conventional-commit
+# format and rarely drops fields in TSV output). ~5 GB on disk, ~25 tok/s on a
+# consumer laptop with GPU acceleration. Override with `gitb cfg model` to
+# match what `ollama list` shows on your machine.
+readonly AI_DEFAULT_MODEL_SIMPLE_OLLAMA="qwen3:8b"
+readonly AI_DEFAULT_MODEL_SUBJECT_OLLAMA="qwen3:8b"
+readonly AI_DEFAULT_MODEL_FULL_OLLAMA="qwen3:8b"
+readonly AI_DEFAULT_MODEL_GROUPING_OLLAMA="qwen3:8b"
 
 ### Resolve the model to use for a specific task.
 # Resolution order:

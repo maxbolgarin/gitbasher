@@ -1,0 +1,104 @@
+name: Bug report
+description: Something in gitbasher misbehaves, errors, or produces the wrong git result.
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a report. Please run the bundled `gitb` (not the dev tree) when reproducing if possible — it isolates the issue from local edits.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What command did you run, what did you expect, what happened instead?
+      placeholder: |
+        I ran `gitb wip up worktree`, expected the WIP to land on a sibling worktree, got a stash error.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: Minimal steps. Paste the exact command(s) and any prompt selections.
+      render: bash
+      placeholder: |
+        cd ~/scratch && git init repo && cd repo
+        echo a > a && git add a && git commit -m init
+        echo b > a
+        gitb wip up worktree   # answer "1" at the prompt
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Actual output
+      description: Paste the terminal output. Redact paths/keys if needed.
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: gitb-version
+    attributes:
+      label: gitbasher version
+      description: Output of `gitb --version`.
+      placeholder: gitbasher v3.10.2
+    validations:
+      required: true
+
+  - type: input
+    id: git-version
+    attributes:
+      label: git version
+      description: Output of `git --version`.
+      placeholder: git version 2.43.0
+    validations:
+      required: true
+
+  - type: input
+    id: bash-version
+    attributes:
+      label: bash version
+      description: Output of `bash --version` (first line).
+      placeholder: GNU bash, version 5.2.21(1)-release
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Linux (Debian/Ubuntu)
+        - Linux (other)
+        - Windows (WSL)
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: Install method
+      options:
+        - npm
+        - curl install.sh
+        - wget install.sh
+        - manual / from source
+        - other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I'm on the latest version (`gitb --version` matches the latest GitHub release).
+        - label: I checked the [troubleshooting section](https://github.com/maxbolgarin/gitbasher#troubleshooting) and existing issues.
+        - label: This is not a security report (those go to SECURITY.md).
+          required: true

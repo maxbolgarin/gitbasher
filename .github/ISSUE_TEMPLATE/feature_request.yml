@@ -1,0 +1,43 @@
+name: Feature request
+description: Suggest a new gitbasher command, mode, flag, or UX improvement.
+labels: ["enhancement", "triage"]
+body:
+  - type: textarea
+    id: motivation
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the workflow or pain point — not the proposed solution. (We can find better solutions together once the problem is clear.)
+      placeholder: |
+        I frequently want to amend the last commit and force-push, but the safe equivalent in gitbasher is two separate commands.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: A specific command, mode, or flag, and how it should behave.
+      placeholder: |
+        `gitb commit fix` — amend HEAD with the staged changes, then `git push --force-with-lease` after a confirmation prompt.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What did you try? Why isn't an existing command (or plain git) enough?
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Out of scope / non-goals
+      description: Anything that should NOT be part of this change. Helps keep the PR focused.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I checked existing issues and didn't find a duplicate.
+        - label: I'm willing to open a PR for this (optional).

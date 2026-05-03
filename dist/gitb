@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-GITBASHER_VERSION="3.10.2-99-g918d85c"
+GITBASHER_VERSION="3.10.2-101-g97761b3"
 if [ "$1" == "init" ] || [ "$1" == "i" ]; then
     git init
 fi
@@ -5548,6 +5548,7 @@ function _restore_split_snapshot {
 }
 function print_split_type_menu {
     local scope="$1"
+    local ai_available="$2"
     echo -e "${YELLOW}What type of changes for ${BLUE}${scope}${ENDCOLOR}?${ENDCOLOR}"
     echo -e "Final message will be ${YELLOW}<type>${ENDCOLOR}(${BLUE}<scope>${ENDCOLOR}): ${BLUE}<summary>${ENDCOLOR}"
     echo -e "1. ${BLUE}${BOLD}feat${ENDCOLOR}:\tnew feature, logic change or performance improvement"
@@ -5559,12 +5560,16 @@ function print_split_type_menu {
     echo -e "7. ${BLUE}${BOLD}chore${ENDCOLOR}:\tmaintenance and housekeeping"
     echo -e "8. ${BLUE}${BOLD}docs${ENDCOLOR}:\tdocumentation changes"
     echo -e "9. ${BOLD}plain${ENDCOLOR}:\twrite plain commit without type and scope"
+    if [ "$ai_available" = "true" ]; then
+        echo -e "g. ${GREEN}${BOLD}ai${ENDCOLOR}:\t\tgenerate commit message using AI"
+    fi
     echo -e "s. ${YELLOW}${BOLD}skip${ENDCOLOR}:\tSkip this group and leave its files unstaged"
     echo -e "0. ${RED}${BOLD}abort${ENDCOLOR}:\tAbort split and restore original staging"
     echo
 }
 function print_commit_type_menu {
     local step="$1"
+    local ai_available="$2"
     echo -e "${YELLOW}Step ${step}.${ENDCOLOR} What ${YELLOW}type${ENDCOLOR} of changes do you want to commit?"
     echo -e "Final message will be ${YELLOW}<type>${ENDCOLOR}(${BLUE}<scope>${ENDCOLOR}): ${BLUE}<summary>${ENDCOLOR}"
     echo -e "1. ${BLUE}${BOLD}feat${ENDCOLOR}:\tnew feature, logic change or performance improvement"
@@ -5576,6 +5581,9 @@ function print_commit_type_menu {
     echo -e "7. ${BLUE}${BOLD}chore${ENDCOLOR}:\tmaintenance and housekeeping"
     echo -e "8. ${BLUE}${BOLD}docs${ENDCOLOR}:\tdocumentation changes"
     echo -e "9. ${BOLD}plain${ENDCOLOR}:\twrite plain commit without type and scope"
+    if [ "$ai_available" = "true" ]; then
+        echo -e "g. ${GREEN}${BOLD}ai${ENDCOLOR}:\t\tgenerate commit message using AI"
+    fi
     echo -e "0. ${RED}${BOLD}exit${ENDCOLOR}:\tExit without changes"
 }
 function print_split_groups_preview {
@@ -5606,6 +5614,70 @@ function print_split_groups_preview {
             echo -e "    ${file_color}${file}${ENDCOLOR}"
         done <<< "${split_groups[$scope]}"
     done
+}
+function run_split_ai_for_scope {
+    local _scope="$1"
+    local _scope_for_msg="$2"
+    local _files_str="$3"
+    local ai_msg choice manual_input
+    local rejected_ai_messages=""
+    msg=""
+    echo -e "${YELLOW}Generating commit message with AI...${ENDCOLOR}"
+    ai_msg=$(generate_ai_commit_message "simple" "$_scope_for_msg" "$_scope_for_msg" "")
+    if [ $? -ne 0 ] || [ -z "$ai_msg" ]; then
+        echo -e "${RED}✗ AI message generation failed.${ENDCOLOR}"
+        return 1
+    fi
+    ai_msg=$(echo "$ai_msg" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    if [ -n "$auto_accept" ]; then
+        msg="$ai_msg"
+        echo -e "${GREEN}AI message:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
+        return 0
+    fi
+    echo
+    echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
+    echo
+    read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) "
+    echo
+    normalize_key "$choice"
+    while [ "$normalized_key" = "r" ]; do
+        echo -e "${YELLOW}Regenerating...${ENDCOLOR}"
+        if [ -n "$rejected_ai_messages" ]; then
+            rejected_ai_messages="${rejected_ai_messages}
+${ai_msg}"
+        else
+            rejected_ai_messages="$ai_msg"
+        fi
+        ai_msg=$(generate_ai_commit_message "simple" "$_scope_for_msg" "$_scope_for_msg" "" "$rejected_ai_messages")
+        if [ $? -ne 0 ] || [ -z "$ai_msg" ]; then
+            echo -e "${RED}✗ AI message regeneration failed.${ENDCOLOR}"
+            return 1
+        fi
+        ai_msg=$(echo "$ai_msg" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        echo
+        echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
+        echo
+        read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) "
+        echo
+        normalize_key "$choice"
+    done
+    if [ "$normalized_key" = "y" ] || [ -z "$choice" ]; then
+        msg="$ai_msg"
+        return 0
+    elif [ "$normalized_key" = "e" ]; then
+        read_editable_input manual_input "Edit: " "$ai_msg"
+        msg="$manual_input"
+        return 0
+    elif [ "$normalized_key" = "s" ]; then
+        echo -e "${YELLOW}Skipping scope '${_scope}' (files left unstaged)${ENDCOLOR}"
+        while IFS= read -r f; do
+            [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
+        done <<< "$_files_str"
+        return 2
+    elif [ "$choice" = "0" ]; then
+        return 3
+    fi
+    return 1
 }
 function perform_commit_split {
     local original_staged
@@ -5662,62 +5734,17 @@ function perform_commit_split {
         [ "$scope" = "misc" ] && scope_for_msg=""
         msg=""
         if [ -n "$llm" ] && [ "$ai_ok" = "true" ]; then
-            echo -e "${YELLOW}Generating commit message with AI...${ENDCOLOR}"
-            ai_msg=$(generate_ai_commit_message "simple" "$scope_for_msg" "$scope_for_msg" "")
-            if [ $? -eq 0 ] && [ -n "$ai_msg" ]; then
-                ai_msg=$(echo "$ai_msg" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-                if [ -n "$auto_accept" ]; then
-                    msg="$ai_msg"
-                    echo -e "${GREEN}AI message:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
-                else
+            run_split_ai_for_scope "$scope" "$scope_for_msg" "$files_str"
+            case $? in
+                2) continue ;;
+                3)
+                    _restore_split_snapshot "$snapshot_file"
+                    trap - INT TERM
                     echo
-                    echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
-                    echo
-                    read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) "
-                    echo
-                    normalize_key "$choice"
-                    local rejected_ai_messages=""
-                    while [ "$normalized_key" = "r" ]; do
-                        echo -e "${YELLOW}Regenerating...${ENDCOLOR}"
-                        if [ -n "$rejected_ai_messages" ]; then
-                            rejected_ai_messages="${rejected_ai_messages}
-${ai_msg}"
-                        else
-                            rejected_ai_messages="$ai_msg"
-                        fi
-                        ai_msg=$(generate_ai_commit_message "simple" "$scope_for_msg" "$scope_for_msg" "" "$rejected_ai_messages")
-                        if [ $? -ne 0 ] || [ -z "$ai_msg" ]; then
-                            ai_msg=""
-                            break
-                        fi
-                        ai_msg=$(echo "$ai_msg" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-                        echo
-                        echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
-                        echo
-                        read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) "
-                        echo
-                        normalize_key "$choice"
-                    done
-                    if [ "$normalized_key" = "y" ] || [ -z "$choice" ]; then
-                        msg="$ai_msg"
-                    elif [ "$normalized_key" = "e" ]; then
-                        read_editable_input manual_input "Edit: " "$ai_msg"
-                        msg="$manual_input"
-                    elif [ "$normalized_key" = "s" ]; then
-                        echo -e "${YELLOW}Skipping scope '${scope}' (files left unstaged)${ENDCOLOR}"
-                        while IFS= read -r f; do
-                            [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
-                        done <<< "$files_str"
-                        continue
-                    elif [ "$choice" = "0" ]; then
-                        _restore_split_snapshot "$snapshot_file"
-                        trap - INT TERM
-                        echo
-                        echo -e "${YELLOW}Aborted. Created ${commit_count} commit(s); original staging restored.${ENDCOLOR}"
-                        exit 0
-                    fi
-                fi
-            fi
+                    echo -e "${YELLOW}Aborted. Created ${commit_count} commit(s); original staging restored.${ENDCOLOR}"
+                    exit 0
+                    ;;
+            esac
         fi
         if [ -z "$msg" ] && [ -n "$auto_accept" ]; then
             echo -e "${RED}✗ AI message generation failed — auto-accept mode cannot prompt for a manual message.${ENDCOLOR}"
@@ -5729,11 +5756,12 @@ ${ai_msg}"
         if [ -z "$msg" ]; then
             local commit_type=""
             local is_empty_msg=""
-            print_split_type_menu "$scope"
+            echo
+            print_split_type_menu "$scope" "$ai_ok"
             local tchoice
             while true; do
                 read_key tchoice
-                if ! sanitize_choice_input "$tchoice" "^[0-9s]$"; then
+                if ! sanitize_choice_input "$tchoice" "^[0-9sg]$"; then
                     continue
                 fi
                 tchoice="$sanitized_choice"
@@ -5747,6 +5775,28 @@ ${ai_msg}"
                     7) commit_type="chore"; break ;;
                     8) commit_type="docs"; break ;;
                     9) is_empty_msg="true"; break ;;
+                    g)
+                        if [ "$ai_ok" != "true" ]; then
+                            continue
+                        fi
+                        echo
+                        run_split_ai_for_scope "$scope" "$scope_for_msg" "$files_str"
+                        case $? in
+                            0) break ;;
+                            2) continue 2 ;;
+                            3)
+                                _restore_split_snapshot "$snapshot_file"
+                                trap - INT TERM
+                                echo
+                                echo -e "${YELLOW}Aborted. Created ${commit_count} commit(s); original staging restored.${ENDCOLOR}"
+                                exit 0
+                                ;;
+                            *)
+                                echo
+                                print_split_type_menu "$scope" "$ai_ok"
+                                ;;
+                        esac
+                        ;;
                     s)
                         echo -e "${YELLOW}Skipping scope '${scope}' (files left unstaged)${ENDCOLOR}"
                         while IFS= read -r f; do
@@ -5763,30 +5813,32 @@ ${ai_msg}"
                         ;;
                 esac
             done
-            prefix=""
-            if [ -z "$is_empty_msg" ]; then
-                if [ -n "$scope_for_msg" ]; then
-                    prefix="${commit_type}(${scope_for_msg}): "
-                else
-                    prefix="${commit_type}: "
+            if [ -z "$msg" ]; then
+                prefix=""
+                if [ -z "$is_empty_msg" ]; then
+                    if [ -n "$scope_for_msg" ]; then
+                        prefix="${commit_type}(${scope_for_msg}): "
+                    else
+                        prefix="${commit_type}: "
+                    fi
                 fi
+                echo -e "${YELLOW}Write a summary (Enter to skip group):${ENDCOLOR}"
+                read_editable_input manual_input "$prefix"
+                if [ -z "$manual_input" ]; then
+                    echo -e "${YELLOW}Skipping scope '${scope}'${ENDCOLOR}"
+                    while IFS= read -r f; do
+                        [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
+                    done <<< "$files_str"
+                    continue
+                fi
+                if ! sanitize_commit_message "$manual_input"; then
+                    show_sanitization_error "commit message" "Use printable characters only, 1-2000 characters."
+                    _restore_split_snapshot "$snapshot_file"
+                    trap - INT TERM
+                    return 1
+                fi
+                msg="${prefix}${sanitized_commit_message}"
             fi
-            echo -e "${YELLOW}Write a summary (Enter to skip group):${ENDCOLOR}"
-            read_editable_input manual_input "$prefix"
-            if [ -z "$manual_input" ]; then
-                echo -e "${YELLOW}Skipping scope '${scope}'${ENDCOLOR}"
-                while IFS= read -r f; do
-                    [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
-                done <<< "$files_str"
-                continue
-            fi
-            if ! sanitize_commit_message "$manual_input"; then
-                show_sanitization_error "commit message" "Use printable characters only, 1-2000 characters."
-                _restore_split_snapshot "$snapshot_file"
-                trap - INT TERM
-                return 1
-            fi
-            msg="${prefix}${sanitized_commit_message}"
         fi
         local result
         result=$(git commit -m "$msg" 2>&1)
@@ -6540,7 +6592,11 @@ function commit_script {
     if [ -n "${fast}" ] || [ -n "${staged}" ]; then
         step="1"
     fi
-    print_commit_type_menu "$step"
+    local _ai_available_for_menu="false"
+    if check_ai_available 2>/dev/null; then
+        _ai_available_for_menu="true"
+    fi
+    print_commit_type_menu "$step" "$_ai_available_for_menu"
     declare -A types=(
         [1]="feat"
         [2]="fix"
@@ -6558,6 +6614,20 @@ function commit_script {
             echo
             echo -e "${YELLOW}Aborted.${ENDCOLOR}"
             exit
+        fi
+        normalize_key "$choice"
+        if [ "$normalized_key" == "g" ]; then
+            if [ "$_ai_available_for_menu" != "true" ]; then
+                continue
+            fi
+            local _ai_mode="simple"
+            if [ -n "${msg}" ]; then
+                _ai_mode="full"
+            fi
+            handle_ai_commit_generation "$step" "$_ai_mode" ""
+            echo
+            print_commit_type_menu "$step" "$_ai_available_for_menu"
+            continue
         fi
         re='^[0-9]+$'
         if ! [[ $choice =~ $re ]]; then
@@ -11726,6 +11796,315 @@ function origin_script {
         exit
     fi
 }
+GITBASHER_REPO="maxbolgarin/gitbasher"
+GITBASHER_RELEASES_URL="https://github.com/${GITBASHER_REPO}/releases"
+function _normalize_version {
+    local v="${1#v}"
+    v="${v#V}"
+    echo "$v"
+}
+function _compare_versions {
+    local a="$(_normalize_version "$1")"
+    local b="$(_normalize_version "$2")"
+    a="${a%%-*}"
+    b="${b%%-*}"
+    local IFS=.
+    local -a aa=($a) bb=($b)
+    local i max=${#aa[@]}
+    [ ${#bb[@]} -gt $max ] && max=${#bb[@]}
+    for ((i = 0; i < max; i++)); do
+        local na=${aa[i]:-0} nb=${bb[i]:-0}
+        na=${na//[^0-9]/}
+        nb=${nb//[^0-9]/}
+        : "${na:=0}"
+        : "${nb:=0}"
+        if (( 10#$na > 10#$nb )); then return 1; fi
+        if (( 10#$na < 10#$nb )); then return 2; fi
+    done
+    return 0
+}
+function _fetch_latest_release {
+    _gitb_update_fetch_err=""
+    local url="https://api.github.com/repos/${GITBASHER_REPO}/releases/latest"
+    local body=""
+    if command -v curl >/dev/null 2>&1; then
+        body=$(curl -fsSL --max-time 10 -H "Accept: application/vnd.github+json" "$url" 2>&1)
+        if [ $? -ne 0 ]; then
+            _gitb_update_fetch_err="$body"
+            echo ""
+            return 1
+        fi
+    elif command -v wget >/dev/null 2>&1; then
+        body=$(wget -qO- --timeout=10 --header="Accept: application/vnd.github+json" "$url" 2>&1)
+        if [ $? -ne 0 ]; then
+            _gitb_update_fetch_err="$body"
+            echo ""
+            return 1
+        fi
+    else
+        _gitb_update_fetch_err="Need curl or wget to check for updates."
+        echo ""
+        return 1
+    fi
+    echo "$body"
+}
+function _extract_tag_name {
+    echo "$1" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' \
+              | head -1 \
+              | sed -E 's/.*"([^"]+)"$/\1/'
+}
+function _extract_release_url {
+    echo "$1" | grep -o '"html_url"[[:space:]]*:[[:space:]]*"[^"]*"' \
+              | head -1 \
+              | sed -E 's/.*"([^"]+)"$/\1/'
+}
+function _extract_release_date {
+    echo "$1" | grep -o '"published_at"[[:space:]]*:[[:space:]]*"[^"]*"' \
+              | head -1 \
+              | sed -E 's/.*"([^"]+)"$/\1/' \
+              | cut -dT -f1
+}
+function _gitb_install_path {
+    local path
+    path=$(command -v gitb 2>/dev/null) || return 1
+    [ -z "$path" ] && return 1
+    if command -v readlink >/dev/null 2>&1; then
+        local resolved
+        resolved=$(readlink -f "$path" 2>/dev/null) || resolved=""
+        if [ -z "$resolved" ] && [ -L "$path" ]; then
+            resolved=$(readlink "$path" 2>/dev/null)
+            case "$resolved" in
+                /*) ;;
+                *)  resolved="$(dirname "$path")/$resolved" ;;
+            esac
+        fi
+        [ -n "$resolved" ] && path="$resolved"
+    fi
+    echo "$path"
+}
+function _gitb_is_npm_install {
+    local path="$1"
+    [ -z "$path" ] && return 1
+    case "$path" in
+        */node_modules/*) return 0 ;;
+    esac
+    if command -v npm >/dev/null 2>&1; then
+        local npm_root
+        npm_root=$(npm root -g 2>/dev/null)
+        if [ -n "$npm_root" ] && [[ "$path" == "$npm_root"/* ]]; then
+            return 0
+        fi
+    fi
+    return 1
+}
+function _download_latest_gitb {
+    _gitb_update_download_err=""
+    local url="https://github.com/${GITBASHER_REPO}/releases/latest/download/gitb"
+    local tmp
+    tmp=$(mktemp 2>/dev/null || mktemp -t gitb)
+    if [ -z "$tmp" ]; then
+        _gitb_update_download_err="Could not create a temp file for the download."
+        return 1
+    fi
+    local err=""
+    if command -v curl >/dev/null 2>&1; then
+        err=$(curl -fSL --proto '=https' --tlsv1.2 --max-time 60 -o "$tmp" "$url" 2>&1)
+    elif command -v wget >/dev/null 2>&1; then
+        err=$(wget --https-only --timeout=60 -qO "$tmp" "$url" 2>&1)
+    else
+        rm -f "$tmp"
+        _gitb_update_download_err="Need curl or wget to download the new release."
+        return 1
+    fi
+    if [ $? -ne 0 ]; then
+        rm -f "$tmp"
+        _gitb_update_download_err="$err"
+        return 1
+    fi
+    if ! head -c 64 "$tmp" | grep -q '^#!.*bash'; then
+        rm -f "$tmp"
+        _gitb_update_download_err="Downloaded file is not a bash script (got HTML or empty body)."
+        return 1
+    fi
+    echo "$tmp"
+    return 0
+}
+function _install_gitb_binary {
+    local src="$1" dst="$2"
+    local install_err=""
+    if install -m 0755 "$src" "$dst" >/dev/null 2>&1; then
+        return 0
+    fi
+    local dst_dir
+    dst_dir=$(dirname "$dst")
+    if [ -w "$dst" ] || { [ ! -e "$dst" ] && [ -w "$dst_dir" ]; }; then
+        install_err=$(install -m 0755 "$src" "$dst" 2>&1)
+        echo "$install_err" >&2
+        return 1
+    fi
+    if ! command -v sudo >/dev/null 2>&1; then
+        echo -e "${RED}✗ Cannot write to ${dst} and sudo is not available.${ENDCOLOR}" >&2
+        return 1
+    fi
+    echo -e "${YELLOW}Updating ${dst} requires sudo — you may be prompted for your password.${ENDCOLOR}"
+    if sudo install -m 0755 "$src" "$dst"; then
+        return 0
+    fi
+    return 1
+}
+function update_script {
+    case "$1" in
+        check|c|ch)        check_only="true";;
+        force|f|fo)        force_update="true";;
+        help|h)            help="true";;
+        "")                ;;
+        *)
+            wrong_mode "update" $1
+    esac
+    local header="GITBASHER UPDATE"
+    if [ -n "$check_only" ]; then
+        header="$header CHECK"
+    elif [ -n "$force_update" ]; then
+        header="$header FORCE"
+    fi
+    echo -e "${YELLOW}${header}${ENDCOLOR}"
+    echo
+    if [ -n "$help" ]; then
+        echo -e "usage: ${YELLOW}gitb update <mode>${ENDCOLOR}"
+        echo
+        local msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Check for a new release and install it"
+        msg="$msg\n${BOLD}check${ENDCOLOR}_c|ch_Only check for a newer release; do not install"
+        msg="$msg\n${BOLD}force${ENDCOLOR}_f|fo_Reinstall the latest release even if already up to date"
+        msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
+        echo -e "$(echo -e "$msg" | column -ts'_')"
+        echo
+        echo -e "${YELLOW}Examples${ENDCOLOR}"
+        echo -e "  ${GREEN}gitb update${ENDCOLOR}        Check and install if a newer version is published"
+        echo -e "  ${GREEN}gitb update check${ENDCOLOR}  Just check, don't install"
+        echo -e "  ${GREEN}gitb update force${ENDCOLOR}  Re-download the latest release over the current one"
+        exit
+    fi
+    local current_version="$GITBASHER_VERSION"
+    echo -e "Current version: ${YELLOW}${current_version}${ENDCOLOR}"
+    echo -e "${BLUE}Fetching latest release info...${ENDCOLOR}"
+    local body
+    body=$(_fetch_latest_release)
+    if [ -z "$body" ]; then
+        echo
+        echo -e "${RED}✗ Cannot reach GitHub Releases.${ENDCOLOR}"
+        if [ -n "$_gitb_update_fetch_err" ]; then
+            echo -e "${GRAY}${_gitb_update_fetch_err}${ENDCOLOR}"
+        fi
+        echo
+        print_link "Releases" "$GITBASHER_RELEASES_URL"
+        exit 1
+    fi
+    local latest_tag latest_url latest_date
+    latest_tag=$(_extract_tag_name "$body")
+    latest_url=$(_extract_release_url "$body")
+    latest_date=$(_extract_release_date "$body")
+    if [ -z "$latest_tag" ]; then
+        echo
+        echo -e "${RED}✗ Could not parse the latest release tag from GitHub's response.${ENDCOLOR}"
+        echo
+        print_link "Releases" "$GITBASHER_RELEASES_URL"
+        exit 1
+    fi
+    local latest_version="$(_normalize_version "$latest_tag")"
+    local printed_date=""
+    [ -n "$latest_date" ] && printed_date=" ${GRAY}(${latest_date})${ENDCOLOR}"
+    echo -e "Latest version:  ${GREEN}${latest_version}${ENDCOLOR}${printed_date}"
+    echo
+    if [ "$current_version" = "dev" ]; then
+        echo -e "${YELLOW}⚠  Running an unbuilt development version (GITBASHER_VERSION=dev).${ENDCOLOR}"
+        echo -e "${GRAY}Build with ${GREEN}make build${GRAY} or install a release with the install script.${ENDCOLOR}"
+        if [ -n "$latest_url" ]; then
+            echo
+            print_link "Release" "$latest_url"
+        fi
+        exit
+    fi
+    _compare_versions "$current_version" "$latest_version"
+    local cmp=$?
+    if [ -n "$check_only" ]; then
+        case $cmp in
+            0) echo -e "${GREEN}✓ You're on the latest version.${ENDCOLOR}";;
+            1) echo -e "${YELLOW}⚠  Your version is newer than the latest release.${ENDCOLOR}";;
+            2) echo -e "${YELLOW}⚠  A newer version is available: ${GREEN}${latest_version}${ENDCOLOR}"
+               echo -e "Run ${GREEN}gitb update${ENDCOLOR} to install it.";;
+        esac
+        if [ -n "$latest_url" ]; then
+            echo
+            print_link "Release" "$latest_url"
+        fi
+        exit
+    fi
+    if [ $cmp -eq 0 ] && [ -z "$force_update" ]; then
+        echo -e "${GREEN}✓ Already on the latest version.${ENDCOLOR}"
+        echo -e "${GRAY}Use ${GREEN}gitb update force${GRAY} to reinstall anyway.${ENDCOLOR}"
+        exit
+    fi
+    if [ $cmp -eq 1 ] && [ -z "$force_update" ]; then
+        echo -e "${YELLOW}⚠  Your version (${current_version}) is newer than the latest release (${latest_version}).${ENDCOLOR}"
+        echo -e "${GRAY}Use ${GREEN}gitb update force${GRAY} to install the published release anyway.${ENDCOLOR}"
+        exit
+    fi
+    local install_path
+    install_path=$(_gitb_install_path)
+    if [ -z "$install_path" ]; then
+        echo -e "${RED}✗ Could not locate the installed gitb binary on PATH.${ENDCOLOR}"
+        echo -e "Reinstall manually:"
+        echo -e "  ${GREEN}curl -fsSL https://raw.githubusercontent.com/${GITBASHER_REPO}/main/install.sh | bash${ENDCOLOR}"
+        exit 1
+    fi
+    if _gitb_is_npm_install "$install_path"; then
+        echo -e "${YELLOW}⚠  gitb is installed via npm at ${install_path}.${ENDCOLOR}"
+        echo -e "Update with npm so the package metadata stays in sync:"
+        echo -e "  ${GREEN}npm update -g gitbasher${ENDCOLOR}"
+        if [ -n "$latest_url" ]; then
+            echo
+            print_link "Release" "$latest_url"
+        fi
+        exit
+    fi
+    echo -e "Install location: ${BLUE}${install_path}${ENDCOLOR}"
+    if [ $cmp -eq 2 ]; then
+        echo -e "Update ${YELLOW}${current_version}${ENDCOLOR} → ${GREEN}${latest_version}${ENDCOLOR}? (y/n)"
+    else
+        echo -e "Reinstall ${GREEN}${latest_version}${ENDCOLOR} over the current binary? (y/n)"
+    fi
+    yes_no_choice "Updating..."
+    local tmp_path
+    tmp_path=$(_download_latest_gitb)
+    if [ -z "$tmp_path" ]; then
+        echo -e "${RED}✗ Download failed.${ENDCOLOR}"
+        if [ -n "$_gitb_update_download_err" ]; then
+            echo -e "${GRAY}${_gitb_update_download_err}${ENDCOLOR}"
+        fi
+        echo
+        print_link "Releases" "$GITBASHER_RELEASES_URL"
+        exit 1
+    fi
+    if ! _install_gitb_binary "$tmp_path" "$install_path"; then
+        rm -f "$tmp_path"
+        echo -e "${RED}✗ Could not install the new binary at ${install_path}.${ENDCOLOR}"
+        exit 1
+    fi
+    rm -f "$tmp_path"
+    local installed_version
+    installed_version=$("$install_path" --version 2>/dev/null | head -1 | awk '{print $NF}')
+    installed_version=$(_normalize_version "$installed_version")
+    if [ -z "$installed_version" ]; then
+        echo -e "${RED}✗ Installed binary at ${install_path} did not report a version.${ENDCOLOR}"
+        exit 1
+    fi
+    echo -e "${GREEN}✓ Updated gitbasher to ${installed_version}${ENDCOLOR}"
+    if [ -n "$latest_url" ]; then
+        echo
+        print_link "Release" "$latest_url"
+    fi
+}
 function _gitb_bash_completion_content {
 cat <<'GITB_BASH_EOF'
 _gitb_commands="
@@ -12602,6 +12981,7 @@ function print_help {
     printf "$row" "$CMD" "hook (ho, hk)"           "Manage git hooks"
     printf "$row" "$CMD" "worktree (wt, tree)"     "Manage git worktrees"
     printf "$row" "$CMD" "config (cf, cfg, conf)"  "Configure gitbasher"
+    printf "$row" "$CMD" "update (up, upd)"        "Check for and install gitbasher updates"
     echo
     echo -e "Run ${YELLOW}gitb <command> help${ENDCOLOR} for modes and examples"
     exit
@@ -12690,6 +13070,9 @@ case "$1" in
     ;;
     origin|or|o|remote)
         origin_script "$2" "$3"
+    ;;
+    update|up|upd)
+        update_script "$2"
     ;;
     init|i)
         exit

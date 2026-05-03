@@ -122,7 +122,7 @@ case "$1" in
         sync_script $2
     ;;
     wip|w)
-        wip_script $2 $3
+        wip_script "${@:2}"
     ;;
     branch|b|br|bran)         
         branch_script $2

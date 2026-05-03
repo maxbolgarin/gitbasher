@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-GITBASHER_VERSION="3.10.2-48-g2ec88f4"
+GITBASHER_VERSION="dev"
 if [ "$1" == "init" ] || [ "$1" == "i" ]; then
     git init
 fi
@@ -8,14 +8,22 @@ if [[ "$git_check" == *"fatal: not a git repository"* ]]; then
     echo "You can use gitb only in a git repository"
     exit
 fi
-if ((BASH_VERSINFO[0] < 4)); then 
-    if [ -x "/opt/homebrew/bin/bash" ]; then
-        exec /opt/homebrew/bin/bash "$0" "$@"
-        exit $?
-    elif [ -x "/usr/local/bin/bash" ]; then
-        exec /usr/local/bin/bash "$0" "$@"
-        exit $?
+if ((BASH_VERSINFO[0] < 4)); then
+    _gitb_candidate=$(command -v bash 2>/dev/null)
+    if [ -n "$_gitb_candidate" ] && [ -x "$_gitb_candidate" ] \
+       && "$_gitb_candidate" -c '((BASH_VERSINFO[0] >= 4))' >/dev/null 2>&1; then
+        exec "$_gitb_candidate" "$0" "$@"
     fi
+    if command -v brew >/dev/null 2>&1; then
+        _gitb_candidate="$(brew --prefix bash 2>/dev/null)/bin/bash"
+        if [ -x "$_gitb_candidate" ]; then
+            exec "$_gitb_candidate" "$0" "$@"
+        fi
+    fi
+    for _gitb_candidate in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+        [ -x "$_gitb_candidate" ] && exec "$_gitb_candidate" "$0" "$@"
+    done
+    unset _gitb_candidate
     printf "Sorry, you need at least bash-4.0 to run gitbasher.\n\n"
     printf "Linux (Debian/Ubuntu):\n    sudo apt update && sudo apt install --only-upgrade bash\n\n"
     printf "macOS:\n    1) Install Homebrew (if missing):\n       /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"\n    2) Install newer bash:\n       brew install bash\n    3) Optional: make it your default shell (then restart Terminal):\n       sudo sh -c 'echo /opt/homebrew/bin/bash >> /etc/shells' && chsh -s /opt/homebrew/bin/bash\n\n"
@@ -251,6 +259,22 @@ function is_no {
         return 0
     fi
     return 1
+}
+function on_branch {
+    git symbolic-ref --quiet HEAD >/dev/null 2>&1
+}
+function warn_if_detached_head {
+    on_branch && return 0
+    local _action="${1:-this operation}"
+    echo
+    echo -e "${YELLOW}You are in detached HEAD state.${ENDCOLOR}"
+    echo "Any new commits will not be on a branch and may be reclaimed by git's garbage collector."
+    read -n 1 -p "Continue ${_action} anyway? (y/N) " _ans
+    echo
+    case "$_ans" in
+        y|Y) return 0 ;;
+        *) exit 1 ;;
+    esac
 }
 function read_key {
     local _var="${1:-REPLY}"
@@ -535,12 +559,20 @@ function print_configuration {
     if [ "$scopes" != "" ]; then
         echo -e "\tscopes:\t\t${YELLOW}$scopes${ENDCOLOR}"
     fi
+    local ai_provider=$(get_ai_provider)
+    echo -e "\tAI provider:\t${GREEN}$ai_provider${ENDCOLOR}"
+    local ai_base_url=$(get_ai_base_url)
+    if [ -n "$ai_base_url" ]; then
+        echo -e "\tAI base URL:\t${GREEN}$ai_base_url${ENDCOLOR}"
+    fi
     local ai_key=$(get_ai_api_key)
     if [ -n "$ai_key" ]; then
         ai_key=$(mask_api_key "$ai_key")
         echo -e "\tAI key:\t\t${GREEN}$ai_key${ENDCOLOR}"
-    else
+    elif ai_provider_requires_api_key; then
         echo -e "\tAI key:\t\t${RED}not set${ENDCOLOR}"
+    else
+        echo -e "\tAI key:\t\t${GRAY}not required for $ai_provider${ENDCOLOR}"
     fi
     local ai_model=$(get_ai_model)
     if [ -n "$ai_model" ]; then
@@ -1148,6 +1180,9 @@ scopes=$(get_config_value gitbasher.scopes "")
 is_first=$(get_config_value gitbasher.isfirst "true")
 git config --local gitbasher.isfirst "false"
 readonly OPENROUTER_API_URL="https://openrouter.ai/api/v1/chat/completions"
+readonly OPENAI_API_URL="https://api.openai.com/v1/chat/completions"
+readonly OLLAMA_API_URL="http://localhost:11434/v1/chat/completions"
+readonly AI_DEFAULT_PROVIDER="openrouter"
 readonly AI_TEMPERATURE="0.3"
 readonly AI_MAX_TOKENS_SUBJECT=256
 readonly AI_MAX_TOKENS_SIMPLE=512
@@ -1162,6 +1197,39 @@ function get_ai_api_key {
 function set_ai_api_key {
     set_config_value gitbasher.ai-api-key "$1"
 }
+function get_ai_provider {
+    local provider
+    provider=$(get_config_value gitbasher.ai-provider "$AI_DEFAULT_PROVIDER")
+    echo "$provider" | tr '[:upper:]' '[:lower:]'
+}
+function set_ai_provider {
+    set_config_value gitbasher.ai-provider "$1"
+}
+function get_ai_base_url {
+    get_config_value gitbasher.ai-base-url ""
+}
+function set_ai_base_url {
+    set_config_value gitbasher.ai-base-url "$1"
+}
+function get_ai_api_url {
+    local custom_url
+    custom_url=$(get_ai_base_url)
+    if [ -n "$custom_url" ]; then
+        echo "$custom_url"
+        return
+    fi
+    case "$(get_ai_provider)" in
+        openai)  echo "$OPENAI_API_URL" ;;
+        ollama)  echo "$OLLAMA_API_URL" ;;
+        *)       echo "$OPENROUTER_API_URL" ;;
+    esac
+}
+function ai_provider_requires_api_key {
+    case "$(get_ai_provider)" in
+        ollama) return 1 ;;
+        *)      return 0 ;;
+    esac
+}
 function get_ai_model {
     get_config_value gitbasher.ai-model ""
 }
@@ -1172,6 +1240,14 @@ readonly AI_DEFAULT_MODEL_SIMPLE="google/gemini-3.1-flash-lite-preview"
 readonly AI_DEFAULT_MODEL_SUBJECT="google/gemini-3.1-flash-lite-preview"
 readonly AI_DEFAULT_MODEL_FULL="google/gemini-3-flash-preview"
 readonly AI_DEFAULT_MODEL_GROUPING="anthropic/claude-haiku-4.5"
+readonly AI_DEFAULT_MODEL_SIMPLE_OPENAI="gpt-5.4-nano"
+readonly AI_DEFAULT_MODEL_SUBJECT_OPENAI="gpt-5.4-nano"
+readonly AI_DEFAULT_MODEL_FULL_OPENAI="gpt-5.4-mini"
+readonly AI_DEFAULT_MODEL_GROUPING_OPENAI="gpt-5.4-mini"
+readonly AI_DEFAULT_MODEL_SIMPLE_OLLAMA="qwen3:8b"
+readonly AI_DEFAULT_MODEL_SUBJECT_OLLAMA="qwen3:8b"
+readonly AI_DEFAULT_MODEL_FULL_OLLAMA="qwen3:8b"
+readonly AI_DEFAULT_MODEL_GROUPING_OLLAMA="qwen3:8b"
 function get_ai_model_for {
     local task="$1"
     local task_model
@@ -1186,12 +1262,34 @@ function get_ai_model_for {
         echo "$global_model"
         return
     fi
-    case "$task" in
-        simple)   echo "$AI_DEFAULT_MODEL_SIMPLE" ;;
-        subject)  echo "$AI_DEFAULT_MODEL_SUBJECT" ;;
-        full)     echo "$AI_DEFAULT_MODEL_FULL" ;;
-        grouping) echo "$AI_DEFAULT_MODEL_GROUPING" ;;
-        *)        echo "$AI_DEFAULT_MODEL_SIMPLE" ;;
+    case "$(get_ai_provider)" in
+        openai)
+            case "$task" in
+                simple)   echo "$AI_DEFAULT_MODEL_SIMPLE_OPENAI" ;;
+                subject)  echo "$AI_DEFAULT_MODEL_SUBJECT_OPENAI" ;;
+                full)     echo "$AI_DEFAULT_MODEL_FULL_OPENAI" ;;
+                grouping) echo "$AI_DEFAULT_MODEL_GROUPING_OPENAI" ;;
+                *)        echo "$AI_DEFAULT_MODEL_SIMPLE_OPENAI" ;;
+            esac
+            ;;
+        ollama)
+            case "$task" in
+                simple)   echo "$AI_DEFAULT_MODEL_SIMPLE_OLLAMA" ;;
+                subject)  echo "$AI_DEFAULT_MODEL_SUBJECT_OLLAMA" ;;
+                full)     echo "$AI_DEFAULT_MODEL_FULL_OLLAMA" ;;
+                grouping) echo "$AI_DEFAULT_MODEL_GROUPING_OLLAMA" ;;
+                *)        echo "$AI_DEFAULT_MODEL_SIMPLE_OLLAMA" ;;
+            esac
+            ;;
+        *)
+            case "$task" in
+                simple)   echo "$AI_DEFAULT_MODEL_SIMPLE" ;;
+                subject)  echo "$AI_DEFAULT_MODEL_SUBJECT" ;;
+                full)     echo "$AI_DEFAULT_MODEL_FULL" ;;
+                grouping) echo "$AI_DEFAULT_MODEL_GROUPING" ;;
+                *)        echo "$AI_DEFAULT_MODEL_SIMPLE" ;;
+            esac
+            ;;
     esac
 }
 function set_ai_model_for {
@@ -1319,21 +1417,30 @@ function validate_proxy_url {
     if [ -z "$proxy_url" ]; then
         return 1
     fi
+    if [ ${#proxy_url} -gt 2048 ]; then
+        return 1
+    fi
     local cleaned_url=$(echo "$proxy_url" | sed 's/[^a-zA-Z0-9.:/@_%?&=-]//g')
-    if [[ "$cleaned_url" =~ ^(https?|socks5)://([a-zA-Z0-9._%-]+(:([a-zA-Z0-9._%-]+))?@)?[a-zA-Z0-9.-]+:[0-9]+(/.*)?$ ]]; then
-        validated_proxy_url="$cleaned_url"
-        return 0
-    elif [[ "$cleaned_url" =~ ^[a-zA-Z0-9.-]+:[0-9]+$ ]]; then
-        validated_proxy_url="$cleaned_url"
-        return 0
+    local port=""
+    if [[ "$cleaned_url" =~ ^(https?|socks5)://([a-zA-Z0-9._%-]+(:[a-zA-Z0-9._%-]+)?@)?([a-zA-Z0-9.-]{1,253}):([0-9]{1,5})(/.*)?$ ]]; then
+        port="${BASH_REMATCH[5]}"
+    elif [[ "$cleaned_url" =~ ^([a-zA-Z0-9.-]{1,253}):([0-9]{1,5})$ ]]; then
+        port="${BASH_REMATCH[2]}"
     else
         return 1
     fi
+    if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+        return 1
+    fi
+    validated_proxy_url="$cleaned_url"
+    return 0
 }
 function secure_curl_with_api_key {
     local proxy_url="$1"
     local api_key="$2"
     local json_payload="$3"
+    local api_url="$4"
+    local provider="$5"
     (
         { set +x; } 2>/dev/null
         unset HISTFILE
@@ -1346,13 +1453,19 @@ function secure_curl_with_api_key {
             curl_cmd+=(--proxy "$proxy_url")
         fi
         curl_cmd+=(
-            "$OPENROUTER_API_URL"
+            "$api_url"
             -H "Content-Type: application/json"
-            -H "Authorization: Bearer $api_key"
-            -H "HTTP-Referer: https://github.com/maxbolgarin/gitbasher"
-            -H "X-Title: gitbasher"
-            -d "$json_payload"
         )
+        if [ -n "$api_key" ]; then
+            curl_cmd+=(-H "Authorization: Bearer $api_key")
+        fi
+        if [ "$provider" = "openrouter" ]; then
+            curl_cmd+=(
+                -H "HTTP-Referer: https://github.com/maxbolgarin/gitbasher"
+                -H "X-Title: gitbasher"
+            )
+        fi
+        curl_cmd+=(-d "$json_payload")
         "${curl_cmd[@]}" 2>&1
     )
 }
@@ -1361,17 +1474,19 @@ function _json_escape_for_payload {
         | LC_ALL=C sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e $'s/\t/\\\\t/g' -e $'s/\r/\\\\r/g' \
         | LC_ALL=C awk 'BEGIN{ORS=""} NR>1{print "\\n"} {print}'
 }
-function call_openrouter_api {
+function call_ai_api {
     trap 'clear_sensitive_vars' EXIT INT TERM
     local system_prompt="$1"
     local user_prompt="$2"
     local max_tokens="${3:-$AI_MAX_TOKENS_FULL}"
     local model="${4:-$(get_ai_model_for simple)}"
+    local provider=$(get_ai_provider)
+    local api_url=$(get_ai_api_url)
     local api_key=$(get_ai_api_key)
     local max_retries=2
     local retry_delay=2
-    if [ -z "$api_key" ]; then
-        echo -e "${RED}AI API key not configured. Set it with: gitb config${ENDCOLOR}" >&2
+    if [ -z "$api_key" ] && ai_provider_requires_api_key; then
+        echo -e "${RED}AI API key not configured for provider '${provider}'. Set it with: gitb config${ENDCOLOR}" >&2
         clear_sensitive_vars
         return 1
     fi
@@ -1406,9 +1521,9 @@ function call_openrouter_api {
     fi
     while [ $retry_count -le $max_retries ]; do
         if [ -n "$safe_proxy_url" ]; then
-            response=$(secure_curl_with_api_key "$safe_proxy_url" "$api_key" "$json_payload")
+            response=$(secure_curl_with_api_key "$safe_proxy_url" "$api_key" "$json_payload" "$api_url" "$provider")
         else
-            response=$(secure_curl_with_api_key "" "$api_key" "$json_payload")
+            response=$(secure_curl_with_api_key "" "$api_key" "$json_payload" "$api_url" "$provider")
         fi
         curl_exit_code=$?
         if [ $curl_exit_code -eq 0 ] && [ -n "$response" ]; then
@@ -1450,18 +1565,24 @@ function call_openrouter_api {
                 echo -e "  📝 Error: $proxy_test" >&2
             fi
         else
+            local probe_host=$(echo "$api_url" | sed -E 's#^(https?://[^/]+).*#\1#')
             echo -e "  • No proxy configured" >&2
+            echo -e "  • Provider: ${provider}" >&2
             echo -e "${YELLOW}Direct connection troubleshooting:${ENDCOLOR}" >&2
-            echo -e "  • Test connection: ${BOLD}curl --connect-timeout 10 https://openrouter.ai${ENDCOLOR}" >&2
-            echo -e "${YELLOW}Testing direct connectivity to OpenRouter...${ENDCOLOR}" >&2
-            local direct_test=$(curl --connect-timeout 5 --max-time 10 -s -I https://openrouter.ai 2>&1)
+            echo -e "  • Test connection: ${BOLD}curl --connect-timeout 10 ${probe_host}${ENDCOLOR}" >&2
+            echo -e "${YELLOW}Testing direct connectivity to ${probe_host}...${ENDCOLOR}" >&2
+            local direct_test=$(curl --connect-timeout 5 --max-time 10 -s -I "$probe_host" 2>&1)
             local direct_test_code=$?
             if [ $direct_test_code -eq 0 ]; then
-                echo -e "  ✅ OpenRouter endpoint: Reachable" >&2
+                echo -e "  ✅ ${provider} endpoint: Reachable" >&2
             else
-                echo -e "  ❌ OpenRouter endpoint: Failed (exit code: $direct_test_code)" >&2
+                echo -e "  ❌ ${provider} endpoint: Failed (exit code: $direct_test_code)" >&2
                 echo -e "  📝 Error: $(echo "$direct_test" | head -1)" >&2
-                echo -e "  💡 Consider configuring a proxy: gitb cfg proxy" >&2
+                if [ "$provider" = "ollama" ]; then
+                    echo -e "  💡 Make sure the Ollama daemon is running: ${BOLD}ollama serve${ENDCOLOR}" >&2
+                else
+                    echo -e "  💡 Consider configuring a proxy: gitb cfg proxy" >&2
+                fi
             fi
         fi
         if [ -n "$response" ]; then
@@ -1521,7 +1642,10 @@ function call_openrouter_api {
                 echo -e "${YELLOW}🔐 Authentication error: Invalid or expired API key.${ENDCOLOR}" >&2
                 echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
                 echo -e "${YELLOW}  • Check your API key with: gitb cfg ai${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Get an OpenRouter key at: https://openrouter.ai/keys${ENDCOLOR}" >&2
+                case "$provider" in
+                    openai)     echo -e "${YELLOW}  • Get an OpenAI key at: https://platform.openai.com/api-keys${ENDCOLOR}" >&2 ;;
+                    openrouter) echo -e "${YELLOW}  • Get an OpenRouter key at: https://openrouter.ai/keys${ENDCOLOR}" >&2 ;;
+                esac
                 echo -e "${YELLOW}  • Ensure your key has proper permissions${ENDCOLOR}" >&2
                 ;;
             429)
@@ -1599,11 +1723,13 @@ function check_ai_available {
         echo -e "${RED}curl is required for AI functionality but not installed${ENDCOLOR}" >&2
         return 1
     fi
-    local api_key=$(get_ai_api_key)
-    if [ -z "$api_key" ]; then
-        echo -e "${RED}AI API key not configured${ENDCOLOR}" >&2
-        echo -e "${YELLOW}Configure it with: gitb cfg ai${ENDCOLOR}" >&2
-        return 1
+    if ai_provider_requires_api_key; then
+        local api_key=$(get_ai_api_key)
+        if [ -z "$api_key" ]; then
+            echo -e "${RED}AI API key not configured${ENDCOLOR}" >&2
+            echo -e "${YELLOW}Configure it with: gitb cfg ai${ENDCOLOR}" >&2
+            return 1
+        fi
     fi
     return 0
 }
@@ -1779,7 +1905,7 @@ function generate_ai_commit_message {
         full)    max_tokens="$AI_MAX_TOKENS_FULL";    model=$(get_ai_model_for full) ;;
         *)       max_tokens="$AI_MAX_TOKENS_SIMPLE";  model=$(get_ai_model_for simple) ;;
     esac
-    call_openrouter_api "$system_prompt" "$user_prompt" "$max_tokens" "$model"
+    call_ai_api "$system_prompt" "$user_prompt" "$max_tokens" "$model"
 }
 function clear_sensitive_vars {
     api_key=""
@@ -1920,14 +2046,28 @@ function set_ticket {
 function configure_ai_key {
     echo -e "${YELLOW}Enter AI API key${ENDCOLOR}"
     echo
+    local provider=$(get_ai_provider)
+    if [ "$provider" = "ollama" ]; then
+        echo -e "${YELLOW}Provider '${provider}' does not require an API key.${ENDCOLOR}"
+        echo -e "Switch providers with ${BLUE}gitb cfg provider${ENDCOLOR} if you want to enter one."
+        exit
+    fi
     ai_api_key=$(get_ai_api_key)
     if [ -z "$ai_api_key" ]; then
         echo -e "${YELLOW}AI API key is not set${ENDCOLOR}"
     else
         echo -e "AI API key is ${GREEN}configured${ENDCOLOR}: ${BLUE}$(mask_api_key "$ai_api_key")${ENDCOLOR}"
     fi
-    echo -e "Enter your ${YELLOW}OpenRouter API key${ENDCOLOR} to enable AI commit message generation"
-    echo -e "Get your API key from: ${BLUE}https://openrouter.ai/keys${ENDCOLOR}"
+    case "$provider" in
+        openai)
+            echo -e "Enter your ${YELLOW}OpenAI API key${ENDCOLOR} to enable AI commit message generation"
+            echo -e "Get your API key from: ${BLUE}https://platform.openai.com/api-keys${ENDCOLOR}"
+            ;;
+        *)
+            echo -e "Enter your ${YELLOW}OpenRouter API key${ENDCOLOR} to enable AI commit message generation"
+            echo -e "Get your API key from: ${BLUE}https://openrouter.ai/keys${ENDCOLOR}"
+            ;;
+    esac
     echo
     echo -e "${YELLOW}Security Note:${ENDCOLOR} For better security, consider using environment variable:"
     echo -e "  ${BLUE}export GITB_AI_API_KEY='your-api-key'${ENDCOLOR}"
@@ -1949,7 +2089,7 @@ function configure_ai_key {
     fi
     echo
     if [[ ! "$ai_key_input" =~ ^[a-zA-Z0-9._-]{20,}$ ]]; then
-        echo -e "${RED}Warning: API key format doesn't look like a valid OpenRouter key${ENDCOLOR}" >&2
+        echo -e "${RED}Warning: API key format doesn't look like a valid ${provider} key${ENDCOLOR}" >&2
         read -n 1 -p "Continue anyway? (y/n) " -s choice
         echo
         if ! is_yes "$choice"; then
@@ -1964,6 +2104,62 @@ function configure_ai_key {
     echo -e "${YELLOW}   Consider using environment variable GITB_AI_API_KEY instead for better security${ENDCOLOR}"
     yes_no_choice "\nSet AI API key globally" "true"
     ai_api_key=$(set_config_value gitbasher.ai-api-key "$ai_key_input" "true")
+}
+function configure_ai_provider {
+    echo -e "${YELLOW}Choose AI Provider${ENDCOLOR}"
+    echo
+    local current_provider=$(get_ai_provider)
+    local current_base_url=$(get_ai_base_url)
+    echo -e "Current provider: ${GREEN}${current_provider}${ENDCOLOR}"
+    if [ -n "$current_base_url" ]; then
+        echo -e "Custom base URL: ${GREEN}${current_base_url}${ENDCOLOR}"
+    fi
+    echo
+    echo -e "Options:"
+    echo -e "  1. ${BLUE}openrouter${ENDCOLOR}  Aggregator with hundreds of models — needs an API key"
+    echo -e "  2. ${BLUE}openai${ENDCOLOR}      OpenAI direct (GPT-5 family) — needs an API key"
+    echo -e "  3. ${BLUE}ollama${ENDCOLOR}      Local models via http://localhost:11434 — no API key required"
+    echo
+    echo -e "Press Enter to keep the current provider, or enter 0 to reset to default (${AI_DEFAULT_PROVIDER})"
+    read -p "Choice (1-3): " choice
+    if [ "$choice" == "" ]; then
+        exit
+    fi
+    if [ "$choice" == "0" ]; then
+        git config --unset gitbasher.ai-provider 2>/dev/null
+        git config --global --unset gitbasher.ai-provider 2>/dev/null
+        echo
+        echo -e "${GREEN}Provider reset to default (${AI_DEFAULT_PROVIDER}).${ENDCOLOR}"
+        exit
+    fi
+    local new_provider
+    case "$choice" in
+        1) new_provider="openrouter" ;;
+        2) new_provider="openai" ;;
+        3) new_provider="ollama" ;;
+        *)
+            echo -e "${RED}Invalid choice${ENDCOLOR}" >&2
+            exit 1
+            ;;
+    esac
+    set_ai_provider "$new_provider"
+    echo -e "${GREEN}AI provider set to '${new_provider}' for '${project_name}' repo${ENDCOLOR}"
+    case "$new_provider" in
+        openai)
+            echo -e "Next: set your key with ${BLUE}gitb cfg ai${ENDCOLOR} (https://platform.openai.com/api-keys)"
+            ;;
+        openrouter)
+            echo -e "Next: set your key with ${BLUE}gitb cfg ai${ENDCOLOR} (https://openrouter.ai/keys)"
+            ;;
+        ollama)
+            echo -e "Make sure the Ollama daemon is running (${BLUE}ollama serve${ENDCOLOR}) and a model is pulled (${BLUE}ollama pull qwen3:8b${ENDCOLOR})."
+            echo -e "Pick a different model with ${BLUE}gitb cfg model${ENDCOLOR} if you have something else installed."
+            ;;
+    esac
+    echo
+    echo -e "Do you want to set this provider ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+    yes_no_choice "\nSet AI provider globally" "true"
+    set_config_value gitbasher.ai-provider "$new_provider" "true"
 }
 function configure_ai_model {
     echo -e "${YELLOW}Configure AI Model${ENDCOLOR}"
@@ -1983,12 +2179,27 @@ function configure_ai_model {
     echo -e "Per-task overrides can be set directly with git config:"
     echo -e "  ${BLUE}git config gitbasher.ai-model-simple <model_id>${ENDCOLOR}    (and -subject / -full / -grouping)"
     echo
-    echo -e "Popular models:"
-    echo -e "  • ${BLUE}openrouter/auto${ENDCOLOR} - Auto-select best available model"
-    echo -e "  • ${BLUE}google/gemini-3.1-flash-lite-preview${ENDCOLOR} - Fastest, cheapest"
-    echo -e "  • ${BLUE}google/gemini-3-flash-preview${ENDCOLOR} - Better body prose"
-    echo -e "  • ${BLUE}anthropic/claude-haiku-4.5${ENDCOLOR} - Strict instruction following"
-    echo -e "  • ${BLUE}openai/gpt-5-mini${ENDCOLOR} - Strong reasoning, low cost"
+    echo -e "Popular models for provider '${GREEN}$(get_ai_provider)${ENDCOLOR}':"
+    case "$(get_ai_provider)" in
+        openai)
+            echo -e "  • ${BLUE}gpt-5.4-nano${ENDCOLOR} - Cheapest+fastest, ideal for one-line subjects (~\$0.20/\$1.25 per M)"
+            echo -e "  • ${BLUE}gpt-5.4-mini${ENDCOLOR} - Balanced for full-body prose and strict TSV output (~\$0.75/\$4.50 per M)"
+            echo -e "  • ${BLUE}gpt-5.4${ENDCOLOR} - Flagship, only worth it for the hardest grouping cases"
+            ;;
+        ollama)
+            echo -e "  • ${BLUE}qwen3:8b${ENDCOLOR} - Best small instruction-follower; most stable structured output"
+            echo -e "  • ${BLUE}llama3.3:8b${ENDCOLOR} - Solid general-purpose alternative"
+            echo -e "  • ${BLUE}qwen2.5-coder:7b${ENDCOLOR} - Code-focused; good when most diffs are code"
+            echo -e "  Run ${BLUE}ollama list${ENDCOLOR} to see what you have pulled locally."
+            ;;
+        *)
+            echo -e "  • ${BLUE}openrouter/auto${ENDCOLOR} - Auto-select best available model"
+            echo -e "  • ${BLUE}google/gemini-3.1-flash-lite-preview${ENDCOLOR} - Fastest, cheapest"
+            echo -e "  • ${BLUE}google/gemini-3-flash-preview${ENDCOLOR} - Better body prose"
+            echo -e "  • ${BLUE}anthropic/claude-haiku-4.5${ENDCOLOR} - Strict instruction following"
+            echo -e "  • ${BLUE}openai/gpt-5.4-mini${ENDCOLOR} - Strong reasoning, low cost"
+            ;;
+    esac
     echo
     echo -e "Press Enter to exit without changes or enter 0 to clear the override (back to per-task defaults)"
     read -p "Model ID: " model_input
@@ -2358,6 +2569,7 @@ function config_script {
         ticket|jira|ti|t)     set_ticket_cfg="true";;
         scopes|scope|sc|s)    set_scopes_cfg="true";;
         ai|llm|key)           set_ai_cfg="true";;
+        provider|prov)        set_ai_provider_cfg="true";;
         model|m)              set_ai_model_cfg="true";;
         proxy|prx|p)          set_proxy_cfg="true";;
         history|hist)         set_ai_history_cfg="true";;
@@ -2380,6 +2592,8 @@ function config_script {
         header="$header SCOPES LIST"
     elif [ -n "${set_ai_cfg}" ]; then
         header="$header AI API KEY"
+    elif [ -n "${set_ai_provider_cfg}" ]; then
+        header="$header AI PROVIDER"
     elif [ -n "${set_ai_model_cfg}" ]; then
         header="$header AI MODEL"
     elif [ -n "${set_proxy_cfg}" ]; then
@@ -2423,6 +2637,10 @@ function config_script {
         configure_ai_key
         exit
     fi
+    if [ "$set_ai_provider_cfg" == "true" ]; then
+        configure_ai_provider
+        exit
+    fi
     if [ "$set_ai_model_cfg" == "true" ]; then
         configure_ai_model
         exit
@@ -2455,7 +2673,8 @@ function config_script {
         msg="$msg\n${BOLD}ticket${ENDCOLOR}_ti|t|jira_Set ticket prefix to help with commit/branch building"
         msg="$msg\n${BOLD}scopes${ENDCOLOR}_sc_Set a list of scopes to help with commit building"
         msg="$msg\n${BOLD}ai${ENDCOLOR}_llm|key_Set AI API key for commit message generation"
-        msg="$msg\n${BOLD}model${ENDCOLOR}_m_Set AI model for OpenRouter"
+        msg="$msg\n${BOLD}provider${ENDCOLOR}_prov_Choose AI provider (openrouter, openai, ollama)"
+        msg="$msg\n${BOLD}model${ENDCOLOR}_m_Set AI model for the active provider"
         msg="$msg\n${BOLD}proxy${ENDCOLOR}_prx|p_Set HTTP proxy for AI requests (bypass geo-restrictions)"
         msg="$msg\n${BOLD}history${ENDCOLOR}_hist_Set number of recent commits to include in AI prompts"
         msg="$msg\n${BOLD}diff${ENDCOLOR}_payload_Set diff payload size (lines and char cap) sent to AI"
@@ -4104,6 +4323,7 @@ function push_script {
         echo -e "$(echo -e "$msg" | column -ts'_')"
         exit
     fi
+    warn_if_detached_head "push"
     get_push_list ${current_branch} ${main_branch} ${origin_name}
     if [ -z "$push_list" ]; then
         echo -e "${GREEN}Nothing to push${ENDCOLOR}"
@@ -4345,7 +4565,7 @@ ${heuristic_hint}
 </heuristic_candidates>
 Output TSV (scope<TAB>file) for every staged file. No prose."
     local ai_response
-    ai_response=$(call_openrouter_api "$system_prompt" "$user_prompt" "$AI_MAX_TOKENS_FULL" "$(get_ai_model_for grouping)" 2>/dev/null)
+    ai_response=$(call_ai_api "$system_prompt" "$user_prompt" "$AI_MAX_TOKENS_FULL" "$(get_ai_model_for grouping)" 2>/dev/null)
     if [ $? -ne 0 ] || [ -z "$ai_response" ]; then
         return 1
     fi
@@ -5012,6 +5232,7 @@ function commit_script {
         git config --unset gitbasher.cached-git-add 2>/dev/null
         exit
     fi
+    warn_if_detached_head "commit"
     if [ -n "$last" ]; then
         git config --unset gitbasher.cached-git-add 2>/dev/null
         git commit --amend
@@ -5714,7 +5935,11 @@ function branch_script {
         echo
         echo -e "${YELLOW}Checking out to tag ${selected_tag}...${ENDCOLOR}"
         echo
-        checkout_output=$(git checkout "$selected_tag" 2>&1)
+        if ! sanitize_git_name "$selected_tag"; then
+            echo -e "${RED}Invalid tag name: ${selected_tag}${ENDCOLOR}"
+            exit 1
+        fi
+        checkout_output=$(git checkout "$sanitized_git_name" 2>&1)
         checkout_code=$?
         if [ $checkout_code -eq 0 ]; then
             echo -e "${GREEN}Successfully checked out to tag '${selected_tag}'${ENDCOLOR}"

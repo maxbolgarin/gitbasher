@@ -10,6 +10,14 @@ install: build
 	@cp ./dist/gitb ~/.local/bin/gitb
 	@chmod +x ~/.local/bin/gitb
 
+.PHONY: install-completions
+install-completions:
+	@./completion/install.sh
+
+.PHONY: uninstall-completions
+uninstall-completions:
+	@./completion/install.sh --uninstall
+
 .PHONY: release
 release: build
 	@echo "Build complete. Use CI workflow to create releases."

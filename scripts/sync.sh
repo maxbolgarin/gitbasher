@@ -17,6 +17,7 @@ function sync_script {
         push|p)         sync_push="true";;
         merge|m)        sync_merge="true";;
         mergep|mp|pm)   sync_merge="true"; sync_push="true";;
+        dry|d|dr)       sync_dry="true";;
         help|h)         help="true";;
         *)
             wrong_mode "sync" $1
@@ -25,7 +26,9 @@ function sync_script {
 
     ### Print header
     header_msg="GIT SYNC"
-    if [ -n "${sync_merge}" ]; then
+    if [ -n "${sync_dry}" ]; then
+        header_msg="$header_msg DRY RUN"
+    elif [ -n "${sync_merge}" ]; then
         if [ -n "${sync_push}" ]; then
             header_msg="$header_msg MERGE & PUSH"
         else
@@ -47,6 +50,7 @@ function sync_script {
         msg="$msg\n${BOLD}push${ENDCOLOR}_p_Fetch $main_branch, rebase current branch onto it, and force push"
         msg="$msg\n${BOLD}merge${ENDCOLOR}_m_Fetch $main_branch and merge it into current branch"
         msg="$msg\n${BOLD}mergep${ENDCOLOR}_mp|pm_Fetch $main_branch, merge it into current branch, and push"
+        msg="$msg\n${BOLD}dry${ENDCOLOR}_d|dr_Preview commits that sync would bring in from $main_branch without modifying local refs"
         msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
         echo -e "$(echo -e "$msg" | column -ts'_')"
         exit
@@ -55,7 +59,70 @@ function sync_script {
 
     ### Check if already on default branch
     if [ "$current_branch" == "$main_branch" ]; then
-        echo -e "${YELLOW}Already on ${main_branch}, use ${BOLD}gitb pull${NORMAL}${YELLOW} instead${ENDCOLOR}"
+        if [ -n "$sync_dry" ]; then
+            echo -e "${YELLOW}Already on ${main_branch}, use ${BOLD}gitb pull dry${NORMAL}${YELLOW} instead${ENDCOLOR}"
+        else
+            echo -e "${YELLOW}Already on ${main_branch}, use ${BOLD}gitb pull${NORMAL}${YELLOW} instead${ENDCOLOR}"
+        fi
+        exit
+    fi
+
+
+    ### Dry-run mode: preview the sync without modifying any local state
+    if [ -n "$sync_dry" ]; then
+        if [ -z "$origin_name" ]; then
+            echo -e "${RED}No git remote configured.${ENDCOLOR}"
+            echo -e "Use ${BLUE}git remote add origin <url>${ENDCOLOR} to set it up first."
+            exit 1
+        fi
+
+        echo -e "${YELLOW}Checking ${origin_name}/${main_branch} for incoming commits...${ENDCOLOR}"
+        echo
+
+        ### Snapshot the remote-tracking ref so we can restore it after the fetch.
+        ### git fetch always honors the configured refs/heads/*:refs/remotes/origin/* refspec,
+        ### so we save the current value and roll it back once we've inspected FETCH_HEAD.
+        remote_tracking_ref="refs/remotes/$origin_name/$main_branch"
+        saved_ref=$(git rev-parse --verify --quiet "$remote_tracking_ref")
+
+        dry_output=$(git fetch --no-tags "$origin_name" "$main_branch" 2>&1)
+        dry_code=$?
+
+        if [ -n "$saved_ref" ]; then
+            git update-ref "$remote_tracking_ref" "$saved_ref" 2>/dev/null
+        else
+            git update-ref -d "$remote_tracking_ref" 2>/dev/null
+        fi
+
+        if [ $dry_code != 0 ]; then
+            echo -e "${RED}Cannot fetch ${main_branch}! Error message:${ENDCOLOR}"
+            echo -e "$dry_output"
+            exit $dry_code
+        fi
+
+        ### Commits on main that current branch doesn't have (would be applied by sync)
+        incoming=$(commit_list 999 "tab" "HEAD..FETCH_HEAD")
+        ### Commits on current branch not on main (would be replayed during rebase)
+        local_only=$(commit_list 999 "tab" "FETCH_HEAD..HEAD")
+
+        if [ -z "$incoming" ]; then
+            echo -e "${GREEN}Already up to date with ${main_branch}${ENDCOLOR}"
+        else
+            incoming_count=$(echo -e "$incoming" | wc -l | sed 's/^ *//;s/ *$//')
+            echo -e "${BOLD}$incoming_count${ENDCOLOR} commits on ${YELLOW}${origin_name}/${main_branch}${ENDCOLOR} would be applied to ${YELLOW}${current_branch}${ENDCOLOR}"
+            echo -e "$incoming"
+        fi
+
+        if [ -n "$local_only" ]; then
+            echo
+            local_count=$(echo -e "$local_only" | wc -l | sed 's/^ *//;s/ *$//')
+            echo -e "${BOLD}$local_count${ENDCOLOR} local commits on ${YELLOW}${current_branch}${ENDCOLOR} would be replayed on top after rebase"
+            echo -e "$local_only"
+        fi
+
+        echo
+        echo -e "${BLUE}Dry run only — no local refs were modified${ENDCOLOR}"
+        echo -e "Run ${YELLOW}gitb sync${ENDCOLOR} to apply changes"
         exit
     fi
 

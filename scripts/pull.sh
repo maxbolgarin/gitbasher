@@ -24,6 +24,7 @@ function pull_script {
         merge|m)            merge="true";;
         rebase|r)           rebase="true";;
         interactive|ri|rs)  rebase="true"; interactive="true";;
+        dry|d|dr)           dry="true";;
         help|h)             help="true";;
         *)
             wrong_mode "pull" $1
@@ -32,7 +33,9 @@ function pull_script {
 
     ### Print header
     header_msg="GIT PULL"
-    if [ -n "${fetch}" ]; then
+    if [ -n "${dry}" ]; then
+        header_msg="$header_msg DRY RUN"
+    elif [ -n "${fetch}" ]; then
         if [ -n "${all}" ]; then
             header_msg="$header_msg FETCH ALL"
         else
@@ -68,6 +71,7 @@ function pull_script {
         msg="$msg\n${BOLD}merge${ENDCOLOR}_m_Fetch current branch and then merge it"
         msg="$msg\n${BOLD}rebase${ENDCOLOR}_r_Fetch current branch and then rebase"
         msg="$msg\n${BOLD}interactive${ENDCOLOR}_ri|rs_Fetch current branch and then rebase in interactive mode with --autosquash"
+        msg="$msg\n${BOLD}dry${ENDCOLOR}_d|dr_Preview incoming commits from remote without modifying local refs"
         msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
         echo -e "$(echo -e "$msg" | column -ts'_')"
         exit
@@ -84,6 +88,68 @@ function pull_script {
         echo -e "${RED}No git remote configured.${ENDCOLOR}"
         echo -e "Use ${BLUE}git remote add origin <url>${ENDCOLOR} to set it up first."
         exit 1
+    fi
+
+    if [ -n "$dry" ]; then
+        echo -e "${YELLOW}Checking '$origin_name/$current_branch' for incoming commits...${ENDCOLOR}"
+        echo
+
+        ### Snapshot the remote-tracking ref so we can restore it after the fetch.
+        ### git fetch always honors the configured refs/heads/*:refs/remotes/origin/* refspec,
+        ### even when an explicit refspec is also passed, so we have to roll back manually.
+        remote_tracking_ref="refs/remotes/$origin_name/$current_branch"
+        saved_ref=$(git rev-parse --verify --quiet "$remote_tracking_ref")
+
+        dry_output=$(git fetch --no-tags "$origin_name" "$current_branch" 2>&1)
+        dry_code=$?
+
+        ### Restore the remote-tracking ref to its pre-dry-run value
+        if [ -n "$saved_ref" ]; then
+            git update-ref "$remote_tracking_ref" "$saved_ref" 2>/dev/null
+        else
+            git update-ref -d "$remote_tracking_ref" 2>/dev/null
+        fi
+
+        if [ $dry_code != 0 ]; then
+            if [[ "$dry_output" == *"couldn't find remote ref"* ]]; then
+                echo -e "${YELLOW}There is no '$current_branch' in $origin_name${ENDCOLOR}"
+                exit
+            fi
+            echo -e "${RED}Cannot fetch! Error message:${ENDCOLOR}"
+            echo -e "$dry_output"
+            exit $dry_code
+        fi
+
+        ### FETCH_HEAD now points at the just-fetched tip — diff against HEAD
+        behind_commits=$(commit_list 999 "tab" "HEAD..FETCH_HEAD")
+        ahead_commits=$(commit_list 999 "tab" "FETCH_HEAD..HEAD")
+
+        if [ -z "$behind_commits" ] && [ -z "$ahead_commits" ]; then
+            echo -e "${GREEN}Already up to date${ENDCOLOR}"
+            echo
+            echo -e "${BLUE}Dry run only — no local refs were modified${ENDCOLOR}"
+            exit
+        fi
+
+        if [ -n "$behind_commits" ]; then
+            behind_count=$(echo -e "$behind_commits" | wc -l | sed 's/^ *//;s/ *$//')
+            echo -e "Your branch is behind ${YELLOW}$origin_name/$current_branch${ENDCOLOR} by ${BOLD}$behind_count${ENDCOLOR} commits"
+            echo -e "$behind_commits"
+        fi
+
+        if [ -n "$ahead_commits" ]; then
+            if [ -n "$behind_commits" ]; then
+                echo
+            fi
+            ahead_count=$(echo -e "$ahead_commits" | wc -l | sed 's/^ *//;s/ *$//')
+            echo -e "Your branch is ahead of ${YELLOW}$origin_name/$current_branch${ENDCOLOR} by ${BOLD}$ahead_count${ENDCOLOR} commits"
+            echo -e "$ahead_commits"
+        fi
+
+        echo
+        echo -e "${BLUE}Dry run only — no local refs were modified${ENDCOLOR}"
+        echo -e "Run ${YELLOW}gitb pull${ENDCOLOR} to apply changes"
+        exit
     fi
 
     if [ -n "$fetch" ]; then

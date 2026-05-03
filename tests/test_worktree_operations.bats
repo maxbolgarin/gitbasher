@@ -49,7 +49,9 @@ teardown() {
 }
 
 @test "list_worktrees_data: detects an added worktree" {
-    local extra="$(mktemp -d)/wt-feature"
+    local parent
+    parent=$(cd "$(mktemp -d)" && pwd -P)
+    local extra="$parent/wt-feature"
     git worktree add -b feature/wt-test "$extra" >/dev/null 2>&1
 
     list_worktrees_data
@@ -87,27 +89,30 @@ teardown() {
 
 # ===== default_worktree_path =====
 
-@test "default_worktree_path: uses sibling directory by default" {
+@test "default_worktree_path: uses .worktree inside repo by default" {
     local result
     result=$(default_worktree_path "feature/branch")
-    local repo_dir
-    repo_dir=$(basename "$TEST_REPO")
-    local parent
-    parent=$(dirname "$TEST_REPO")
-    [ "$result" = "${parent}/${repo_dir}-feature-branch" ]
+    [ "$result" = "${TEST_REPO}/.worktree/feature-branch" ]
 }
 
-@test "default_worktree_path: respects gitbasher.worktreebase config" {
+@test "default_worktree_path: respects absolute gitbasher.worktreebase config" {
     git config --local gitbasher.worktreebase "/tmp/wt-custom"
     local result
     result=$(default_worktree_path "feat/x")
     [ "$result" = "/tmp/wt-custom/feat-x" ]
 }
 
+@test "default_worktree_path: resolves relative gitbasher.worktreebase against repo root" {
+    git config --local gitbasher.worktreebase "wt-rel"
+    local result
+    result=$(default_worktree_path "feat/y")
+    [ "$result" = "${TEST_REPO}/wt-rel/feat-y" ]
+}
+
 @test "default_worktree_path: replaces slashes in branch with dashes" {
     local result
     result=$(default_worktree_path "feature/nested/name")
-    [[ "$result" == *"-feature-nested-name" ]]
+    [[ "$result" == *"/feature-nested-name" ]]
 }
 
 # ===== git worktree integration =====

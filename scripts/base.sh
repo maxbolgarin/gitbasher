@@ -8,54 +8,55 @@ function print_help {
     echo -e "usage: ${YELLOW}gitb <command> [mode]${ENDCOLOR}"
     echo
 
-    msg="${YELLOW}Common flows${ENDCOLOR}_\t${BLUE}What it does${ENDCOLOR}"
-    msg="$msg\n${BOLD}gitb st${NORMAL}_Show repo status and changed files"
-    msg="$msg\n${BOLD}gitb c${NORMAL}_Create an interactive conventional commit"
-    msg="$msg\n${BOLD}gitb c ai${NORMAL}_Generate an AI commit message from staged changes"
-    msg="$msg\n${BOLD}gitb c aip${NORMAL}_Generate an AI commit message, commit, and push"
-    msg="$msg\n${BOLD}gitb sy${NORMAL}_Sync current branch with $main_branch"
-    msg="$msg\n${BOLD}gitb sq${NORMAL}_Use AI to squash branch commits into changelog-ready history"
-    msg="$msg\n${BOLD}gitb b new${NORMAL}_Create a conventionally named branch"
-    echo -e "$(echo -e "$msg" | column -ts '_')"
+    local CMD=19 ALIAS=11
+    local hdr3="${YELLOW}%-*s${ENDCOLOR}  ${GREEN}%-*s${ENDCOLOR}  ${BLUE}%s${ENDCOLOR}\n"
+    local hdr2="${YELLOW}%-*s${ENDCOLOR}  %-*s  ${BLUE}%s${ENDCOLOR}\n"
+    local row="%-*s  %-*s  %s\n"
+    local rowb="${BOLD}%-*s${NORMAL}  %-*s  %s\n"
+
+    printf "$hdr2" "$CMD" "Common flows"  "$ALIAS" "" "What it does"
+    printf "$rowb" "$CMD" "gitb status"   "$ALIAS" "" "Show repo status and changed files"
+    printf "$rowb" "$CMD" "gitb commit"   "$ALIAS" "" "Create an interactive conventional commit"
+    printf "$rowb" "$CMD" "gitb c ai"     "$ALIAS" "" "Generate an AI commit message from staged changes"
+    printf "$rowb" "$CMD" "gitb c ai push" "$ALIAS" "" "Generate an AI commit message, commit, and push"
+    printf "$rowb" "$CMD" "gitb sync"       "$ALIAS" "" "Sync current branch with $main_branch"
+    printf "$rowb" "$CMD" "gitb branch new"  "$ALIAS" "" "Create a conventionally named branch"
     echo
 
-    msg="${YELLOW}Workflow commands${ENDCOLOR}_\t${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-    msg="$msg\ncommit_c|co|com_Create commits: interactive, AI, split, amend, revert"
-    msg="$msg\npush_p|ps|pus_Push changes safely to a remote repository"
-    msg="$msg\npull_pu|pl|pul_Pull changes from a remote repository"
-    msg="$msg\nbranch_b|br|bran_List, switch, create, and clean up branches"
-    msg="$msg\ntag_t|tg_Create, push, list, fetch, and delete tags"
-    msg="$msg\nmerge_m|me_Merge branches into the current branch or $main_branch"
-    msg="$msg\nrebase_r|re|base_Rebase current branch, autosquash, or pull commits"
-    msg="$msg\nsquash_sq|tidy_AI-driven squash of branch commits into changelog-ready history"
-    msg="$msg\ncherry_ch|cp_Cherry-pick commits from other branches"
-    msg="$msg\nsync_sy_Sync current branch with $main_branch (fetch + rebase/merge)"
-    msg="$msg\nwip_w_Stash work-in-progress and optionally back it up remotely"
-    msg="$msg\nundo_un_Undo commit, amend, merge, rebase, or stash actions"
-    msg="$msg\nreset_res_Preview and apply common git reset flows"
-    msg="$msg\nstash_s|sta_Manage git stashes"
-    msg="$msg\nworktree_wt|tree_List, add, remove, lock, move, and prune git worktrees"
-    msg="$msg\nhook_ho|hk_List, create, edit, toggle, and test git hooks"
-    msg="$msg\norigin_or|o|remote_Init, set, change, rename, or remove remotes"
-    msg="$msg\nconfig_cf|cfg|conf_Configure gitbasher settings"
-
-    msg="$msg\n_ _ _"
-    msg="$msg\nprev_-_Switch to the previous branch (like cd -)"
-    msg="$msg\n_ _ _"
-    msg="$msg\n${YELLOW}Info commands${ENDCOLOR}_\t${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-    msg="$msg\nstatus_st_Show repo status and changed files"
-    msg="$msg\nlog_l|lg_View git log with branch selection and comparison"
-    msg="$msg\nreflog_rl|rlg_Open git reflog in a pretty format"
-    msg="$msg\nlast-commit_lc|lastc_Show info about the last commit"
-    msg="$msg\nlast-ref_lr|lastr_Show info about the last reference"
-    echo -e "$(echo -e "$msg" | column -ts '_')"
+    printf "$hdr3" "$CMD" "Workflow commands" "$ALIAS" "Aliases"     "Description"
+    printf "$row"  "$CMD" "commit"            "$ALIAS" "c|co|com"    "Create commits: interactive, AI, split, amend, revert"
+    printf "$row"  "$CMD" "push"              "$ALIAS" "p|ps|pus"    "Push changes safely to a remote repository"
+    printf "$row"  "$CMD" "pull"              "$ALIAS" "pu|pl|pul"   "Pull changes from a remote repository"
+    printf "$row"  "$CMD" "branch"            "$ALIAS" "b|br|bran"   "List, switch, create, and clean up branches"
+    printf "$row"  "$CMD" "tag"               "$ALIAS" "t|tg"        "Create, push, list, fetch, and delete tags"
+    printf "$row"  "$CMD" "merge"             "$ALIAS" "m|me"        "Merge branches into the current branch or $main_branch"
+    printf "$row"  "$CMD" "rebase"            "$ALIAS" "r|re|base"   "Rebase current branch, autosquash, or pull commits"
+    printf "$row"  "$CMD" "cherry"            "$ALIAS" "ch|cp"       "Cherry-pick commits from other branches"
+    printf "$row"  "$CMD" "sync"              "$ALIAS" "sy"          "Sync current branch with $main_branch (fetch + rebase/merge)"
+    printf "$row"  "$CMD" "wip"               "$ALIAS" "w"           "Stash work-in-progress and optionally back it up remotely"
+    printf "$row"  "$CMD" "undo"              "$ALIAS" "un"          "Undo commit, amend, merge, rebase, or stash actions"
+    printf "$row"  "$CMD" "reset"             "$ALIAS" "res"         "Preview and apply common git reset flows"
+    printf "$row"  "$CMD" "stash"             "$ALIAS" "s|sta"       "Manage git stashes"
+    printf "$row"  "$CMD" "worktree"          "$ALIAS" "wt|tree"     "List, add, remove, lock, move, and prune git worktrees"
+    printf "$row"  "$CMD" "hook"              "$ALIAS" "ho|hk"       "List, create, edit, toggle, and test git hooks"
+    printf "$row"  "$CMD" "origin"            "$ALIAS" "or|o|remote" "Init, set, change, rename, or remove remotes"
+    printf "$row"  "$CMD" "config"            "$ALIAS" "cf|cfg|conf" "Configure gitbasher settings"
+    echo
+    printf "$row"  "$CMD" "prev"              "$ALIAS" "-"           "Switch to the previous branch (like cd -)"
     echo
 
-    msg="${YELLOW}Tips${ENDCOLOR}_\t${BLUE}Details${ENDCOLOR}"
-    msg="$msg\n${BOLD}gitb <command> help${NORMAL}_Show command-specific modes and aliases"
-    msg="$msg\n${BOLD}gitb --help${NORMAL}_Show this help"
-    msg="$msg\n${BOLD}gitb -${NORMAL}_Switch to the previous branch"
-    echo -e "$(echo -e "$msg" | column -ts '_')"
+    printf "$hdr3" "$CMD" "Info commands" "$ALIAS" "Aliases"  "Description"
+    printf "$row"  "$CMD" "status"        "$ALIAS" "st"       "Show repo status and changed files"
+    printf "$row"  "$CMD" "log"           "$ALIAS" "l|lg"     "View git log with branch selection and comparison"
+    printf "$row"  "$CMD" "reflog"        "$ALIAS" "rl|rlg"   "Open git reflog in a pretty format"
+    printf "$row"  "$CMD" "last-commit"   "$ALIAS" "lc|lastc" "Show info about the last commit"
+    printf "$row"  "$CMD" "last-ref"      "$ALIAS" "lr|lastr" "Show info about the last reference"
+    echo
+
+    printf "$hdr2" "$CMD" "Tips"                "$ALIAS" "" "Details"
+    printf "$rowb" "$CMD" "gitb <command> help" "$ALIAS" "" "Show command-specific modes and aliases"
+    printf "$rowb" "$CMD" "gitb --help"         "$ALIAS" "" "Show this help"
+    printf "$rowb" "$CMD" "gitb -"              "$ALIAS" "" "Switch to the previous branch"
 
     exit
 }
@@ -114,11 +115,8 @@ case "$1" in
     merge|m|me)         
         merge_script $2
     ;;
-    rebase|r|re|base)
+    rebase|r|re|base)         
         rebase_script $2
-    ;;
-    squash|sq|tidy)
-        squash_script $2
     ;;
     cherry|ch|cp)
         cherry_script $2 $3

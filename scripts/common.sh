@@ -932,6 +932,9 @@ function choose {
             read -p "$read_prefix" -e -n 2 choice
         else
             read -p "$read_prefix" -n 1 -s choice
+            # Drain trailing newline so users who press "1<Enter>" don't leak
+            # the newline into the next read (e.g. worktree move's path prompt).
+            read -t 0.01 -s _choose_drain 2>/dev/null
         fi
 
         if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then

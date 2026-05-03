@@ -8,13 +8,15 @@
 
 ### Function lists worktrees and stores them in arrays
 # Returns:
-#     worktrees_path  - array of worktree paths
-#     worktrees_head  - array of HEAD/branch labels (one per worktree)
-#     worktrees_info  - array of pretty-formatted display lines
+#     worktrees_path   - array of worktree paths
+#     worktrees_head   - array of HEAD/branch labels (one per worktree)
+#     worktrees_info   - array of pretty-formatted display lines
+#     worktrees_locked - parallel array; non-empty string when entry is locked
 function list_worktrees_data {
     worktrees_path=()
     worktrees_head=()
     worktrees_info=()
+    worktrees_locked=()
 
     local raw
     raw=$(git worktree list --porcelain 2>&1)
@@ -43,6 +45,7 @@ function list_worktrees_data {
 
         worktrees_path+=("$cur_path")
         worktrees_head+=("$label")
+        worktrees_locked+=("$cur_locked")
 
         local marker="  "
         if [ "$cur_path" == "$main_path" ]; then
@@ -88,6 +91,7 @@ function list_worktrees_data {
 # Returns:
 #     selected_worktree_path
 #     selected_worktree_head
+#     selected_worktree_locked - non-empty string when the picked worktree is locked
 function choose_worktree {
     local filter="$1"
     if ! list_worktrees_data; then
@@ -105,7 +109,7 @@ function choose_worktree {
     local main_path
     main_path=$(git worktree list --porcelain 2>/dev/null | awk 'NR==1 && /^worktree /{print substr($0,10); exit}')
 
-    local display_paths=() display_heads=() display_lines=()
+    local display_paths=() display_heads=() display_lines=() display_locked=()
     for index in "${!worktrees_path[@]}"; do
         local p="${worktrees_path[$index]}"
         if [ "$filter" == "removable" ]; then
@@ -116,6 +120,7 @@ function choose_worktree {
         display_paths+=("$p")
         display_heads+=("${worktrees_head[$index]}")
         display_lines+=("${worktrees_info[$index]}")
+        display_locked+=("${worktrees_locked[$index]}")
     done
 
     if [ ${#display_paths[@]} -eq 0 ]; then
@@ -148,10 +153,12 @@ function choose_worktree {
     read_prefix="Select worktree number: "
     choose "${display_paths[@]}"
     selected_worktree_path="$choice_result"
+    selected_worktree_locked=""
 
     for index in "${!display_paths[@]}"; do
         if [ "${display_paths[$index]}" == "$selected_worktree_path" ]; then
             selected_worktree_head="${display_heads[$index]}"
+            selected_worktree_locked="${display_locked[$index]}"
             break
         fi
     done
@@ -163,6 +170,11 @@ function choose_worktree {
 ### Function returns a sensible default path for a new worktree
 # $1: branch name (must be sanitized already)
 # Returns: prints the path
+#
+# Layout:
+#   - default:                          <repo_root>/.worktree/<safe_branch>
+#   - gitbasher.worktreebase = absolute <base>/<safe_branch>
+#   - gitbasher.worktreebase = relative <repo_root>/<base>/<safe_branch>
 function default_worktree_path {
     local branch="$1"
     local base
@@ -170,19 +182,19 @@ function default_worktree_path {
 
     local repo_root
     repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
-    local repo_dir_name
-    repo_dir_name=$(basename "$repo_root")
 
     # Replace path-unfriendly slashes in branch name with dashes for the dir name
     local safe_branch
     safe_branch=$(echo "$branch" | tr '/' '-')
 
-    if [ -n "$base" ]; then
+    if [ -z "$base" ]; then
+        base=".worktree"
+    fi
+
+    if [[ "$base" == /* ]]; then
         echo "${base%/}/${safe_branch}"
     else
-        local parent_dir
-        parent_dir=$(dirname "$repo_root")
-        echo "${parent_dir}/${repo_dir_name}-${safe_branch}"
+        echo "${repo_root}/${base%/}/${safe_branch}"
     fi
 }
 
@@ -543,15 +555,9 @@ function worktree_add {
 }
 
 
-### Function removes a worktree (interactive)
-function worktree_remove {
-    echo -e "${YELLOW}Pick a worktree to remove${ENDCOLOR}"
-    echo
-
-    if ! choose_worktree "removable"; then
-        return 1
-    fi
-
+### Action: remove the already-selected worktree
+# Assumes selected_worktree_path / selected_worktree_head are set.
+function _do_worktree_remove {
     echo
     echo -e "${YELLOW}Removing worktree at ${BOLD}${selected_worktree_path}${NORMAL}${YELLOW} (${selected_worktree_head})...${ENDCOLOR}"
 
@@ -586,6 +592,19 @@ function worktree_remove {
     echo -e "${RED}Failed to remove worktree${ENDCOLOR}"
     echo "$rm_output"
     return $rm_code
+}
+
+
+### Function removes a worktree (interactive)
+function worktree_remove {
+    echo -e "${YELLOW}Pick a worktree to remove${ENDCOLOR}"
+    echo
+
+    if ! choose_worktree "removable"; then
+        return 1
+    fi
+
+    _do_worktree_remove
 }
 
 
@@ -626,17 +645,11 @@ function worktree_prune {
 }
 
 
-### Function locks or unlocks a worktree
+### Action: lock or unlock the already-selected worktree
 # $1: action - "lock" or "unlock"
-function worktree_lock_unlock {
+# Assumes selected_worktree_path is set.
+function _do_worktree_lock_unlock {
     local action="$1"
-
-    echo -e "${YELLOW}Pick a worktree to ${action}${ENDCOLOR}"
-    echo
-
-    if ! choose_worktree; then
-        return 1
-    fi
 
     local reason=""
     if [ "$action" == "lock" ]; then
@@ -675,15 +688,25 @@ function worktree_lock_unlock {
 }
 
 
-### Function moves an existing worktree to a new path
-function worktree_move {
-    echo -e "${YELLOW}Pick a worktree to move${ENDCOLOR}"
+### Function locks or unlocks a worktree
+# $1: action - "lock" or "unlock"
+function worktree_lock_unlock {
+    local action="$1"
+
+    echo -e "${YELLOW}Pick a worktree to ${action}${ENDCOLOR}"
     echo
 
-    if ! choose_worktree "removable"; then
+    if ! choose_worktree; then
         return 1
     fi
 
+    _do_worktree_lock_unlock "$action"
+}
+
+
+### Action: move the already-selected worktree
+# Assumes selected_worktree_path is set.
+function _do_worktree_move {
     echo
     echo -e "${YELLOW}New path for the worktree${ENDCOLOR}"
     echo -e "Current path: ${BOLD}${selected_worktree_path}${NORMAL}"
@@ -724,6 +747,61 @@ function worktree_move {
 }
 
 
+### Function moves an existing worktree to a new path
+function worktree_move {
+    echo -e "${YELLOW}Pick a worktree to move${ENDCOLOR}"
+    echo
+
+    if ! choose_worktree "removable"; then
+        return 1
+    fi
+
+    _do_worktree_move
+}
+
+
+### Function picks a worktree, then offers Move / Lock-or-Unlock / Delete
+function worktree_manage {
+    echo -e "${YELLOW}Pick a worktree to manage${ENDCOLOR}"
+    echo
+
+    if ! choose_worktree "removable"; then
+        return 1
+    fi
+
+    echo
+    echo -e "${YELLOW}What do you want to do with ${BOLD}${BLUE}${selected_worktree_head}${NORMAL}${YELLOW}?${ENDCOLOR}"
+    echo
+    echo "1. Move it"
+    if [ -n "$selected_worktree_locked" ]; then
+        echo "2. Unlock it"
+    else
+        echo "2. Lock it"
+    fi
+    echo "3. Delete it"
+    echo "0. Exit"
+    echo
+
+    local choice
+    read -n 1 -s choice
+    read -t 0.01 -s _wt_drain 2>/dev/null
+
+    case "$choice" in
+        1) _do_worktree_move ;;
+        2)
+            if [ -n "$selected_worktree_locked" ]; then
+                _do_worktree_lock_unlock "unlock"
+            else
+                _do_worktree_lock_unlock "lock"
+            fi
+            ;;
+        3) _do_worktree_remove ;;
+        0) exit ;;
+        *) echo -e "${RED}Invalid option${ENDCOLOR}"; return 1 ;;
+    esac
+}
+
+
 ### Function prints the path of a chosen worktree (so the user can `cd $(...)`)
 function worktree_path {
     echo -e "${YELLOW}Pick a worktree${ENDCOLOR}"
@@ -741,13 +819,50 @@ function worktree_path {
 }
 
 
+### Function spawns a subshell inside a chosen worktree
+# A child process can't change its parent shell's CWD, so we exec a fresh
+# interactive shell at the worktree path. `exit` / Ctrl-D returns to the
+# original shell at the original CWD.
+function worktree_goto {
+    echo -e "${YELLOW}Pick a worktree to go to${ENDCOLOR}"
+    echo
+
+    if ! choose_worktree; then
+        return 1
+    fi
+
+    local current_path
+    current_path=$(git rev-parse --show-toplevel 2>/dev/null)
+    if [ "$selected_worktree_path" == "$current_path" ]; then
+        echo
+        echo -e "${YELLOW}Already inside ${selected_worktree_path}${ENDCOLOR}"
+        return 0
+    fi
+
+    if [ ! -d "$selected_worktree_path" ]; then
+        echo
+        echo -e "${RED}Path '${selected_worktree_path}' does not exist on disk${ENDCOLOR}"
+        echo -e "Try ${BOLD}gitb worktree prune${NORMAL} to clean up stale records"
+        return 1
+    fi
+
+    echo
+    echo -e "${GREEN}Entering ${ENDCOLOR}${selected_worktree_path}"
+    echo -e "Type ${YELLOW}exit${ENDCOLOR} or press ${YELLOW}Ctrl-D${ENDCOLOR} to return"
+    echo
+
+    cd "$selected_worktree_path" || return 1
+    exec "${SHELL:-/bin/bash}"
+}
+
+
 ### Main function
 # $1: mode
 function worktree_script {
     case "$1" in
         list|l|ls)              list_mode="true";;
         add|a|new|n|c)          add_mode="true"; add_source="current";;
-        addd|ad|nd|cd)          add_mode="true"; add_source="default";;
+        addd|ad|nd)             add_mode="true"; add_source="default";;
         addb|ab|from|b)         add_mode="true"; add_source="branch";;
         addr|ar|remote|r)       add_mode="true"; add_source="remote";;
         remove|rm|del|d)        remove_mode="true";;
@@ -755,7 +870,9 @@ function worktree_script {
         lock)                   lock_mode="true";;
         unlock|ul)              unlock_mode="true";;
         move|mv)                move_mode="true";;
-        path|cd|switch|sw)      path_mode="true";;
+        manage|m)               manage_mode="true";;
+        path|sw)                path_mode="true";;
+        goto|go|g|cd|switch)    goto_mode="true";;
         help|h)                 help="true";;
         "")                     interactive="true";;
         *)                      wrong_mode "worktree" "$1";;
@@ -782,8 +899,12 @@ function worktree_script {
         header="$header UNLOCK"
     elif [ -n "$move_mode" ]; then
         header="$header MOVE"
+    elif [ -n "$manage_mode" ]; then
+        header="$header MANAGE"
     elif [ -n "$path_mode" ]; then
         header="$header PATH"
+    elif [ -n "$goto_mode" ]; then
+        header="$header GO TO"
     fi
 
     echo -e "${YELLOW}${header}${ENDCOLOR}"
@@ -796,21 +917,23 @@ function worktree_script {
         msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Show interactive worktree menu"
         msg="$msg\n${BOLD}list${ENDCOLOR}_l|ls_List all worktrees"
         msg="$msg\n${BOLD}add${ENDCOLOR}_a|new|n|c_Create a worktree with a new branch from current HEAD"
-        msg="$msg\n${BOLD}addd${ENDCOLOR}_ad|nd|cd_Fetch + create worktree with new branch from $main_branch"
+        msg="$msg\n${BOLD}addd${ENDCOLOR}_ad|nd_Fetch + create worktree with new branch from $main_branch"
         msg="$msg\n${BOLD}addb${ENDCOLOR}_ab|from|b_Create a worktree from an existing local branch"
         msg="$msg\n${BOLD}addr${ENDCOLOR}_ar|remote|r_Fetch + create worktree tracking a remote branch"
-        msg="$msg\n${BOLD}remove${ENDCOLOR}_rm|del|d_Remove a worktree (interactive picker)"
+        msg="$msg\n${BOLD}manage${ENDCOLOR}_m_Pick a worktree, then move / lock / unlock / delete"
         msg="$msg\n${BOLD}move${ENDCOLOR}_mv_Move a worktree to a new path"
         msg="$msg\n${BOLD}lock${ENDCOLOR}_ _Lock a worktree (with optional reason)"
         msg="$msg\n${BOLD}unlock${ENDCOLOR}_ul_Unlock a worktree"
+        msg="$msg\n${BOLD}remove${ENDCOLOR}_rm|del|d_Remove a worktree (interactive picker)"
         msg="$msg\n${BOLD}prune${ENDCOLOR}_pr|p_Remove stale worktree records"
-        msg="$msg\n${BOLD}path${ENDCOLOR}_cd|switch|sw_Print the path to a chosen worktree"
+        msg="$msg\n${BOLD}path${ENDCOLOR}_sw_Print the path to a chosen worktree"
+        msg="$msg\n${BOLD}goto${ENDCOLOR}_go|g|cd|switch_Open a subshell inside a chosen worktree"
         msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
         echo -e "$(echo -e "$msg" | column -ts'_')"
         echo
         echo -e "${YELLOW}Tips${ENDCOLOR}"
-        echo -e "  - Default worktree path: ${BOLD}../<repo>-<branch>${NORMAL}"
-        echo -e "  - Override the base directory with ${BOLD}git config gitbasher.worktreebase <dir>${NORMAL}"
+        echo -e "  - Default worktree path: ${BOLD}<repo>/.worktree/<branch>${NORMAL} (add ${BOLD}.worktree/${NORMAL} to .gitignore)"
+        echo -e "  - Override the base directory with ${BOLD}git config gitbasher.worktreebase <dir>${NORMAL} (relative paths resolve against repo root)"
         echo -e "  - Use ${BOLD}cd \$(gitb worktree path)${NORMAL} to jump into a worktree"
         exit
     fi
@@ -830,35 +953,49 @@ function worktree_script {
 
         echo -e "${YELLOW}What do you want to do?${ENDCOLOR}"
         echo
-        echo "1. Add worktree (new branch from current)"
-        echo "2. Add worktree (new branch from $main_branch)"
-        echo "3. Add worktree from existing local branch"
-        echo "4. Add worktree from remote branch"
-        echo "5. Remove a worktree"
-        echo "6. Move a worktree"
-        echo "7. Lock a worktree"
-        echo "8. Unlock a worktree"
-        echo "9. Prune stale records"
+        echo "1. Add a worktree"
+        echo "2. Go to a worktree"
+        echo "3. Manage a worktree"
+        echo "4. Prune stale records"
         echo "0. Exit"
         echo
 
         local choice
         read -n 1 -s choice
-        echo
+        read -t 0.01 -s _wt_drain 2>/dev/null
 
         case "$choice" in
-            1) add_mode="true"; add_source="current";;
-            2) add_mode="true"; add_source="default";;
-            3) add_mode="true"; add_source="branch";;
-            4) add_mode="true"; add_source="remote";;
-            5) remove_mode="true";;
-            6) move_mode="true";;
-            7) lock_mode="true";;
-            8) unlock_mode="true";;
-            9) prune_mode="true";;
+            1) add_mode="true";;
+            2) goto_mode="true";;
+            3) manage_mode="true";;
+            4) prune_mode="true";;
             0) exit;;
             *) echo -e "${RED}Invalid option${ENDCOLOR}"; exit 1;;
         esac
+
+        if [ -n "$add_mode" ]; then
+            echo -e "${YELLOW}How should the worktree's branch be created?${ENDCOLOR}"
+            echo
+            echo "1. New branch from current"
+            echo "2. New branch from $main_branch"
+            echo "3. From existing local branch"
+            echo "4. From remote branch"
+            echo "0. Exit"
+            echo
+
+            local source_choice
+            read -n 1 -s source_choice
+            read -t 0.01 -s _wt_drain 2>/dev/null
+
+            case "$source_choice" in
+                1) add_source="current";;
+                2) add_source="default";;
+                3) add_source="branch";;
+                4) add_source="remote";;
+                0) exit;;
+                *) echo -e "${RED}Invalid option${ENDCOLOR}"; exit 1;;
+            esac
+        fi
     fi
 
     if [ -n "$list_mode" ]; then
@@ -906,8 +1043,18 @@ function worktree_script {
         exit
     fi
 
+    if [ -n "$manage_mode" ]; then
+        worktree_manage
+        exit
+    fi
+
     if [ -n "$path_mode" ]; then
         worktree_path
+        exit
+    fi
+
+    if [ -n "$goto_mode" ]; then
+        worktree_goto
         exit
     fi
 }

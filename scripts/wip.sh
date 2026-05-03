@@ -74,22 +74,26 @@ function find_wip_worktree {
 
 
 ### Compute a default path for the wip worktree
+# Same rules as worktree's default_worktree_path:
+#   - default:                          <repo_root>/.worktree/wip-<branch>
+#   - gitbasher.worktreebase = absolute <base>/wip-<branch>
+#   - gitbasher.worktreebase = relative <repo_root>/<base>/wip-<branch>
 function wip_worktree_default_path {
     local base
     base=$(get_config_value gitbasher.worktreebase "")
     local repo_root
     repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
-    local repo_dir_name
-    repo_dir_name=$(basename "$repo_root")
     local safe_branch
     safe_branch=$(echo "wip-${current_branch}" | tr '/' '-')
 
-    if [ -n "$base" ]; then
-        echo "${base%/}/${repo_dir_name}-${safe_branch}"
+    if [ -z "$base" ]; then
+        base=".worktree"
+    fi
+
+    if [[ "$base" == /* ]]; then
+        echo "${base%/}/${safe_branch}"
     else
-        local parent_dir
-        parent_dir=$(dirname "$repo_root")
-        echo "${parent_dir}/${repo_dir_name}-${safe_branch}"
+        echo "${repo_root}/${base%/}/${safe_branch}"
     fi
 }
 
@@ -605,7 +609,6 @@ function wip_up {
         else
             prompt_wip_backend
             backend="$wip_backend"
-            echo
         fi
     fi
 

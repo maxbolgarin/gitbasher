@@ -844,6 +844,7 @@ function config_script {
         diff|payload)         set_ai_diff_cfg="true";;
         delete|unset|del)     delete_cfg="true";;
         user|name|email|u)    set_user_cfg="true";;
+        auto|completion|comp) auto_cfg="true";;
         help|h)               help="true";;
         *)                    wrong_mode "config" $1
     esac
@@ -876,10 +877,22 @@ function config_script {
         header="$header UNSET GLOBAL CONFIG"
     elif [ -n "${set_user_cfg}" ]; then
         header="$header USER NAME & EMAIL"
+    elif [ -n "${auto_cfg}" ]; then
+        header="$header TAB COMPLETION"
     fi
 
-    echo -e "${YELLOW}${header}${ENDCOLOR}"
-    echo
+    # `cfg auto print` writes the completion script to stdout for piping;
+    # decorations would corrupt the output, so skip the header in that case.
+    local _suppress_header=""
+    if [ -n "${auto_cfg}" ]; then
+        case "$2" in
+            print|cat|p) _suppress_header="true" ;;
+        esac
+    fi
+    if [ -z "$_suppress_header" ]; then
+        echo -e "${YELLOW}${header}${ENDCOLOR}"
+        echo
+    fi
 
     if [ "$set_user_cfg" == "true" ]; then
         set_user
@@ -946,6 +959,11 @@ function config_script {
         exit
     fi
 
+    if [ "$auto_cfg" == "true" ]; then
+        completion_script "$2" "$3"
+        exit
+    fi
+
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb config <mode>${ENDCOLOR}"
         echo
@@ -963,6 +981,7 @@ function config_script {
         msg="$msg\n${BOLD}proxy${ENDCOLOR}_prx|p_Set HTTP proxy for AI requests (bypass geo-restrictions)"
         msg="$msg\n${BOLD}history${ENDCOLOR}_hist_Set number of recent commits to include in AI prompts"
         msg="$msg\n${BOLD}diff${ENDCOLOR}_payload_Set diff payload size (lines and char cap) sent to AI"
+        msg="$msg\n${BOLD}auto${ENDCOLOR}_completion|comp_Install/remove tab completion for bash, zsh, or fish"
         msg="$msg\n${BOLD}delete${ENDCOLOR}_unset|del_Unset global configuration"
         msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
         echo -e "$(echo -e "$msg" | column -ts'_')"

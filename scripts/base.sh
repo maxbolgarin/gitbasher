@@ -78,6 +78,8 @@ if [[ $is_first == "true" ]]; then
     echo
 fi
 
+_gitb_first_run_completion_prompt
+
 if [ "$1" == "--version" ] || [ "$1" == "-v" ] || [ "$1" == "version" ]; then
     echo "gitbasher v${GITBASHER_VERSION}"
     exit
@@ -133,8 +135,8 @@ case "$1" in
     tag|t|tg)         
         tag_script $2
     ;;
-    config|cf|cfg|conf)         
-        config_script $2
+    config|cf|cfg|conf)
+        config_script "${@:2}"
     ;;
     undo|un)
         undo_script $2

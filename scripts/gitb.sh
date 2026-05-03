@@ -91,5 +91,6 @@ source scripts/gitlog.sh || { echo "gitbasher: failed to load scripts/gitlog.sh"
 source scripts/worktree.sh || { echo "gitbasher: failed to load scripts/worktree.sh" >&2; exit 1; }
 source scripts/hooks.sh || { echo "gitbasher: failed to load scripts/hooks.sh" >&2; exit 1; }
 source scripts/origin.sh || { echo "gitbasher: failed to load scripts/origin.sh" >&2; exit 1; }
+source scripts/completion.sh || { echo "gitbasher: failed to load scripts/completion.sh" >&2; exit 1; }
 
 source scripts/base.sh || { echo "gitbasher: failed to load scripts/base.sh" >&2; exit 1; }

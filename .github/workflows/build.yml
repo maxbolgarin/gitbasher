@@ -61,3 +61,36 @@ jobs:
 
       - name: Smoke Test
         run: ./dist/gitb; if [ $? -ne 0 ]; then exit 1; fi
+
+  coverage:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install BATS and kcov
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bats kcov
+
+      # Run each .bats file under kcov so coverage data merges across files.
+      # --include-path scopes coverage to the source we actually ship.
+      - name: Run BATS under kcov
+        run: |
+          mkdir -p coverage
+          for f in tests/*.bats; do
+            kcov --include-path=scripts,install.sh \
+                 --bash-dont-parse-binary-dir \
+                 "coverage/$(basename "$f" .bats)" \
+                 bats "$f" || true
+          done
+          # Merge into a single report
+          kcov --merge coverage/merged coverage/test_*
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bash-coverage
+          path: coverage/merged
+          retention-days: 14

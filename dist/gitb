@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-GITBASHER_VERSION="3.10.2-96-g9eb6e4f"
+GITBASHER_VERSION="3.10.2-99-g918d85c"
 if [ "$1" == "init" ] || [ "$1" == "i" ]; then
     git init
 fi
@@ -558,53 +558,113 @@ function get_tag_ci_url {
         bitbucket) echo "${repo}/pipelines";;
     esac
 }
+function config_source {
+    if git config --local --get "$1" >/dev/null 2>&1; then
+        echo "local"
+    elif git config --global --get "$1" >/dev/null 2>&1; then
+        echo "global"
+    else
+        echo "default"
+    fi
+}
+function config_source_tag {
+    case "$(config_source "$1")" in
+        local)   echo -e "${BLUE}(project)${ENDCOLOR}" ;;
+        global)  echo -e "${PURPLE}(global)${ENDCOLOR}" ;;
+        default) echo -e "${GRAY}(default)${ENDCOLOR}" ;;
+    esac
+}
 function print_configuration {
     echo -e "${YELLOW}Current configuration:${ENDCOLOR}"
-    echo -e "\tuser.name:\t${YELLOW}$(get_config_value user.name)${ENDCOLOR}"
-    echo -e "\tuser.email:\t${YELLOW}$(get_config_value user.email)${ENDCOLOR}"
-    echo -e "\tdefault:\t${YELLOW}$main_branch${ENDCOLOR}"
-    echo -e "\tseparator:\t${YELLOW}$sep${ENDCOLOR}"
-    echo -e "\teditor:\t\t${YELLOW}$editor${ENDCOLOR}"
+    local user_name=$(get_config_value user.name)
+    if [ -n "$user_name" ]; then
+        echo -e "\tuser.name:\t${YELLOW}$user_name${ENDCOLOR} $(config_source_tag user.name)"
+    else
+        echo -e "\tuser.name:\t${RED}not set${ENDCOLOR}"
+    fi
+    local user_email=$(get_config_value user.email)
+    if [ -n "$user_email" ]; then
+        echo -e "\tuser.email:\t${YELLOW}$user_email${ENDCOLOR} $(config_source_tag user.email)"
+    else
+        echo -e "\tuser.email:\t${RED}not set${ENDCOLOR}"
+    fi
+    echo -e "\tdefault:\t${YELLOW}$main_branch${ENDCOLOR} $(config_source_tag gitbasher.branch)"
+    echo -e "\tseparator:\t${YELLOW}$sep${ENDCOLOR} $(config_source_tag gitbasher.sep)"
+    echo -e "\teditor:\t\t${YELLOW}$editor${ENDCOLOR} $(config_source_tag core.editor)"
     if [ "$ticket_name" != "" ]; then
-        echo -e "\tticket:\t\t${YELLOW}$ticket_name${ENDCOLOR}"
+        echo -e "\tticket:\t\t${YELLOW}$ticket_name${ENDCOLOR} $(config_source_tag gitbasher.ticket)"
     fi
     if [ "$scopes" != "" ]; then
-        echo -e "\tscopes:\t\t${YELLOW}$scopes${ENDCOLOR}"
+        echo -e "\tscopes:\t\t${YELLOW}$scopes${ENDCOLOR} $(config_source_tag gitbasher.scopes)"
     fi
     local ai_provider=$(get_ai_provider)
-    echo -e "\tAI provider:\t${GREEN}$ai_provider${ENDCOLOR}"
+    echo -e "\tAI provider:\t${GREEN}$ai_provider${ENDCOLOR} $(config_source_tag gitbasher.ai-provider)"
     local ai_base_url=$(get_ai_base_url)
     if [ -n "$ai_base_url" ]; then
-        echo -e "\tAI base URL:\t${GREEN}$ai_base_url${ENDCOLOR}"
+        echo -e "\tAI base URL:\t${GREEN}$ai_base_url${ENDCOLOR} $(config_source_tag gitbasher.ai-base-url)"
     fi
     local ai_key=$(get_ai_api_key)
     if [ -n "$ai_key" ]; then
+        local ai_key_tag
+        case "$(get_ai_api_key_source)" in
+            env-provider)    ai_key_tag="${CYAN}(env: GITB_AI_API_KEY_${ai_provider^^})${ENDCOLOR}" ;;
+            env-legacy)      ai_key_tag="${CYAN}(env: GITB_AI_API_KEY, legacy)${ENDCOLOR}" ;;
+            local-provider)  ai_key_tag="${BLUE}(project)${ENDCOLOR}" ;;
+            global-provider) ai_key_tag="${PURPLE}(global)${ENDCOLOR}" ;;
+            local-legacy)    ai_key_tag="${YELLOW}(project, legacy slot)${ENDCOLOR}" ;;
+            global-legacy)   ai_key_tag="${YELLOW}(global, legacy slot)${ENDCOLOR}" ;;
+        esac
         ai_key=$(mask_api_key "$ai_key")
-        echo -e "\tAI key:\t\t${GREEN}$ai_key${ENDCOLOR}"
+        echo -e "\tAI key:\t\t${GREEN}$ai_key${ENDCOLOR} ${GRAY}for ${ai_provider}${ENDCOLOR} $ai_key_tag"
     elif ai_provider_requires_api_key; then
-        echo -e "\tAI key:\t\t${RED}not set${ENDCOLOR}"
+        echo -e "\tAI key:\t\t${RED}not set for ${ai_provider}${ENDCOLOR} ${GRAY}— run ${GREEN}gitb cfg ai${ENDCOLOR}"
     else
         echo -e "\tAI key:\t\t${GRAY}not required for $ai_provider${ENDCOLOR}"
     fi
+    local other_keys=""
+    while IFS= read -r prov; do
+        [ -z "$prov" ] && continue
+        [ "$prov" = "$ai_provider" ] && continue
+        other_keys="${other_keys:+${other_keys}, }${prov}"
+    done < <(list_providers_with_api_key)
+    if [ -n "$other_keys" ]; then
+        echo -e "\t\t\t${GRAY}also stored for: ${other_keys}${ENDCOLOR}"
+    fi
     local ai_model=$(get_ai_model)
     if [ -n "$ai_model" ]; then
-        echo -e "\tAI model:\t${GREEN}$ai_model${ENDCOLOR} ${GRAY}(global override)${ENDCOLOR}"
+        echo -e "\tAI model:\t${GREEN}$ai_model${ENDCOLOR} ${GRAY}(all tasks)${ENDCOLOR} $(config_source_tag gitbasher.ai-model)"
     else
-        echo -e "\tAI models:\t${GREEN}$(get_ai_model_for simple)${ENDCOLOR} ${GRAY}(simple/subject)${ENDCOLOR}"
-        echo -e "\t\t\t${GREEN}$(get_ai_model_for full)${ENDCOLOR} ${GRAY}(full)${ENDCOLOR}"
-        echo -e "\t\t\t${GREEN}$(get_ai_model_for grouping)${ENDCOLOR} ${GRAY}(grouping)${ENDCOLOR}"
+        echo -e "\tAI models:\t${GREEN}$(get_ai_model_for simple)${ENDCOLOR} ${GRAY}(simple/subject)${ENDCOLOR} $(config_source_tag gitbasher.ai-model-simple)"
+        echo -e "\t\t\t${GREEN}$(get_ai_model_for full)${ENDCOLOR} ${GRAY}(full)${ENDCOLOR} $(config_source_tag gitbasher.ai-model-full)"
+        echo -e "\t\t\t${GREEN}$(get_ai_model_for grouping)${ENDCOLOR} ${GRAY}(grouping)${ENDCOLOR} $(config_source_tag gitbasher.ai-model-grouping)"
     fi
     local ai_proxy=$(get_ai_proxy)
     if [ -n "$ai_proxy" ]; then
-        echo -e "\tAI proxy:\t${GREEN}$ai_proxy${ENDCOLOR}"
+        echo -e "\tAI proxy:\t${GREEN}$ai_proxy${ENDCOLOR} $(config_source_tag gitbasher.ai-proxy)"
     else
         echo -e "\tAI proxy:\t${YELLOW}not set${ENDCOLOR}"
     fi
     local ai_history_limit=$(get_ai_commit_history_limit)
-    echo -e "\tAI history:\t${GREEN}$ai_history_limit commits${ENDCOLOR}"
+    echo -e "\tAI history:\t${GREEN}$ai_history_limit commits${ENDCOLOR} $(config_source_tag gitbasher.ai-commit-history-limit)"
     local ai_diff_lines=$(get_ai_diff_limit)
     local ai_diff_chars=$(get_ai_diff_max_chars)
-    echo -e "\tAI diff:\t${GREEN}${ai_diff_lines} lines / ${ai_diff_chars} chars max${ENDCOLOR}"
+    local lines_src=$(config_source gitbasher.ai-diff-limit)
+    local chars_src=$(config_source gitbasher.ai-diff-max-chars)
+    local diff_src="default"
+    if [ "$lines_src" = "local" ] || [ "$chars_src" = "local" ]; then
+        diff_src="local"
+    elif [ "$lines_src" = "global" ] || [ "$chars_src" = "global" ]; then
+        diff_src="global"
+    fi
+    local diff_tag
+    case "$diff_src" in
+        local)   diff_tag="${BLUE}(project)${ENDCOLOR}" ;;
+        global)  diff_tag="${PURPLE}(global)${ENDCOLOR}" ;;
+        default) diff_tag="${GRAY}(default)${ENDCOLOR}" ;;
+    esac
+    echo -e "\tAI diff:\t${GREEN}${ai_diff_lines} lines / ${ai_diff_chars} chars max${ENDCOLOR} $diff_tag"
+    echo
+    echo -e "${GRAY}Source:${ENDCOLOR} ${BLUE}(project)${ENDCOLOR}${GRAY} this repo,${ENDCOLOR} ${PURPLE}(global)${ENDCOLOR}${GRAY} ~/.gitconfig,${ENDCOLOR} ${GRAY}(default) built-in fallback${ENDCOLOR}"
 }
 function escape {
     string="$1"
@@ -1201,14 +1261,87 @@ readonly AI_MAX_TOKENS_SUBJECT=256
 readonly AI_MAX_TOKENS_SIMPLE=512
 readonly AI_MAX_TOKENS_FULL=1024
 function get_ai_api_key {
+    local provider=$(get_ai_provider)
+    local provider_upper
+    provider_upper=$(echo "$provider" | tr '[:lower:]' '[:upper:]')
+    local provider_env_var="GITB_AI_API_KEY_${provider_upper}"
+    if [ -n "${!provider_env_var}" ]; then
+        echo "${!provider_env_var}"
+        return
+    fi
     if [ -n "$GITB_AI_API_KEY" ]; then
         echo "$GITB_AI_API_KEY"
         return
     fi
+    local provider_key
+    provider_key=$(get_config_value "gitbasher.ai-api-key-${provider}" "")
+    if [ -n "$provider_key" ]; then
+        echo "$provider_key"
+        return
+    fi
     get_config_value gitbasher.ai-api-key ""
 }
+function get_ai_api_key_source {
+    local provider=$(get_ai_provider)
+    local provider_upper
+    provider_upper=$(echo "$provider" | tr '[:lower:]' '[:upper:]')
+    local provider_env_var="GITB_AI_API_KEY_${provider_upper}"
+    if [ -n "${!provider_env_var}" ]; then
+        echo "env-provider"; return
+    fi
+    if [ -n "$GITB_AI_API_KEY" ]; then
+        echo "env-legacy"; return
+    fi
+    if git config --local --get "gitbasher.ai-api-key-${provider}" >/dev/null 2>&1; then
+        echo "local-provider"; return
+    fi
+    if git config --global --get "gitbasher.ai-api-key-${provider}" >/dev/null 2>&1; then
+        echo "global-provider"; return
+    fi
+    if git config --local --get gitbasher.ai-api-key >/dev/null 2>&1; then
+        echo "local-legacy"; return
+    fi
+    if git config --global --get gitbasher.ai-api-key >/dev/null 2>&1; then
+        echo "global-legacy"; return
+    fi
+    echo ""
+}
 function set_ai_api_key {
-    set_config_value gitbasher.ai-api-key "$1"
+    local provider=$(get_ai_provider)
+    set_config_value "gitbasher.ai-api-key-${provider}" "$1" "$2"
+}
+function unset_ai_api_key {
+    local provider=$(get_ai_provider)
+    unset_config_value "gitbasher.ai-api-key-${provider}"
+}
+function migrate_legacy_ai_api_key_to {
+    local target_provider="$1"
+    local migrated=""
+    local local_legacy=$(git config --local --get gitbasher.ai-api-key 2>/dev/null)
+    if [ -n "$local_legacy" ]; then
+        if ! git config --local --get "gitbasher.ai-api-key-${target_provider}" >/dev/null 2>&1; then
+            git config --local "gitbasher.ai-api-key-${target_provider}" "$local_legacy"
+            migrated="local"
+        fi
+        git config --local --unset gitbasher.ai-api-key 2>/dev/null || true
+    fi
+    local global_legacy=$(git config --global --get gitbasher.ai-api-key 2>/dev/null)
+    if [ -n "$global_legacy" ]; then
+        if ! git config --global --get "gitbasher.ai-api-key-${target_provider}" >/dev/null 2>&1; then
+            git config --global "gitbasher.ai-api-key-${target_provider}" "$global_legacy"
+            migrated="${migrated:+$migrated, }global"
+        fi
+        git config --global --unset gitbasher.ai-api-key 2>/dev/null || true
+    fi
+    if [ -n "$migrated" ]; then
+        echo -e "${GRAY}↻ Migrated existing API key to provider '${target_provider}' (${migrated})${ENDCOLOR}" >&2
+    fi
+}
+function list_providers_with_api_key {
+    {
+        git config --local --get-regexp '^gitbasher\.ai-api-key-' 2>/dev/null
+        git config --global --get-regexp '^gitbasher\.ai-api-key-' 2>/dev/null
+    } | awk '{print $1}' | sed 's/^gitbasher\.ai-api-key-//' | sort -u
 }
 function get_ai_provider {
     local provider
@@ -1493,15 +1626,21 @@ function call_ai_api {
     local user_prompt="$2"
     local max_tokens="${3:-$AI_MAX_TOKENS_FULL}"
     local model="${4:-$(get_ai_model_for simple)}"
+    local response_format="${5:-}"
     local provider=$(get_ai_provider)
     local api_url=$(get_ai_api_url)
     local api_key=$(get_ai_api_key)
     local max_retries=2
     local retry_delay=2
     if [ -z "$api_key" ] && ai_provider_requires_api_key; then
-        echo -e "${RED}AI API key not configured for provider '${provider}'. Set it with: gitb config${ENDCOLOR}" >&2
+        echo -e "${RED}✗ AI API key not configured for provider '${provider}'${ENDCOLOR}" >&2
+        echo -e "${YELLOW}Configure it with:${ENDCOLOR} ${GREEN}gitb cfg ai${ENDCOLOR}" >&2
         clear_sensitive_vars
         return 1
+    fi
+    local tokens_field="max_tokens"
+    if [ "$provider" = "openai" ]; then
+        tokens_field="max_completion_tokens"
     fi
     local json_payload
     if command -v jq &>/dev/null; then
@@ -1509,13 +1648,24 @@ function call_ai_api {
             --arg model "$model" \
             --arg system "$system_prompt" \
             --arg user "$user_prompt" \
+            --arg tokens_field "$tokens_field" \
             --argjson temperature "$AI_TEMPERATURE" \
             --argjson max_tokens "$max_tokens" \
-            '{model: $model, messages: [{role: "system", content: $system}, {role: "user", content: $user}], temperature: $temperature, max_tokens: $max_tokens}')
+            '{model: $model, messages: [{role: "system", content: $system}, {role: "user", content: $user}], temperature: $temperature} + {($tokens_field): $max_tokens}')
+        if [ -n "$response_format" ]; then
+            json_payload=$(jq -nc \
+                --argjson base "$json_payload" \
+                --argjson rf "$response_format" \
+                '$base + {response_format: $rf}')
+        fi
     else
         local system_escaped=$(_json_escape_for_payload "$system_prompt")
         local user_escaped=$(_json_escape_for_payload "$user_prompt")
-        json_payload="{\"model\":\"$model\",\"messages\":[{\"role\":\"system\",\"content\":\"$system_escaped\"},{\"role\":\"user\",\"content\":\"$user_escaped\"}],\"temperature\":$AI_TEMPERATURE,\"max_tokens\":$max_tokens}"
+        local rf_field=""
+        if [ -n "$response_format" ]; then
+            rf_field=",\"response_format\":${response_format}"
+        fi
+        json_payload="{\"model\":\"$model\",\"messages\":[{\"role\":\"system\",\"content\":\"$system_escaped\"},{\"role\":\"user\",\"content\":\"$user_escaped\"}],\"temperature\":$AI_TEMPERATURE,\"${tokens_field}\":$max_tokens${rf_field}}"
     fi
     local proxy_url=$(get_ai_proxy)
     local safe_proxy_url=""
@@ -1608,105 +1758,81 @@ function call_ai_api {
     fi
     local has_error=$(echo "$response" | grep -q '"error"' && echo "true" || echo "false")
     if [ "$has_error" = "true" ]; then
-        local error_code=""
-        local error_message=""
+        local error_code="" error_message="" error_type="" error_param=""
         if command -v jq &>/dev/null; then
             error_code=$(echo "$response" | jq -r '.error.code // empty' 2>/dev/null)
             error_message=$(echo "$response" | jq -r '.error.message // empty' 2>/dev/null)
+            error_type=$(echo "$response" | jq -r '.error.type // empty' 2>/dev/null)
+            error_param=$(echo "$response" | jq -r '.error.param // empty' 2>/dev/null)
         else
-            error_code=$(echo "$response" | LC_ALL=C grep -o '"code"[[:space:]]*:[[:space:]]*[0-9]*' | grep -o '[0-9]*')
-            error_message=$(echo "$response" | LC_ALL=C grep -o '"message"[[:space:]]*:[[:space:]]*"[^"]*"' | LC_ALL=C sed 's/"message"[[:space:]]*:[[:space:]]*"\([^"]*\)"/\1/')
+            error_code=$(echo "$response" | LC_ALL=C grep -o '"code"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | LC_ALL=C sed 's/.*"\([^"]*\)"$/\1/')
+            [ -z "$error_code" ] && error_code=$(echo "$response" | LC_ALL=C grep -o '"code"[[:space:]]*:[[:space:]]*[0-9]*' | head -1 | grep -o '[0-9]*')
+            error_message=$(echo "$response" | LC_ALL=C grep -o '"message"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | LC_ALL=C sed 's/.*"\([^"]*\)"$/\1/')
+            error_type=$(echo "$response" | LC_ALL=C grep -o '"type"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | LC_ALL=C sed 's/.*"\([^"]*\)"$/\1/')
         fi
-        echo >&2
-        echo -e "${RED}AI API Error${ENDCOLOR}" >&2
-        if [ -n "$error_code" ]; then
-            echo -e "${RED}✗ Error code: $error_code${ENDCOLOR}" >&2
-        fi
-        if [ -n "$error_message" ]; then
-            echo -e "${RED}✗ Error message: $error_message${ENDCOLOR}" >&2
-        fi
-        echo >&2
-        echo -e "${YELLOW}📋 Full API Response:${ENDCOLOR}"
-        echo "$response" >&2
-        echo >&2
+        local kind="unknown"
         case "$error_code" in
-            400)
-                if [[ "$error_message" == *"context"* ]] || [[ "$error_message" == *"token"* ]] || [[ "$error_message" == *"too long"* ]] || [[ "$error_message" == *"length"* ]]; then
-                    echo -e "${YELLOW}📏 Prompt too large: Too many staged files or changes for the AI model.${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Reduce the diff limit: gitb cfg history${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Try a model with larger context: gitb cfg model${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Use manual commit message for now: gitb c${ENDCOLOR}" >&2
-                else
-                    echo -e "${YELLOW}⚠️  Bad request: Check your API configuration or prompt format.${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Verify your API key is correct${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Try again with a smaller commit diff${ENDCOLOR}" >&2
-                fi
-                ;;
-            413)
-                echo -e "${YELLOW}📏 Payload too large: Too many staged files or changes for the AI model.${ENDCOLOR}" >&2
-                echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Reduce the diff limit: gitb cfg history${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Try a model with larger context: gitb cfg model${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Use manual commit message for now: gitb c${ENDCOLOR}" >&2
-                ;;
-            401|403)
-                echo -e "${YELLOW}🔐 Authentication error: Invalid or expired API key.${ENDCOLOR}" >&2
-                echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Check your API key with: gitb cfg ai${ENDCOLOR}" >&2
+            400)         kind="bad_request" ;;
+            401|403)     kind="auth" ;;
+            413)         kind="context" ;;
+            429)         kind="rate_limit" ;;
+            500|502|503) kind="server" ;;
+            invalid_api_key|invalid_token|authentication_error) kind="auth" ;;
+            unsupported_parameter|invalid_request_error)        kind="bad_param" ;;
+            insufficient_quota|rate_limit_exceeded)             kind="rate_limit" ;;
+            context_length_exceeded)                            kind="context" ;;
+        esac
+        if [ "$kind" = "unknown" ] || [ "$kind" = "bad_request" ]; then
+            if [[ "$error_message" == *"context"* ]] || [[ "$error_message" == *"too long"* ]] \
+                    || [[ "$error_message" == *"too large"* ]] || [[ "$error_message" == *"context length"* ]]; then
+                kind="context"
+            elif [[ "$error_message" == *"max_completion_tokens"* ]] || [[ "$error_message" == *"max_tokens"* ]] \
+                    || [[ "$error_message" == *"Unsupported parameter"* ]]; then
+                kind="bad_param"
+            elif [[ "$error_message" == *"suspended"* ]]; then
+                kind="suspended"
+            elif [[ "$error_message" == *"location is not supported"* ]] || [[ "$error_message" == *"region"* ]]; then
+                kind="geo"
+            elif [[ "$error_message" == *"API key"* ]] || [[ "$error_message" == *"api_key"* ]] || [[ "$error_message" == *"unauthorized"* ]]; then
+                kind="auth"
+            fi
+        fi
+        echo >&2
+        echo -e "${RED}✗ AI request failed${ENDCOLOR} ${GRAY}(provider '${provider}', model '${model}')${ENDCOLOR}" >&2
+        if [ -n "$error_message" ]; then
+            echo -e "  ${GRAY}cause:${ENDCOLOR} ${error_message}" >&2
+        fi
+        case "$kind" in
+            auth)
+                echo -e "  ${GRAY}fix:${ENDCOLOR}   invalid or missing key for ${YELLOW}${provider}${ENDCOLOR} — set one with ${GREEN}gitb cfg ai${ENDCOLOR}" >&2
                 case "$provider" in
-                    openai)     echo -e "${YELLOW}  • Get an OpenAI key at: https://platform.openai.com/api-keys${ENDCOLOR}" >&2 ;;
-                    openrouter) echo -e "${YELLOW}  • Get an OpenRouter key at: https://openrouter.ai/keys${ENDCOLOR}" >&2 ;;
+                    openai)     echo -e "         ${GRAY}get a key at https://platform.openai.com/api-keys${ENDCOLOR}" >&2 ;;
+                    openrouter) echo -e "         ${GRAY}get a key at https://openrouter.ai/keys${ENDCOLOR}" >&2 ;;
                 esac
-                echo -e "${YELLOW}  • Ensure your key has proper permissions${ENDCOLOR}" >&2
                 ;;
-            429)
-                echo -e "${YELLOW}⏱️  Rate limit exceeded: Too many requests.${ENDCOLOR}" >&2
-                echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Wait a few minutes and try again${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Consider upgrading your API plan for higher limits${ENDCOLOR}" >&2
+            context)
+                echo -e "  ${GRAY}fix:${ENDCOLOR}   payload too large — shrink it with ${GREEN}gitb cfg diff${ENDCOLOR} or pick a larger-context model with ${GREEN}gitb cfg model${ENDCOLOR}" >&2
                 ;;
-            500|502)
-                echo -e "${YELLOW}🔧 Server error: AI service is experiencing issues.${ENDCOLOR}" >&2
-                echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Try again in a few minutes${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Check OpenRouter status: https://status.openrouter.ai${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Use manual commit message for now: gitb c${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Try a different model: gitb cfg model${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Check your API key balance: https://openrouter.ai/keys${ENDCOLOR}" >&2
+            rate_limit)
+                echo -e "  ${GRAY}fix:${ENDCOLOR}   rate-limited — wait and retry, or upgrade your ${provider} plan" >&2
                 ;;
-            503)
-                echo -e "${YELLOW}📊 Service overloaded: Provider servers are busy.${ENDCOLOR}" >&2
-                echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Try again in a few minutes${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Retry during off-peak hours${ENDCOLOR}" >&2
+            server)
+                echo -e "  ${GRAY}fix:${ENDCOLOR}   provider is having issues — retry shortly, or use ${GREEN}gitb c${ENDCOLOR} for a manual commit" >&2
+                ;;
+            suspended)
+                echo -e "  ${GRAY}fix:${ENDCOLOR}   account suspended — contact ${provider} support" >&2
+                ;;
+            geo)
+                echo -e "  ${GRAY}fix:${ENDCOLOR}   region restricted — route requests via a proxy with ${GREEN}gitb cfg proxy${ENDCOLOR}" >&2
+                ;;
+            bad_param)
+                echo -e "  ${GRAY}fix:${ENDCOLOR}   gitbasher sent a parameter ${provider} doesn't accept for this model — please report at https://github.com/maxbolgarin/gitbasher/issues" >&2
                 ;;
             *)
-                if [[ "$error_message" == *"suspended"* ]]; then
-                    echo -e "${YELLOW}🚫 Account suspended: Your API access has been suspended.${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Contact OpenRouter Support to resolve account issues${ENDCOLOR}" >&2
-                elif [[ "$error_message" == *"location is not supported"* ]]; then
-                    echo -e "${YELLOW}⚠️  Geographic restriction: Service may be unavailable in your region.${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Configure proxy with: gitb cfg proxy${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Use a VPN to connect from a supported region${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Use manual commit messages for now${ENDCOLOR}" >&2
-                elif [[ "$error_message" == *"context"* ]] || [[ "$error_message" == *"token"* ]] || [[ "$error_message" == *"too long"* ]] || [[ "$error_message" == *"length"* ]]; then
-                    echo -e "${YELLOW}📏 Prompt too large: Too many staged files or changes for the AI model.${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Reduce the diff limit: gitb cfg history${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Try a model with larger context: gitb cfg model${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Use manual commit message for now: gitb c${ENDCOLOR}" >&2
-                else
-                    echo -e "${YELLOW}❓ Unknown error occurred.${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Check OpenAI-compatible API documentation${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Try again later${ENDCOLOR}" >&2
-                fi
+                echo -e "  ${GRAY}fix:${ENDCOLOR}   retry, or use ${GREEN}gitb c${ENDCOLOR} for a manual commit" >&2
                 ;;
         esac
+        echo >&2
         clear_sensitive_vars
         return 1
     fi
@@ -1739,8 +1865,10 @@ function check_ai_available {
     if ai_provider_requires_api_key; then
         local api_key=$(get_ai_api_key)
         if [ -z "$api_key" ]; then
-            echo -e "${RED}AI API key not configured${ENDCOLOR}" >&2
-            echo -e "${YELLOW}Configure it with: gitb cfg ai${ENDCOLOR}" >&2
+            local provider=$(get_ai_provider)
+            echo -e "${RED}✗ AI API key not configured for provider '${provider}'${ENDCOLOR}" >&2
+            echo -e "${YELLOW}Configure it with:${ENDCOLOR} ${GREEN}gitb cfg ai${ENDCOLOR}" >&2
+            echo -e "${YELLOW}Or switch provider with:${ENDCOLOR} ${GREEN}gitb cfg provider${ENDCOLOR}" >&2
             return 1
         fi
     fi
@@ -2066,9 +2194,11 @@ function set_ticket {
     ticket_name=$(set_config_value gitbasher.ticket $ticket_name "true")
 }
 function configure_ai_key {
-    echo -e "${YELLOW}Enter AI API key${ENDCOLOR}"
-    echo
     local provider=$(get_ai_provider)
+    local provider_upper
+    provider_upper=$(echo "$provider" | tr '[:lower:]' '[:upper:]')
+    echo -e "${YELLOW}Enter AI API key for provider '${provider}'${ENDCOLOR}"
+    echo
     if [ "$provider" = "ollama" ]; then
         echo -e "${YELLOW}Provider '${provider}' does not require an API key.${ENDCOLOR}"
         echo -e "Switch providers with ${GREEN}gitb cfg provider${ENDCOLOR} to set one."
@@ -2076,9 +2206,9 @@ function configure_ai_key {
     fi
     ai_api_key=$(get_ai_api_key)
     if [ -z "$ai_api_key" ]; then
-        echo -e "${YELLOW}No AI API key is set.${ENDCOLOR}"
+        echo -e "${YELLOW}No AI API key is set for '${provider}'.${ENDCOLOR}"
     else
-        echo -e "AI API key is ${GREEN}configured${ENDCOLOR}: ${BLUE}$(mask_api_key "$ai_api_key")${ENDCOLOR}"
+        echo -e "AI API key for '${provider}' is ${GREEN}configured${ENDCOLOR}: ${BLUE}$(mask_api_key "$ai_api_key")${ENDCOLOR}"
     fi
     case "$provider" in
         openai)
@@ -2092,7 +2222,7 @@ function configure_ai_key {
     esac
     echo
     echo -e "${CYAN}💡 For better security, set the key via environment variable instead:${ENDCOLOR}"
-    echo -e "  ${BLUE}export GITB_AI_API_KEY='your-api-key'${ENDCOLOR}"
+    echo -e "  ${BLUE}export GITB_AI_API_KEY_${provider_upper}='your-api-key'${ENDCOLOR}"
     echo -e "  Add this to your ~/.bashrc or ~/.zshrc to make it permanent."
     echo
     echo -e "Press Enter to exit without changes, or 0 to remove the existing key"
@@ -2104,9 +2234,9 @@ function configure_ai_key {
         exit
     fi
     if [ "$ai_key_input" == "0" ]; then
-        unset_config_value gitbasher.ai-api-key
+        unset_ai_api_key
         echo
-        echo -e "${GREEN}✓ Removed AI API key from '${project_name}'${ENDCOLOR}"
+        echo -e "${GREEN}✓ Removed AI API key for '${provider}' from '${project_name}'${ENDCOLOR}"
         exit
     fi
     echo
@@ -2118,14 +2248,14 @@ function configure_ai_key {
             exit 1
         fi
     fi
-    ai_api_key=$(set_config_value gitbasher.ai-api-key "$ai_key_input")
-    echo -e "${GREEN}✓ Configured AI API key for '${project_name}':${ENDCOLOR} ${BLUE}$(mask_api_key "$ai_api_key")${ENDCOLOR}"
+    ai_api_key=$(set_ai_api_key "$ai_key_input")
+    echo -e "${GREEN}✓ Configured AI API key for '${provider}' in '${project_name}':${ENDCOLOR} ${BLUE}$(mask_api_key "$ai_api_key")${ENDCOLOR}"
     echo
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     echo -e "${RED}⚠  Global API keys are stored in plaintext in ~/.gitconfig.${ENDCOLOR}"
-    echo -e "${CYAN}💡 For better security, set ${BLUE}GITB_AI_API_KEY${CYAN} as an environment variable instead.${ENDCOLOR}"
+    echo -e "${CYAN}💡 For better security, set ${BLUE}GITB_AI_API_KEY_${provider_upper}${CYAN} as an environment variable instead.${ENDCOLOR}"
     yes_no_choice "\nSet AI API key globally" "true"
-    ai_api_key=$(set_config_value gitbasher.ai-api-key "$ai_key_input" "true")
+    ai_api_key=$(set_ai_api_key "$ai_key_input" "true")
 }
 function configure_ai_provider {
     echo -e "${YELLOW}Choose AI Provider${ENDCOLOR}"
@@ -2164,15 +2294,10 @@ function configure_ai_provider {
             exit 1
             ;;
     esac
+    migrate_legacy_ai_api_key_to "$current_provider"
     set_ai_provider "$new_provider"
     echo -e "${GREEN}✓ Set AI provider to '${new_provider}' for '${project_name}'${ENDCOLOR}"
     case "$new_provider" in
-        openai)
-            echo -e "${CYAN}💡 Next: set your key with ${GREEN}gitb cfg ai${CYAN} (https://platform.openai.com/api-keys)${ENDCOLOR}"
-            ;;
-        openrouter)
-            echo -e "${CYAN}💡 Next: set your key with ${GREEN}gitb cfg ai${CYAN} (https://openrouter.ai/keys)${ENDCOLOR}"
-            ;;
         ollama)
             echo -e "${CYAN}💡 Make sure the Ollama daemon is running (${BLUE}ollama serve${CYAN}) and a model is pulled (${BLUE}ollama pull qwen3:8b${CYAN}).${ENDCOLOR}"
             echo -e "${CYAN}💡 Pick a different model with ${GREEN}gitb cfg model${CYAN} if you have one installed already.${ENDCOLOR}"
@@ -2182,6 +2307,20 @@ function configure_ai_provider {
     echo -e "Do you want to set this provider ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet AI provider globally" "true"
     set_config_value gitbasher.ai-provider "$new_provider" "true"
+    if ai_provider_requires_api_key && [ -z "$(get_ai_api_key)" ]; then
+        echo
+        echo -e "${YELLOW}No API key is set for '${new_provider}'.${ENDCOLOR}"
+        echo -e "${CYAN}AI commands will be blocked until a key is configured.${ENDCOLOR}"
+        echo
+        echo -e "Set one now? (y/n)"
+        if read -n 1 -s key_choice && is_yes "$key_choice"; then
+            echo
+            configure_ai_key
+        else
+            echo
+            echo -e "${YELLOW}Skipped. Run ${GREEN}gitb cfg ai${YELLOW} when you're ready.${ENDCOLOR}"
+        fi
+    fi
 }
 function configure_ai_model {
     echo -e "${YELLOW}Configure AI Model${ENDCOLOR}"
@@ -2444,107 +2583,79 @@ function delete_global {
     echo -e "${YELLOW}Unset global config${ENDCOLOR}"
     echo
     echo -e "Select a cfg to unset from global settings"
-    global_default=$(git config --global --get gitbasher.branch)
-    if [ "$global_default" != "" ]; then
-        echo -e "1. Default branch: ${YELLOW}${global_default}${ENDCOLOR}"
-    fi
-    global_sep=$(git config --global --get gitbasher.sep)
-    if [ "$global_sep" != "" ]; then
-        echo -e "2. Branch separator: ${YELLOW}${global_sep}${ENDCOLOR}"
-    fi
-    global_editor=$(git config --global --get core.editor)
-    if [ "$global_editor" != "" ]; then
-        echo -e "3. Commit message editor: ${YELLOW}${global_editor}${ENDCOLOR}"
-    fi
-    global_ticket=$(git config --global --get gitbasher.ticket)
-    if [ "$global_ticket" != "" ]; then
-        echo -e "4. Ticket prefix: ${YELLOW}${global_ticket}${ENDCOLOR}"
-    fi
-    global_scopes=$(git config --global --get gitbasher.scopes)
-    if [ "$global_scopes" != "" ]; then
-        echo -e "5. Scopes list: ${YELLOW}${global_scopes}${ENDCOLOR}"
-    fi
-    global_ai_key=$(git config --global --get gitbasher.ai-api-key)
-    if [ "$global_ai_key" != "" ]; then
-        echo -e "6. AI API key: ${GREEN}configured${ENDCOLOR}"
-    fi
-    global_ai_model=$(git config --global --get gitbasher.ai-model)
-    if [ "$global_ai_model" != "" ]; then
-        echo -e "7. AI model: ${GREEN}$global_ai_model${ENDCOLOR}"
-    fi
-    global_ai_proxy=$(git config --global --get gitbasher.ai-proxy)
-    if [ "$global_ai_proxy" != "" ]; then
-        echo -e "8. AI proxy: ${GREEN}$global_ai_proxy${ENDCOLOR}"
-    fi
-    global_ai_history=$(git config --global --get gitbasher.ai-commit-history-limit)
-    if [ "$global_ai_history" != "" ]; then
-        echo -e "9. AI commit history limit: ${GREEN}$global_ai_history${ENDCOLOR}"
-    fi
-    global_ai_diff_lines=$(git config --global --get gitbasher.ai-diff-limit)
-    global_ai_diff_chars=$(git config --global --get gitbasher.ai-diff-max-chars)
+    local -a labels=()
+    local -a actions=()
+    _delete_global_add() {
+        local key="$1" label="$2" value_display="$3"
+        if [ -n "$value_display" ]; then
+            labels+=("${label}: ${value_display}")
+            actions+=("$key|$label")
+        fi
+    }
+    local global_default=$(git config --global --get gitbasher.branch)
+    _delete_global_add "gitbasher.branch" "Default branch" "${YELLOW}${global_default}${ENDCOLOR}"
+    local global_sep=$(git config --global --get gitbasher.sep)
+    _delete_global_add "gitbasher.sep" "Branch separator" "${YELLOW}${global_sep}${ENDCOLOR}"
+    local global_editor=$(git config --global --get core.editor)
+    _delete_global_add "core.editor" "Commit message editor" "${YELLOW}${global_editor}${ENDCOLOR}"
+    local global_ticket=$(git config --global --get gitbasher.ticket)
+    _delete_global_add "gitbasher.ticket" "Ticket prefix" "${YELLOW}${global_ticket}${ENDCOLOR}"
+    local global_scopes=$(git config --global --get gitbasher.scopes)
+    _delete_global_add "gitbasher.scopes" "Scopes list" "${YELLOW}${global_scopes}${ENDCOLOR}"
+    while IFS=$'\t' read -r key_name; do
+        [ -z "$key_name" ] && continue
+        local prov="${key_name#gitbasher.ai-api-key-}"
+        labels+=("AI API key (${prov}): ${GREEN}configured${ENDCOLOR}")
+        actions+=("$key_name|AI API key (${prov})")
+    done < <(git config --global --get-regexp '^gitbasher\.ai-api-key-' 2>/dev/null | awk '{print $1}')
+    local global_legacy_key=$(git config --global --get gitbasher.ai-api-key)
+    _delete_global_add "gitbasher.ai-api-key" "AI API key (legacy)" "${GREEN}configured${ENDCOLOR}"
+    local global_ai_model=$(git config --global --get gitbasher.ai-model)
+    _delete_global_add "gitbasher.ai-model" "AI model" "${GREEN}${global_ai_model}${ENDCOLOR}"
+    local global_ai_proxy=$(git config --global --get gitbasher.ai-proxy)
+    _delete_global_add "gitbasher.ai-proxy" "AI proxy" "${GREEN}${global_ai_proxy}${ENDCOLOR}"
+    local global_ai_history=$(git config --global --get gitbasher.ai-commit-history-limit)
+    _delete_global_add "gitbasher.ai-commit-history-limit" "AI commit history limit" "${GREEN}${global_ai_history}${ENDCOLOR}"
+    local global_ai_diff_lines=$(git config --global --get gitbasher.ai-diff-limit)
+    local global_ai_diff_chars=$(git config --global --get gitbasher.ai-diff-max-chars)
     if [ -n "$global_ai_diff_lines" ] || [ -n "$global_ai_diff_chars" ]; then
-        diff_summary=""
+        local diff_summary=""
         [ -n "$global_ai_diff_lines" ] && diff_summary="${global_ai_diff_lines} lines"
         if [ -n "$global_ai_diff_chars" ]; then
             [ -n "$diff_summary" ] && diff_summary="${diff_summary}, "
             diff_summary="${diff_summary}${global_ai_diff_chars} chars"
         fi
-        echo -e "10. AI diff payload: ${GREEN}${diff_summary}${ENDCOLOR}"
+        labels+=("AI diff payload: ${GREEN}${diff_summary}${ENDCOLOR}")
+        actions+=("gitbasher.ai-diff-limit+gitbasher.ai-diff-max-chars|AI diff payload")
     fi
+    if [ ${#labels[@]} -eq 0 ]; then
+        echo -e "${GRAY}Nothing to unset — no global gitbasher settings are configured.${ENDCOLOR}"
+        exit
+    fi
+    local i
+    for i in "${!labels[@]}"; do
+        echo -e "$((i + 1)). ${labels[$i]}"
+    done
     echo -e "0. Exit"
-    read -p "" choice
-    re='^([0-9]|10)$'
-    if ! [[ $choice =~ $re ]]; then
+    echo
+    read_editable_input choice "Choice: "
+    if [ "$choice" == "" ] || [ "$choice" == "0" ]; then
+        exit
+    fi
+    if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "${#labels[@]}" ]; then
         echo -e "${RED}✗ Invalid choice.${ENDCOLOR}" >&2
         return 1
     fi
-    if [ "$choice" == "0" ]; then
-        exit
-    fi
     echo
-    case "$choice" in
-        1)  
-            echo -e "${GREEN}✓ Unset default branch from global settings${ENDCOLOR}"
-            git config --global --unset gitbasher.branch
-            ;;
-        2)
-            echo -e "${GREEN}✓ Unset branch separator from global settings${ENDCOLOR}"
-            git config --global --unset gitbasher.sep
-            ;;
-        3)
-            echo -e "${GREEN}✓ Unset commit message editor from global settings${ENDCOLOR}"
-            git config --global --unset core.editor
-            ;;
-        4)
-            echo -e "${GREEN}✓ Unset ticket prefix from global settings${ENDCOLOR}"
-            git config --global --unset gitbasher.ticket
-            ;;
-        5)
-            echo -e "${GREEN}✓ Unset scopes list from global settings${ENDCOLOR}"
-            git config --global --unset gitbasher.scopes
-            ;;
-        6)
-            echo -e "${GREEN}✓ Unset AI API key from global settings${ENDCOLOR}"
-            git config --global --unset gitbasher.ai-api-key
-            ;;
-        7)
-            echo -e "${GREEN}✓ Unset AI model from global settings${ENDCOLOR}"
-            git config --global --unset gitbasher.ai-model
-            ;;
-        8)
-            echo -e "${GREEN}✓ Unset AI proxy from global settings${ENDCOLOR}"
-            git config --global --unset gitbasher.ai-proxy
-            ;;
-        9)
-            echo -e "${GREEN}✓ Unset AI commit history limit from global settings${ENDCOLOR}"
-            git config --global --unset gitbasher.ai-commit-history-limit
-            ;;
-        10)
-            echo -e "${GREEN}✓ Unset AI diff payload settings from global settings${ENDCOLOR}"
-            git config --global --unset gitbasher.ai-diff-limit 2>/dev/null
-            git config --global --unset gitbasher.ai-diff-max-chars 2>/dev/null
-            ;;
-    esac
+    local action="${actions[$((choice - 1))]}"
+    local keys="${action%%|*}"
+    local label="${action#*|}"
+    local k
+    IFS='+' read -ra _keys <<< "$keys"
+    for k in "${_keys[@]}"; do
+        git config --global --unset "$k" 2>/dev/null
+    done
+    echo -e "${GREEN}✓ Unset ${label} from global settings${ENDCOLOR}"
 }
 function set_user {
     echo -e "${YELLOW}Set user name and email${ENDCOLOR}"
@@ -4062,6 +4173,7 @@ function handle_cherry_pick_conflicts {
 }
 readonly SQUASH_AI_DIFF_PER_COMMIT_CHARS=2000
 readonly SQUASH_MAX_COMMITS=80
+readonly SQUASH_CHUNK_SIZE=25
 function squash_resolve_base_ref {
     local explicit_ref="$1"
     if [ -n "$explicit_ref" ]; then
@@ -4100,7 +4212,7 @@ function squash_resolve_base_ref {
     return 1
 }
 function squash_build_commits_block {
-    local base_ref="$1"
+    local hashes_input="$1"
     local block=""
     local sep=""
     while IFS= read -r full_hash; do
@@ -4145,53 +4257,66 @@ ${diff}
         block+="
 </commit>"
         sep=$'\n'
-    done < <(git rev-list --reverse "${base_ref}..HEAD" 2>/dev/null)
+    done <<< "$hashes_input"
     printf '%s' "$block"
 }
 function squash_call_ai_grouping {
-    local base_ref="$1"
-    local commit_count="$2"
+    local hashes_input="$1"
+    local chunk_label="${2:-}"
+    local correction_note="${3:-}"
+    local commit_count
+    commit_count=$(printf '%s\n' "$hashes_input" | grep -c .)
     local commits_block recent_commits
-    commits_block=$(squash_build_commits_block "$base_ref")
+    commits_block=$(squash_build_commits_block "$hashes_input")
     recent_commits=$(get_recent_commit_messages_for_ai)
+    local chunk_note=""
+    if [ -n "$chunk_label" ]; then
+        chunk_note="
+This is chunk ${chunk_label} of a larger range — group ONLY the commits shown
+inside <commits>. Do not invent hashes from outside this chunk."
+    fi
     local system_prompt='You are a git history editor. You receive a chronological list of commits (oldest first) inside <commits> and must propose how to consolidate them into a clean, changelog-ready history.
 Goals (in priority order):
 1. Each output group represents ONE logical change a reader would want to see in a CHANGELOG. Merge "fix typo", "address review", "wip", "fixup!", "lint", "rebase fix", and follow-up tweaks INTO the commit they belong to.
 2. Preserve every code change. Never drop a commit just because its message is poor — squash it into a meaningful neighbour instead.
 3. Keep unrelated changes in separate groups. A bug fix and a new feature should not share a group even if they are adjacent.
 4. Order groups by the FIRST commit in each group (the original chronological order of group leaders MUST be preserved). Within a group, commits also stay in their original order.
-Output format (STRICT — any deviation will be rejected):
-- Output ONLY blocks like the example below, separated by blank lines. No prose before, between, or after the blocks. No markdown fences.
-- Each block has exactly these fields, in this order, one per line:
-    GROUP: <1-based index>
-    COMMITS: <space-separated short hashes from the input, in original order>
-    MESSAGE: <conventional commit header, lowercase subject, <=100 chars total>
-    BODY: <single line, or the literal string NONE>
-- The MESSAGE follows Conventional Commits: type(scope): subject. Allowed types: feat, fix, refactor, perf, test, build, ci, chore, docs, style. Scope is optional. Subject is imperative, lowercase, no trailing period.
-- BODY is one line of prose explaining WHY (1-2 short sentences). If no body is needed, write the literal word NONE.
-- Every input hash MUST appear in exactly one COMMITS line. The union of all COMMITS lines MUST equal the input set, with the original order preserved within each group.
-- Prefer keeping the existing message of the leader commit when it is already clean and accurate; only rewrite when consolidation actually changes the meaning.
-Example output for three input commits abc1111 def2222 ghi3333 where the second is a fix to the first and the third is unrelated:
-GROUP: 1
-COMMITS: abc1111 def2222
-MESSAGE: feat(auth): add backup codes for MFA recovery
-BODY: Folds the follow-up null-check fix into the original feature so the changelog shows one self-contained change.
-GROUP: 2
-COMMITS: ghi3333
-MESSAGE: docs: update contributing guide
-BODY: NONE'
+Output format: a single JSON object matching this schema (no prose, no markdown fences):
+{
+  "groups": [
+    {
+      "commits": ["<short hash>", "<short hash>", ...],
+      "message": "<conventional commit header, lowercase subject, <=100 chars>",
+      "body": "<one-line body explaining WHY, or empty string for no body>"
+    }
+  ]
+}
+Rules (any violation will be rejected):
+- The "message" field follows Conventional Commits: type(scope): subject. Allowed types: feat, fix, refactor, perf, test, build, ci, chore, docs, style. Scope is optional. Subject is imperative, lowercase, no trailing period.
+- The "body" field is a SINGLE line (no newlines) explaining WHY in 1-2 short sentences. Use the empty string "" if no body is needed.
+- Each "commits" array contains the EXACT short hashes from the input, in their original chronological order.
+- Every input hash MUST appear in exactly one "commits" array across the response. No duplicates, no omissions, no hashes outside the input set.
+- Prefer keeping the existing leader-commit message verbatim when it is already clean and accurate.
+Example response for three input commits abc1111 def2222 ghi3333 where the second is a fix to the first and the third is unrelated:
+{"groups":[{"commits":["abc1111","def2222"],"message":"feat(auth): add backup codes for MFA recovery","body":"Folds the follow-up null-check fix into the original feature so the changelog shows one self-contained change."},{"commits":["ghi3333"],"message":"docs: update contributing guide","body":""}]}'
     local user_prompt="<recent_commits>
 ${recent_commits}
 </recent_commits>
-<range>
-base=${base_ref}
-total_commits=${commit_count}
-</range>
 <commits>
 ${commits_block}
 </commits>
-Group these ${commit_count} commits as instructed. Output GROUP/COMMITS/MESSAGE/BODY blocks only."
-    call_ai_api "$system_prompt" "$user_prompt" 4096 "$(get_ai_model_for grouping)"
+${chunk_note}
+Group these ${commit_count} commits as instructed. Output a single JSON object only."
+    if [ -n "$correction_note" ]; then
+        user_prompt="${user_prompt}
+CORRECTION (your previous attempt was rejected):
+${correction_note}
+Re-do the grouping. Every input hash MUST appear in EXACTLY ONE \"commits\" array — no duplicates, no omissions, no hashes outside the input set. Output a single JSON object only."
+    fi
+    local max_out=$(( commit_count * 120 ))
+    [ "$max_out" -lt 2048 ] && max_out=2048
+    [ "$max_out" -gt 16384 ] && max_out=16384
+    call_ai_api "$system_prompt" "$user_prompt" "$max_out" "$(get_ai_model_for grouping)" '{"type":"json_object"}'
 }
 function squash_parse_ai_plan {
     local response="$1"
@@ -4201,7 +4326,41 @@ function squash_parse_ai_plan {
     declare -gA squash_group_message
     declare -gA squash_group_body
     squash_group_count=0
-    response=$(printf '%s' "$response" | LC_ALL=C sed -e 's/^```[a-zA-Z]*$//' -e 's/^```$//')
+    squash_parse_error=""
+    if ! command -v jq &>/dev/null; then
+        squash_parse_error="jq is required to parse the AI plan but is not installed"
+        return 1
+    fi
+    local json_only
+    json_only=$(printf '%s' "$response" | LC_ALL=C awk '
+        BEGIN{depth=0; started=0; out=""}
+        {
+            for (i=1; i<=length($0); i++) {
+                c=substr($0,i,1)
+                if (c=="{") { depth++; started=1 }
+                if (started) out=out c
+                if (c=="}") { depth--; if (depth==0 && started) { print out; exit } }
+            }
+            if (started) out=out "\n"
+        }')
+    if [ -z "$json_only" ]; then
+        squash_parse_error="response is not JSON (no { } block found)"
+        return 1
+    fi
+    if ! printf '%s' "$json_only" | jq -e . >/dev/null 2>&1; then
+        squash_parse_error="response is not valid JSON — likely truncated by max_tokens"
+        return 1
+    fi
+    local groups_count
+    groups_count=$(printf '%s' "$json_only" | jq -r '.groups | length' 2>/dev/null)
+    if [ -z "$groups_count" ] || [ "$groups_count" = "null" ]; then
+        squash_parse_error="response is missing the \"groups\" array"
+        return 1
+    fi
+    if [ "$groups_count" -lt 1 ]; then
+        squash_parse_error="response contains zero groups"
+        return 1
+    fi
     local -A expected_set=()
     local -a expected_order=()
     local h
@@ -4209,94 +4368,64 @@ function squash_parse_ai_plan {
         expected_set["$h"]=1
         expected_order+=("$h")
     done
-    local current_group=0
-    local current_commits="" current_message="" current_body=""
-    local in_block=0
     local seen=()
     declare -A seen_set=()
-    _squash_flush_block() {
-        if [ "$in_block" = "1" ]; then
-            if [ -z "$current_commits" ] || [ -z "$current_message" ]; then
-                in_block=0
+    local current_group=0
+    local g
+    for ((g = 0; g < groups_count; g++)); do
+        local one_idx=$((g + 1))
+        local commits_arr message body
+        commits_arr=$(printf '%s' "$json_only" | jq -r ".groups[$g].commits | if type==\"array\" then .[] else empty end" 2>/dev/null)
+        message=$(printf '%s' "$json_only" | jq -r ".groups[$g].message // \"\"" 2>/dev/null)
+        body=$(printf '%s' "$json_only" | jq -r ".groups[$g].body // \"\"" 2>/dev/null)
+        if [ -z "$commits_arr" ]; then
+            squash_parse_error="group $one_idx has empty or missing \"commits\" array — likely truncated by max_tokens"
+            return 1
+        fi
+        if [ -z "$message" ]; then
+            squash_parse_error="group $one_idx has empty or missing \"message\""
+            return 1
+        fi
+        if [ ${#message} -gt 200 ]; then
+            squash_parse_error="group $one_idx \"message\" is ${#message} chars (max 200)"
+            return 1
+        fi
+        message=$(printf '%s' "$message" | tr -d '\r\n')
+        body=$(printf '%s' "$body" | tr '\r\n' '  ' | LC_ALL=C sed -e 's/  */ /g' -e 's/^ //' -e 's/ $//')
+        if [ ${#body} -gt 500 ]; then
+            body="${body:0:500}"
+        fi
+        local validated="" c
+        while IFS= read -r c; do
+            [ -z "$c" ] && continue
+            if [ -z "${expected_set[$c]:-}" ]; then
+                squash_parse_error="group $one_idx references unknown commit '$c' (not in input range)"
                 return 1
             fi
-            current_group=$((current_group + 1))
-            squash_group_commits["$current_group"]="$current_commits"
-            squash_group_message["$current_group"]="$current_message"
-            if [ "$current_body" = "NONE" ]; then
-                squash_group_body["$current_group"]=""
-            else
-                squash_group_body["$current_group"]="$current_body"
+            if [ -n "${seen_set[$c]:-}" ]; then
+                squash_parse_error="group $one_idx reuses commit '$c' already assigned to an earlier group"
+                return 1
             fi
-            current_commits=""
-            current_message=""
-            current_body=""
-            in_block=0
-        fi
-        return 0
-    }
-    while IFS= read -r line; do
-        line=$(printf '%s' "$line" | LC_ALL=C sed -e 's/[[:space:]]*$//')
-        case "$line" in
-            GROUP:*|"GROUP "*)
-                _squash_flush_block || return 1
-                in_block=1
-                ;;
-            COMMITS:*)
-                local commits_value="${line#COMMITS:}"
-                commits_value=$(printf '%s' "$commits_value" | LC_ALL=C sed -e 's/^[[:space:]]*//')
-                local validated=""
-                local c
-                for c in $commits_value; do
-                    if [ -z "${expected_set[$c]:-}" ]; then
-                        return 1
-                    fi
-                    if [ -n "${seen_set[$c]:-}" ]; then
-                        return 1
-                    fi
-                    seen_set["$c"]=1
-                    seen+=("$c")
-                    validated+="${validated:+ }$c"
-                done
-                current_commits="$validated"
-                ;;
-            MESSAGE:*)
-                local msg_value="${line#MESSAGE:}"
-                msg_value=$(printf '%s' "$msg_value" | LC_ALL=C sed -e 's/^[[:space:]]*//')
-                if [ -z "$msg_value" ] || [ ${#msg_value} -gt 200 ]; then
-                    return 1
-                fi
-                if printf '%s' "$msg_value" | LC_ALL=C grep -q '[[:cntrl:]]'; then
-                    return 1
-                fi
-                current_message="$msg_value"
-                ;;
-            BODY:*)
-                local body_value="${line#BODY:}"
-                body_value=$(printf '%s' "$body_value" | LC_ALL=C sed -e 's/^[[:space:]]*//')
-                if [ ${#body_value} -gt 500 ]; then
-                    body_value="${body_value:0:500}"
-                fi
-                current_body="$body_value"
-                ;;
-            "")
-                : # blank line is fine inside or between blocks
-                ;;
-            *)
-                ;;
-        esac
-    done <<< "$response"
-    _squash_flush_block || return 1
+            seen_set["$c"]=1
+            seen+=("$c")
+            validated+="${validated:+ }$c"
+        done <<< "$commits_arr"
+        current_group=$((current_group + 1))
+        squash_group_commits["$current_group"]="$validated"
+        squash_group_message["$current_group"]="$message"
+        squash_group_body["$current_group"]="$body"
+    done
     if [ "${#seen[@]}" -ne "${#expected_order[@]}" ]; then
+        squash_parse_error="coverage: AI returned ${#seen[@]} commits but range has ${#expected_order[@]} — response likely truncated by max_tokens"
         return 1
     fi
     for h in "${expected_order[@]}"; do
         if [ -z "${seen_set[$h]:-}" ]; then
+            squash_parse_error="coverage: commit '$h' is missing from the AI plan"
             return 1
         fi
     done
     local last_idx=-1
-    local g
     for ((g = 1; g <= current_group; g++)); do
         local first_hash="${squash_group_commits[$g]%% *}"
         local i idx=-1
@@ -4307,14 +4436,103 @@ function squash_parse_ai_plan {
             fi
         done
         if [ "$idx" -le "$last_idx" ]; then
+            squash_parse_error="group $g leader '$first_hash' appears out of chronological order"
             return 1
         fi
         last_idx="$idx"
     done
     squash_group_count="$current_group"
-    if [ "$squash_group_count" -lt 1 ]; then
+    return 0
+}
+function squash_run_ai_attempt {
+    local hashes_input="$1"
+    local expected_short="$2"
+    local chunk_label="${3:-}"
+    local correction="" attempt
+    local max_attempts=3
+    local response=""
+    for ((attempt = 1; attempt <= max_attempts; attempt++)); do
+        response=$(squash_call_ai_grouping "$hashes_input" "$chunk_label" "$correction")
+        local rc=$?
+        squash_last_ai_response="$response"
+        if [ "$rc" -ne 0 ] || [ -z "$response" ]; then
+            squash_parse_error="AI request failed (rc=$rc, empty=$([ -z "$response" ] && echo yes || echo no))"
+            return 1
+        fi
+        if squash_parse_ai_plan "$response" "$expected_short"; then
+            return 0
+        fi
+        if [ "$attempt" -lt "$max_attempts" ]; then
+            local prefix=""
+            [ -n "$chunk_label" ] && prefix="chunk ${chunk_label} "
+            echo -e "${YELLOW}AI plan rejected (${prefix}${squash_parse_error}). Retry ${attempt}/${max_attempts}...${ENDCOLOR}"
+            correction="${squash_parse_error}"
+        fi
+    done
+    return 1
+}
+function squash_run_ai_grouping {
+    local all_hashes="$1"
+    local expected_all="$2"
+    local total=0
+    local h
+    local -a all_hashes_arr=()
+    while IFS= read -r h; do
+        [ -z "$h" ] && continue
+        all_hashes_arr+=("$h")
+    done <<< "$all_hashes"
+    total=${#all_hashes_arr[@]}
+    local -a expected_all_arr=()
+    for h in $expected_all; do expected_all_arr+=("$h"); done
+    if [ "$total" -le "$SQUASH_CHUNK_SIZE" ]; then
+        echo -e "${YELLOW}Asking AI to group ${total} commits...${ENDCOLOR}"
+        if squash_run_ai_attempt "$all_hashes" "$expected_all" ""; then
+            return 0
+        fi
         return 1
     fi
+    local num_chunks=$(( (total + SQUASH_CHUNK_SIZE - 1) / SQUASH_CHUNK_SIZE ))
+    local avg=$(( (total + num_chunks - 1) / num_chunks ))
+    echo -e "${YELLOW}Range is large (${total} commits) — splitting into ${num_chunks} chunks of ~${avg} commits each.${ENDCOLOR}"
+    local -a final_commits=() final_message=() final_body=()
+    local i=0 chunk_idx=1
+    while [ "$i" -lt "$total" ]; do
+        local end=$(( i + avg ))
+        [ "$end" -gt "$total" ] && end="$total"
+        local chunk_hashes_input="" chunk_expected="" k
+        for ((k = i; k < end; k++)); do
+            chunk_hashes_input+="${chunk_hashes_input:+
+}${all_hashes_arr[$k]}"
+            chunk_expected+="${chunk_expected:+ }${expected_all_arr[$k]}"
+        done
+        local chunk_count=$((end - i))
+        local label="${chunk_idx}/${num_chunks}"
+        echo -e "${YELLOW}Asking AI to group chunk ${BOLD}${label}${NORMAL}${YELLOW} (${chunk_count} commits)...${ENDCOLOR}"
+        if ! squash_run_ai_attempt "$chunk_hashes_input" "$chunk_expected" "$label"; then
+            squash_parse_error="chunk ${label}: ${squash_parse_error}"
+            return 1
+        fi
+        local g
+        for ((g = 1; g <= squash_group_count; g++)); do
+            final_commits+=("${squash_group_commits[$g]}")
+            final_message+=("${squash_group_message[$g]}")
+            final_body+=("${squash_group_body[$g]}")
+        done
+        i="$end"
+        chunk_idx=$((chunk_idx + 1))
+    done
+    unset squash_group_commits squash_group_message squash_group_body
+    declare -gA squash_group_commits
+    declare -gA squash_group_message
+    declare -gA squash_group_body
+    squash_group_count=${#final_commits[@]}
+    local g_idx
+    for g_idx in "${!final_commits[@]}"; do
+        local target=$((g_idx + 1))
+        squash_group_commits[$target]="${final_commits[$g_idx]}"
+        squash_group_message[$target]="${final_message[$g_idx]}"
+        squash_group_body[$target]="${final_body[$g_idx]}"
+    done
     return 0
 }
 function squash_print_plan {
@@ -4436,11 +4654,11 @@ function squash_script {
     if ! check_ai_available; then
         exit 1
     fi
-    local clean_status
-    clean_status=$(git status | tail -n 1)
-    if [ "$clean_status" != "nothing to commit, working tree clean" ]; then
+    if [ -n "$(git status --porcelain)" ]; then
         echo -e "${RED}✗ Cannot squash — there are uncommitted changes:${ENDCOLOR}"
-        git_status
+        git status --short | sed 's/^/  /'
+        echo
+        echo -e "${CYAN}💡 Stash with ${BOLD}gitb wip${NORMAL}${CYAN} (or ${BOLD}git stash${NORMAL}${CYAN}), or commit, then re-run ${BOLD}gitb tidy${NORMAL}${CYAN}.${ENDCOLOR}"
         exit 1
     fi
     if [ -d "$(git rev-parse --git-dir)/rebase-merge" ] || [ -d "$(git rev-parse --git-dir)/rebase-apply" ]; then
@@ -4473,11 +4691,6 @@ function squash_script {
         echo -e "${GREEN}✓ Nothing to squash — only ${commit_count} commit in range${ENDCOLOR}"
         exit 0
     fi
-    if [ "$commit_count" -gt "$SQUASH_MAX_COMMITS" ]; then
-        echo -e "${RED}✗ Range is too large: ${commit_count} commits (cap: ${SQUASH_MAX_COMMITS}).${ENDCOLOR}"
-        echo -e "Tag a recent release or rebase onto a closer base before retrying."
-        exit 1
-    fi
     local expected_short_hashes=""
     local h
     while IFS= read -r h; do
@@ -4490,20 +4703,44 @@ function squash_script {
     echo -e "${YELLOW}Commits:${ENDCOLOR} ${commit_count}"
     echo
     echo -e "${YELLOW}Original history:${ENDCOLOR}"
-    git log --reverse --format="  ${YELLOW}%h${ENDCOLOR} (${BLUE}%cr${ENDCOLOR}) %s" "${base_ref}..HEAD"
+    git --no-pager log --color=always --reverse --format='  %C(yellow)%h%C(reset) (%C(blue)%cr%C(reset)) %s' "${base_ref}..HEAD"
     echo
-    echo -e "${YELLOW}Asking AI to group these commits...${ENDCOLOR}"
-    local ai_response
-    ai_response=$(squash_call_ai_grouping "$base_ref" "$commit_count")
-    local ai_status=$?
-    if [ "$ai_status" -ne 0 ] || [ -z "$ai_response" ]; then
-        echo -e "${RED}✗ AI grouping failed.${ENDCOLOR}"
-        exit 1
+    if [ -z "$mode_yes" ]; then
+        local size_warning=""
+        if [ "$commit_count" -gt "$SQUASH_MAX_COMMITS" ]; then
+            size_warning=" ${RED}(large — model accuracy may degrade above ~${SQUASH_MAX_COMMITS} commits)${ENDCOLOR}"
+        fi
+        echo -e "${YELLOW}Will analyze ${BOLD}${commit_count}${NORMAL}${YELLOW} commits with AI.${ENDCOLOR}${size_warning}"
+        echo -e "Continue (y/n)?"
+        local pre_choice
+        read -n 1 -s pre_choice
+        if ! is_yes "$pre_choice"; then
+            echo
+            echo -e "${YELLOW}Cancelled.${ENDCOLOR}"
+            exit 0
+        fi
+        echo
     fi
-    if ! squash_parse_ai_plan "$ai_response" "$expected_short_hashes"; then
+    if ! squash_run_ai_grouping "$commit_hashes_full" "$expected_short_hashes"; then
         echo -e "${RED}✗ Cannot parse the AI plan.${ENDCOLOR}"
-        echo -e "${YELLOW}Raw response (first 30 lines):${ENDCOLOR}"
-        printf '%s\n' "$ai_response" | head -n 30
+        if [ -n "${squash_parse_error:-}" ]; then
+            echo -e "${YELLOW}Reason:${ENDCOLOR} ${squash_parse_error}"
+        fi
+        if [ -n "${squash_last_ai_response:-}" ]; then
+            local dump_file
+            dump_file=$(mktemp -t gitb-tidy-response.XXXXXX 2>/dev/null) || dump_file="/tmp/gitb-tidy-response.$$"
+            printf '%s\n' "$squash_last_ai_response" > "$dump_file"
+            local total_lines
+            total_lines=$(printf '%s\n' "$squash_last_ai_response" | wc -l | tr -d ' ')
+            echo -e "${YELLOW}Last response (${total_lines} lines) saved to:${ENDCOLOR} ${dump_file}"
+            echo -e "${YELLOW}Response preview (first 20 lines):${ENDCOLOR}"
+            printf '%s\n' "$squash_last_ai_response" | head -n 20
+            if [ "$total_lines" -gt 20 ]; then
+                echo -e "${GRAY}...${ENDCOLOR}"
+                echo -e "${YELLOW}Response tail (last 10 lines):${ENDCOLOR}"
+                printf '%s\n' "$squash_last_ai_response" | tail -n 10
+            fi
+        fi
         exit 1
     fi
     echo
@@ -4541,6 +4778,13 @@ function squash_script {
     trap 'rm -rf "$work_dir"' EXIT
     local todo_file="${work_dir}/todo"
     squash_write_rebase_todo "$todo_file" "$work_dir"
+    if [ -n "$(git status --porcelain)" ]; then
+        echo -e "${RED}✗ Working tree became dirty during the AI step:${ENDCOLOR}"
+        git status --short | sed 's/^/  /'
+        echo
+        echo -e "${CYAN}💡 Stash with ${BOLD}gitb wip${NORMAL}${CYAN} (or ${BOLD}git stash${NORMAL}${CYAN}), or commit, then re-run ${BOLD}gitb tidy${NORMAL}${CYAN}.${ENDCOLOR}"
+        exit 1
+    fi
     echo -e "${YELLOW}Rebasing...${ENDCOLOR}"
     if ! squash_run_rebase "$base_ref" "$todo_file"; then
         echo -e "${RED}✗ Squash failed — your branch was restored.${ENDCOLOR}"
@@ -4549,7 +4793,7 @@ function squash_script {
     echo
     echo -e "${GREEN}✓ Squashed${ENDCOLOR}"
     echo -e "${YELLOW}New history:${ENDCOLOR}"
-    git log --reverse --format="  ${YELLOW}%h${ENDCOLOR} (${BLUE}%cr${ENDCOLOR}) %s" "${base_ref}..HEAD"
+    git --no-pager log --color=always --reverse --format='  %C(yellow)%h%C(reset) (%C(blue)%cr%C(reset)) %s' "${base_ref}..HEAD"
     echo
     if [ -n "$mode_push" ]; then
         echo -e "${YELLOW}Force-pushing with --force-with-lease...${ENDCOLOR}"
@@ -12318,56 +12562,48 @@ function _gitb_first_run_completion_prompt {
     esac
 }
 function print_help {
-    echo -e "${BOLD}gitbasher${NORMAL} v${GITBASHER_VERSION}"
+    echo -e "${BOLD}gitbasher${NORMAL} v${GITBASHER_VERSION} ${GRAY}— git, made fluent${ENDCOLOR}"
     echo
     echo -e "usage: ${YELLOW}gitb <command> [mode]${ENDCOLOR}"
     echo
-    local CMD=19 ALIAS=11
-    local hdr3="${YELLOW}%-*s${ENDCOLOR}  ${GREEN}%-*s${ENDCOLOR}  ${BLUE}%s${ENDCOLOR}\n"
-    local hdr2="${YELLOW}%-*s${ENDCOLOR}  %-*s  ${BLUE}%s${ENDCOLOR}\n"
-    local row="%-*s  %-*s  %s\n"
-    local rowb="${BOLD}%-*s${NORMAL}  %-*s  %s\n"
-    printf "$hdr2" "$CMD" "Common flows"  "$ALIAS" "" "What it does"
-    printf "$rowb" "$CMD" "gitb status"   "$ALIAS" "" "Show repo status and changed files"
-    printf "$rowb" "$CMD" "gitb commit"   "$ALIAS" "" "Create an interactive conventional commit"
-    printf "$rowb" "$CMD" "gitb c ai"     "$ALIAS" "" "Generate an AI commit message from staged changes"
-    printf "$rowb" "$CMD" "gitb c ai push" "$ALIAS" "" "Generate an AI commit message, commit, and push"
-    printf "$rowb" "$CMD" "gitb sync"       "$ALIAS" "" "Sync current branch with $main_branch"
-    printf "$rowb" "$CMD" "gitb branch new"  "$ALIAS" "" "Create a conventionally named branch"
+    local CMD=26
+    local hdr="${YELLOW}%s${ENDCOLOR}\n"
+    local row="  ${BOLD}%-*s${NORMAL}  %s\n"
+    printf "$hdr" "DAILY"
+    printf "$row" "$CMD" "status (st)"             "Show repo state and changed files"
+    printf "$row" "$CMD" "commit (c, co, com)"     "Create commits — interactive, AI, amend, revert"
+    printf "$row" "$CMD" "push (p, ps, pus)"       "Push current branch safely"
+    printf "$row" "$CMD" "pull (pu, pl, pul)"      "Pull from remote"
+    printf "$row" "$CMD" "sync (sy)"               "Sync current branch with $main_branch"
     echo
-    printf "$hdr3" "$CMD" "Workflow commands" "$ALIAS" "Aliases"     "Description"
-    printf "$row"  "$CMD" "commit"            "$ALIAS" "c|co|com"    "Create commits: interactive, AI, split, amend, revert"
-    printf "$row"  "$CMD" "push"              "$ALIAS" "p|ps|pus"    "Push changes safely to a remote repository"
-    printf "$row"  "$CMD" "pull"              "$ALIAS" "pu|pl|pul"   "Pull changes from a remote repository"
-    printf "$row"  "$CMD" "branch"            "$ALIAS" "b|br|bran"   "List, switch, create, and clean up branches"
-    printf "$row"  "$CMD" "tag"               "$ALIAS" "t|tg"        "Create, push, list, fetch, and delete tags"
-    printf "$row"  "$CMD" "merge"             "$ALIAS" "m|me"        "Merge branches into the current branch or $main_branch"
-    printf "$row"  "$CMD" "rebase"            "$ALIAS" "r|re|base"   "Rebase current branch, autosquash, or pull commits"
-    printf "$row"  "$CMD" "squash"            "$ALIAS" "sq|tidy"     "AI-group branch commits into clean, changelog-ready history"
-    printf "$row"  "$CMD" "cherry"            "$ALIAS" "ch|cp"       "Cherry-pick commits from other branches"
-    printf "$row"  "$CMD" "sync"              "$ALIAS" "sy"          "Sync current branch with $main_branch (fetch + rebase/merge)"
-    printf "$row"  "$CMD" "wip"               "$ALIAS" "w"           "Stash work-in-progress and optionally back it up remotely"
-    printf "$row"  "$CMD" "undo"              "$ALIAS" "un"          "Undo commit, amend, merge, rebase, or stash actions"
-    printf "$row"  "$CMD" "reset"             "$ALIAS" "res"         "Preview and apply common git reset flows"
-    printf "$row"  "$CMD" "stash"             "$ALIAS" "s|sta"       "Manage git stashes"
-    printf "$row"  "$CMD" "worktree"          "$ALIAS" "wt|tree"     "List, add, remove, lock, move, and prune git worktrees"
-    printf "$row"  "$CMD" "hook"              "$ALIAS" "ho|hk"       "List, create, edit, toggle, and test git hooks"
-    printf "$row"  "$CMD" "origin"            "$ALIAS" "or|o|remote" "Init, set, change, rename, or remove remotes"
-    printf "$row"  "$CMD" "config"            "$ALIAS" "cf|cfg|conf" "Configure gitbasher settings"
+    printf "$hdr" "BRANCHES"
+    printf "$row" "$CMD" "branch (b, br, bran)"    "Switch, create, clean up branches"
+    printf "$row" "$CMD" "merge (m, me)"           "Merge branches"
+    printf "$row" "$CMD" "rebase (r, re, base)"    "Rebase, autosquash, pull commits"
+    printf "$row" "$CMD" "squash (sq, tidy)"       "AI-group commits into clean history"
+    printf "$row" "$CMD" "cherry (ch, cp)"         "Cherry-pick commits from other branches"
+    printf "$row" "$CMD" "prev (-)"                "Switch to previous branch (like cd -)"
     echo
-    printf "$row"  "$CMD" "prev"              "$ALIAS" "-"           "Switch to the previous branch (like cd -)"
+    printf "$hdr" "HISTORY"
+    printf "$row" "$CMD" "log (l, lg)"             "Pretty git log with branch comparison"
+    printf "$row" "$CMD" "reflog (rl, rlg)"        "Pretty git reflog"
+    printf "$row" "$CMD" "last-commit (lc, lastc)" "Show last commit info"
+    printf "$row" "$CMD" "last-ref (lr, lastr)"    "Show last reference info"
+    printf "$row" "$CMD" "tag (t, tg)"             "Create, list, push, fetch, delete tags"
     echo
-    printf "$hdr3" "$CMD" "Info commands" "$ALIAS" "Aliases"  "Description"
-    printf "$row"  "$CMD" "status"        "$ALIAS" "st"       "Show repo status and changed files"
-    printf "$row"  "$CMD" "log"           "$ALIAS" "l|lg"     "View git log with branch selection and comparison"
-    printf "$row"  "$CMD" "reflog"        "$ALIAS" "rl|rlg"   "Open git reflog in a pretty format"
-    printf "$row"  "$CMD" "last-commit"   "$ALIAS" "lc|lastc" "Show info about the last commit"
-    printf "$row"  "$CMD" "last-ref"      "$ALIAS" "lr|lastr" "Show info about the last reference"
+    printf "$hdr" "RECOVERY"
+    printf "$row" "$CMD" "undo (un)"               "Undo commit, amend, merge, rebase, stash"
+    printf "$row" "$CMD" "reset (res)"             "Preview and apply git reset flows"
+    printf "$row" "$CMD" "stash (s, sta)"          "Manage git stashes"
+    printf "$row" "$CMD" "wip (w)"                 "Stash work-in-progress, optionally back up remote"
     echo
-    printf "$hdr2" "$CMD" "Tips"                "$ALIAS" "" "Details"
-    printf "$rowb" "$CMD" "gitb <command> help" "$ALIAS" "" "Show command-specific modes, aliases, and examples"
-    printf "$rowb" "$CMD" "gitb --help"         "$ALIAS" "" "Show this help"
-    printf "$rowb" "$CMD" "gitb -"              "$ALIAS" "" "Switch to the previous branch"
+    printf "$hdr" "SETUP"
+    printf "$row" "$CMD" "origin (or, o, remote)"  "Manage remotes"
+    printf "$row" "$CMD" "hook (ho, hk)"           "Manage git hooks"
+    printf "$row" "$CMD" "worktree (wt, tree)"     "Manage git worktrees"
+    printf "$row" "$CMD" "config (cf, cfg, conf)"  "Configure gitbasher"
+    echo
+    echo -e "Run ${YELLOW}gitb <command> help${ENDCOLOR} for modes and examples"
     exit
 }
 project_name="$(get_repo_name)"

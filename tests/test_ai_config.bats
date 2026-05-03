@@ -40,10 +40,54 @@ teardown() {
     [ "$val" = "stored-key" ]
 }
 
-@test "set_ai_api_key: persists to git config" {
+@test "set_ai_api_key: persists to per-provider git config slot" {
     set_ai_api_key "my-test-key" >/dev/null
-    val=$(git config --local --get gitbasher.ai-api-key)
+    # Default provider when nothing is set is openrouter — set_ai_api_key
+    # writes to the per-provider slot so switching providers doesn't reuse
+    # a key meant for another one.
+    val=$(git config --local --get gitbasher.ai-api-key-openrouter)
     [ "$val" = "my-test-key" ]
+    # Legacy slot must remain untouched
+    [ -z "$(git config --local --get gitbasher.ai-api-key)" ]
+}
+
+@test "get_ai_api_key: per-provider config wins over legacy config" {
+    git config --local gitbasher.ai-api-key "legacy-key"
+    git config --local gitbasher.ai-api-key-openrouter "provider-key"
+    val=$(get_ai_api_key)
+    [ "$val" = "provider-key" ]
+}
+
+@test "get_ai_api_key: switching provider isolates per-provider keys" {
+    git config --local gitbasher.ai-api-key-openrouter "or-key"
+    git config --local gitbasher.ai-api-key-openai "oa-key"
+    git config --local gitbasher.ai-provider "openrouter"
+    [ "$(get_ai_api_key)" = "or-key" ]
+    git config --local gitbasher.ai-provider "openai"
+    [ "$(get_ai_api_key)" = "oa-key" ]
+}
+
+@test "get_ai_api_key: per-provider env var beats legacy env var" {
+    GITB_AI_API_KEY="legacy-env"
+    GITB_AI_API_KEY_OPENROUTER="prov-env"
+    val=$(GITB_AI_API_KEY="legacy-env" GITB_AI_API_KEY_OPENROUTER="prov-env" get_ai_api_key)
+    [ "$val" = "prov-env" ]
+}
+
+@test "migrate_legacy_ai_api_key_to: moves legacy local key to per-provider slot" {
+    git config --local gitbasher.ai-api-key "stale-or-key"
+    migrate_legacy_ai_api_key_to "openrouter" 2>/dev/null
+    [ "$(git config --local --get gitbasher.ai-api-key-openrouter)" = "stale-or-key" ]
+    [ -z "$(git config --local --get gitbasher.ai-api-key)" ]
+}
+
+@test "migrate_legacy_ai_api_key_to: does not clobber an existing per-provider key" {
+    git config --local gitbasher.ai-api-key "legacy-key"
+    git config --local gitbasher.ai-api-key-openrouter "explicit-key"
+    migrate_legacy_ai_api_key_to "openrouter" 2>/dev/null
+    [ "$(git config --local --get gitbasher.ai-api-key-openrouter)" = "explicit-key" ]
+    # Legacy must still get cleared so it can't shadow other providers later
+    [ -z "$(git config --local --get gitbasher.ai-api-key)" ]
 }
 
 # ===== get_ai_model / set_ai_model =====

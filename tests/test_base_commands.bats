@@ -22,12 +22,19 @@ teardown() {
     ! grep -q "#gitb-fixup" "${GITBASHER_ROOT}/README.md"
 }
 
-@test "top-level help highlights common flows and next-step tips" {
+@test "top-level help groups commands by intent and points to per-command help" {
     run bash "${GITBASHER_ROOT}/dist/gitb" help
     assert_success
-    [[ "$output" == *"Common flows"* ]]
-    [[ "$output" == *"gitb st"* ]]
-    [[ "$output" == *"gitb c ai"* ]]
-    [[ "$output" == *"gitb c aip"* ]]
+    # Intent-based section headers
+    [[ "$output" == *"DAILY"* ]]
+    [[ "$output" == *"BRANCHES"* ]]
+    [[ "$output" == *"HISTORY"* ]]
+    [[ "$output" == *"RECOVERY"* ]]
+    [[ "$output" == *"SETUP"* ]]
+    # Each command listed with its inline aliases
+    [[ "$output" == *"status (st)"* ]]
+    [[ "$output" == *"commit (c, co, com)"* ]]
+    [[ "$output" == *"branch (b, br, bran)"* ]]
+    # Footer hint pointing at per-command help
     [[ "$output" == *"gitb <command> help"* ]]
 }

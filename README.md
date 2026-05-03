@@ -120,7 +120,7 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 | **Branches** | `branch` (`b`), `prev` (`-`) | List / switch / create-from-current / create-from-updated-main / delete (orphaned, merged, gone) / recent / previous / checkout-tag |
 | **Integration** | `merge` (`m`), `rebase` (`r`), `cherry` (`ch`) | Merge into current / into main / from remote · rebase onto main / interactive / autosquash / fastautosquash / pull-commits · cherry-pick by hash, range, or interactive |
 | **Tags & releases** | `tag` (`t`) | Lightweight, annotated, from-commit, push, push-all, delete, delete-all, list, fetch-remote |
-| **Save & rollback** | `wip` (`up`/`down`), `undo` (`un`), `reset` (`res`), `stash` (`s`) | Stash WIP + push backup branch, restore in one step · undo last commit/amend/merge/rebase/stash · interactive reset · full stash menu |
+| **Save & rollback** | `wip` (`up`/`down`), `undo` (`un`), `reset` (`res`), `stash` (`s`) | Save WIP via stash / branch / worktree (auto-detected on restore) · undo last commit/amend/merge/rebase/stash · interactive reset · full stash menu |
 | **Worktrees** | `worktree` (`wt`) | Add / list / remove / move / lock / prune git worktrees, with new branch from current/main or from existing/remote branches |
 | **Inspect** | `status` (`st`), `log` (`l`), `reflog` (`rl`), `last-commit` (`lc`), `last-ref` (`lr`) | Pretty repo status, multi-mode log + search, reflog viewer, quick last-commit / last-ref summary |
 | **Hooks** | `hook` (`ho`) | List / create from templates / edit / toggle / remove / test / show — for every git hook |
@@ -429,13 +429,30 @@ Fetch the default branch and update your current branch. Useful mid-feature.
 
 ### `gitb wip`
 
-Stash work-in-progress as a single `wip` stash and back it up to a remote `wip/<branch>` branch so it survives between machines. Restore later with `wip down`.
+Save work-in-progress through one of three backends and restore it later. Pick
+the one that fits the situation — `wip up` prompts when the backend isn't
+specified, and `wip down` auto-detects which backend was used.
 
-| Command | Mode | Aliases | Description |
-|---------|------|---------|-------------|
-| `gitb wip up` | | `u` | Stash all changes (incl. untracked) as `wip: <branch>` and force-push the stash to `origin/wip/<branch>` |
-| `gitb wip up nopush` | | `np` `n` | Stash only, skip the remote backup |
-| `gitb wip down` | | `d` | Pop the most recent wip stash for the current branch and delete the remote backup |
+| Backend | What it does | When to use |
+|---------|--------------|-------------|
+| `stash` | `git stash --include-untracked` + force-push `wip/<branch>` to remote as backup | Quick context switch, default |
+| `branch` | Commits all changes onto a `wip/<branch>` branch, leaves current branch clean, optionally pushes | Want history / share work / open a draft PR |
+| `worktree` | Same as branch, but the WIP lives in a sibling worktree so you can keep working on it side-by-side | Long-running parallel work |
+
+| Command | Aliases | Description |
+|---------|---------|-------------|
+| `gitb wip up` | `u` | Save WIP — prompts which backend to use |
+| `gitb wip up stash` | `u s` | Stash + push backup branch |
+| `gitb wip up branch` | `u b` | Commit onto `wip/<branch>` + push |
+| `gitb wip up worktree` | `u w` `u wt` | Move WIP into a sibling worktree |
+| `gitb wip up <mode> nopush` | `np` `n` | Skip the push step (works with any backend) |
+| `gitb wip up nopush` | `u np` `u n` | Legacy: stash + no push (same as `up stash nopush`) |
+| `gitb wip down` | `d` | Restore — auto-detects backend, prompts if ambiguous |
+| `gitb wip down stash` | `d s` | Restore from the stash |
+| `gitb wip down branch` | `d b` | Restore from `wip/<branch>` (squash-merge into working tree) |
+| `gitb wip down worktree` | `d w` `d wt` | Restore from the wip worktree, then remove it |
+
+For `branch` and `worktree`, `wip down` brings everything (committed + uncommitted) back as plain modifications and deletes the wip branch / worktree (and remote `wip/<branch>` if present).
 
 ### `gitb undo`
 

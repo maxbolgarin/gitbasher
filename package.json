@@ -5,8 +5,29 @@
     "keywords": [
         "git",
         "bash",
+        "shell",
         "cli",
-        "version-control"
+        "command-line",
+        "version-control",
+        "git-cli",
+        "git-helper",
+        "git-tools",
+        "git-workflow",
+        "developer-tools",
+        "productivity",
+        "interactive",
+        "conventional-commits",
+        "ai-commit",
+        "openai",
+        "openrouter",
+        "ollama",
+        "worktree",
+        "rebase",
+        "merge",
+        "stash",
+        "wip",
+        "macos",
+        "linux"
     ],
     "author": "maxbolgarin",
     "license": "MIT",
@@ -21,6 +42,7 @@
     "files": [
         "dist/gitb",
         "README.md",
+        "CHANGELOG.md",
         "LICENSE"
     ],
     "engines": {
@@ -31,6 +53,7 @@
         "@semantic-release/commit-analyzer": "latest",
         "@semantic-release/release-notes-generator": "latest",
         "@semantic-release/exec": "latest",
+        "@semantic-release/changelog": "latest",
         "@semantic-release/github": "latest",
         "@semantic-release/npm": "latest",
         "@semantic-release/git": "latest",

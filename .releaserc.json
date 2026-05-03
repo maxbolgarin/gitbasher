@@ -54,6 +54,13 @@
       }
     ],
     [
+      "@semantic-release/changelog",
+      {
+        "changelogFile": "CHANGELOG.md",
+        "changelogTitle": "# Changelog\n\nAll notable changes to gitbasher are generated automatically by [semantic-release](https://github.com/semantic-release/semantic-release) from [Conventional Commits](https://www.conventionalcommits.org/) on `main`. The project follows [Semantic Versioning](https://semver.org/)."
+      }
+    ],
+    [
       "@semantic-release/github",
       {
         "assets": [
@@ -77,7 +84,7 @@
     [
       "@semantic-release/git",
       {
-        "assets": ["dist/gitb", "package.json"],
+        "assets": ["dist/gitb", "package.json", "CHANGELOG.md"],
         "message": "chore(release): ${nextRelease.version} [skip ci]"
       }
     ]

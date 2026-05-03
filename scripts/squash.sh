@@ -12,10 +12,16 @@
 # the diff stats and subjects without blowing the context window.
 readonly SQUASH_AI_DIFF_PER_COMMIT_CHARS=2000
 
-# Hard cap on commits we will hand to the AI in one call. Beyond this the
-# range is almost certainly the wrong one (e.g. a stale tag), so we ask the
-# user to narrow it instead of silently truncating.
+# Soft warning threshold. Above this count the pre-AI confirmation flags the
+# range as "large" because the model's accuracy at partitioning hashes drops
+# noticeably past ~80 commits. The user can still proceed.
 readonly SQUASH_MAX_COMMITS=80
+
+# Maximum commits handed to the model in a single AI call. Above this we split
+# the range into windows of ≤ SQUASH_CHUNK_SIZE commits, group each chunk
+# independently, then concatenate. Tuned so each chunk fits comfortably in the
+# model's working memory; smaller is more reliable but produces more chunks.
+readonly SQUASH_CHUNK_SIZE=25
 
 
 ### Resolve the base ref the squash range should start from.
@@ -71,9 +77,9 @@ function squash_resolve_base_ref {
 # Per commit: full hash, short hash, subject, body, --stat, name-status, and a
 # truncated diff. Truncation is per-commit so one huge change cannot starve the
 # rest of the range.
-# $1: base ref
+# $1: newline-separated full hashes (chronological, oldest first)
 function squash_build_commits_block {
-    local base_ref="$1"
+    local hashes_input="$1"
     local block=""
     local sep=""
 
@@ -120,23 +126,38 @@ ${diff}
         block+="
 </commit>"
         sep=$'\n'
-    done < <(git rev-list --reverse "${base_ref}..HEAD" 2>/dev/null)
+    done <<< "$hashes_input"
 
     printf '%s' "$block"
 }
 
 
 ### Ask the AI to group commits in the range into clean, changelog-ready
-### commits. Streams the model's plan into stdout for the caller to parse.
-# $1: base ref
-# $2: total commit count (for context)
+### commits. Streams the model's plan as a JSON object into stdout for the
+### caller to parse. JSON mode (response_format) eliminates whole classes of
+### parse failure that the previous free-text format used to suffer.
+# $1: newline-separated full hashes for THIS chunk (chronological, oldest first)
+# $2: chunk context label (e.g. "1/3" or empty for single-call)
+# $3: optional correction note appended to the user prompt (used on retry
+#     after a parse failure to point the model at its specific mistake)
 function squash_call_ai_grouping {
-    local base_ref="$1"
-    local commit_count="$2"
+    local hashes_input="$1"
+    local chunk_label="${2:-}"
+    local correction_note="${3:-}"
+
+    local commit_count
+    commit_count=$(printf '%s\n' "$hashes_input" | grep -c .)
 
     local commits_block recent_commits
-    commits_block=$(squash_build_commits_block "$base_ref")
+    commits_block=$(squash_build_commits_block "$hashes_input")
     recent_commits=$(get_recent_commit_messages_for_ai)
+
+    local chunk_note=""
+    if [ -n "$chunk_label" ]; then
+        chunk_note="
+This is chunk ${chunk_label} of a larger range — group ONLY the commits shown
+inside <commits>. Do not invent hashes from outside this chunk."
+    fi
 
     local system_prompt='You are a git history editor. You receive a chronological list of commits (oldest first) inside <commits> and must propose how to consolidate them into a clean, changelog-ready history.
 
@@ -146,57 +167,68 @@ Goals (in priority order):
 3. Keep unrelated changes in separate groups. A bug fix and a new feature should not share a group even if they are adjacent.
 4. Order groups by the FIRST commit in each group (the original chronological order of group leaders MUST be preserved). Within a group, commits also stay in their original order.
 
-Output format (STRICT — any deviation will be rejected):
-- Output ONLY blocks like the example below, separated by blank lines. No prose before, between, or after the blocks. No markdown fences.
-- Each block has exactly these fields, in this order, one per line:
-    GROUP: <1-based index>
-    COMMITS: <space-separated short hashes from the input, in original order>
-    MESSAGE: <conventional commit header, lowercase subject, <=100 chars total>
-    BODY: <single line, or the literal string NONE>
-- The MESSAGE follows Conventional Commits: type(scope): subject. Allowed types: feat, fix, refactor, perf, test, build, ci, chore, docs, style. Scope is optional. Subject is imperative, lowercase, no trailing period.
-- BODY is one line of prose explaining WHY (1-2 short sentences). If no body is needed, write the literal word NONE.
-- Every input hash MUST appear in exactly one COMMITS line. The union of all COMMITS lines MUST equal the input set, with the original order preserved within each group.
-- Prefer keeping the existing message of the leader commit when it is already clean and accurate; only rewrite when consolidation actually changes the meaning.
+Output format: a single JSON object matching this schema (no prose, no markdown fences):
 
-Example output for three input commits abc1111 def2222 ghi3333 where the second is a fix to the first and the third is unrelated:
+{
+  "groups": [
+    {
+      "commits": ["<short hash>", "<short hash>", ...],
+      "message": "<conventional commit header, lowercase subject, <=100 chars>",
+      "body": "<one-line body explaining WHY, or empty string for no body>"
+    }
+  ]
+}
 
-GROUP: 1
-COMMITS: abc1111 def2222
-MESSAGE: feat(auth): add backup codes for MFA recovery
-BODY: Folds the follow-up null-check fix into the original feature so the changelog shows one self-contained change.
+Rules (any violation will be rejected):
+- The "message" field follows Conventional Commits: type(scope): subject. Allowed types: feat, fix, refactor, perf, test, build, ci, chore, docs, style. Scope is optional. Subject is imperative, lowercase, no trailing period.
+- The "body" field is a SINGLE line (no newlines) explaining WHY in 1-2 short sentences. Use the empty string "" if no body is needed.
+- Each "commits" array contains the EXACT short hashes from the input, in their original chronological order.
+- Every input hash MUST appear in exactly one "commits" array across the response. No duplicates, no omissions, no hashes outside the input set.
+- Prefer keeping the existing leader-commit message verbatim when it is already clean and accurate.
 
-GROUP: 2
-COMMITS: ghi3333
-MESSAGE: docs: update contributing guide
-BODY: NONE'
+Example response for three input commits abc1111 def2222 ghi3333 where the second is a fix to the first and the third is unrelated:
+
+{"groups":[{"commits":["abc1111","def2222"],"message":"feat(auth): add backup codes for MFA recovery","body":"Folds the follow-up null-check fix into the original feature so the changelog shows one self-contained change."},{"commits":["ghi3333"],"message":"docs: update contributing guide","body":""}]}'
 
     local user_prompt="<recent_commits>
 ${recent_commits}
 </recent_commits>
 
-<range>
-base=${base_ref}
-total_commits=${commit_count}
-</range>
-
 <commits>
 ${commits_block}
 </commits>
+${chunk_note}
 
-Group these ${commit_count} commits as instructed. Output GROUP/COMMITS/MESSAGE/BODY blocks only."
+Group these ${commit_count} commits as instructed. Output a single JSON object only."
 
-    call_ai_api "$system_prompt" "$user_prompt" 4096 "$(get_ai_model_for grouping)"
+    if [ -n "$correction_note" ]; then
+        user_prompt="${user_prompt}
+
+CORRECTION (your previous attempt was rejected):
+${correction_note}
+
+Re-do the grouping. Every input hash MUST appear in EXACTLY ONE \"commits\" array — no duplicates, no omissions, no hashes outside the input set. Output a single JSON object only."
+    fi
+
+    # Size max_tokens to the commit count: ~120 tokens per commit covers a
+    # full group entry with room for a verbose body. Floor at 2048 (small
+    # chunks) and cap at 16384 (model-wide ceiling).
+    local max_out=$(( commit_count * 120 ))
+    [ "$max_out" -lt 2048 ] && max_out=2048
+    [ "$max_out" -gt 16384 ] && max_out=16384
+
+    call_ai_api "$system_prompt" "$user_prompt" "$max_out" "$(get_ai_model_for grouping)" '{"type":"json_object"}'
 }
 
 
-### Parse the AI grouping response.
+### Parse the AI grouping JSON response.
 # Populates these globals:
 #   squash_group_count       — number of groups
 #   squash_group_commits[i]  — space-separated short hashes for group i (1-based)
 #   squash_group_message[i]  — conventional commit header for group i
-#   squash_group_body[i]     — body line for group i (empty if NONE)
+#   squash_group_body[i]     — body line for group i (empty when omitted)
 # Returns 0 on success, 1 on parse / validation failure.
-# $1: AI response text
+# $1: AI response text (a JSON object with a "groups" array)
 # $2: expected ordered short hashes (space-separated; chronological)
 function squash_parse_ai_plan {
     local response="$1"
@@ -208,11 +240,51 @@ function squash_parse_ai_plan {
     declare -gA squash_group_message
     declare -gA squash_group_body
     squash_group_count=0
+    squash_parse_error=""
 
-    # Strip stray markdown fences
-    response=$(printf '%s' "$response" | LC_ALL=C sed -e 's/^```[a-zA-Z]*$//' -e 's/^```$//')
+    if ! command -v jq &>/dev/null; then
+        squash_parse_error="jq is required to parse the AI plan but is not installed"
+        return 1
+    fi
 
-    # Build a set of expected hashes for membership checks
+    # The model sometimes prepends/appends prose or markdown fences despite
+    # response_format=json_object. Extract the outermost {...} block to be safe.
+    local json_only
+    json_only=$(printf '%s' "$response" | LC_ALL=C awk '
+        BEGIN{depth=0; started=0; out=""}
+        {
+            for (i=1; i<=length($0); i++) {
+                c=substr($0,i,1)
+                if (c=="{") { depth++; started=1 }
+                if (started) out=out c
+                if (c=="}") { depth--; if (depth==0 && started) { print out; exit } }
+            }
+            if (started) out=out "\n"
+        }')
+
+    if [ -z "$json_only" ]; then
+        squash_parse_error="response is not JSON (no { } block found)"
+        return 1
+    fi
+
+    if ! printf '%s' "$json_only" | jq -e . >/dev/null 2>&1; then
+        squash_parse_error="response is not valid JSON — likely truncated by max_tokens"
+        return 1
+    fi
+
+    # Extract groups count and shape
+    local groups_count
+    groups_count=$(printf '%s' "$json_only" | jq -r '.groups | length' 2>/dev/null)
+    if [ -z "$groups_count" ] || [ "$groups_count" = "null" ]; then
+        squash_parse_error="response is missing the \"groups\" array"
+        return 1
+    fi
+    if [ "$groups_count" -lt 1 ]; then
+        squash_parse_error="response contains zero groups"
+        return 1
+    fi
+
+    # Build expected-hash sets
     local -A expected_set=()
     local -a expected_order=()
     local h
@@ -221,109 +293,73 @@ function squash_parse_ai_plan {
         expected_order+=("$h")
     done
 
-    local current_group=0
-    local current_commits="" current_message="" current_body=""
-    local in_block=0
     local seen=()
     declare -A seen_set=()
+    local current_group=0
+    local g
+    for ((g = 0; g < groups_count; g++)); do
+        local one_idx=$((g + 1))
+        local commits_arr message body
+        commits_arr=$(printf '%s' "$json_only" | jq -r ".groups[$g].commits | if type==\"array\" then .[] else empty end" 2>/dev/null)
+        message=$(printf '%s' "$json_only" | jq -r ".groups[$g].message // \"\"" 2>/dev/null)
+        body=$(printf '%s' "$json_only" | jq -r ".groups[$g].body // \"\"" 2>/dev/null)
 
-    # Helper: flush the in-progress block to the globals.
-    _squash_flush_block() {
-        if [ "$in_block" = "1" ]; then
-            if [ -z "$current_commits" ] || [ -z "$current_message" ]; then
-                in_block=0
+        if [ -z "$commits_arr" ]; then
+            squash_parse_error="group $one_idx has empty or missing \"commits\" array — likely truncated by max_tokens"
+            return 1
+        fi
+        if [ -z "$message" ]; then
+            squash_parse_error="group $one_idx has empty or missing \"message\""
+            return 1
+        fi
+        if [ ${#message} -gt 200 ]; then
+            squash_parse_error="group $one_idx \"message\" is ${#message} chars (max 200)"
+            return 1
+        fi
+        # Strip newlines from message; the rebase squash header must be one line.
+        message=$(printf '%s' "$message" | tr -d '\r\n')
+        # Body may be multi-line in some models; squash to one line.
+        body=$(printf '%s' "$body" | tr '\r\n' '  ' | LC_ALL=C sed -e 's/  */ /g' -e 's/^ //' -e 's/ $//')
+        if [ ${#body} -gt 500 ]; then
+            body="${body:0:500}"
+        fi
+
+        local validated="" c
+        while IFS= read -r c; do
+            [ -z "$c" ] && continue
+            if [ -z "${expected_set[$c]:-}" ]; then
+                squash_parse_error="group $one_idx references unknown commit '$c' (not in input range)"
                 return 1
             fi
-            current_group=$((current_group + 1))
-            squash_group_commits["$current_group"]="$current_commits"
-            squash_group_message["$current_group"]="$current_message"
-            if [ "$current_body" = "NONE" ]; then
-                squash_group_body["$current_group"]=""
-            else
-                squash_group_body["$current_group"]="$current_body"
+            if [ -n "${seen_set[$c]:-}" ]; then
+                squash_parse_error="group $one_idx reuses commit '$c' already assigned to an earlier group"
+                return 1
             fi
-            current_commits=""
-            current_message=""
-            current_body=""
-            in_block=0
-        fi
-        return 0
-    }
+            seen_set["$c"]=1
+            seen+=("$c")
+            validated+="${validated:+ }$c"
+        done <<< "$commits_arr"
 
-    while IFS= read -r line; do
-        # Trim trailing CR / spaces
-        line=$(printf '%s' "$line" | LC_ALL=C sed -e 's/[[:space:]]*$//')
-
-        case "$line" in
-            GROUP:*|"GROUP "*)
-                _squash_flush_block || return 1
-                in_block=1
-                ;;
-            COMMITS:*)
-                local commits_value="${line#COMMITS:}"
-                commits_value=$(printf '%s' "$commits_value" | LC_ALL=C sed -e 's/^[[:space:]]*//')
-                local validated=""
-                local c
-                for c in $commits_value; do
-                    if [ -z "${expected_set[$c]:-}" ]; then
-                        return 1
-                    fi
-                    if [ -n "${seen_set[$c]:-}" ]; then
-                        return 1
-                    fi
-                    seen_set["$c"]=1
-                    seen+=("$c")
-                    validated+="${validated:+ }$c"
-                done
-                current_commits="$validated"
-                ;;
-            MESSAGE:*)
-                local msg_value="${line#MESSAGE:}"
-                msg_value=$(printf '%s' "$msg_value" | LC_ALL=C sed -e 's/^[[:space:]]*//')
-                if [ -z "$msg_value" ] || [ ${#msg_value} -gt 200 ]; then
-                    return 1
-                fi
-                # Reject newlines / control chars
-                if printf '%s' "$msg_value" | LC_ALL=C grep -q '[[:cntrl:]]'; then
-                    return 1
-                fi
-                current_message="$msg_value"
-                ;;
-            BODY:*)
-                local body_value="${line#BODY:}"
-                body_value=$(printf '%s' "$body_value" | LC_ALL=C sed -e 's/^[[:space:]]*//')
-                if [ ${#body_value} -gt 500 ]; then
-                    body_value="${body_value:0:500}"
-                fi
-                current_body="$body_value"
-                ;;
-            "")
-                : # blank line is fine inside or between blocks
-                ;;
-            *)
-                # Unknown line — ignore, the model sometimes adds stray narration
-                # despite instructions. We still validate the final coverage.
-                ;;
-        esac
-    done <<< "$response"
-
-    _squash_flush_block || return 1
+        current_group=$((current_group + 1))
+        squash_group_commits["$current_group"]="$validated"
+        squash_group_message["$current_group"]="$message"
+        squash_group_body["$current_group"]="$body"
+    done
 
     # Coverage check: every expected hash must appear exactly once
     if [ "${#seen[@]}" -ne "${#expected_order[@]}" ]; then
+        squash_parse_error="coverage: AI returned ${#seen[@]} commits but range has ${#expected_order[@]} — response likely truncated by max_tokens"
         return 1
     fi
     for h in "${expected_order[@]}"; do
         if [ -z "${seen_set[$h]:-}" ]; then
+            squash_parse_error="coverage: commit '$h' is missing from the AI plan"
             return 1
         fi
     done
 
-    # Group leader order check: leaders must appear in the same chronological
-    # order as the input. We look up each leader's index in expected_order and
-    # require strictly increasing indices.
+    # Leader order check: group leaders must appear in chronological order.
     local last_idx=-1
-    local g
     for ((g = 1; g <= current_group; g++)); do
         local first_hash="${squash_group_commits[$g]%% *}"
         local i idx=-1
@@ -334,15 +370,145 @@ function squash_parse_ai_plan {
             fi
         done
         if [ "$idx" -le "$last_idx" ]; then
+            squash_parse_error="group $g leader '$first_hash' appears out of chronological order"
             return 1
         fi
         last_idx="$idx"
     done
 
     squash_group_count="$current_group"
-    if [ "$squash_group_count" -lt 1 ]; then
+    return 0
+}
+
+
+### Run a single AI grouping call with up to N attempts and corrective retries.
+# On success, the parsed plan is in the squash_group_* globals.
+# $1: newline-separated full hashes for the chunk (chronological)
+# $2: chunk's expected short hashes (space-separated, chronological)
+# $3: chunk label (e.g. "1/3" or empty for single-call)
+# Returns 0 on success. On failure, sets squash_parse_error and stores the
+# last raw response in squash_last_ai_response for the caller to dump.
+function squash_run_ai_attempt {
+    local hashes_input="$1"
+    local expected_short="$2"
+    local chunk_label="${3:-}"
+
+    local correction="" attempt
+    local max_attempts=3
+    local response=""
+    for ((attempt = 1; attempt <= max_attempts; attempt++)); do
+        response=$(squash_call_ai_grouping "$hashes_input" "$chunk_label" "$correction")
+        local rc=$?
+        squash_last_ai_response="$response"
+        if [ "$rc" -ne 0 ] || [ -z "$response" ]; then
+            squash_parse_error="AI request failed (rc=$rc, empty=$([ -z "$response" ] && echo yes || echo no))"
+            return 1
+        fi
+
+        if squash_parse_ai_plan "$response" "$expected_short"; then
+            return 0
+        fi
+
+        if [ "$attempt" -lt "$max_attempts" ]; then
+            local prefix=""
+            [ -n "$chunk_label" ] && prefix="chunk ${chunk_label} "
+            echo -e "${YELLOW}AI plan rejected (${prefix}${squash_parse_error}). Retry ${attempt}/${max_attempts}...${ENDCOLOR}"
+            correction="${squash_parse_error}"
+        fi
+    done
+    return 1
+}
+
+
+### Run the AI grouping over the full range, splitting into chunks if the
+### range exceeds SQUASH_CHUNK_SIZE. Each chunk is grouped independently and
+### the resulting groups are concatenated in chronological order. Cross-chunk
+### consolidation (e.g. a typo fix in chunk 2 belonging to a feature in chunk
+### 1) is sacrificed for reliability — the model partitions far more accurately
+### on small windows.
+# $1: newline-separated full hashes for the entire range (chronological)
+# $2: expected short hashes for the entire range (space-separated)
+# Populates squash_group_* globals on success.
+function squash_run_ai_grouping {
+    local all_hashes="$1"
+    local expected_all="$2"
+
+    local total=0
+    local h
+    local -a all_hashes_arr=()
+    while IFS= read -r h; do
+        [ -z "$h" ] && continue
+        all_hashes_arr+=("$h")
+    done <<< "$all_hashes"
+    total=${#all_hashes_arr[@]}
+
+    local -a expected_all_arr=()
+    for h in $expected_all; do expected_all_arr+=("$h"); done
+
+    if [ "$total" -le "$SQUASH_CHUNK_SIZE" ]; then
+        echo -e "${YELLOW}Asking AI to group ${total} commits...${ENDCOLOR}"
+        if squash_run_ai_attempt "$all_hashes" "$expected_all" ""; then
+            return 0
+        fi
         return 1
     fi
+
+    # Multi-chunk path. Distribute commits roughly evenly across chunks so the
+    # last chunk isn't a tiny straggler.
+    local num_chunks=$(( (total + SQUASH_CHUNK_SIZE - 1) / SQUASH_CHUNK_SIZE ))
+    local avg=$(( (total + num_chunks - 1) / num_chunks ))
+
+    echo -e "${YELLOW}Range is large (${total} commits) — splitting into ${num_chunks} chunks of ~${avg} commits each.${ENDCOLOR}"
+
+    # Final accumulators across all chunks
+    local -a final_commits=() final_message=() final_body=()
+
+    local i=0 chunk_idx=1
+    while [ "$i" -lt "$total" ]; do
+        local end=$(( i + avg ))
+        [ "$end" -gt "$total" ] && end="$total"
+
+        local chunk_hashes_input="" chunk_expected="" k
+        for ((k = i; k < end; k++)); do
+            chunk_hashes_input+="${chunk_hashes_input:+
+}${all_hashes_arr[$k]}"
+            chunk_expected+="${chunk_expected:+ }${expected_all_arr[$k]}"
+        done
+        local chunk_count=$((end - i))
+        local label="${chunk_idx}/${num_chunks}"
+
+        echo -e "${YELLOW}Asking AI to group chunk ${BOLD}${label}${NORMAL}${YELLOW} (${chunk_count} commits)...${ENDCOLOR}"
+        if ! squash_run_ai_attempt "$chunk_hashes_input" "$chunk_expected" "$label"; then
+            squash_parse_error="chunk ${label}: ${squash_parse_error}"
+            return 1
+        fi
+
+        local g
+        for ((g = 1; g <= squash_group_count; g++)); do
+            final_commits+=("${squash_group_commits[$g]}")
+            final_message+=("${squash_group_message[$g]}")
+            final_body+=("${squash_group_body[$g]}")
+        done
+
+        i="$end"
+        chunk_idx=$((chunk_idx + 1))
+    done
+
+    # Copy accumulators back into the per-group globals.
+    unset squash_group_commits squash_group_message squash_group_body
+    declare -gA squash_group_commits
+    declare -gA squash_group_message
+    declare -gA squash_group_body
+    squash_group_count=${#final_commits[@]}
+
+    local g_idx
+    for g_idx in "${!final_commits[@]}"; do
+        local target=$((g_idx + 1))
+        squash_group_commits[$target]="${final_commits[$g_idx]}"
+        squash_group_message[$target]="${final_message[$g_idx]}"
+        squash_group_body[$target]="${final_body[$g_idx]}"
+    done
+
     return 0
 }
 
@@ -508,11 +674,15 @@ function squash_script {
         exit 1
     fi
 
-    local clean_status
-    clean_status=$(git status | tail -n 1)
-    if [ "$clean_status" != "nothing to commit, working tree clean" ]; then
+    # Use --porcelain (locale-stable, machine-readable) rather than parsing
+    # the human-readable last line of `git status`, which depends on the
+    # user's git locale and on git's exact wording (which has changed across
+    # versions).
+    if [ -n "$(git status --porcelain)" ]; then
         echo -e "${RED}✗ Cannot squash — there are uncommitted changes:${ENDCOLOR}"
-        git_status
+        git status --short | sed 's/^/  /'
+        echo
+        echo -e "${CYAN}💡 Stash with ${BOLD}gitb wip${NORMAL}${CYAN} (or ${BOLD}git stash${NORMAL}${CYAN}), or commit, then re-run ${BOLD}gitb tidy${NORMAL}${CYAN}.${ENDCOLOR}"
         exit 1
     fi
 
@@ -553,12 +723,6 @@ function squash_script {
         exit 0
     fi
 
-    if [ "$commit_count" -gt "$SQUASH_MAX_COMMITS" ]; then
-        echo -e "${RED}✗ Range is too large: ${commit_count} commits (cap: ${SQUASH_MAX_COMMITS}).${ENDCOLOR}"
-        echo -e "Tag a recent release or rebase onto a closer base before retrying."
-        exit 1
-    fi
-
     local expected_short_hashes=""
     local h
     while IFS= read -r h; do
@@ -572,23 +736,48 @@ function squash_script {
     echo -e "${YELLOW}Commits:${ENDCOLOR} ${commit_count}"
     echo
     echo -e "${YELLOW}Original history:${ENDCOLOR}"
-    git log --reverse --format="  ${YELLOW}%h${ENDCOLOR} (${BLUE}%cr${ENDCOLOR}) %s" "${base_ref}..HEAD"
+    git --no-pager log --color=always --reverse --format='  %C(yellow)%h%C(reset) (%C(blue)%cr%C(reset)) %s' "${base_ref}..HEAD"
     echo
 
-    ### Ask the AI
-    echo -e "${YELLOW}Asking AI to group these commits...${ENDCOLOR}"
-    local ai_response
-    ai_response=$(squash_call_ai_grouping "$base_ref" "$commit_count")
-    local ai_status=$?
-    if [ "$ai_status" -ne 0 ] || [ -z "$ai_response" ]; then
-        echo -e "${RED}✗ AI grouping failed.${ENDCOLOR}"
-        exit 1
+    ### Confirm before paying for the AI call (skip in --yes mode)
+    if [ -z "$mode_yes" ]; then
+        local size_warning=""
+        if [ "$commit_count" -gt "$SQUASH_MAX_COMMITS" ]; then
+            size_warning=" ${RED}(large — model accuracy may degrade above ~${SQUASH_MAX_COMMITS} commits)${ENDCOLOR}"
+        fi
+        echo -e "${YELLOW}Will analyze ${BOLD}${commit_count}${NORMAL}${YELLOW} commits with AI.${ENDCOLOR}${size_warning}"
+        echo -e "Continue (y/n)?"
+        local pre_choice
+        read -n 1 -s pre_choice
+        if ! is_yes "$pre_choice"; then
+            echo
+            echo -e "${YELLOW}Cancelled.${ENDCOLOR}"
+            exit 0
+        fi
+        echo
     fi
 
-    if ! squash_parse_ai_plan "$ai_response" "$expected_short_hashes"; then
+    ### Ask the AI — chunked for large ranges, single-call otherwise.
+    if ! squash_run_ai_grouping "$commit_hashes_full" "$expected_short_hashes"; then
         echo -e "${RED}✗ Cannot parse the AI plan.${ENDCOLOR}"
-        echo -e "${YELLOW}Raw response (first 30 lines):${ENDCOLOR}"
-        printf '%s\n' "$ai_response" | head -n 30
+        if [ -n "${squash_parse_error:-}" ]; then
+            echo -e "${YELLOW}Reason:${ENDCOLOR} ${squash_parse_error}"
+        fi
+        if [ -n "${squash_last_ai_response:-}" ]; then
+            local dump_file
+            dump_file=$(mktemp -t gitb-tidy-response.XXXXXX 2>/dev/null) || dump_file="/tmp/gitb-tidy-response.$$"
+            printf '%s\n' "$squash_last_ai_response" > "$dump_file"
+            local total_lines
+            total_lines=$(printf '%s\n' "$squash_last_ai_response" | wc -l | tr -d ' ')
+            echo -e "${YELLOW}Last response (${total_lines} lines) saved to:${ENDCOLOR} ${dump_file}"
+            echo -e "${YELLOW}Response preview (first 20 lines):${ENDCOLOR}"
+            printf '%s\n' "$squash_last_ai_response" | head -n 20
+            if [ "$total_lines" -gt 20 ]; then
+                echo -e "${GRAY}...${ENDCOLOR}"
+                echo -e "${YELLOW}Response tail (last 10 lines):${ENDCOLOR}"
+                printf '%s\n' "$squash_last_ai_response" | tail -n 10
+            fi
+        fi
         exit 1
     fi
 
@@ -637,6 +826,18 @@ function squash_script {
     local todo_file="${work_dir}/todo"
     squash_write_rebase_todo "$todo_file" "$work_dir"
 
+    # Re-check the working tree right before rebase. The AI calls can take long
+    # enough that an editor save or background tool may have dirtied the tree
+    # since the initial check at the top of squash_script. git rebase's own
+    # error is correct but terse — surface it actionably.
+    if [ -n "$(git status --porcelain)" ]; then
+        echo -e "${RED}✗ Working tree became dirty during the AI step:${ENDCOLOR}"
+        git status --short | sed 's/^/  /'
+        echo
+        echo -e "${CYAN}💡 Stash with ${BOLD}gitb wip${NORMAL}${CYAN} (or ${BOLD}git stash${NORMAL}${CYAN}), or commit, then re-run ${BOLD}gitb tidy${NORMAL}${CYAN}.${ENDCOLOR}"
+        exit 1
+    fi
+
     echo -e "${YELLOW}Rebasing...${ENDCOLOR}"
     if ! squash_run_rebase "$base_ref" "$todo_file"; then
         echo -e "${RED}✗ Squash failed — your branch was restored.${ENDCOLOR}"
@@ -646,7 +847,7 @@ function squash_script {
     echo
     echo -e "${GREEN}✓ Squashed${ENDCOLOR}"
     echo -e "${YELLOW}New history:${ENDCOLOR}"
-    git log --reverse --format="  ${YELLOW}%h${ENDCOLOR} (${BLUE}%cr${ENDCOLOR}) %s" "${base_ref}..HEAD"
+    git --no-pager log --color=always --reverse --format='  %C(yellow)%h%C(reset) (%C(blue)%cr%C(reset)) %s' "${base_ref}..HEAD"
     echo
 
     ### Optional force-push

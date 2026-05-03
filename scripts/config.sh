@@ -174,10 +174,12 @@ function set_ticket {
 
 ### Function asks user to set AI API key
 function configure_ai_key {
-    echo -e "${YELLOW}Enter AI API key${ENDCOLOR}"
-    echo
-
     local provider=$(get_ai_provider)
+    local provider_upper
+    provider_upper=$(echo "$provider" | tr '[:lower:]' '[:upper:]')
+
+    echo -e "${YELLOW}Enter AI API key for provider '${provider}'${ENDCOLOR}"
+    echo
 
     # Local providers don't take a key — short-circuit instead of prompting for nothing.
     if [ "$provider" = "ollama" ]; then
@@ -188,9 +190,9 @@ function configure_ai_key {
 
     ai_api_key=$(get_ai_api_key)
     if [ -z "$ai_api_key" ]; then
-        echo -e "${YELLOW}No AI API key is set.${ENDCOLOR}"
+        echo -e "${YELLOW}No AI API key is set for '${provider}'.${ENDCOLOR}"
     else
-        echo -e "AI API key is ${GREEN}configured${ENDCOLOR}: ${BLUE}$(mask_api_key "$ai_api_key")${ENDCOLOR}"
+        echo -e "AI API key for '${provider}' is ${GREEN}configured${ENDCOLOR}: ${BLUE}$(mask_api_key "$ai_api_key")${ENDCOLOR}"
     fi
     case "$provider" in
         openai)
@@ -204,7 +206,7 @@ function configure_ai_key {
     esac
     echo
     echo -e "${CYAN}💡 For better security, set the key via environment variable instead:${ENDCOLOR}"
-    echo -e "  ${BLUE}export GITB_AI_API_KEY='your-api-key'${ENDCOLOR}"
+    echo -e "  ${BLUE}export GITB_AI_API_KEY_${provider_upper}='your-api-key'${ENDCOLOR}"
     echo -e "  Add this to your ~/.bashrc or ~/.zshrc to make it permanent."
     echo
     echo -e "Press Enter to exit without changes, or 0 to remove the existing key"
@@ -220,9 +222,9 @@ function configure_ai_key {
     fi
 
     if [ "$ai_key_input" == "0" ]; then
-        unset_config_value gitbasher.ai-api-key
+        unset_ai_api_key
         echo
-        echo -e "${GREEN}✓ Removed AI API key from '${project_name}'${ENDCOLOR}"
+        echo -e "${GREEN}✓ Removed AI API key for '${provider}' from '${project_name}'${ENDCOLOR}"
         exit
     fi
 
@@ -238,15 +240,15 @@ function configure_ai_key {
         fi
     fi
 
-    ai_api_key=$(set_config_value gitbasher.ai-api-key "$ai_key_input")
-    echo -e "${GREEN}✓ Configured AI API key for '${project_name}':${ENDCOLOR} ${BLUE}$(mask_api_key "$ai_api_key")${ENDCOLOR}"
+    ai_api_key=$(set_ai_api_key "$ai_key_input")
+    echo -e "${GREEN}✓ Configured AI API key for '${provider}' in '${project_name}':${ENDCOLOR} ${BLUE}$(mask_api_key "$ai_api_key")${ENDCOLOR}"
     echo
 
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     echo -e "${RED}⚠  Global API keys are stored in plaintext in ~/.gitconfig.${ENDCOLOR}"
-    echo -e "${CYAN}💡 For better security, set ${BLUE}GITB_AI_API_KEY${CYAN} as an environment variable instead.${ENDCOLOR}"
+    echo -e "${CYAN}💡 For better security, set ${BLUE}GITB_AI_API_KEY_${provider_upper}${CYAN} as an environment variable instead.${ENDCOLOR}"
     yes_no_choice "\nSet AI API key globally" "true"
-    ai_api_key=$(set_config_value gitbasher.ai-api-key "$ai_key_input" "true")
+    ai_api_key=$(set_ai_api_key "$ai_key_input" "true")
 }
 
 
@@ -299,17 +301,16 @@ function configure_ai_provider {
             ;;
     esac
 
+    # Before switching, attribute any legacy `gitbasher.ai-api-key` to the
+    # outgoing provider. Otherwise the next AI call would happily send (e.g.)
+    # an OpenRouter key to OpenAI and get a 401.
+    migrate_legacy_ai_api_key_to "$current_provider"
+
     set_ai_provider "$new_provider"
     echo -e "${GREEN}✓ Set AI provider to '${new_provider}' for '${project_name}'${ENDCOLOR}"
 
     # Provider-specific follow-up hints so users aren't left guessing.
     case "$new_provider" in
-        openai)
-            echo -e "${CYAN}💡 Next: set your key with ${GREEN}gitb cfg ai${CYAN} (https://platform.openai.com/api-keys)${ENDCOLOR}"
-            ;;
-        openrouter)
-            echo -e "${CYAN}💡 Next: set your key with ${GREEN}gitb cfg ai${CYAN} (https://openrouter.ai/keys)${ENDCOLOR}"
-            ;;
         ollama)
             echo -e "${CYAN}💡 Make sure the Ollama daemon is running (${BLUE}ollama serve${CYAN}) and a model is pulled (${BLUE}ollama pull qwen3:8b${CYAN}).${ENDCOLOR}"
             echo -e "${CYAN}💡 Pick a different model with ${GREEN}gitb cfg model${CYAN} if you have one installed already.${ENDCOLOR}"
@@ -320,6 +321,24 @@ function configure_ai_provider {
     echo -e "Do you want to set this provider ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet AI provider globally" "true"
     set_config_value gitbasher.ai-provider "$new_provider" "true"
+
+    # If the new provider needs an API key but none is configured for it,
+    # walk the user through setting one now — this is the surprise the user
+    # hit when switching from openrouter to openai with a stale legacy key.
+    if ai_provider_requires_api_key && [ -z "$(get_ai_api_key)" ]; then
+        echo
+        echo -e "${YELLOW}No API key is set for '${new_provider}'.${ENDCOLOR}"
+        echo -e "${CYAN}AI commands will be blocked until a key is configured.${ENDCOLOR}"
+        echo
+        echo -e "Set one now? (y/n)"
+        if read -n 1 -s key_choice && is_yes "$key_choice"; then
+            echo
+            configure_ai_key
+        else
+            echo
+            echo -e "${YELLOW}Skipped. Run ${GREEN}gitb cfg ai${YELLOW} when you're ready.${ENDCOLOR}"
+        fi
+    fi
 }
 
 
@@ -650,126 +669,109 @@ function set_scopes {
 
 
 ### Function asks user to unset global
+# Built dynamically because per-provider AI keys add a variable number of rows;
+# each visible menu entry carries its own label and a "key:label" action that
+# describes which git config key(s) to unset and what to call it in the
+# success message.
 function delete_global {
     echo -e "${YELLOW}Unset global config${ENDCOLOR}"
     echo
     echo -e "Select a cfg to unset from global settings"
 
-    global_default=$(git config --global --get gitbasher.branch)
-    if [ "$global_default" != "" ]; then
-        echo -e "1. Default branch: ${YELLOW}${global_default}${ENDCOLOR}"
-    fi
+    local -a labels=()
+    local -a actions=()
 
-    global_sep=$(git config --global --get gitbasher.sep)
-    if [ "$global_sep" != "" ]; then
-        echo -e "2. Branch separator: ${YELLOW}${global_sep}${ENDCOLOR}"
-    fi
+    _delete_global_add() {
+        local key="$1" label="$2" value_display="$3"
+        if [ -n "$value_display" ]; then
+            labels+=("${label}: ${value_display}")
+            actions+=("$key|$label")
+        fi
+    }
 
-    global_editor=$(git config --global --get core.editor)
-    if [ "$global_editor" != "" ]; then
-        echo -e "3. Commit message editor: ${YELLOW}${global_editor}${ENDCOLOR}"
-    fi
+    local global_default=$(git config --global --get gitbasher.branch)
+    _delete_global_add "gitbasher.branch" "Default branch" "${YELLOW}${global_default}${ENDCOLOR}"
 
-    global_ticket=$(git config --global --get gitbasher.ticket)
-    if [ "$global_ticket" != "" ]; then
-        echo -e "4. Ticket prefix: ${YELLOW}${global_ticket}${ENDCOLOR}"
-    fi
+    local global_sep=$(git config --global --get gitbasher.sep)
+    _delete_global_add "gitbasher.sep" "Branch separator" "${YELLOW}${global_sep}${ENDCOLOR}"
 
-    global_scopes=$(git config --global --get gitbasher.scopes)
-    if [ "$global_scopes" != "" ]; then
-        echo -e "5. Scopes list: ${YELLOW}${global_scopes}${ENDCOLOR}"
-    fi
+    local global_editor=$(git config --global --get core.editor)
+    _delete_global_add "core.editor" "Commit message editor" "${YELLOW}${global_editor}${ENDCOLOR}"
 
-    global_ai_key=$(git config --global --get gitbasher.ai-api-key)
-    if [ "$global_ai_key" != "" ]; then
-        echo -e "6. AI API key: ${GREEN}configured${ENDCOLOR}"
-    fi
+    local global_ticket=$(git config --global --get gitbasher.ticket)
+    _delete_global_add "gitbasher.ticket" "Ticket prefix" "${YELLOW}${global_ticket}${ENDCOLOR}"
 
-    global_ai_model=$(git config --global --get gitbasher.ai-model)
-    if [ "$global_ai_model" != "" ]; then
-        echo -e "7. AI model: ${GREEN}$global_ai_model${ENDCOLOR}"
-    fi
+    local global_scopes=$(git config --global --get gitbasher.scopes)
+    _delete_global_add "gitbasher.scopes" "Scopes list" "${YELLOW}${global_scopes}${ENDCOLOR}"
 
-    global_ai_proxy=$(git config --global --get gitbasher.ai-proxy)
-    if [ "$global_ai_proxy" != "" ]; then
-        echo -e "8. AI proxy: ${GREEN}$global_ai_proxy${ENDCOLOR}"
-    fi
+    # Per-provider AI keys; one row per provider that has a global key.
+    while IFS=$'\t' read -r key_name; do
+        [ -z "$key_name" ] && continue
+        local prov="${key_name#gitbasher.ai-api-key-}"
+        labels+=("AI API key (${prov}): ${GREEN}configured${ENDCOLOR}")
+        actions+=("$key_name|AI API key (${prov})")
+    done < <(git config --global --get-regexp '^gitbasher\.ai-api-key-' 2>/dev/null | awk '{print $1}')
 
-    global_ai_history=$(git config --global --get gitbasher.ai-commit-history-limit)
-    if [ "$global_ai_history" != "" ]; then
-        echo -e "9. AI commit history limit: ${GREEN}$global_ai_history${ENDCOLOR}"
-    fi
+    local global_legacy_key=$(git config --global --get gitbasher.ai-api-key)
+    _delete_global_add "gitbasher.ai-api-key" "AI API key (legacy)" "${GREEN}configured${ENDCOLOR}"
 
-    global_ai_diff_lines=$(git config --global --get gitbasher.ai-diff-limit)
-    global_ai_diff_chars=$(git config --global --get gitbasher.ai-diff-max-chars)
+    local global_ai_model=$(git config --global --get gitbasher.ai-model)
+    _delete_global_add "gitbasher.ai-model" "AI model" "${GREEN}${global_ai_model}${ENDCOLOR}"
+
+    local global_ai_proxy=$(git config --global --get gitbasher.ai-proxy)
+    _delete_global_add "gitbasher.ai-proxy" "AI proxy" "${GREEN}${global_ai_proxy}${ENDCOLOR}"
+
+    local global_ai_history=$(git config --global --get gitbasher.ai-commit-history-limit)
+    _delete_global_add "gitbasher.ai-commit-history-limit" "AI commit history limit" "${GREEN}${global_ai_history}${ENDCOLOR}"
+
+    local global_ai_diff_lines=$(git config --global --get gitbasher.ai-diff-limit)
+    local global_ai_diff_chars=$(git config --global --get gitbasher.ai-diff-max-chars)
     if [ -n "$global_ai_diff_lines" ] || [ -n "$global_ai_diff_chars" ]; then
-        diff_summary=""
+        local diff_summary=""
         [ -n "$global_ai_diff_lines" ] && diff_summary="${global_ai_diff_lines} lines"
         if [ -n "$global_ai_diff_chars" ]; then
             [ -n "$diff_summary" ] && diff_summary="${diff_summary}, "
             diff_summary="${diff_summary}${global_ai_diff_chars} chars"
         fi
-        echo -e "10. AI diff payload: ${GREEN}${diff_summary}${ENDCOLOR}"
+        labels+=("AI diff payload: ${GREEN}${diff_summary}${ENDCOLOR}")
+        # Two keys, one action — encode both, separator '+' inside the key field.
+        actions+=("gitbasher.ai-diff-limit+gitbasher.ai-diff-max-chars|AI diff payload")
     fi
 
-    echo -e "0. Exit"
+    if [ ${#labels[@]} -eq 0 ]; then
+        echo -e "${GRAY}Nothing to unset — no global gitbasher settings are configured.${ENDCOLOR}"
+        exit
+    fi
 
-    read -p "" choice
-    re='^([0-9]|10)$'
-    if ! [[ $choice =~ $re ]]; then
+    local i
+    for i in "${!labels[@]}"; do
+        echo -e "$((i + 1)). ${labels[$i]}"
+    done
+    echo -e "0. Exit"
+    echo
+
+    read_editable_input choice "Choice: "
+
+    if [ "$choice" == "" ] || [ "$choice" == "0" ]; then
+        exit
+    fi
+
+    if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "${#labels[@]}" ]; then
         echo -e "${RED}✗ Invalid choice.${ENDCOLOR}" >&2
         return 1
     fi
 
-    if [ "$choice" == "0" ]; then
-        exit
-    fi
-
     echo
 
-    case "$choice" in
-        1)  
-            echo -e "${GREEN}✓ Unset default branch from global settings${ENDCOLOR}"
-            git config --global --unset gitbasher.branch
-            ;;
-        2)
-            echo -e "${GREEN}✓ Unset branch separator from global settings${ENDCOLOR}"
-            git config --global --unset gitbasher.sep
-            ;;
-        3)
-            echo -e "${GREEN}✓ Unset commit message editor from global settings${ENDCOLOR}"
-            git config --global --unset core.editor
-            ;;
-        4)
-            echo -e "${GREEN}✓ Unset ticket prefix from global settings${ENDCOLOR}"
-            git config --global --unset gitbasher.ticket
-            ;;
-        5)
-            echo -e "${GREEN}✓ Unset scopes list from global settings${ENDCOLOR}"
-            git config --global --unset gitbasher.scopes
-            ;;
-        6)
-            echo -e "${GREEN}✓ Unset AI API key from global settings${ENDCOLOR}"
-            git config --global --unset gitbasher.ai-api-key
-            ;;
-        7)
-            echo -e "${GREEN}✓ Unset AI model from global settings${ENDCOLOR}"
-            git config --global --unset gitbasher.ai-model
-            ;;
-        8)
-            echo -e "${GREEN}✓ Unset AI proxy from global settings${ENDCOLOR}"
-            git config --global --unset gitbasher.ai-proxy
-            ;;
-        9)
-            echo -e "${GREEN}✓ Unset AI commit history limit from global settings${ENDCOLOR}"
-            git config --global --unset gitbasher.ai-commit-history-limit
-            ;;
-        10)
-            echo -e "${GREEN}✓ Unset AI diff payload settings from global settings${ENDCOLOR}"
-            git config --global --unset gitbasher.ai-diff-limit 2>/dev/null
-            git config --global --unset gitbasher.ai-diff-max-chars 2>/dev/null
-            ;;
-    esac
+    local action="${actions[$((choice - 1))]}"
+    local keys="${action%%|*}"
+    local label="${action#*|}"
+    local k
+    IFS='+' read -ra _keys <<< "$keys"
+    for k in "${_keys[@]}"; do
+        git config --global --unset "$k" 2>/dev/null
+    done
+    echo -e "${GREEN}✓ Unset ${label} from global settings${ENDCOLOR}"
 }
 
 

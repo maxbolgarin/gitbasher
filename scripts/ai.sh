@@ -26,24 +26,136 @@ readonly AI_MAX_TOKENS_SUBJECT=256
 readonly AI_MAX_TOKENS_SIMPLE=512
 readonly AI_MAX_TOKENS_FULL=1024
 
-### Function to get AI API key from environment variable or git config
-# Checks environment variable GITB_AI_API_KEY first, then falls back to git config
+### Function to get AI API key for the active provider.
+# Resolution order — env tier wins over config tier (so a one-shot
+# `GITB_AI_API_KEY=... gitb commit ai` overrides stored config), and within
+# each tier the per-provider variant wins over the legacy catch-all:
+#   1. GITB_AI_API_KEY_<PROVIDER>      per-provider env var
+#   2. GITB_AI_API_KEY                 legacy env var (applies to active provider)
+#   3. gitbasher.ai-api-key-<provider> per-provider git config (canonical slot)
+#   4. gitbasher.ai-api-key            legacy git config — kept only as a
+#                                      fallback for users who haven't migrated
+# Per-provider config exists so switching providers doesn't accidentally use a
+# key meant for another (e.g. an sk-or-v1 OpenRouter key being sent to OpenAI).
+# When a user switches providers via `gitb cfg provider`, the legacy config
+# slot is migrated to the outgoing provider's per-provider slot — that's what
+# actually fixes the cross-provider key reuse bug; the resolution order alone
+# can't, because the legacy config might be valid for the active provider.
 # Returns: AI API key or empty if not set
 function get_ai_api_key {
-    # First check environment variable (more secure)
+    local provider=$(get_ai_provider)
+    local provider_upper
+    provider_upper=$(echo "$provider" | tr '[:lower:]' '[:upper:]')
+
+    # Env tier — per-provider, then legacy
+    local provider_env_var="GITB_AI_API_KEY_${provider_upper}"
+    if [ -n "${!provider_env_var}" ]; then
+        echo "${!provider_env_var}"
+        return
+    fi
     if [ -n "$GITB_AI_API_KEY" ]; then
         echo "$GITB_AI_API_KEY"
         return
     fi
 
-    # Fall back to git config
+    # Config tier — per-provider, then legacy
+    local provider_key
+    provider_key=$(get_config_value "gitbasher.ai-api-key-${provider}" "")
+    if [ -n "$provider_key" ]; then
+        echo "$provider_key"
+        return
+    fi
     get_config_value gitbasher.ai-api-key ""
 }
 
-### Function to set AI API key in git config
+### Returns the source of the active provider's API key, for diagnostic display.
+# Echoes one of: env-provider | env-legacy | local-provider | global-provider |
+# local-legacy | global-legacy | (empty if unset everywhere)
+function get_ai_api_key_source {
+    local provider=$(get_ai_provider)
+    local provider_upper
+    provider_upper=$(echo "$provider" | tr '[:lower:]' '[:upper:]')
+    local provider_env_var="GITB_AI_API_KEY_${provider_upper}"
+    if [ -n "${!provider_env_var}" ]; then
+        echo "env-provider"; return
+    fi
+    if [ -n "$GITB_AI_API_KEY" ]; then
+        echo "env-legacy"; return
+    fi
+    if git config --local --get "gitbasher.ai-api-key-${provider}" >/dev/null 2>&1; then
+        echo "local-provider"; return
+    fi
+    if git config --global --get "gitbasher.ai-api-key-${provider}" >/dev/null 2>&1; then
+        echo "global-provider"; return
+    fi
+    if git config --local --get gitbasher.ai-api-key >/dev/null 2>&1; then
+        echo "local-legacy"; return
+    fi
+    if git config --global --get gitbasher.ai-api-key >/dev/null 2>&1; then
+        echo "global-legacy"; return
+    fi
+    echo ""
+}
+
+### Function to set AI API key for the active provider in git config.
 # $1: API key
+# $2: optional "true" to write to global config instead of local
 function set_ai_api_key {
-    set_config_value gitbasher.ai-api-key "$1"
+    local provider=$(get_ai_provider)
+    set_config_value "gitbasher.ai-api-key-${provider}" "$1" "$2"
+}
+
+### Function to unset the AI API key for the active provider.
+# Removes the per-provider key from local config; unset_config_value will
+# offer to clear the global value too if one exists.
+function unset_ai_api_key {
+    local provider=$(get_ai_provider)
+    unset_config_value "gitbasher.ai-api-key-${provider}"
+}
+
+### Migrate the legacy `gitbasher.ai-api-key` to the per-provider slot for the
+# given provider, then drop the legacy entry. Run this on the *outgoing*
+# provider when switching, so a key set under provider X doesn't get reused
+# (and rejected by) provider Y. Operates on whichever scope held the legacy
+# value (local and/or global).
+# $1: provider name to attribute the legacy key to
+function migrate_legacy_ai_api_key_to {
+    local target_provider="$1"
+    local migrated=""
+
+    # `local var=$(...)` keeps the failing exit code attached to `local`,
+    # which always succeeds — important for callers running with set -e.
+    local local_legacy=$(git config --local --get gitbasher.ai-api-key 2>/dev/null)
+    if [ -n "$local_legacy" ]; then
+        # Don't clobber an existing per-provider key that the user may have set explicitly.
+        if ! git config --local --get "gitbasher.ai-api-key-${target_provider}" >/dev/null 2>&1; then
+            git config --local "gitbasher.ai-api-key-${target_provider}" "$local_legacy"
+            migrated="local"
+        fi
+        git config --local --unset gitbasher.ai-api-key 2>/dev/null || true
+    fi
+
+    local global_legacy=$(git config --global --get gitbasher.ai-api-key 2>/dev/null)
+    if [ -n "$global_legacy" ]; then
+        if ! git config --global --get "gitbasher.ai-api-key-${target_provider}" >/dev/null 2>&1; then
+            git config --global "gitbasher.ai-api-key-${target_provider}" "$global_legacy"
+            migrated="${migrated:+$migrated, }global"
+        fi
+        git config --global --unset gitbasher.ai-api-key 2>/dev/null || true
+    fi
+
+    if [ -n "$migrated" ]; then
+        echo -e "${GRAY}↻ Migrated existing API key to provider '${target_provider}' (${migrated})${ENDCOLOR}" >&2
+    fi
+}
+
+### List providers that currently have a per-provider key configured.
+# Echoes provider names one per line, sorted, deduplicated.
+function list_providers_with_api_key {
+    {
+        git config --local --get-regexp '^gitbasher\.ai-api-key-' 2>/dev/null
+        git config --global --get-regexp '^gitbasher\.ai-api-key-' 2>/dev/null
+    } | awk '{print $1}' | sed 's/^gitbasher\.ai-api-key-//' | sort -u
 }
 
 ### Function to get the configured AI provider (openrouter | openai | ollama).
@@ -515,6 +627,9 @@ function _json_escape_for_payload {
 # $2: user prompt (data: recent commits, staged files, diff, scopes)
 # $3: max_tokens cap on the response (default: AI_MAX_TOKENS_FULL)
 # $4: model id (default: get_ai_model_for "simple" — keeps single-arg legacy callers working)
+# $5: optional response_format (JSON string, e.g. '{"type":"json_object"}'). Empty
+#     means free-text. All targeted providers accept the OpenAI /chat/completions
+#     schema, so this passes through untouched.
 # Returns: AI response text
 function call_ai_api {
     # Set trap to clear sensitive variables on exit/interrupt
@@ -524,6 +639,7 @@ function call_ai_api {
     local user_prompt="$2"
     local max_tokens="${3:-$AI_MAX_TOKENS_FULL}"
     local model="${4:-$(get_ai_model_for simple)}"
+    local response_format="${5:-}"
     local provider=$(get_ai_provider)
     local api_url=$(get_ai_api_url)
     local api_key=$(get_ai_api_key)
@@ -532,12 +648,22 @@ function call_ai_api {
 
     # Local providers (Ollama) don't require a key; everyone else does.
     if [ -z "$api_key" ] && ai_provider_requires_api_key; then
-        echo -e "${RED}AI API key not configured for provider '${provider}'. Set it with: gitb config${ENDCOLOR}" >&2
+        echo -e "${RED}✗ AI API key not configured for provider '${provider}'${ENDCOLOR}" >&2
+        echo -e "${YELLOW}Configure it with:${ENDCOLOR} ${GREEN}gitb cfg ai${ENDCOLOR}" >&2
         clear_sensitive_vars
         return 1
     fi
 
-    # Build OpenAI-style payload for OpenRouter.
+    # Build OpenAI-style payload. The output-cap field name diverges by provider:
+    # OpenAI's GPT-5 family and reasoning models reject `max_tokens` and require
+    # `max_completion_tokens` instead. OpenRouter and Ollama still accept the
+    # legacy `max_tokens` (OpenRouter forwards it to whichever upstream provider
+    # the chosen model targets), so only switch the field name for openai.
+    local tokens_field="max_tokens"
+    if [ "$provider" = "openai" ]; then
+        tokens_field="max_completion_tokens"
+    fi
+
     # Prefer jq for robust JSON encoding; fall back to sed/awk that preserves newlines as JSON \n.
     local json_payload
     if command -v jq &>/dev/null; then
@@ -545,13 +671,24 @@ function call_ai_api {
             --arg model "$model" \
             --arg system "$system_prompt" \
             --arg user "$user_prompt" \
+            --arg tokens_field "$tokens_field" \
             --argjson temperature "$AI_TEMPERATURE" \
             --argjson max_tokens "$max_tokens" \
-            '{model: $model, messages: [{role: "system", content: $system}, {role: "user", content: $user}], temperature: $temperature, max_tokens: $max_tokens}')
+            '{model: $model, messages: [{role: "system", content: $system}, {role: "user", content: $user}], temperature: $temperature} + {($tokens_field): $max_tokens}')
+        if [ -n "$response_format" ]; then
+            json_payload=$(jq -nc \
+                --argjson base "$json_payload" \
+                --argjson rf "$response_format" \
+                '$base + {response_format: $rf}')
+        fi
     else
         local system_escaped=$(_json_escape_for_payload "$system_prompt")
         local user_escaped=$(_json_escape_for_payload "$user_prompt")
-        json_payload="{\"model\":\"$model\",\"messages\":[{\"role\":\"system\",\"content\":\"$system_escaped\"},{\"role\":\"user\",\"content\":\"$user_escaped\"}],\"temperature\":$AI_TEMPERATURE,\"max_tokens\":$max_tokens}"
+        local rf_field=""
+        if [ -n "$response_format" ]; then
+            rf_field=",\"response_format\":${response_format}"
+        fi
+        json_payload="{\"model\":\"$model\",\"messages\":[{\"role\":\"system\",\"content\":\"$system_escaped\"},{\"role\":\"user\",\"content\":\"$user_escaped\"}],\"temperature\":$AI_TEMPERATURE,\"${tokens_field}\":$max_tokens${rf_field}}"
     fi
 
     # Make API request with optional proxy and retry logic
@@ -675,113 +812,94 @@ function call_ai_api {
     local has_error=$(echo "$response" | grep -q '"error"' && echo "true" || echo "false")
     
     if [ "$has_error" = "true" ]; then
-        # Extract error details
-        local error_code=""
-        local error_message=""
+        # Extract error fields. OpenAI returns string codes (e.g. "invalid_api_key",
+        # "unsupported_parameter") in the same .error.code slot where OpenRouter
+        # returns numeric HTTP-ish codes — handle both.
+        local error_code="" error_message="" error_type="" error_param=""
         if command -v jq &>/dev/null; then
             error_code=$(echo "$response" | jq -r '.error.code // empty' 2>/dev/null)
             error_message=$(echo "$response" | jq -r '.error.message // empty' 2>/dev/null)
+            error_type=$(echo "$response" | jq -r '.error.type // empty' 2>/dev/null)
+            error_param=$(echo "$response" | jq -r '.error.param // empty' 2>/dev/null)
         else
-            error_code=$(echo "$response" | LC_ALL=C grep -o '"code"[[:space:]]*:[[:space:]]*[0-9]*' | grep -o '[0-9]*')
-            error_message=$(echo "$response" | LC_ALL=C grep -o '"message"[[:space:]]*:[[:space:]]*"[^"]*"' | LC_ALL=C sed 's/"message"[[:space:]]*:[[:space:]]*"\([^"]*\)"/\1/')
+            # Try string code first, fall back to numeric
+            error_code=$(echo "$response" | LC_ALL=C grep -o '"code"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | LC_ALL=C sed 's/.*"\([^"]*\)"$/\1/')
+            [ -z "$error_code" ] && error_code=$(echo "$response" | LC_ALL=C grep -o '"code"[[:space:]]*:[[:space:]]*[0-9]*' | head -1 | grep -o '[0-9]*')
+            error_message=$(echo "$response" | LC_ALL=C grep -o '"message"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | LC_ALL=C sed 's/.*"\([^"]*\)"$/\1/')
+            error_type=$(echo "$response" | LC_ALL=C grep -o '"type"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | LC_ALL=C sed 's/.*"\([^"]*\)"$/\1/')
         fi
-        
-        echo >&2
-        echo -e "${RED}AI API Error${ENDCOLOR}" >&2
-        if [ -n "$error_code" ]; then
-            echo -e "${RED}✗ Error code: $error_code${ENDCOLOR}" >&2
-        fi
-        if [ -n "$error_message" ]; then
-            echo -e "${RED}✗ Error message: $error_message${ENDCOLOR}" >&2
-        fi
-        
-        # Show full API response for debugging
-        echo >&2
-        echo -e "${YELLOW}📋 Full API Response:${ENDCOLOR}"
-        echo "$response" >&2
-        echo >&2
-        
-        # Provide helpful suggestions based on error type
+
+        # Classify into one of: auth | context | rate_limit | server | suspended |
+        # geo | bad_param | unknown — drives both the suggested fix and whether
+        # we point the user at gitbasher itself vs the provider.
+        local kind="unknown"
         case "$error_code" in
-            400)
-                if [[ "$error_message" == *"context"* ]] || [[ "$error_message" == *"token"* ]] || [[ "$error_message" == *"too long"* ]] || [[ "$error_message" == *"length"* ]]; then
-                    echo -e "${YELLOW}📏 Prompt too large: Too many staged files or changes for the AI model.${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Reduce the diff limit: gitb cfg history${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Try a model with larger context: gitb cfg model${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Use manual commit message for now: gitb c${ENDCOLOR}" >&2
-                else
-                    echo -e "${YELLOW}⚠️  Bad request: Check your API configuration or prompt format.${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Verify your API key is correct${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Try again with a smaller commit diff${ENDCOLOR}" >&2
-                fi
-                ;;
-            413)
-                echo -e "${YELLOW}📏 Payload too large: Too many staged files or changes for the AI model.${ENDCOLOR}" >&2
-                echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Reduce the diff limit: gitb cfg history${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Try a model with larger context: gitb cfg model${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Use manual commit message for now: gitb c${ENDCOLOR}" >&2
-                ;;
-            401|403)
-                echo -e "${YELLOW}🔐 Authentication error: Invalid or expired API key.${ENDCOLOR}" >&2
-                echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Check your API key with: gitb cfg ai${ENDCOLOR}" >&2
+            400)         kind="bad_request" ;;
+            401|403)     kind="auth" ;;
+            413)         kind="context" ;;
+            429)         kind="rate_limit" ;;
+            500|502|503) kind="server" ;;
+            invalid_api_key|invalid_token|authentication_error) kind="auth" ;;
+            unsupported_parameter|invalid_request_error)        kind="bad_param" ;;
+            insufficient_quota|rate_limit_exceeded)             kind="rate_limit" ;;
+            context_length_exceeded)                            kind="context" ;;
+        esac
+        # Message-pattern fallback for vendors that don't set a useful .error.code
+        if [ "$kind" = "unknown" ] || [ "$kind" = "bad_request" ]; then
+            if [[ "$error_message" == *"context"* ]] || [[ "$error_message" == *"too long"* ]] \
+                    || [[ "$error_message" == *"too large"* ]] || [[ "$error_message" == *"context length"* ]]; then
+                kind="context"
+            elif [[ "$error_message" == *"max_completion_tokens"* ]] || [[ "$error_message" == *"max_tokens"* ]] \
+                    || [[ "$error_message" == *"Unsupported parameter"* ]]; then
+                kind="bad_param"
+            elif [[ "$error_message" == *"suspended"* ]]; then
+                kind="suspended"
+            elif [[ "$error_message" == *"location is not supported"* ]] || [[ "$error_message" == *"region"* ]]; then
+                kind="geo"
+            elif [[ "$error_message" == *"API key"* ]] || [[ "$error_message" == *"api_key"* ]] || [[ "$error_message" == *"unauthorized"* ]]; then
+                kind="auth"
+            fi
+        fi
+
+        echo >&2
+        echo -e "${RED}✗ AI request failed${ENDCOLOR} ${GRAY}(provider '${provider}', model '${model}')${ENDCOLOR}" >&2
+        if [ -n "$error_message" ]; then
+            echo -e "  ${GRAY}cause:${ENDCOLOR} ${error_message}" >&2
+        fi
+        case "$kind" in
+            auth)
+                echo -e "  ${GRAY}fix:${ENDCOLOR}   invalid or missing key for ${YELLOW}${provider}${ENDCOLOR} — set one with ${GREEN}gitb cfg ai${ENDCOLOR}" >&2
                 case "$provider" in
-                    openai)     echo -e "${YELLOW}  • Get an OpenAI key at: https://platform.openai.com/api-keys${ENDCOLOR}" >&2 ;;
-                    openrouter) echo -e "${YELLOW}  • Get an OpenRouter key at: https://openrouter.ai/keys${ENDCOLOR}" >&2 ;;
+                    openai)     echo -e "         ${GRAY}get a key at https://platform.openai.com/api-keys${ENDCOLOR}" >&2 ;;
+                    openrouter) echo -e "         ${GRAY}get a key at https://openrouter.ai/keys${ENDCOLOR}" >&2 ;;
                 esac
-                echo -e "${YELLOW}  • Ensure your key has proper permissions${ENDCOLOR}" >&2
                 ;;
-            429)
-                echo -e "${YELLOW}⏱️  Rate limit exceeded: Too many requests.${ENDCOLOR}" >&2
-                echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Wait a few minutes and try again${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Consider upgrading your API plan for higher limits${ENDCOLOR}" >&2
+            context)
+                echo -e "  ${GRAY}fix:${ENDCOLOR}   payload too large — shrink it with ${GREEN}gitb cfg diff${ENDCOLOR} or pick a larger-context model with ${GREEN}gitb cfg model${ENDCOLOR}" >&2
                 ;;
-            500|502)
-                echo -e "${YELLOW}🔧 Server error: AI service is experiencing issues.${ENDCOLOR}" >&2
-                echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Try again in a few minutes${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Check OpenRouter status: https://status.openrouter.ai${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Use manual commit message for now: gitb c${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Try a different model: gitb cfg model${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Check your API key balance: https://openrouter.ai/keys${ENDCOLOR}" >&2
+            rate_limit)
+                echo -e "  ${GRAY}fix:${ENDCOLOR}   rate-limited — wait and retry, or upgrade your ${provider} plan" >&2
                 ;;
-            503)
-                echo -e "${YELLOW}📊 Service overloaded: Provider servers are busy.${ENDCOLOR}" >&2
-                echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Try again in a few minutes${ENDCOLOR}" >&2
-                echo -e "${YELLOW}  • Retry during off-peak hours${ENDCOLOR}" >&2
+            server)
+                echo -e "  ${GRAY}fix:${ENDCOLOR}   provider is having issues — retry shortly, or use ${GREEN}gitb c${ENDCOLOR} for a manual commit" >&2
+                ;;
+            suspended)
+                echo -e "  ${GRAY}fix:${ENDCOLOR}   account suspended — contact ${provider} support" >&2
+                ;;
+            geo)
+                echo -e "  ${GRAY}fix:${ENDCOLOR}   region restricted — route requests via a proxy with ${GREEN}gitb cfg proxy${ENDCOLOR}" >&2
+                ;;
+            bad_param)
+                echo -e "  ${GRAY}fix:${ENDCOLOR}   gitbasher sent a parameter ${provider} doesn't accept for this model — please report at https://github.com/maxbolgarin/gitbasher/issues" >&2
                 ;;
             *)
-                # Check for specific error message patterns when code is unclear
-                if [[ "$error_message" == *"suspended"* ]]; then
-                    echo -e "${YELLOW}🚫 Account suspended: Your API access has been suspended.${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Contact OpenRouter Support to resolve account issues${ENDCOLOR}" >&2
-                elif [[ "$error_message" == *"location is not supported"* ]]; then
-                    echo -e "${YELLOW}⚠️  Geographic restriction: Service may be unavailable in your region.${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Configure proxy with: gitb cfg proxy${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Use a VPN to connect from a supported region${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Use manual commit messages for now${ENDCOLOR}" >&2
-                elif [[ "$error_message" == *"context"* ]] || [[ "$error_message" == *"token"* ]] || [[ "$error_message" == *"too long"* ]] || [[ "$error_message" == *"length"* ]]; then
-                    echo -e "${YELLOW}📏 Prompt too large: Too many staged files or changes for the AI model.${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Reduce the diff limit: gitb cfg history${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Try a model with larger context: gitb cfg model${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Use manual commit message for now: gitb c${ENDCOLOR}" >&2
-                else
-                    echo -e "${YELLOW}❓ Unknown error occurred.${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}Solutions:${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Check OpenAI-compatible API documentation${ENDCOLOR}" >&2
-                    echo -e "${YELLOW}  • Try again later${ENDCOLOR}" >&2
-                fi
+                echo -e "  ${GRAY}fix:${ENDCOLOR}   retry, or use ${GREEN}gitb c${ENDCOLOR} for a manual commit" >&2
                 ;;
         esac
-        
+        # Trailing blank line so the next prompt (e.g. "What type of changes…")
+        # isn't visually glued to the error block.
+        echo >&2
+
         clear_sensitive_vars
         return 1
     fi
@@ -829,8 +947,10 @@ function check_ai_available {
     if ai_provider_requires_api_key; then
         local api_key=$(get_ai_api_key)
         if [ -z "$api_key" ]; then
-            echo -e "${RED}AI API key not configured${ENDCOLOR}" >&2
-            echo -e "${YELLOW}Configure it with: gitb cfg ai${ENDCOLOR}" >&2
+            local provider=$(get_ai_provider)
+            echo -e "${RED}✗ AI API key not configured for provider '${provider}'${ENDCOLOR}" >&2
+            echo -e "${YELLOW}Configure it with:${ENDCOLOR} ${GREEN}gitb cfg ai${ENDCOLOR}" >&2
+            echo -e "${YELLOW}Or switch provider with:${ENDCOLOR} ${GREEN}gitb cfg provider${ENDCOLOR}" >&2
             return 1
         fi
     fi

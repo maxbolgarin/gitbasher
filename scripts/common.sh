@@ -847,54 +847,133 @@ function get_tag_ci_url {
 }
 
 
+### Determine where a git config value originates.
+# Used by print_configuration to label each row so users can tell whether a
+# value comes from this repo, ~/.gitconfig, or gitbasher's built-in fallback.
+# $1: full git config key (e.g. gitbasher.ai-provider)
+# Returns: "local" | "global" | "default"
+function config_source {
+    if git config --local --get "$1" >/dev/null 2>&1; then
+        echo "local"
+    elif git config --global --get "$1" >/dev/null 2>&1; then
+        echo "global"
+    else
+        echo "default"
+    fi
+}
+
+### Render a colored "(project)" / "(global)" / "(default)" tag for a key.
+# $1: full git config key
+function config_source_tag {
+    case "$(config_source "$1")" in
+        local)   echo -e "${BLUE}(project)${ENDCOLOR}" ;;
+        global)  echo -e "${PURPLE}(global)${ENDCOLOR}" ;;
+        default) echo -e "${GRAY}(default)${ENDCOLOR}" ;;
+    esac
+}
+
+
 ### Function prints current config
 function print_configuration {
     echo -e "${YELLOW}Current configuration:${ENDCOLOR}"
-    echo -e "\tuser.name:\t${YELLOW}$(get_config_value user.name)${ENDCOLOR}"
-    echo -e "\tuser.email:\t${YELLOW}$(get_config_value user.email)${ENDCOLOR}"
-    echo -e "\tdefault:\t${YELLOW}$main_branch${ENDCOLOR}"
-    echo -e "\tseparator:\t${YELLOW}$sep${ENDCOLOR}"
-    echo -e "\teditor:\t\t${YELLOW}$editor${ENDCOLOR}"
+
+    local user_name=$(get_config_value user.name)
+    if [ -n "$user_name" ]; then
+        echo -e "\tuser.name:\t${YELLOW}$user_name${ENDCOLOR} $(config_source_tag user.name)"
+    else
+        echo -e "\tuser.name:\t${RED}not set${ENDCOLOR}"
+    fi
+    local user_email=$(get_config_value user.email)
+    if [ -n "$user_email" ]; then
+        echo -e "\tuser.email:\t${YELLOW}$user_email${ENDCOLOR} $(config_source_tag user.email)"
+    else
+        echo -e "\tuser.email:\t${RED}not set${ENDCOLOR}"
+    fi
+    echo -e "\tdefault:\t${YELLOW}$main_branch${ENDCOLOR} $(config_source_tag gitbasher.branch)"
+    echo -e "\tseparator:\t${YELLOW}$sep${ENDCOLOR} $(config_source_tag gitbasher.sep)"
+    echo -e "\teditor:\t\t${YELLOW}$editor${ENDCOLOR} $(config_source_tag core.editor)"
     if [ "$ticket_name" != "" ]; then
-        echo -e "\tticket:\t\t${YELLOW}$ticket_name${ENDCOLOR}"
+        echo -e "\tticket:\t\t${YELLOW}$ticket_name${ENDCOLOR} $(config_source_tag gitbasher.ticket)"
     fi
     if [ "$scopes" != "" ]; then
-        echo -e "\tscopes:\t\t${YELLOW}$scopes${ENDCOLOR}"
+        echo -e "\tscopes:\t\t${YELLOW}$scopes${ENDCOLOR} $(config_source_tag gitbasher.scopes)"
     fi
     local ai_provider=$(get_ai_provider)
-    echo -e "\tAI provider:\t${GREEN}$ai_provider${ENDCOLOR}"
+    echo -e "\tAI provider:\t${GREEN}$ai_provider${ENDCOLOR} $(config_source_tag gitbasher.ai-provider)"
     local ai_base_url=$(get_ai_base_url)
     if [ -n "$ai_base_url" ]; then
-        echo -e "\tAI base URL:\t${GREEN}$ai_base_url${ENDCOLOR}"
+        echo -e "\tAI base URL:\t${GREEN}$ai_base_url${ENDCOLOR} $(config_source_tag gitbasher.ai-base-url)"
     fi
     local ai_key=$(get_ai_api_key)
     if [ -n "$ai_key" ]; then
+        # Resolve where the active provider's key actually comes from. The
+        # full resolution chain (per-provider env > per-provider config >
+        # legacy env > legacy config) is encoded in get_ai_api_key_source.
+        local ai_key_tag
+        case "$(get_ai_api_key_source)" in
+            env-provider)    ai_key_tag="${CYAN}(env: GITB_AI_API_KEY_${ai_provider^^})${ENDCOLOR}" ;;
+            env-legacy)      ai_key_tag="${CYAN}(env: GITB_AI_API_KEY, legacy)${ENDCOLOR}" ;;
+            local-provider)  ai_key_tag="${BLUE}(project)${ENDCOLOR}" ;;
+            global-provider) ai_key_tag="${PURPLE}(global)${ENDCOLOR}" ;;
+            local-legacy)    ai_key_tag="${YELLOW}(project, legacy slot)${ENDCOLOR}" ;;
+            global-legacy)   ai_key_tag="${YELLOW}(global, legacy slot)${ENDCOLOR}" ;;
+        esac
         ai_key=$(mask_api_key "$ai_key")
-        echo -e "\tAI key:\t\t${GREEN}$ai_key${ENDCOLOR}"
+        echo -e "\tAI key:\t\t${GREEN}$ai_key${ENDCOLOR} ${GRAY}for ${ai_provider}${ENDCOLOR} $ai_key_tag"
     elif ai_provider_requires_api_key; then
-        echo -e "\tAI key:\t\t${RED}not set${ENDCOLOR}"
+        echo -e "\tAI key:\t\t${RED}not set for ${ai_provider}${ENDCOLOR} ${GRAY}— run ${GREEN}gitb cfg ai${ENDCOLOR}"
     else
         echo -e "\tAI key:\t\t${GRAY}not required for $ai_provider${ENDCOLOR}"
     fi
+    # List other providers that have a key stored, so users can see at a
+    # glance that switching providers won't lose their other keys.
+    local other_keys=""
+    while IFS= read -r prov; do
+        [ -z "$prov" ] && continue
+        [ "$prov" = "$ai_provider" ] && continue
+        other_keys="${other_keys:+${other_keys}, }${prov}"
+    done < <(list_providers_with_api_key)
+    if [ -n "$other_keys" ]; then
+        echo -e "\t\t\t${GRAY}also stored for: ${other_keys}${ENDCOLOR}"
+    fi
     local ai_model=$(get_ai_model)
     if [ -n "$ai_model" ]; then
-        echo -e "\tAI model:\t${GREEN}$ai_model${ENDCOLOR} ${GRAY}(global override)${ENDCOLOR}"
+        echo -e "\tAI model:\t${GREEN}$ai_model${ENDCOLOR} ${GRAY}(all tasks)${ENDCOLOR} $(config_source_tag gitbasher.ai-model)"
     else
-        echo -e "\tAI models:\t${GREEN}$(get_ai_model_for simple)${ENDCOLOR} ${GRAY}(simple/subject)${ENDCOLOR}"
-        echo -e "\t\t\t${GREEN}$(get_ai_model_for full)${ENDCOLOR} ${GRAY}(full)${ENDCOLOR}"
-        echo -e "\t\t\t${GREEN}$(get_ai_model_for grouping)${ENDCOLOR} ${GRAY}(grouping)${ENDCOLOR}"
+        echo -e "\tAI models:\t${GREEN}$(get_ai_model_for simple)${ENDCOLOR} ${GRAY}(simple/subject)${ENDCOLOR} $(config_source_tag gitbasher.ai-model-simple)"
+        echo -e "\t\t\t${GREEN}$(get_ai_model_for full)${ENDCOLOR} ${GRAY}(full)${ENDCOLOR} $(config_source_tag gitbasher.ai-model-full)"
+        echo -e "\t\t\t${GREEN}$(get_ai_model_for grouping)${ENDCOLOR} ${GRAY}(grouping)${ENDCOLOR} $(config_source_tag gitbasher.ai-model-grouping)"
     fi
     local ai_proxy=$(get_ai_proxy)
     if [ -n "$ai_proxy" ]; then
-        echo -e "\tAI proxy:\t${GREEN}$ai_proxy${ENDCOLOR}"
+        echo -e "\tAI proxy:\t${GREEN}$ai_proxy${ENDCOLOR} $(config_source_tag gitbasher.ai-proxy)"
     else
         echo -e "\tAI proxy:\t${YELLOW}not set${ENDCOLOR}"
     fi
     local ai_history_limit=$(get_ai_commit_history_limit)
-    echo -e "\tAI history:\t${GREEN}$ai_history_limit commits${ENDCOLOR}"
+    echo -e "\tAI history:\t${GREEN}$ai_history_limit commits${ENDCOLOR} $(config_source_tag gitbasher.ai-commit-history-limit)"
     local ai_diff_lines=$(get_ai_diff_limit)
     local ai_diff_chars=$(get_ai_diff_max_chars)
-    echo -e "\tAI diff:\t${GREEN}${ai_diff_lines} lines / ${ai_diff_chars} chars max${ENDCOLOR}"
+    # Two keys share one row; pick the most-specific source so a single override
+    # in either key is visible at a glance (local > global > default).
+    local lines_src=$(config_source gitbasher.ai-diff-limit)
+    local chars_src=$(config_source gitbasher.ai-diff-max-chars)
+    local diff_src="default"
+    if [ "$lines_src" = "local" ] || [ "$chars_src" = "local" ]; then
+        diff_src="local"
+    elif [ "$lines_src" = "global" ] || [ "$chars_src" = "global" ]; then
+        diff_src="global"
+    fi
+    local diff_tag
+    case "$diff_src" in
+        local)   diff_tag="${BLUE}(project)${ENDCOLOR}" ;;
+        global)  diff_tag="${PURPLE}(global)${ENDCOLOR}" ;;
+        default) diff_tag="${GRAY}(default)${ENDCOLOR}" ;;
+    esac
+    echo -e "\tAI diff:\t${GREEN}${ai_diff_lines} lines / ${ai_diff_chars} chars max${ENDCOLOR} $diff_tag"
+
+    echo
+    echo -e "${GRAY}Source:${ENDCOLOR} ${BLUE}(project)${ENDCOLOR}${GRAY} this repo,${ENDCOLOR} ${PURPLE}(global)${ENDCOLOR}${GRAY} ~/.gitconfig,${ENDCOLOR} ${GRAY}(default) built-in fallback${ENDCOLOR}"
 }
 
 

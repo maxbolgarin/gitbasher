@@ -66,7 +66,7 @@ teardown() {
     [[ "$before_type" != $'\n\n\n'* ]]
 }
 
-@test "declining split AI suggestion goes directly to type menu on next line" {
+@test "declining split AI suggestion leaves blank line before type menu" {
     create_test_file "gitb" "changed"
     git add gitb
     declare -gA split_groups=([gitb]="gitb")
@@ -88,8 +88,8 @@ teardown() {
     before_type="${output#*"$use_prompt"}"
     [[ "$before_type" != "$output" ]]
     before_type="${before_type%%What ${yellow}type*}"
-    [[ "$before_type" == $'\n'* ]]
-    [[ "$before_type" != $'\n\n'* ]]
+    [[ "$before_type" == $'\n\n'* ]]
+    [[ "$before_type" != $'\n\n\n'* ]]
 }
 
 @test "normal type menu abort prints aborted message" {

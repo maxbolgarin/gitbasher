@@ -6,8 +6,28 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  shellcheck:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Catches real bugs (unquoted vars, incorrect test ops, GNU-only flags) without
+      # blocking on style warnings. Severity can be widened to "warning" later once
+      # the existing baseline is clean.
+      - name: ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          severity: error
+          scandir: ./scripts
+          additional_files: install.sh
+
+  build:
+    needs: shellcheck
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: write
     steps:
@@ -24,10 +44,15 @@ jobs:
           ./dist/build.sh ./scripts/gitb.sh ./dist/gitb "${{ steps.version.outputs.version }}"
           chmod +x ./dist/gitb
 
-      - name: Install BATS
+      - name: Install BATS (Linux)
+        if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y bats
+
+      - name: Install BATS (macOS)
+        if: matrix.os == 'macos-latest'
+        run: brew install bats-core
 
       - name: Run BATS Tests
         run: |

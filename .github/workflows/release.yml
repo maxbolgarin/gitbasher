@@ -45,13 +45,9 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Install semantic-release
-        run: |
-          npm install -g semantic-release
-          npm install -g @semantic-release/github
-          npm install -g @semantic-release/npm
-          npm install -g @semantic-release/git
-          npm install -g @semantic-release/exec
-          npm install -g conventional-changelog-conventionalcommits
+        # Plugins live in devDependencies (package.json). `npm install` resolves them
+        # locally; `npx semantic-release` below picks them up from ./node_modules/.bin.
+        run: npm install --no-audit --no-fund
 
       - name: Release
         env:

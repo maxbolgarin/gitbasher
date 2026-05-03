@@ -119,7 +119,7 @@ function prompt_wip_backend {
         2) wip_backend="branch";;
         3) wip_backend="worktree";;
         0) exit;;
-        *) echo -e "${RED}Invalid option${ENDCOLOR}"; exit 1;;
+        *) echo -e "${RED}✗ Invalid choice.${ENDCOLOR}"; exit 1;;
     esac
 }
 
@@ -127,7 +127,7 @@ function prompt_wip_backend {
 ### Refuse to operate when working tree is empty
 function require_changes {
     if git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then
-        echo -e "${GREEN}No changes to save${ENDCOLOR}"
+        echo -e "${GREEN}✓ No changes to save${ENDCOLOR}"
         exit
     fi
 }
@@ -136,8 +136,8 @@ function require_changes {
 ### Refuse to run when working tree is dirty (used by branch/worktree restore)
 function require_clean {
     if ! git diff --quiet || ! git diff --cached --quiet; then
-        echo -e "${RED}Working tree has uncommitted changes${ENDCOLOR}"
-        echo -e "Commit or stash them before restoring the WIP"
+        echo -e "${RED}✗ Working tree has uncommitted changes.${ENDCOLOR}"
+        echo -e "Commit or stash them before restoring the WIP."
         exit 1
     fi
 }
@@ -146,7 +146,7 @@ function require_clean {
 ### Push the wip stash as a remote backup branch
 function wip_push_stash_backup {
     if [ -z "$origin_name" ]; then
-        echo -e "${YELLOW}No remote configured, skipping push${ENDCOLOR}"
+        echo -e "${YELLOW}No remote configured — skipping push.${ENDCOLOR}"
         return
     fi
     local remote_branch
@@ -156,9 +156,9 @@ function wip_push_stash_backup {
     push_output=$(git push --force "${origin_name}" "stash@{0}:refs/heads/${remote_branch}" 2>&1)
     push_code=$?
     if [ $push_code -eq 0 ]; then
-        echo -e "${GREEN}WIP pushed to ${origin_name}/${remote_branch}${ENDCOLOR}"
+        echo -e "${GREEN}✓ Pushed WIP backup to ${origin_name}/${remote_branch}${ENDCOLOR}"
     else
-        echo -e "${YELLOW}Could not push WIP backup (you can push manually later)${ENDCOLOR}"
+        echo -e "${YELLOW}⚠  Could not push WIP backup (you can push manually later).${ENDCOLOR}"
         echo "$push_output"
     fi
 }
@@ -168,7 +168,7 @@ function wip_push_stash_backup {
 function wip_push_branch {
     local branch="$1"
     if [ -z "$origin_name" ]; then
-        echo -e "${YELLOW}No remote configured, skipping push${ENDCOLOR}"
+        echo -e "${YELLOW}No remote configured — skipping push.${ENDCOLOR}"
         return
     fi
     echo -e "${YELLOW}Pushing ${branch} to ${origin_name}...${ENDCOLOR}"
@@ -176,9 +176,9 @@ function wip_push_branch {
     push_output=$(git push --force --set-upstream "${origin_name}" "${branch}" 2>&1)
     push_code=$?
     if [ $push_code -eq 0 ]; then
-        echo -e "${GREEN}Pushed to ${origin_name}/${branch}${ENDCOLOR}"
+        echo -e "${GREEN}✓ Pushed to ${origin_name}/${branch}${ENDCOLOR}"
     else
-        echo -e "${YELLOW}Could not push ${branch} (you can push manually later)${ENDCOLOR}"
+        echo -e "${YELLOW}⚠  Could not push ${branch} (you can push manually later).${ENDCOLOR}"
         echo "$push_output"
     fi
 }
@@ -198,9 +198,9 @@ function wip_delete_remote_branch {
     out=$(git push "$origin_name" --delete "$branch" 2>&1)
     code=$?
     if [ $code -eq 0 ]; then
-        echo -e "${GREEN}Remote WIP backup removed${ENDCOLOR}"
+        echo -e "${GREEN}✓ Removed remote WIP backup${ENDCOLOR}"
     else
-        echo -e "${YELLOW}Could not remove remote WIP backup (you can delete it manually later)${ENDCOLOR}"
+        echo -e "${YELLOW}⚠  Could not remove remote WIP backup (delete it manually later).${ENDCOLOR}"
         echo "$out"
     fi
 }
@@ -223,14 +223,14 @@ function wip_up_stash {
     stash_code=$?
 
     if [ $stash_code -ne 0 ]; then
-        echo -e "${RED}Cannot stash changes! Error message:${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot stash changes.${ENDCOLOR}"
         echo "$stash_output"
         exit $stash_code
     fi
 
     local stash_hash
     stash_hash=$(git rev-parse --short stash@{0} 2>/dev/null)
-    echo -e "${GREEN}WIP stashed!${ENDCOLOR} ${BLUE}[${stash_hash}]${ENDCOLOR} $message"
+    echo -e "${GREEN}✓ Stashed WIP${ENDCOLOR} ${BLUE}[${stash_hash}]${ENDCOLOR} $message"
     echo
 
     if [ -z "$nopush" ]; then
@@ -248,7 +248,7 @@ function wip_up_branch {
     require_changes
 
     if find_wip_branch; then
-        echo -e "${RED}Branch ${BOLD}$(wip_remote_branch)${NORMAL}${RED} already exists${ENDCOLOR}"
+        echo -e "${RED}✗ Branch ${BOLD}$(wip_remote_branch)${NORMAL}${RED} already exists.${ENDCOLOR}"
         echo -e "Restore or delete it first: ${YELLOW}gitb wip down branch${ENDCOLOR}"
         exit 1
     fi
@@ -265,7 +265,7 @@ function wip_up_branch {
     local stash_output
     stash_output=$(git stash push --include-untracked --message "wip-transfer: ${original_branch}" 2>&1)
     if [ $? -ne 0 ]; then
-        echo -e "${RED}Cannot stash changes for transfer:${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot stash changes for transfer.${ENDCOLOR}"
         echo "$stash_output"
         exit 1
     fi
@@ -274,7 +274,7 @@ function wip_up_branch {
     local create_output
     create_output=$(git switch -c "$wip_branch" 2>&1)
     if [ $? -ne 0 ]; then
-        echo -e "${RED}Cannot create branch ${wip_branch}:${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot create branch ${wip_branch}.${ENDCOLOR}"
         echo "$create_output"
         # Restore the stash so the user does not lose work
         git stash pop >/dev/null 2>&1
@@ -285,10 +285,10 @@ function wip_up_branch {
     local pop_output
     pop_output=$(git stash pop 2>&1)
     if [ $? -ne 0 ]; then
-        echo -e "${RED}Cannot apply WIP onto ${wip_branch}:${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot apply WIP onto ${wip_branch}.${ENDCOLOR}"
         echo "$pop_output"
         echo
-        echo -e "${YELLOW}You are now on ${wip_branch}. Resolve conflicts and finish manually.${ENDCOLOR}"
+        echo -e "${YELLOW}You are now on ${wip_branch} — resolve conflicts and finish manually.${ENDCOLOR}"
         exit 1
     fi
 
@@ -299,7 +299,7 @@ function wip_up_branch {
     local commit_output
     commit_output=$(git -c commit.gpgsign=false commit -m "wip: ${original_branch} @ ${ts}" 2>&1)
     if [ $? -ne 0 ]; then
-        echo -e "${RED}Cannot create wip commit:${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot create WIP commit.${ENDCOLOR}"
         echo "$commit_output"
         exit 1
     fi
@@ -311,16 +311,16 @@ function wip_up_branch {
     local switch_output
     switch_output=$(git switch "$original_branch" 2>&1)
     if [ $? -ne 0 ]; then
-        echo -e "${RED}Could not switch back to ${original_branch}:${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot switch back to ${original_branch}.${ENDCOLOR}"
         echo "$switch_output"
         echo
-        echo -e "${YELLOW}WIP committed on ${wip_branch} (${wip_hash}). Switch back manually.${ENDCOLOR}"
+        echo -e "${YELLOW}WIP committed on ${wip_branch} (${wip_hash}) — switch back manually.${ENDCOLOR}"
         exit 1
     fi
     current_branch="$original_branch"
 
-    echo -e "${GREEN}WIP committed!${ENDCOLOR} ${BLUE}[${wip_hash}]${ENDCOLOR} on ${BLUE}${wip_branch}${ENDCOLOR}"
-    echo -e "${GREEN}Switched back to ${original_branch} with a clean working tree${ENDCOLOR}"
+    echo -e "${GREEN}✓ Committed WIP${ENDCOLOR} ${BLUE}[${wip_hash}]${ENDCOLOR} on ${BLUE}${wip_branch}${ENDCOLOR}"
+    echo -e "${GREEN}✓ Switched back to ${original_branch} with a clean working tree${ENDCOLOR}"
     echo
 
     if [ -z "$nopush" ]; then
@@ -338,7 +338,7 @@ function wip_up_worktree {
     require_changes
 
     if find_wip_branch; then
-        echo -e "${RED}Branch ${BOLD}$(wip_remote_branch)${NORMAL}${RED} already exists${ENDCOLOR}"
+        echo -e "${RED}✗ Branch ${BOLD}$(wip_remote_branch)${NORMAL}${RED} already exists.${ENDCOLOR}"
         echo -e "Restore or delete it first: ${YELLOW}gitb wip down worktree${ENDCOLOR}"
         exit 1
     fi
@@ -348,7 +348,7 @@ function wip_up_worktree {
     wip_path="$(wip_worktree_default_path)"
 
     if [ -e "$wip_path" ]; then
-        echo -e "${RED}Path ${wip_path} already exists${ENDCOLOR}"
+        echo -e "${RED}✗ Path ${wip_path} already exists.${ENDCOLOR}"
         exit 1
     fi
 
@@ -360,7 +360,7 @@ function wip_up_worktree {
     local stash_output
     stash_output=$(git stash push --include-untracked --message "wip-transfer: ${current_branch}" 2>&1)
     if [ $? -ne 0 ]; then
-        echo -e "${RED}Cannot stash changes for transfer:${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot stash changes for transfer.${ENDCOLOR}"
         echo "$stash_output"
         exit 1
     fi
@@ -369,7 +369,7 @@ function wip_up_worktree {
     local add_output
     add_output=$(git worktree add -b "$wip_branch" "$wip_path" HEAD 2>&1)
     if [ $? -ne 0 ]; then
-        echo -e "${RED}Cannot create worktree:${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot create worktree.${ENDCOLOR}"
         echo "$add_output"
         # Restore the stash so the user does not lose work
         git stash pop >/dev/null 2>&1
@@ -380,14 +380,14 @@ function wip_up_worktree {
     local pop_output
     pop_output=$(git -C "$wip_path" stash pop 2>&1)
     if [ $? -ne 0 ]; then
-        echo -e "${RED}Cannot apply WIP onto worktree:${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot apply WIP onto worktree.${ENDCOLOR}"
         echo "$pop_output"
         echo
-        echo -e "${YELLOW}Stash kept; resolve manually in ${wip_path}.${ENDCOLOR}"
+        echo -e "${YELLOW}Stash kept — resolve manually in ${wip_path}.${ENDCOLOR}"
         exit 1
     fi
 
-    echo -e "${GREEN}WIP moved into worktree${ENDCOLOR}"
+    echo -e "${GREEN}✓ Moved WIP into worktree${ENDCOLOR}"
     echo -e "  branch: ${BLUE}${wip_branch}${ENDCOLOR}"
     echo -e "  path:   ${wip_path}"
     echo
@@ -412,7 +412,7 @@ function wip_up_worktree {
 ### Stash backend restore
 function wip_down_stash {
     if ! find_wip_stash; then
-        echo -e "${RED}No WIP stash found for branch ${current_branch}${ENDCOLOR}"
+        echo -e "${YELLOW}No WIP stash found for branch ${current_branch}.${ENDCOLOR}"
         echo -e "Save one first with: ${YELLOW}gitb wip up${ENDCOLOR}"
         exit 1
     fi
@@ -428,12 +428,12 @@ function wip_down_stash {
     pop_code=$?
 
     if [ $pop_code -ne 0 ]; then
-        echo -e "${RED}Cannot restore WIP! Error message:${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot restore WIP.${ENDCOLOR}"
         echo "$pop_output"
         exit $pop_code
     fi
 
-    echo -e "${GREEN}WIP restored!${ENDCOLOR}"
+    echo -e "${GREEN}✓ Restored WIP${ENDCOLOR}"
     echo
     echo -e "${YELLOW}Restored changes:${ENDCOLOR}"
     git_status
@@ -448,7 +448,7 @@ function wip_down_branch {
     wip_branch="$(wip_remote_branch)"
 
     if ! find_wip_branch; then
-        echo -e "${RED}No WIP branch ${wip_branch} found${ENDCOLOR}"
+        echo -e "${YELLOW}No WIP branch ${wip_branch} found.${ENDCOLOR}"
         echo -e "Save one first with: ${YELLOW}gitb wip up branch${ENDCOLOR}"
         exit 1
     fi
@@ -463,7 +463,7 @@ function wip_down_branch {
     merge_code=$?
 
     if [ $merge_code -ne 0 ]; then
-        echo -e "${RED}Cannot restore WIP (squash-merge failed):${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot restore WIP — squash-merge failed.${ENDCOLOR}"
         echo "$merge_output"
         echo
         echo -e "${YELLOW}Resolve conflicts manually, then ${BOLD}git reset HEAD${NORMAL}${YELLOW} to leave them unstaged.${ENDCOLOR}"
@@ -474,7 +474,7 @@ function wip_down_branch {
     git reset HEAD >/dev/null 2>&1
     rm -f "$(git rev-parse --git-path MERGE_MSG 2>/dev/null)" 2>/dev/null
 
-    echo -e "${GREEN}WIP restored!${ENDCOLOR}"
+    echo -e "${GREEN}✓ Restored WIP${ENDCOLOR}"
     echo
     echo -e "${YELLOW}Restored changes:${ENDCOLOR}"
     git_status
@@ -484,9 +484,9 @@ function wip_down_branch {
     local del_out
     del_out=$(git branch -D "$wip_branch" 2>&1)
     if [ $? -eq 0 ]; then
-        echo -e "${GREEN}Local branch ${wip_branch} deleted${ENDCOLOR}"
+        echo -e "${GREEN}✓ Deleted local branch ${wip_branch}${ENDCOLOR}"
     else
-        echo -e "${YELLOW}Could not delete local branch (delete manually):${ENDCOLOR}"
+        echo -e "${YELLOW}⚠  Could not delete local branch (delete manually).${ENDCOLOR}"
         echo "$del_out"
     fi
 
@@ -500,7 +500,7 @@ function wip_down_worktree {
     wip_branch="$(wip_remote_branch)"
 
     if ! find_wip_worktree; then
-        echo -e "${RED}No WIP worktree found for ${wip_branch}${ENDCOLOR}"
+        echo -e "${YELLOW}No WIP worktree found for ${wip_branch}.${ENDCOLOR}"
         echo -e "Save one first with: ${YELLOW}gitb wip up worktree${ENDCOLOR}"
         exit 1
     fi
@@ -508,7 +508,7 @@ function wip_down_worktree {
     local current_path
     current_path=$(git rev-parse --show-toplevel 2>/dev/null)
     if [ "$wip_worktree_path" = "$current_path" ]; then
-        echo -e "${RED}You are inside the WIP worktree (${wip_worktree_path})${ENDCOLOR}"
+        echo -e "${RED}✗ You are inside the WIP worktree (${wip_worktree_path}).${ENDCOLOR}"
         echo -e "Switch back to the original worktree first"
         exit 1
     fi
@@ -533,10 +533,10 @@ function wip_down_worktree {
     merge_output=$(git merge --squash --no-commit "$wip_branch" 2>&1)
     merge_code=$?
     if [ $merge_code -ne 0 ]; then
-        echo -e "${RED}Cannot restore WIP (squash-merge failed):${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot restore WIP — squash-merge failed.${ENDCOLOR}"
         echo "$merge_output"
         echo
-        echo -e "${YELLOW}Resolve conflicts manually; the wip worktree is still at ${wip_worktree_path}${ENDCOLOR}"
+        echo -e "${YELLOW}Resolve conflicts manually; the wip worktree is still at ${wip_worktree_path}.${ENDCOLOR}"
         exit $merge_code
     fi
 
@@ -651,7 +651,7 @@ function wip_down {
         fi
 
         if [ ${#available[@]} -eq 0 ]; then
-            echo -e "${RED}No WIP found for branch ${current_branch}${ENDCOLOR}"
+            echo -e "${YELLOW}No WIP found for branch ${current_branch}.${ENDCOLOR}"
             echo -e "Save one first with: ${YELLOW}gitb wip up${ENDCOLOR}"
             exit 1
         fi
@@ -709,9 +709,15 @@ function wip_help {
     echo -e "$(echo -e "$msg" | column -ts'_')"
     echo
     echo -e "${YELLOW}Backends${ENDCOLOR}"
-    echo -e "  ${BOLD}stash${NORMAL}    - Quick & local; pushes ${YELLOW}${origin_name:-origin}/wip/<branch>${ENDCOLOR} as a backup."
-    echo -e "  ${BOLD}branch${NORMAL}   - Commits all changes onto a ${YELLOW}wip/<branch>${ENDCOLOR} branch; clean tree on current branch."
-    echo -e "  ${BOLD}worktree${NORMAL} - Same as branch, but the WIP lives in a ${YELLOW}sibling worktree${ENDCOLOR} so you can keep working on it."
+    echo -e "  ${BOLD}stash${NORMAL}    Quick & local; pushes ${YELLOW}${origin_name:-origin}/wip/<branch>${ENDCOLOR} as a backup"
+    echo -e "  ${BOLD}branch${NORMAL}   Commits changes onto a ${YELLOW}wip/<branch>${ENDCOLOR} branch; current branch becomes clean"
+    echo -e "  ${BOLD}worktree${NORMAL} Like branch, but WIP lives in a ${YELLOW}sibling worktree${ENDCOLOR} so you can keep working on it"
+    echo
+    echo -e "${YELLOW}Examples${ENDCOLOR}"
+    echo -e "  ${GREEN}gitb wip up${ENDCOLOR}              Pick a backend and save current changes"
+    echo -e "  ${GREEN}gitb wip up stash${ENDCOLOR}        Stash + push backup to ${BLUE}${origin_name:-origin}/wip/<branch>${ENDCOLOR}"
+    echo -e "  ${GREEN}gitb wip up branch np${ENDCOLOR}    Commit to ${BLUE}wip/<branch>${ENDCOLOR}, skip push"
+    echo -e "  ${GREEN}gitb wip down${ENDCOLOR}            Restore the saved WIP back into the current branch"
 }
 
 

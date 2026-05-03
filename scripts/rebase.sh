@@ -45,18 +45,24 @@ function rebase_script {
         echo -e "usage: ${YELLOW}gitb rebase <mode>${ENDCOLOR}"
         echo
         msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Select base branch to rebase current changes"
-        msg="$msg\n${BOLD}main${ENDCOLOR}_master|m_Rebase current branch onto default branch"
-        msg="$msg\n${BOLD}interactive${ENDCOLOR}_i_Select base commit in current branch and rebase in an interactive mode"
-        msg="$msg\n${BOLD}autosquash${ENDCOLOR}_a|s|ia_Rebase on the current local branch in an interactive mode with --autosquash"
-        msg="$msg\n${BOLD}fastautosquash${ENDCOLOR}_fast|sf|f_Fast autosquash rebase - automatically merge fixup commits without interaction"
-        msg="$msg\n${BOLD}pull${ENDCOLOR}_p_Take all commits from selected branch and apply them to current branch"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Pick a base branch and rebase the current branch onto it"
+        msg="$msg\n${BOLD}main${ENDCOLOR}_master|m_Rebase the current branch onto $main_branch"
+        msg="$msg\n${BOLD}interactive${ENDCOLOR}_i_Pick a base commit and rebase interactively"
+        msg="$msg\n${BOLD}autosquash${ENDCOLOR}_a|s|ia_Interactive rebase on local commits with ${BLUE}--autosquash${ENDCOLOR}"
+        msg="$msg\n${BOLD}fastautosquash${ENDCOLOR}_fast|sf|f_Apply fixup commits non-interactively"
+        msg="$msg\n${BOLD}pull${ENDCOLOR}_p_Take all commits from a chosen branch and apply them here"
         msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
         echo -e "$(echo -e "$msg" | column -ts'_')"
         echo
-        echo -e "${YELLOW}Conflict resolution options (available during rebase conflicts):${ENDCOLOR}"
-        echo -e "Accept all incoming changes\tResolve all conflicts by accepting changes from the target branch"
-        echo -e "Accept all current changes\tResolve all conflicts by keeping changes from your current branch"
+        echo -e "${YELLOW}Conflict resolution${ENDCOLOR} ${BLUE}(during a rebase conflict)${ENDCOLOR}"
+        echo -e "  Accept all incoming changes\tKeep changes from the branch being rebased onto"
+        echo -e "  Accept all current changes\tKeep changes from your current branch"
+        echo
+        echo -e "${YELLOW}Examples${ENDCOLOR}"
+        echo -e "  ${GREEN}gitb rebase${ENDCOLOR}        Pick a base branch interactively and rebase onto it"
+        echo -e "  ${GREEN}gitb rebase main${ENDCOLOR}   Rebase current branch onto ${YELLOW}$main_branch${ENDCOLOR}"
+        echo -e "  ${GREEN}gitb rebase a${ENDCOLOR}      Interactive autosquash on the current branch"
+        echo -e "  ${GREEN}gitb rebase f${ENDCOLOR}      Auto-apply fixup commits without prompts"
         exit
     fi
 
@@ -72,9 +78,9 @@ function rebase_script {
         current_remote_commit=$(git ls-remote "$origin_name" "refs/heads/$current_branch" 2>/dev/null | cut -f1)
         
         if [ -z "$current_remote_commit" ]; then
-            echo -e "${YELLOW}Remote branch ${origin_name}/${current_branch} not found - proceeding with local rebase${ENDCOLOR}"
+            echo -e "${YELLOW}Remote branch ${origin_name}/${current_branch} not found — proceeding with local rebase.${ENDCOLOR}"
         elif [ "$current_local_commit" != "$current_remote_commit" ]; then
-            echo -e "${YELLOW}Remote changes detected in current branch ${current_branch}!${ENDCOLOR}"
+            echo -e "${YELLOW}⚠  Remote changes detected on ${current_branch}.${ENDCOLOR}"
             echo
             echo -e "Do you want to pull ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} first (y/n)?"
             read -n 1 -s choice
@@ -86,7 +92,7 @@ function rebase_script {
                 pull_code=$?
                 
                 if [ $pull_code -eq 0 ]; then
-                    echo -e "${GREEN}Successfully pulled current branch${ENDCOLOR}"
+                    echo -e "${GREEN}✓ Pulled ${origin_name}/${current_branch}${ENDCOLOR}"
                     if [[ $pull_output == *"file changed"* ]] || [[ $pull_output == *"files changed"* ]]; then
                         # Extract only the file statistics (lines starting with space and containing |)
                         # and the summary line (contains "file changed" or "files changed")
@@ -97,13 +103,13 @@ function rebase_script {
                         fi
                     fi
                 else
-                    echo -e "${RED}Failed to pull current branch:${ENDCOLOR}"
+                    echo -e "${RED}✗ Cannot pull current branch.${ENDCOLOR}"
                     echo "$pull_output"
                     exit $pull_code
                 fi
             fi
         else
-            echo -e "${GREEN}Current branch is up to date with remote${ENDCOLOR}"
+            echo -e "${GREEN}✓ Current branch is up to date with remote${ENDCOLOR}"
         fi
         echo
     fi
@@ -111,7 +117,7 @@ function rebase_script {
 
     is_clean=$(git status | tail -n 1)
     if [ "$is_clean" != "nothing to commit, working tree clean" ]; then
-        echo -e "${RED}Cannot rebase! There are uncommited changes:"
+        echo -e "${RED}✗ Cannot rebase — there are uncommitted changes:"
         git_status
         exit 1
     fi
@@ -126,7 +132,7 @@ function rebase_script {
 
         # Check if source branch exists
         if ! git show-ref --verify --quiet refs/heads/$source_branch; then
-            echo -e "${RED}Source branch '${source_branch}' does not exist locally${ENDCOLOR}"
+            echo -e "${RED}✗ Source branch '${source_branch}' does not exist locally.${ENDCOLOR}"
             exit 1
         fi
 
@@ -237,15 +243,15 @@ function rebase_script {
 
     ### Nothing to rebase
     if [[ $rebase_output == *"is up to date"* ]]; then
-        echo -e "${GREEN}Nothing to rebase - already up to date${ENDCOLOR}"
+        echo -e "${GREEN}✓ Nothing to rebase — already up to date${ENDCOLOR}"
         exit
     fi
 
     if [ $rebase_code == 0 ] ; then
-        echo -e "${GREEN}Successful rebase!${ENDCOLOR}"
+        echo -e "${GREEN}✓ Rebased${ENDCOLOR}"
         echo -e "${BLUE}[${new_base_branch}${ENDCOLOR} -> ${BLUE}${current_branch}]${ENDCOLOR}"
     else
-        echo -e "${RED}Cannot rebase! Error message:${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot rebase.${ENDCOLOR}"
         echo -e "$rebase_output"
     fi
 }
@@ -351,7 +357,7 @@ function rebase_branch {
 
     ### Cannot rebase because there are uncommitted files
     if [[ $rebase_output == *"Please commit or stash them"* ]]; then
-        echo -e "${RED}Cannot rebase! There are uncommited changes:"
+        echo -e "${RED}✗ Cannot rebase — there are uncommitted changes:${ENDCOLOR}"
         git_status
         exit $rebase_code
     fi
@@ -364,14 +370,14 @@ function rebase_branch {
 
     ### Cannot rebase because of conflicts
     if [[ $rebase_output == *"Resolve all conflicts manually"* ]] || [[ $rebase_output == *"previous cherry-pick is now empty"* ]]; then
-        echo -e "${RED}Cannot rebase! There are conflicts${ENDCOLOR}"
+        echo -e "${YELLOW}⚠  Conflicts detected during rebase.${ENDCOLOR}"
         rebase_conflicts $rebase_output 
         echo
     fi
 
     ### Cannot rebase because of some error
     if [[ $rebase_output != *"Successfully rebased"* ]]; then
-        echo -e "${RED}Cannot rebase! Error message:${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot rebase.${ENDCOLOR}"
         echo "$rebase_output"
         exit $rebase_code
     fi
@@ -384,13 +390,13 @@ function rebase_todo_errors {
     rebase_output=$1
     output_to_print=$1
     while true; do
-        echo -e "${RED}Cannot rebase! Your rebase plan has errors:${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot rebase — the rebase plan has errors:${ENDCOLOR}"
         echo "$(sed '$d' <<< "$output_to_print")"
         echo
-        echo -e "${YELLOW}You should fix errors${ENDCOLOR}"
-        echo -e "1. Open editor to change rebase plan: ${BLUE}git rebase --edit-todo${ENDCOLOR}"
-        echo -e "2. Abort rebase and return to the original state: ${YELLOW}git rebase --abort${ENDCOLOR}"
-        echo -e "0. Exit from this script ${BOLD}without${NORMAL} rebase abort"
+        echo -e "${YELLOW}Fix the plan to continue:${ENDCOLOR}"
+        echo -e "1. Edit the rebase plan ${BLUE}(${YELLOW}git rebase --edit-todo${BLUE})${ENDCOLOR}"
+        echo -e "2. Abort rebase and return to original state ${BLUE}(${YELLOW}git rebase --abort${BLUE})${ENDCOLOR}"
+        echo -e "0. Exit (leave rebase in progress; do ${BOLD}not${NORMAL} abort)"
 
         while [ true ]; do
             read -n 1 -s choice
@@ -444,15 +450,14 @@ function rebase_conflicts {
     while [ true ]; do
         if [ "$print_menu" == "true" ]; then
             echo
-            echo -e "${YELLOW}You should resolve conflicts manually${ENDCOLOR}"
-            echo -e "After resolving, select an option to continue"
-            echo -e "1. Add changes and continue: ${YELLOW}git rebase --continue${ENDCOLOR}"
-            echo -e "2. Open editor to change rebase plan: ${BLUE}git rebase --edit-todo${ENDCOLOR}"
-            echo -e "3. Throw away the commit from the history: ${RED}git rebase --skip${ENDCOLOR}"
-            echo -e "4. Abort rebase and return to the original state: ${YELLOW}git rebase --abort${ENDCOLOR}"
-            echo -e "5. Accept all incoming changes: ${GREEN}git checkout --theirs .${ENDCOLOR}"
-            echo -e "6. Accept all current changes: ${GREEN}git checkout --ours .${ENDCOLOR}"
-            echo -e "0. Exit from this script ${BOLD}without${NORMAL} rebase abort"
+            echo -e "${YELLOW}Resolve conflicts manually, then choose an option:${ENDCOLOR}"
+            echo -e "1. Add changes and continue ${BLUE}(${YELLOW}git rebase --continue${BLUE})${ENDCOLOR}"
+            echo -e "2. Edit the rebase plan ${BLUE}(${YELLOW}git rebase --edit-todo${BLUE})${ENDCOLOR}"
+            echo -e "3. Drop this commit from history ${BLUE}(${RED}git rebase --skip${BLUE})${ENDCOLOR}"
+            echo -e "4. Abort rebase and return to original state ${BLUE}(${YELLOW}git rebase --abort${BLUE})${ENDCOLOR}"
+            echo -e "5. Accept all incoming changes ${BLUE}(${GREEN}git checkout --theirs .${BLUE})${ENDCOLOR}"
+            echo -e "6. Accept all current changes ${BLUE}(${GREEN}git checkout --ours .${BLUE})${ENDCOLOR}"
+            echo -e "0. Exit (leave rebase in progress; do ${BOLD}not${NORMAL} abort)"
 
             print_menu="false"
         fi
@@ -517,7 +522,7 @@ function rebase_conflicts {
             fi
 
             if [[ $rebase_output != *"CONFLICT"* ]]; then
-                echo -e "${RED}Cannot rebase! Error message:${ENDCOLOR}"
+                echo -e "${RED}✗ Cannot rebase.${ENDCOLOR}"
                 echo "$rebase_output"
                 exit $rebase_code
             fi
@@ -537,7 +542,7 @@ function rebase_conflicts {
             fi
 
             echo
-            echo -e "${YELLOW}Successfull plan edit, continuing...${ENDCOLOR}"
+            echo -e "${YELLOW}✓ Plan saved — continuing...${ENDCOLOR}"
             
             continue
         fi
@@ -545,7 +550,8 @@ function rebase_conflicts {
         if [ "$choice" == "3" ]; then
             if [ "$force_skip" != "true" ]; then
                 echo
-                echo -e "Are you sure you want to ${RED}skip${ENDCOLOR} commit and ${RED}throw it away${ENDCOLOR} (y/n)?"
+                echo -e "${RED}⚠  Dropping this commit will permanently remove it from history.${ENDCOLOR}"
+            echo -e "Are you sure you want to ${RED}skip and discard${ENDCOLOR} this commit (y/n)?"
                 read -n 1 -s choice_yes
                 if ! is_yes "$choice_yes"; then
                     echo -e "${YELLOW}Continuing...${ENDCOLOR}"
@@ -586,7 +592,8 @@ function rebase_conflicts {
 
         if [ "$choice" == "5" ]; then
             echo
-            echo -e "Are you sure you want to ${GREEN}accept all incoming changes${ENDCOLOR} and discard current changes (y/n)?"
+            echo -e "${RED}⚠  This will discard your current changes for these files.${ENDCOLOR}"
+            echo -e "Are you sure you want to ${GREEN}accept all incoming changes${ENDCOLOR} (y/n)?"
             read -n 1 -s choice_yes
             if is_yes "$choice_yes"; then
                 echo
@@ -595,7 +602,7 @@ function rebase_conflicts {
                 # Check for deleted files in conflicts
                 deleted_files=$(git --no-pager diff --name-only --diff-filter=D --relative 2>/dev/null)
                 if [ -n "$deleted_files" ]; then
-                    echo -e "${YELLOW}Warning: Some files were deleted in the incoming branch:${ENDCOLOR}"
+                    echo -e "${YELLOW}⚠  Some files were deleted in the incoming branch:${ENDCOLOR}"
                     echo "$deleted_files" | sed 's/^/\t/'
                     echo
                     echo -e "Do you want to continue and accept the deletions (y/n)?"
@@ -611,7 +618,7 @@ function rebase_conflicts {
                 checkout_code=$?
                 
                 if [ $checkout_code -ne 0 ]; then
-                    echo -e "${RED}Failed to accept incoming changes:${ENDCOLOR}"
+                    echo -e "${RED}✗ Cannot accept incoming changes.${ENDCOLOR}"
                     echo "$checkout_output"
                     echo
                     echo -e "${YELLOW}This might be due to deleted files. You can:${ENDCOLOR}"
@@ -648,17 +655,17 @@ function rebase_conflicts {
                 rebase_code=$?
 
                 if [[ $rebase_output == *"Successfully rebased"* ]]; then
-                    echo -e "${GREEN}Successfully accepted all incoming changes and continued rebase!${ENDCOLOR}"
+                    echo -e "${GREEN}✓ Accepted all incoming changes and continued rebase${ENDCOLOR}"
                     return
                 fi
 
                 if [[ $rebase_output != *"CONFLICT"* ]]; then
-                    echo -e "${RED}Cannot rebase! Error message:${ENDCOLOR}"
+                    echo -e "${RED}✗ Cannot rebase.${ENDCOLOR}"
                     echo "$rebase_output"
                     exit $rebase_code
                 fi
                 
-                echo -e "${GREEN}Accepted all incoming changes, moving to next conflict${ENDCOLOR}"
+                echo -e "${GREEN}✓ Accepted all incoming changes — moving to next conflict${ENDCOLOR}"
                 new_step="true"
             else
                 echo -e "${YELLOW}Continuing...${ENDCOLOR}"
@@ -668,7 +675,8 @@ function rebase_conflicts {
 
         if [ "$choice" == "6" ]; then
             echo
-            echo -e "Are you sure you want to ${GREEN}accept all current changes${ENDCOLOR} and discard incoming changes (y/n)?"
+            echo -e "${RED}⚠  This will discard the incoming changes for these files.${ENDCOLOR}"
+            echo -e "Are you sure you want to ${GREEN}accept all current changes${ENDCOLOR} (y/n)?"
             read -n 1 -s choice_yes
             if is_yes "$choice_yes"; then
                 echo
@@ -677,7 +685,7 @@ function rebase_conflicts {
                 # Check for deleted files in conflicts
                 deleted_files=$(git --no-pager diff --name-only --diff-filter=D --relative 2>/dev/null)
                 if [ -n "$deleted_files" ]; then
-                    echo -e "${YELLOW}Warning: Some files were deleted in the current branch:${ENDCOLOR}"
+                    echo -e "${YELLOW}⚠  Some files were deleted in the current branch:${ENDCOLOR}"
                     echo "$deleted_files" | sed 's/^/\t/'
                     echo
                     echo -e "Do you want to continue and accept the deletions (y/n)?"
@@ -726,17 +734,17 @@ function rebase_conflicts {
                 rebase_code=$?
 
                 if [[ $rebase_output == *"Successfully rebased"* ]]; then
-                    echo -e "${GREEN}Successfully accepted all current changes and continued rebase!${ENDCOLOR}"
+                    echo -e "${GREEN}✓ Accepted all current changes and continued rebase${ENDCOLOR}"
                     return
                 fi
 
                 if [[ $rebase_output != *"CONFLICT"* ]]; then
-                    echo -e "${RED}Cannot rebase! Error message:${ENDCOLOR}"
+                    echo -e "${RED}✗ Cannot rebase.${ENDCOLOR}"
                     echo "$rebase_output"
                     exit $rebase_code
                 fi
                 
-                echo -e "${GREEN}Accepted all current changes, moving to next conflict${ENDCOLOR}"
+                echo -e "${GREEN}✓ Accepted all current changes — moving to next conflict${ENDCOLOR}"
                 new_step="true"
             else
                 echo -e "${YELLOW}Continuing...${ENDCOLOR}"
@@ -809,7 +817,7 @@ function pull_commits_from_branch {
         echo
     done
     
-    echo -e "${GREEN}Successfully pulled $total_commits commits from '${source_branch}' to '${current_branch}'!${ENDCOLOR}"
+    echo -e "${GREEN}✓ Pulled $total_commits commits from '${source_branch}' into '${current_branch}'${ENDCOLOR}"
     echo -e "${BLUE}[${source_branch}${ENDCOLOR} -> ${BLUE}${current_branch}]${ENDCOLOR}"
 }
 
@@ -886,12 +894,12 @@ function handle_cherry_pick_error {
         echo -e "1. Keep empty commit: ${GREEN}git commit --allow-empty${ENDCOLOR}"
         echo -e "2. Skip this commit: ${YELLOW}git cherry-pick --skip${ENDCOLOR}"
         echo -e "3. Abort pull operation: ${RED}abort and reset${ENDCOLOR}"
-        echo -e "0. Exit script"
+        echo -e "0. Exit (leave operation in progress)"
     else
         echo -e "1. Skip this commit and continue: ${YELLOW}git cherry-pick --skip${ENDCOLOR}"
         echo -e "2. Abort pull operation: ${RED}abort and reset${ENDCOLOR}"
         echo -e "3. Show full git error details"
-        echo -e "0. Exit script"
+        echo -e "0. Exit (leave operation in progress)"
     fi
     
     while [ true ]; do
@@ -914,7 +922,7 @@ function handle_cherry_pick_error {
                         echo -e "\t${GREEN}✓ Empty commit preserved with original message${ENDCOLOR}"
                         return
                     else
-                        echo -e "${RED}Failed to keep empty commit:${ENDCOLOR}"
+                        echo -e "${RED}✗ Cannot keep empty commit.${ENDCOLOR}"
                         echo "$commit_output" | sed 's/^/\t/'
                         echo
                         echo -e "${YELLOW}You may need to resolve this manually:${ENDCOLOR}"
@@ -970,7 +978,7 @@ function handle_cherry_pick_error {
                     echo -e "1. Skip this commit and continue: ${YELLOW}git cherry-pick --skip${ENDCOLOR}"
                     echo -e "2. Abort pull operation: ${RED}abort and reset${ENDCOLOR}"
                     echo -e "3. Show full git error details"
-                    echo -e "0. Exit script"
+                    echo -e "0. Exit (leave operation in progress)"
                     ;;
                 0)
                     exit 1
@@ -1013,7 +1021,7 @@ function handle_cherry_pick_conflicts {
             echo -e "3. Accept all incoming changes: ${GREEN}git checkout --theirs .${ENDCOLOR}"
             echo -e "4. Accept all current changes: ${GREEN}git checkout --ours .${ENDCOLOR}"
             echo -e "5. Abort pull operation: ${YELLOW}abort and reset${ENDCOLOR}"
-            echo -e "0. Exit script"
+            echo -e "0. Exit (leave operation in progress)"
             
             print_menu="false"
         fi
@@ -1043,7 +1051,7 @@ function handle_cherry_pick_conflicts {
                     return
                 else
                     echo
-                    echo -e "${RED}Failed to continue cherry-pick:${ENDCOLOR}"
+                    echo -e "${RED}✗ Cannot continue cherry-pick.${ENDCOLOR}"
                     echo "$continue_output"
                     print_menu="true"
                 fi
@@ -1077,7 +1085,7 @@ function handle_cherry_pick_conflicts {
                         echo -e "\t${GREEN}✓ Applied with incoming changes${ENDCOLOR}"
                         return
                     else
-                        echo -e "${RED}Failed to continue:${ENDCOLOR}"
+                        echo -e "${RED}✗ Cannot continue.${ENDCOLOR}"
                         echo "$continue_output"
                         print_menu="true"
                     fi
@@ -1101,7 +1109,7 @@ function handle_cherry_pick_conflicts {
                         echo -e "\t${GREEN}✓ Applied with current changes${ENDCOLOR}"
                         return
                     else
-                        echo -e "${RED}Failed to continue:${ENDCOLOR}"
+                        echo -e "${RED}✗ Cannot continue.${ENDCOLOR}"
                         echo "$continue_output"
                         print_menu="true"
                     fi

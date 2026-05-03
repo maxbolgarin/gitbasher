@@ -70,19 +70,25 @@ function branch_script {
         echo -e "usage: ${YELLOW}gitb branch <mode>${ENDCOLOR}"
         echo
         msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Select a local branch to switch"
-        msg="$msg\n${BOLD}list${ENDCOLOR}_l_Print a list of local branches"
-        msg="$msg\n${BOLD}remote${ENDCOLOR}_re|r_Fetch $origin_name and select a remote branch to switch"
-        msg="$msg\n${BOLD}main${ENDCOLOR}_def|m_Switch to $main_branch without additional confirmations"
-        msg="$msg\n${BOLD}tag${ENDCOLOR}_t_Checkout to a specific tag"
-        msg="$msg\n${BOLD}new${ENDCOLOR}_n|c_Build a conventional name and create a new branch from current branch"
-        msg="$msg\n${BOLD}newd${ENDCOLOR}_nd|cd_Build a conventional name, switch to $main_branch, pull it and create new branch"
-        msg="$msg\n${BOLD}delete${ENDCOLOR}_del|d_Delete branches (cleanup orphaned, merged, or select specific branch)"
-        msg="$msg\n${BOLD}prev${ENDCOLOR}_p|-_Switch to the previous branch (like cd -)"
-        msg="$msg\n${BOLD}recent${ENDCOLOR}_rc_Show recently checked out branches and select one to switch"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Pick a local branch to switch to"
+        msg="$msg\n${BOLD}list${ENDCOLOR}_l_List local branches"
+        msg="$msg\n${BOLD}remote${ENDCOLOR}_re|r_Fetch $origin_name and pick a remote branch"
+        msg="$msg\n${BOLD}main${ENDCOLOR}_def|m_Switch to $main_branch without prompting"
+        msg="$msg\n${BOLD}tag${ENDCOLOR}_t_Check out a specific tag"
+        msg="$msg\n${BOLD}new${ENDCOLOR}_n|c_Create a conventionally named branch from the current branch"
+        msg="$msg\n${BOLD}newd${ENDCOLOR}_nd|cd_Switch to $main_branch, pull, and create a new conventionally named branch"
+        msg="$msg\n${BOLD}delete${ENDCOLOR}_del|d_Delete branches (orphaned, merged, or a specific one)"
+        msg="$msg\n${BOLD}prev${ENDCOLOR}_p|-_Switch to the previous branch (like ${BLUE}cd -${ENDCOLOR})"
+        msg="$msg\n${BOLD}recent${ENDCOLOR}_rc_Pick from recently checked-out branches"
         msg="$msg\n${BOLD}gone${ENDCOLOR}_g_Delete local branches whose remote tracking branch is gone"
         msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
         echo -e "$(echo -e "$msg" | column -ts'_')"
+        echo
+        echo -e "${YELLOW}Examples${ENDCOLOR}"
+        echo -e "  ${GREEN}gitb branch${ENDCOLOR}        Pick a local branch to switch to"
+        echo -e "  ${GREEN}gitb branch new${ENDCOLOR}    Create a branch like ${BLUE}feat/my-thing${ENDCOLOR} from the current one"
+        echo -e "  ${GREEN}gitb branch main${ENDCOLOR}   Jump straight to ${YELLOW}$main_branch${ENDCOLOR}"
+        echo -e "  ${GREEN}gitb branch gone${ENDCOLOR}   Clean up local branches whose remote was deleted"
         exit
     fi
         
@@ -93,7 +99,7 @@ function branch_script {
         prev_branch=$(git rev-parse --symbolic-full-name @{-1} 2>/dev/null | sed 's|refs/heads/||')
 
         if [ -z "$prev_branch" ]; then
-            echo -e "${RED}No previous branch found${ENDCOLOR}"
+            echo -e "${RED}✗ No previous branch found.${ENDCOLOR}"
             exit 1
         fi
 
@@ -136,7 +142,7 @@ function branch_script {
         done < <(git reflog --pretty="%gs" | grep "^checkout: moving from" | sed 's/checkout: moving from .* to //')
 
         if [ ${#recent_branches[@]} -eq 0 ]; then
-            echo -e "${GREEN}No recent branches found${ENDCOLOR}"
+            echo -e "${YELLOW}No recent branches found.${ENDCOLOR}"
             exit
         fi
 
@@ -177,28 +183,27 @@ function branch_script {
         done < <(git branch -vv | grep ': gone\]')
 
         if [ ${#gone_branches[@]} -eq 0 ]; then
-            echo -e "${GREEN}No branches with gone remote tracking found${ENDCOLOR}"
-            echo -e "All local branches have corresponding remote branches"
+            echo -e "${GREEN}✓ All local branches have a corresponding remote.${ENDCOLOR}"
             exit
         fi
 
-        echo -e "${YELLOW}Found ${#gone_branches[@]} branch(es) with gone remote tracking:${ENDCOLOR}"
+        echo -e "${YELLOW}Found ${#gone_branches[@]} branch(es) whose remote is gone:${ENDCOLOR}"
         for branch in "${gone_branches[@]}"; do
             printf "\t$branch\n"
         done
         echo
 
-        echo -e "${YELLOW}Do you want to delete these branches?${ENDCOLOR}"
-        echo -e "Do you want to continue (y/n)?"
+        echo -e "${RED}⚠  These branches will be force-deleted (${BLUE}git branch -D${RED}).${ENDCOLOR}"
+        echo -e "Are you sure you want to delete them (y/n)?"
         yes_no_choice "Deleting gone branches..."
 
         for branch in "${gone_branches[@]}"; do
             delete_output=$(git branch -D "$branch" 2>&1)
             delete_code=$?
             if [ $delete_code -eq 0 ]; then
-                echo -e "${GREEN}Branch '$branch' deleted${ENDCOLOR}"
+                echo -e "${GREEN}✓ Deleted branch '$branch'${ENDCOLOR}"
             else
-                echo -e "${RED}Cannot delete branch '$branch'!${ENDCOLOR}"
+                echo -e "${RED}✗ Cannot delete branch '$branch'.${ENDCOLOR}"
                 echo -e "${delete_output}"
             fi
         done
@@ -234,7 +239,7 @@ function branch_script {
         IFS=$'\n' read -rd '' -a tags_info <<<"$tags_info_str"
 
         if [ -z "$tags_info" ]; then
-            echo -e "${RED}No tags found in this repository${ENDCOLOR}"
+            echo -e "${YELLOW}No tags found in this repository.${ENDCOLOR}"
             exit
         fi
 
@@ -242,7 +247,7 @@ function branch_script {
         for index in "${!tags_info[@]}"; do
             echo -e "$(($index+1)). ${tags_info[index]}"
         done
-        echo "0. Exit without changes"
+        echo "0. Exit"
         echo
 
         while [ true ]; do
@@ -259,34 +264,34 @@ function branch_script {
                     selected_tag=$(git for-each-ref --count=999 --sort=-creatordate refs/tags --format='%(refname:short)' | sed -n "$((index+1))p")
                     break
                 else
-                    echo -e "${RED}Invalid tag number! Please choose from 1-${#tags_info[@]}.${ENDCOLOR}"
+                    echo -e "${RED}✗ Invalid tag number. Please choose 1-${#tags_info[@]}.${ENDCOLOR}"
                     echo
                     continue
                 fi
             else
-                echo -e "${RED}Please enter a valid tag number.${ENDCOLOR}"
+                echo -e "${RED}✗ Please enter a valid tag number.${ENDCOLOR}"
                 echo
                 continue
             fi
         done
 
         echo
-        echo -e "${YELLOW}Checking out to tag ${selected_tag}...${ENDCOLOR}"
+        echo -e "${YELLOW}Checking out tag ${selected_tag}...${ENDCOLOR}"
         echo
 
         if ! sanitize_git_name "$selected_tag"; then
-            echo -e "${RED}Invalid tag name: ${selected_tag}${ENDCOLOR}"
+            echo -e "${RED}✗ Invalid tag name: ${selected_tag}${ENDCOLOR}"
             exit 1
         fi
         checkout_output=$(git checkout "$sanitized_git_name" 2>&1)
         checkout_code=$?
 
         if [ $checkout_code -eq 0 ]; then
-            echo -e "${GREEN}Successfully checked out to tag '${selected_tag}'${ENDCOLOR}"
-            echo -e "${YELLOW}Note: You are now in 'detached HEAD' state${ENDCOLOR}"
-            echo -e "If you want to make changes, create a new branch: ${YELLOW}gitb branch new${ENDCOLOR}"
+            echo -e "${GREEN}✓ Checked out tag '${selected_tag}'${ENDCOLOR}"
+            echo -e "${YELLOW}⚠  You are now in detached HEAD state.${ENDCOLOR}"
+            echo -e "To make changes, create a branch: ${GREEN}gitb branch new${ENDCOLOR}"
         else
-            echo -e "${RED}Failed to checkout to tag ${selected_tag}! Error message:${ENDCOLOR}"
+            echo -e "${RED}✗ Cannot check out tag ${selected_tag}.${ENDCOLOR}"
             echo "${checkout_output}"
             exit $checkout_code
         fi
@@ -331,11 +336,10 @@ function branch_script {
     elif [[ -z "$new" ]] && [[ -n "$delete" ]] && [[ -z "$tag" ]]; then
 
         # Delete local branches that don't exist on remote
-        echo -e "${YELLOW}Do you want to delete local branches that don't exist on remote?${ENDCOLOR}"
-        echo -e "This will clean up branches that were deleted from the remote repository"
+        echo -e "${YELLOW}Clean up local branches that no longer exist on the remote?${ENDCOLOR}"
         echo
 
-        printf "Answer (y/n): "
+        printf "Continue (y/n)? "
 
         while [ true ]; do
             read -n 1 -s choice
@@ -365,18 +369,17 @@ function branch_script {
                 done
 
                 if [ ${#branches_to_delete[@]} -eq 0 ]; then
-                    echo -e "${GREEN}No orphaned local branches found!${ENDCOLOR}"
-                    echo -e "All local branches have corresponding remote branches"
+                    echo -e "${GREEN}✓ All local branches have a corresponding remote.${ENDCOLOR}"
                     echo
                 else
-                    echo -e "${YELLOW}Found ${#branches_to_delete[@]} local branch(es) without remote:${ENDCOLOR}"
+                    echo -e "${YELLOW}Found ${#branches_to_delete[@]} local branch(es) without a remote:${ENDCOLOR}"
                     for branch in "${branches_to_delete[@]}"; do
                         printf "\t$branch\n"
                     done
                     echo
 
-                    echo -e "${YELLOW}Do you want to delete these branches?${ENDCOLOR}"
-                    printf "Answer (y/n): "
+                    echo -e "${RED}⚠  These branches will be force-deleted (${BLUE}git branch -D${RED}).${ENDCOLOR}"
+                    printf "Are you sure you want to delete them (y/n)? "
 
                     while [ true ]; do
                         read -n 1 -s delete_choice
@@ -386,9 +389,9 @@ function branch_script {
                                 delete_output=$(git branch -D "$branch" 2>&1)
                                 delete_code=$?
                                 if [ $delete_code -eq 0 ]; then
-                                    echo -e "${GREEN}Branch '$branch' is deleted!${ENDCOLOR}"
+                                    echo -e "${GREEN}✓ Deleted branch '$branch'${ENDCOLOR}"
                                 else
-                                    echo -e "${RED}Cannot delete branch '$branch'!${ENDCOLOR}"
+                                    echo -e "${RED}✗ Cannot delete branch '$branch'.${ENDCOLOR}"
                                     echo -e "${delete_output}"
                                 fi
                             done
@@ -421,15 +424,14 @@ function branch_script {
         number_of_branches=${#merged_branches_without_main[@]}
 
         if [ "$number_of_branches" != 0 ]; then
-            echo -e "${YELLOW}Do you want to delete merged local branches?${ENDCOLOR}"
-            echo -e "These are branches without new changes regarding ${YELLOW}${main_branch}${ENDCOLOR}"
+            echo -e "${YELLOW}Merged branches (no new changes vs. ${main_branch}):${ENDCOLOR}"
             for index in "${!merged_branches_without_main[@]}"
             do
                 printf "\t${merged_branches_without_main[index]}\n"
             done
 
-            printf "\nAnswer (y/n): "
-            
+            printf "\nDelete these merged branches (y/n)? "
+
             while [ true ]; do
                 read -n 1 -s choice
                 if is_yes "$choice"; then
@@ -442,9 +444,9 @@ function branch_script {
                         delete_output=$(git branch -d "$branch_to_delete" 2>&1)
                         delete_code=$?
                         if [ $delete_code == 0 ]; then
-                            echo -e "${GREEN}Branch '$branch_to_delete' is deleted!${ENDCOLOR}"
+                            echo -e "${GREEN}✓ Deleted branch '$branch_to_delete'${ENDCOLOR}"
                         else
-                            echo -e "${RED}Cannot delete branch '$branch_to_delete'!${ENDCOLOR}"
+                            echo -e "${RED}✗ Cannot delete branch '$branch_to_delete'.${ENDCOLOR}"
                             echo -e "${delete_output}"
                             break
                         fi
@@ -502,15 +504,14 @@ function branch_script {
         done
 
         if [ ${#squash_merged_branches[@]} -gt 0 ]; then
-            echo -e "${YELLOW}Found ${#squash_merged_branches[@]} squash-merged branch(es):${ENDCOLOR}"
-            echo -e "These branches appear to have been squash-merged into ${YELLOW}${main_branch}${ENDCOLOR}"
+            echo -e "${YELLOW}Squash-merged branches (likely already in ${main_branch}):${ENDCOLOR}"
             for branch in "${squash_merged_branches[@]}"; do
                 printf "\t$branch\n"
             done
             echo
 
-            echo -e "${YELLOW}Do you want to delete these squash-merged branches?${ENDCOLOR}"
-            printf "Answer (y/n): "
+            echo -e "${RED}⚠  These will be force-deleted (${BLUE}git branch -D${RED}).${ENDCOLOR}"
+            printf "Are you sure (y/n)? "
 
             while [ true ]; do
                 read -n 1 -s choice
@@ -520,9 +521,9 @@ function branch_script {
                         delete_output=$(git branch -D "$branch" 2>&1)
                         delete_code=$?
                         if [ $delete_code -eq 0 ]; then
-                            echo -e "${GREEN}Branch '$branch' is deleted!${ENDCOLOR}"
+                            echo -e "${GREEN}✓ Deleted branch '$branch'${ENDCOLOR}"
                         else
-                            echo -e "${RED}Cannot delete branch '$branch'!${ENDCOLOR}"
+                            echo -e "${RED}✗ Cannot delete branch '$branch'.${ENDCOLOR}"
                             echo -e "${delete_output}"
                         fi
                     done
@@ -546,14 +547,13 @@ function branch_script {
         delete_code=$?
 
         if [ "$delete_code" == 0 ]; then
-            echo -e "${GREEN}Branch '$branch_name' is deleted!${ENDCOLOR}"
+            echo -e "${GREEN}✓ Deleted branch '$branch_name'${ENDCOLOR}"
 
         elif [[ ${delete_output} == *"is not fully merged"* ]]; then
-            echo -e "${RED}The branch '$branch_name' is not fully merged${ENDCOLOR}"
-            echo "Do you want to force delete (-D flag) this branch?"
+            echo -e "${YELLOW}⚠  Branch '$branch_name' is not fully merged.${ENDCOLOR}"
+            echo -e "${RED}⚠  Force-delete (${BLUE}git branch -D${RED}) will discard unmerged commits.${ENDCOLOR}"
+            printf "Force-delete this branch (y/n)? "
 
-            printf "Answer (y/n): "
-            
             while [ true ]; do
                 read -n 1 -s choice
                 if is_yes "$choice"; then
@@ -561,11 +561,11 @@ function branch_script {
                     delete_output=$(git branch -D "$branch_name" 2>&1)
                     delete_code=$?
                     if [ "$delete_code" != 0 ]; then
-                        echo -e "${RED}Cannot delete branch '$branch_name'! Error message:${ENDCOLOR}"
+                        echo -e "${RED}✗ Cannot delete branch '$branch_name'.${ENDCOLOR}"
                         echo -e "${delete_output}"
                         exit
                     fi
-                    echo -e "${GREEN}Branch '$branch_name' is deleted!${ENDCOLOR}"
+                    echo -e "${GREEN}✓ Deleted branch '$branch_name'${ENDCOLOR}"
                     break
 
                 elif is_no "$choice"; then
@@ -575,7 +575,7 @@ function branch_script {
             done
 
         else
-            echo -e "${RED}Cannot delete branch '$branch_name'! Error message:${ENDCOLOR}"
+            echo -e "${RED}✗ Cannot delete branch '$branch_name'.${ENDCOLOR}"
             echo -e "${delete_output}"
             exit
         fi
@@ -583,15 +583,13 @@ function branch_script {
         remote_check=$(git --no-pager log "$origin_name/$branch_name..HEAD" 2>&1)
         if [[ $remote_check != *"unknown revision or path not in the working tree"* ]]; then
             echo
-            echo -e "${YELLOW}Do you want to delete this branch in the remote?${ENDCOLOR}"
+            printf "Also delete this branch on ${origin_name} (y/n)? "
 
-            printf "Answer (y/n): "
-            
             while [ true ]; do
                 read -n 1 -s choice
                 if is_yes "$choice"; then
                     printf "y\n\n"
-                    echo -e "${YELLOW}Deleting...${ENDCOLOR}"
+                    echo -e "${YELLOW}Deleting from remote...${ENDCOLOR}"
 
                     push_output=$(git push "$origin_name" -d "$branch_name" 2>&1)
                     push_code=$?
@@ -600,14 +598,14 @@ function branch_script {
                     if [ "$push_code" != 0 ]; then
                         # Check if the error is because the branch doesn't exist on remote (which is OK)
                         if [[ $push_output == *"remote ref does not exist"* ]] || [[ $push_output == *"unable to delete"*"does not exist"* ]]; then
-                            echo -e "${YELLOW}Branch '$branch_name' doesn't exist on remote (already deleted or never pushed)${ENDCOLOR}"
+                            echo -e "${YELLOW}Branch '$branch_name' does not exist on remote (already deleted or never pushed).${ENDCOLOR}"
                         else
-                            echo -e "${RED}Cannot delete branch '$branch_name'! Error message:${ENDCOLOR}"
+                            echo -e "${RED}✗ Cannot delete branch '$branch_name' on remote.${ENDCOLOR}"
                             echo -e "${push_output}"
                             exit
                         fi
                     else
-                        echo -e "${GREEN}Branch '$branch_name' is deleted in the remote!${ENDCOLOR}"
+                        echo -e "${GREEN}✓ Deleted branch '$branch_name' on ${origin_name}${ENDCOLOR}"
                     fi
                     break
 
@@ -686,7 +684,7 @@ function branch_script {
     # If no prefixes detected, skip to branch name entry
     if [ -z "$all_prefixes" ]; then
         echo -e "${YELLOW}Step 1.${ENDCOLOR} Enter the full name of the branch"
-        echo "Press Enter if you want to exit"
+        echo "Press Enter to exit without changes"
 
         printf "${BOLD}git branch${ENDCOLOR} "
         read -e branch_name
@@ -707,9 +705,9 @@ function branch_script {
         if [ -z "$current" ]; then
             branch_to_show=$main_branch
         fi
-        echo -e "${YELLOW}Step 1.${ENDCOLOR} Enter a ${YELLOW}prefix${ENDCOLOR} for your new branch from ${BOLD}${BLUE}${branch_to_show}${ENDCOLOR}"
-        echo -e "A branch will be created with '${YELLOW}${sep}${ENDCOLOR}' as a separator (e.g., ${YELLOW}prefix${sep}name${ENDCOLOR})"
-        echo -e "Press Enter to continue without prefix or enter 0 to exit without changes"
+        echo -e "${YELLOW}Step 1.${ENDCOLOR} Pick a ${YELLOW}prefix${ENDCOLOR} for the new branch from ${BOLD}${BLUE}${branch_to_show}${ENDCOLOR}"
+        echo -e "Branch name will be ${YELLOW}<prefix>${sep}<name>${ENDCOLOR}"
+        echo -e "Press Enter to skip the prefix, or 0 to exit without changes"
         
         # Build the display array
         IFS=' ' read -r -a prefixes_array <<< "$all_prefixes"
@@ -764,7 +762,7 @@ function branch_script {
                     branch_type_and_sep="${branch_type}${sep}"
                     break
                 else
-                    echo -e "${RED}Please enter a valid option number or custom prefix.${ENDCOLOR}"
+                    echo -e "${RED}✗ Please enter a valid option number or a custom prefix.${ENDCOLOR}"
                     echo
                     continue
                 fi
@@ -774,7 +772,7 @@ function branch_script {
         ### Step 2. Enter branch name
         echo
         echo -e "${YELLOW}Step 2.${ENDCOLOR} Enter the ${YELLOW}name${ENDCOLOR} of the branch"
-        echo "Press Enter if you want to exit"
+        echo "Press Enter to exit without changes"
 
         printf "${BOLD}git branch${ENDCOLOR}"
         read -p " ${branch_type_and_sep}" -e branch_name
@@ -795,7 +793,7 @@ function branch_script {
 
     if [[ "$branch_name" == "HEAD" ]] || [[ "$branch_name" == "$origin_name" ]]; then
         echo
-        echo -e "${RED}This name is forbidden${ENDCOLOR}"
+        echo -e "${RED}✗ This name is reserved and cannot be used.${ENDCOLOR}"
         exit
     fi
 
@@ -820,7 +818,7 @@ function branch_script {
     echo
 
     if [ $create_code -eq 0 ]; then
-        echo -e "${GREEN}${create_output} from '$from_branch'${ENDCOLOR}"
+        echo -e "${GREEN}✓ ${create_output} from '$from_branch'${ENDCOLOR}"
         changes=$(git_status)
         if [ -n "$changes" ]; then
             echo
@@ -831,11 +829,11 @@ function branch_script {
     fi
 
     if [[ $create_output == *"already exists"* ]]; then
-        echo -e "${RED}Branch with name '${branch_name}' already exists!${ENDCOLOR}"
+        echo -e "${RED}✗ Branch '${branch_name}' already exists.${ENDCOLOR}"
         exit $create_code
     fi
 
-    echo -e "${RED}Cannot create '${branch_name}'! Error message:${ENDCOLOR}"
+    echo -e "${RED}✗ Cannot create branch '${branch_name}'.${ENDCOLOR}"
     echo "${create_output}"
     exit $create_code
 }

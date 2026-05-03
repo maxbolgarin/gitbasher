@@ -104,10 +104,10 @@ function select_hook_type {
     
     if [ ${#available_hooks[@]} -eq 0 ]; then
         if [ "$filter_existing" = "existing" ]; then
-            echo -e "${YELLOW}No git hooks found${ENDCOLOR}" >&2
-            echo -e "Use ${GREEN}gitb hook create${ENDCOLOR} to create a hook first" >&2
+            echo -e "${YELLOW}No git hooks found.${ENDCOLOR}" >&2
+            echo -e "Run ${GREEN}gitb hook create${ENDCOLOR} to create one." >&2
         else
-            echo -e "${RED}No hook types available${ENDCOLOR}" >&2
+            echo -e "${RED}✗ No hook types available.${ENDCOLOR}" >&2
         fi
         return 1
     fi
@@ -169,7 +169,7 @@ function select_hook_type {
     
     # Validate choice
     if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt ${#available_hooks[@]} ]; then
-        echo -e "${RED}Invalid selection${ENDCOLOR}" >&2
+        echo -e "${RED}✗ Invalid choice.${ENDCOLOR}" >&2
         return 1
     fi
     
@@ -326,10 +326,10 @@ function list_hooks {
     local show_samples="$1"
     
     if [ ! -d "$hooks_dir" ]; then
-        echo -e "${RED}Git hooks directory not found: $hooks_dir${ENDCOLOR}"
+        echo -e "${RED}✗ Git hooks directory not found: $hooks_dir${ENDCOLOR}"
         return 1
     fi
-    
+
     echo -e "${YELLOW}Git hooks in: $hooks_dir${ENDCOLOR}"
     echo
     
@@ -343,9 +343,9 @@ function list_hooks {
         if [ -f "$hook_file" ]; then
             found_hooks=true
             if [ -x "$hook_file" ]; then
-                echo -e "${GREEN}✓ $hook_type${ENDCOLOR} (executable)"
+                echo -e "${GREEN}✓ $hook_type${ENDCOLOR} (enabled)"
             else
-                echo -e "${YELLOW}! $hook_type${ENDCOLOR} (not executable)"
+                echo -e "${YELLOW}⚠  $hook_type${ENDCOLOR} (disabled)"
             fi
         elif [ -f "$sample_file" ] && [ -n "$show_samples" ]; then
             echo -e "${GRAY}○ $hook_type.sample${ENDCOLOR} (sample)"
@@ -353,9 +353,9 @@ function list_hooks {
     done
     
     if [ "$found_hooks" = false ]; then
-        echo -e "${YELLOW}No git hooks found${ENDCOLOR}"
+        echo -e "${YELLOW}No git hooks found.${ENDCOLOR}"
         if [ -z "$show_samples" ]; then
-            echo -e "Use ${GREEN}gitb hooks list samples${ENDCOLOR} to see available sample hooks"
+            echo -e "Run ${GREEN}gitb hooks list samples${ENDCOLOR} to see available samples."
         fi
     fi
 }
@@ -368,26 +368,27 @@ function create_hook {
     local hook_file="$hooks_dir/$hook_type"
     
     if [ ! -d "$hooks_dir" ]; then
-        echo -e "${RED}Git hooks directory not found: $hooks_dir${ENDCOLOR}"
+        echo -e "${RED}✗ Git hooks directory not found: $hooks_dir${ENDCOLOR}"
         return 1
     fi
-    
+
     # Validate hook type
     local all_hooks=$(get_all_hook_types)
     if [[ ! " $all_hooks " =~ " $hook_type " ]]; then
-        echo -e "${RED}Invalid hook type: $hook_type${ENDCOLOR}"
+        echo -e "${RED}✗ Invalid hook type: $hook_type${ENDCOLOR}"
         echo -e "${YELLOW}Valid types: $all_hooks${ENDCOLOR}"
         return 1
     fi
-    
+
     # Check if hook already exists
     if [ -f "$hook_file" ]; then
-        echo -e "${YELLOW}Hook '$hook_type' already exists${ENDCOLOR}"
-        echo -e "Do you want to ${RED}overwrite${ENDCOLOR} it? (y/n)"
+        echo -e "${YELLOW}⚠  Hook '$hook_type' already exists.${ENDCOLOR}"
+        echo -e "${RED}⚠  Overwriting will replace its contents.${ENDCOLOR}"
+        echo -e "Overwrite (y/n)?"
         read -n 1 -s choice
         echo
         if ! is_yes "$choice"; then
-            echo -e "${YELLOW}Hook creation cancelled${ENDCOLOR}"
+            echo -e "${YELLOW}Hook creation cancelled.${ENDCOLOR}"
             return
         fi
     fi
@@ -410,7 +411,7 @@ exit 0"
         ;;
         "pre-commit-lint")
             if [ "$hook_type" != "pre-commit" ]; then
-                echo -e "${RED}Template 'pre-commit-lint' is only for pre-commit hooks${ENDCOLOR}"
+                echo -e "${RED}✗ Template 'pre-commit-lint' is only for pre-commit hooks.${ENDCOLOR}"
                 return 1
             fi
             hook_content="#!/usr/bin/env bash
@@ -458,7 +459,7 @@ exit 0"
         ;;
         "commit-msg-conventional")
             if [ "$hook_type" != "commit-msg" ]; then
-                echo -e "${RED}Template 'commit-msg-conventional' is only for commit-msg hooks${ENDCOLOR}"
+                echo -e "${RED}✗ Template 'commit-msg-conventional' is only for commit-msg hooks.${ENDCOLOR}"
                 return 1
             fi
             hook_content="#!/bin/sh
@@ -489,7 +490,7 @@ exit 0"
         ;;
         "pre-push-protection")
             if [ "$hook_type" != "pre-push" ]; then
-                echo -e "${RED}Template 'pre-push-protection' is only for pre-push hooks${ENDCOLOR}"
+                echo -e "${RED}✗ Template 'pre-push-protection' is only for pre-push hooks.${ENDCOLOR}"
                 return 1
             fi
             hook_content="#!/bin/sh
@@ -529,7 +530,7 @@ exit 0"
     echo "$hook_content" > "$hook_file"
     chmod +x "$hook_file"
     
-    echo -e "${GREEN}Created executable hook: $hook_type${ENDCOLOR}"
+    echo -e "${GREEN}✓ Created executable hook: $hook_type${ENDCOLOR}"
     echo -e "${YELLOW}Hook file: $hook_file${ENDCOLOR}"
     
     # Offer to edit the hook
@@ -549,11 +550,11 @@ function edit_hook {
     local hook_file="$hooks_dir/$hook_type"
     
     if [ ! -f "$hook_file" ]; then
-        echo -e "${RED}Hook '$hook_type' does not exist${ENDCOLOR}"
-        echo -e "Use ${GREEN}gitb hooks create $hook_type${ENDCOLOR} to create it first"
+        echo -e "${RED}✗ Hook '$hook_type' does not exist.${ENDCOLOR}"
+        echo -e "Run ${GREEN}gitb hooks create $hook_type${ENDCOLOR} to create it first."
         return 1
     fi
-    
+
     echo -e "${YELLOW}Editing hook: $hook_type${ENDCOLOR}"
     echo -e "${GRAY}File: $hook_file${ENDCOLOR}"
     echo
@@ -563,7 +564,7 @@ function edit_hook {
     
     # Ensure hook remains executable
     chmod +x "$hook_file"
-    echo -e "${GREEN}Hook updated and made executable${ENDCOLOR}"
+    echo -e "${GREEN}✓ Hook updated (executable)${ENDCOLOR}"
 }
 
 ### Function to toggle hook executable status
@@ -573,16 +574,16 @@ function toggle_hook {
     local hook_file="$hooks_dir/$hook_type"
     
     if [ ! -f "$hook_file" ]; then
-        echo -e "${RED}Hook '$hook_type' does not exist${ENDCOLOR}"
+        echo -e "${RED}✗ Hook '$hook_type' does not exist.${ENDCOLOR}"
         return 1
     fi
-    
+
     if [ -x "$hook_file" ]; then
         chmod -x "$hook_file"
-        echo -e "${YELLOW}Disabled hook: $hook_type${ENDCOLOR}"
+        echo -e "${YELLOW}✓ Disabled hook: $hook_type${ENDCOLOR}"
     else
         chmod +x "$hook_file"
-        echo -e "${GREEN}Enabled hook: $hook_type${ENDCOLOR}"
+        echo -e "${GREEN}✓ Enabled hook: $hook_type${ENDCOLOR}"
     fi
 }
 
@@ -593,21 +594,21 @@ function remove_hook {
     local hook_file="$hooks_dir/$hook_type"
     
     if [ ! -f "$hook_file" ]; then
-        echo -e "${RED}Hook '$hook_type' does not exist${ENDCOLOR}"
+        echo -e "${RED}✗ Hook '$hook_type' does not exist.${ENDCOLOR}"
         return 1
     fi
-    
-    echo -e "${RED}Are you sure you want to delete hook '$hook_type'?${ENDCOLOR}"
+
+    echo -e "${RED}⚠  Deleting hook '$hook_type' cannot be undone.${ENDCOLOR}"
     echo -e "${GRAY}File: $hook_file${ENDCOLOR}"
-    echo -e "This action cannot be undone. (y/n)"
+    echo -e "Are you sure you want to delete it (y/n)?"
     read -n 1 -s choice
     echo
-    
+
     if is_yes "$choice"; then
         rm "$hook_file"
-        echo -e "${GREEN}Removed hook: $hook_type${ENDCOLOR}"
+        echo -e "${GREEN}✓ Removed hook: $hook_type${ENDCOLOR}"
     else
-        echo -e "${YELLOW}Hook removal cancelled${ENDCOLOR}"
+        echo -e "${YELLOW}Hook removal cancelled.${ENDCOLOR}"
     fi
 }
 
@@ -616,15 +617,14 @@ function remove_all_hooks {
     local hooks_dir=$(get_hooks_dir)
     
     if [ ! -d "$hooks_dir" ]; then
-        echo -e "${RED}Git hooks directory not found: $hooks_dir${ENDCOLOR}"
+        echo -e "${RED}✗ Git hooks directory not found: $hooks_dir${ENDCOLOR}"
         return 1
     fi
-    
-    echo -e "${RED}Remove All Git Hooks${ENDCOLOR}"
+
+    echo -e "${RED}Remove all git hooks${ENDCOLOR}"
     echo
-    echo -e "${YELLOW}Description:${ENDCOLOR}"
-    echo "This will remove ALL git hooks from your repository."
-    echo -e "${RED}WARNING: This action cannot be undone!${ENDCOLOR}"
+    echo -e "This will remove ${BOLD}every${NORMAL} git hook from this repository."
+    echo -e "${RED}⚠  This action cannot be undone.${ENDCOLOR}"
     echo
     
     # Find all existing hooks
@@ -647,36 +647,36 @@ function remove_all_hooks {
     done
     
     if [ $hook_count -eq 0 ]; then
-        echo -e "${YELLOW}No git hooks found to remove${ENDCOLOR}"
+        echo -e "${YELLOW}No git hooks found to remove.${ENDCOLOR}"
         return
     fi
-    
+
     echo
-    echo -e "${RED}This will permanently delete $hook_count hooks.${ENDCOLOR}"
-    echo -e "${YELLOW}Are you absolutely sure? (y/n)${ENDCOLOR}"
+    echo -e "${RED}⚠  This will permanently delete $hook_count hooks.${ENDCOLOR}"
+    echo -e "${YELLOW}Are you absolutely sure (y/n)?${ENDCOLOR}"
     read -n 1 -p "Your choice: " choice < /dev/tty
     echo
     echo
-    
+
     if ! is_yes "$choice"; then
-        echo -e "${YELLOW}Hook removal cancelled${ENDCOLOR}"
+        echo -e "${YELLOW}Hook removal cancelled.${ENDCOLOR}"
         return
     fi
 
     # Double confirmation for safety
-    echo -e "${RED}FINAL CONFIRMATION${ENDCOLOR}"
-    echo -e "${RED}Type 'DELETE' to confirm removal of all hooks:${ENDCOLOR}"
+    echo -e "${RED}Final confirmation${ENDCOLOR}"
+    echo -e "Type ${BOLD}DELETE${NORMAL} to confirm removal of all hooks:"
     read -p "Enter confirmation: " confirmation < /dev/tty
-    
+
     if [ "$confirmation" != "DELETE" ]; then
-        echo -e "${YELLOW}Hook removal cancelled - confirmation text did not match${ENDCOLOR}"
+        echo -e "${YELLOW}Hook removal cancelled — confirmation text did not match.${ENDCOLOR}"
         return
     fi
-    
+
     echo
     echo -e "${YELLOW}Removing all hooks...${ENDCOLOR}"
     echo
-    
+
     local removed_count=0
     for hook_type in "${existing_hooks[@]}"; do
         local hook_file="$hooks_dir/$hook_type"
@@ -686,9 +686,9 @@ function remove_all_hooks {
             ((removed_count++))
         fi
     done
-    
+
     echo
-    echo -e "${GREEN}Successfully removed $removed_count hooks${ENDCOLOR}"
+    echo -e "${GREEN}✓ Removed $removed_count hooks${ENDCOLOR}"
 
 }
 
@@ -699,16 +699,16 @@ function test_hook {
     local hook_file="$hooks_dir/$hook_type"
     
     if [ ! -f "$hook_file" ]; then
-        echo -e "${RED}Hook '$hook_type' does not exist${ENDCOLOR}"
+        echo -e "${RED}✗ Hook '$hook_type' does not exist.${ENDCOLOR}"
         return 1
     fi
-    
+
     if [ ! -x "$hook_file" ]; then
-        echo -e "${YELLOW}Hook '$hook_type' is not executable${ENDCOLOR}"
+        echo -e "${YELLOW}⚠  Hook '$hook_type' is disabled (not executable).${ENDCOLOR}"
         echo -e "Enable it with: ${GREEN}gitb hooks toggle $hook_type${ENDCOLOR}"
         return 1
     fi
-    
+
     echo -e "${YELLOW}Testing hook: $hook_type${ENDCOLOR}"
     echo -e "${GRAY}Running: $hook_file${ENDCOLOR}"
     echo "----------------------------------------"
@@ -719,9 +719,9 @@ function test_hook {
     
     echo "----------------------------------------"
     if [ $exit_code -eq 0 ]; then
-        echo -e "${GREEN}Hook test passed (exit code: $exit_code)${ENDCOLOR}"
+        echo -e "${GREEN}✓ Hook test passed (exit code: $exit_code)${ENDCOLOR}"
     else
-        echo -e "${RED}❌ Hook test failed (exit code: $exit_code)${ENDCOLOR}"
+        echo -e "${RED}✗ Hook test failed (exit code: $exit_code)${ENDCOLOR}"
     fi
 }
 
@@ -732,16 +732,16 @@ function show_hook {
     local hook_file="$hooks_dir/$hook_type"
     
     if [ ! -f "$hook_file" ]; then
-        echo -e "${RED}Hook '$hook_type' does not exist${ENDCOLOR}"
+        echo -e "${RED}✗ Hook '$hook_type' does not exist.${ENDCOLOR}"
         return 1
     fi
-    
+
     echo -e "${YELLOW}Hook: $hook_type${ENDCOLOR}"
     echo -e "${GRAY}File: $hook_file${ENDCOLOR}"
     if [ -x "$hook_file" ]; then
-        echo -e "${GREEN}Status: Enabled (executable)${ENDCOLOR}"
+        echo -e "${GREEN}Status: enabled${ENDCOLOR}"
     else
-        echo -e "${YELLOW}Status: Disabled (not executable)${ENDCOLOR}"
+        echo -e "${YELLOW}Status: disabled${ENDCOLOR}"
     fi
     echo "----------------------------------------"
     cat "$hook_file"
@@ -753,11 +753,11 @@ function install_samples {
     local hooks_dir=$(get_hooks_dir)
     
     if [ ! -d "$hooks_dir" ]; then
-        echo -e "${RED}Git hooks directory not found: $hooks_dir${ENDCOLOR}"
+        echo -e "${RED}✗ Git hooks directory not found: $hooks_dir${ENDCOLOR}"
         return 1
     fi
-    
-    echo -e "${YELLOW}Install Git Sample Hooks${ENDCOLOR}"
+
+    echo -e "${YELLOW}Install Git sample hooks${ENDCOLOR}"
     echo
     echo -e "${YELLOW}Description:${ENDCOLOR}"
     echo "This will install all available sample hooks from Git into your repository."
@@ -788,14 +788,14 @@ function install_samples {
     done
     
     if [ $sample_count -eq 0 ]; then
-        echo -e "${YELLOW}No new sample hooks to install${ENDCOLOR}"
-        echo "All sample hooks are already installed or no sample files found."
+        echo -e "${YELLOW}No new sample hooks to install.${ENDCOLOR}"
+        echo "All sample hooks are already installed (or no sample files were found)."
         return
     fi
-    
+
     echo
     echo -e "${YELLOW}Ready to install $sample_count sample hooks.${ENDCOLOR}"
-    echo -e "${YELLOW}Continue? (y/n)${ENDCOLOR}"
+    echo -e "Continue (y/n)?"
     read -n 1 -p "Your choice: " choice < /dev/tty
     echo
     echo
@@ -826,7 +826,7 @@ function install_samples {
     done
     
     echo
-    echo -e "${GREEN}Successfully installed $installed_count sample hooks${ENDCOLOR}"
+    echo -e "${GREEN}✓ Installed $installed_count sample hooks${ENDCOLOR}"
     
     if [ $installed_count -gt 0 ]; then
         echo

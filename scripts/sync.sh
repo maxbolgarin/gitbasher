@@ -46,13 +46,19 @@ function sync_script {
         echo -e "usage: ${YELLOW}gitb sync <mode>${ENDCOLOR}"
         echo
         msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Fetch $main_branch and rebase current branch onto it"
-        msg="$msg\n${BOLD}push${ENDCOLOR}_p_Fetch $main_branch, rebase current branch onto it, and force push"
-        msg="$msg\n${BOLD}merge${ENDCOLOR}_m_Fetch $main_branch and merge it into current branch"
-        msg="$msg\n${BOLD}mergep${ENDCOLOR}_mp|pm_Fetch $main_branch, merge it into current branch, and push"
-        msg="$msg\n${BOLD}dry${ENDCOLOR}_d|dr_Preview commits that sync would bring in from $main_branch without modifying local refs"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Fetch $main_branch and rebase the current branch onto it"
+        msg="$msg\n${BOLD}push${ENDCOLOR}_p_Same as <empty>, then force-push the rebased branch"
+        msg="$msg\n${BOLD}merge${ENDCOLOR}_m_Fetch $main_branch and merge it into the current branch"
+        msg="$msg\n${BOLD}mergep${ENDCOLOR}_mp|pm_Same as merge, then push"
+        msg="$msg\n${BOLD}dry${ENDCOLOR}_d|dr_Preview incoming commits without modifying local refs"
         msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
         echo -e "$(echo -e "$msg" | column -ts'_')"
+        echo
+        echo -e "${YELLOW}Examples${ENDCOLOR}"
+        echo -e "  ${GREEN}gitb sync${ENDCOLOR}        Rebase current branch on top of ${YELLOW}$main_branch${ENDCOLOR}"
+        echo -e "  ${GREEN}gitb sync push${ENDCOLOR}   Rebase, then force-push (use after a clean rebase)"
+        echo -e "  ${GREEN}gitb sync merge${ENDCOLOR}  Merge ${YELLOW}$main_branch${ENDCOLOR} into current branch (preserves history)"
+        echo -e "  ${GREEN}gitb sync dry${ENDCOLOR}    Preview what sync would change, without touching anything"
         exit
     fi
 
@@ -60,9 +66,9 @@ function sync_script {
     ### Check if already on default branch
     if [ "$current_branch" == "$main_branch" ]; then
         if [ -n "$sync_dry" ]; then
-            echo -e "${YELLOW}Already on ${main_branch}, use ${BOLD}gitb pull dry${NORMAL}${YELLOW} instead${ENDCOLOR}"
+            echo -e "${YELLOW}Already on ${main_branch} — use ${BOLD}gitb pull dry${NORMAL}${YELLOW} instead.${ENDCOLOR}"
         else
-            echo -e "${YELLOW}Already on ${main_branch}, use ${BOLD}gitb pull${NORMAL}${YELLOW} instead${ENDCOLOR}"
+            echo -e "${YELLOW}Already on ${main_branch} — use ${BOLD}gitb pull${NORMAL}${YELLOW} instead.${ENDCOLOR}"
         fi
         exit
     fi
@@ -71,8 +77,8 @@ function sync_script {
     ### Dry-run mode: preview the sync without modifying any local state
     if [ -n "$sync_dry" ]; then
         if [ -z "$origin_name" ]; then
-            echo -e "${RED}No git remote configured.${ENDCOLOR}"
-            echo -e "Use ${BLUE}git remote add origin <url>${ENDCOLOR} to set it up first."
+            echo -e "${RED}✗ No git remote configured.${ENDCOLOR}"
+            echo -e "Run ${GREEN}git remote add origin <url>${ENDCOLOR} to set one up."
             exit 1
         fi
 
@@ -95,7 +101,7 @@ function sync_script {
         fi
 
         if [ $dry_code != 0 ]; then
-            echo -e "${RED}Cannot fetch ${main_branch}! Error message:${ENDCOLOR}"
+            echo -e "${RED}✗ Cannot fetch ${main_branch}.${ENDCOLOR}"
             echo -e "$dry_output"
             exit $dry_code
         fi
@@ -106,7 +112,7 @@ function sync_script {
         local_only=$(commit_list 999 "tab" "FETCH_HEAD..HEAD")
 
         if [ -z "$incoming" ]; then
-            echo -e "${GREEN}Already up to date with ${main_branch}${ENDCOLOR}"
+            echo -e "${GREEN}✓ Already up to date with ${main_branch}${ENDCOLOR}"
         else
             incoming_count=$(echo -e "$incoming" | wc -l | sed 's/^ *//;s/ *$//')
             echo -e "${BOLD}$incoming_count${ENDCOLOR} commits on ${YELLOW}${origin_name}/${main_branch}${ENDCOLOR} would be applied to ${YELLOW}${current_branch}${ENDCOLOR}"
@@ -130,18 +136,18 @@ function sync_script {
     ### Check for uncommitted changes
     is_clean=$(git status | tail -n 1)
     if [ "$is_clean" != "nothing to commit, working tree clean" ]; then
-        echo -e "${RED}Cannot sync! There are uncommitted changes:${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot sync — there are uncommitted changes:${ENDCOLOR}"
         git_status
         echo
-        echo -e "${YELLOW}Commit or stash your changes first${ENDCOLOR}"
+        echo -e "${YELLOW}Commit or stash your changes first.${ENDCOLOR}"
         exit 1
     fi
 
 
     ### Check remote
     if [ -z "$origin_name" ]; then
-        echo -e "${RED}No git remote configured.${ENDCOLOR}"
-        echo -e "Use ${BLUE}git remote add origin <url>${ENDCOLOR} to set it up first."
+        echo -e "${RED}✗ No git remote configured.${ENDCOLOR}"
+        echo -e "Run ${GREEN}git remote add origin <url>${ENDCOLOR} to set one up."
         exit 1
     fi
 
@@ -152,11 +158,11 @@ function sync_script {
     fetch $main_branch $origin_name
 
     if [ $fetch_code != 0 ]; then
-        echo -e "${RED}Cannot fetch ${main_branch}!${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot fetch ${main_branch}.${ENDCOLOR}"
         exit 1
     fi
 
-    echo -e "${GREEN}Fetched ${origin_name}/${main_branch}${ENDCOLOR}"
+    echo -e "${GREEN}✓ Fetched ${origin_name}/${main_branch}${ENDCOLOR}"
     echo
 
 
@@ -168,11 +174,11 @@ function sync_script {
         merge $main_branch $origin_name $editor "sync" "true"
 
         if [[ $merge_output == *"Already up to date"* ]]; then
-            echo -e "${GREEN}Already up to date with ${main_branch}${ENDCOLOR}"
+            echo -e "${GREEN}✓ Already up to date with ${main_branch}${ENDCOLOR}"
         else
             # merge() exits on fatal errors, so if we reach here, merge succeeded
             # (merge_code may be non-zero after conflict resolution, but that's ok)
-            echo -e "${GREEN}Successfully synced with ${main_branch} using merge!${ENDCOLOR}"
+            echo -e "${GREEN}✓ Synced with ${main_branch} using merge${ENDCOLOR}"
             echo -e "${BLUE}[${origin_name}/${main_branch}${ENDCOLOR} -> ${BLUE}${current_branch}]${ENDCOLOR}"
         fi
     else
@@ -183,12 +189,12 @@ function sync_script {
         rebase_branch "$main_branch" "$origin_name" "true"
 
         if [[ $rebase_output == *"is up to date"* ]]; then
-            echo -e "${GREEN}Already up to date with ${main_branch}${ENDCOLOR}"
+            echo -e "${GREEN}✓ Already up to date with ${main_branch}${ENDCOLOR}"
         elif [ $rebase_code == 0 ]; then
-            echo -e "${GREEN}Successfully synced with ${main_branch} using rebase!${ENDCOLOR}"
+            echo -e "${GREEN}✓ Synced with ${main_branch} using rebase${ENDCOLOR}"
             echo -e "${BLUE}[${origin_name}/${main_branch}${ENDCOLOR} -> ${BLUE}${current_branch}]${ENDCOLOR}"
         else
-            echo -e "${RED}Rebase failed! Resolve conflicts and try again.${ENDCOLOR}"
+            echo -e "${RED}✗ Rebase failed — resolve the conflicts and try again.${ENDCOLOR}"
             exit $rebase_code
         fi
     fi
@@ -202,7 +208,7 @@ function sync_script {
             echo
             push_script y
         else
-            echo -e "${YELLOW}Force pushing ${current_branch} after rebase...${ENDCOLOR}"
+            echo -e "${YELLOW}Force-pushing ${current_branch} after rebase...${ENDCOLOR}"
             echo
             push_script f
         fi

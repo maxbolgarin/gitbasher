@@ -12,6 +12,24 @@ GRAY_ES="\x1b[37m"
 ENDCOLOR_ES="\x1b[0m"
 
 
+### ===== UX STYLE GUIDE =====
+### All user-facing text in gitbasher follows these rules. Reviewers and future
+### contributors: please keep new strings consistent with this guide.
+###
+###   Errors    : ${RED}✗ Cannot <action>.${ENDCOLOR}              (period, no '!')
+###   Success   : ${GREEN}✓ <Past-tense verb> <object>${ENDCOLOR}   (no 'Successfully')
+###   Warnings  : ${YELLOW}⚠  <statement>.${ENDCOLOR}              (red ⚠ if destructive)
+###   Tips      : ${CYAN}💡 <Tip text>${ENDCOLOR}
+###   Steps     : ${YELLOW}Step N.${ENDCOLOR} <Imperative instruction>
+###   Confirm   : routine "(y/n)?", destructive prefixed with red ⚠ line
+###   Menu exit : "0. Exit" (or "00. Exit" when paginated/≥10 items)
+###   Invalid   : ${RED}✗ Invalid choice.${ENDCOLOR}
+###
+### Free-text input uses `read -p`, single-key choices use `read -n 1 -s`.
+### Color invariants: RED=error, GREEN=success/example, YELLOW=prompt/warning/key,
+### BLUE=description/context, CYAN=tip, BOLD=mode/keyword.
+
+
 ### ===== INPUT SANITIZATION FRAMEWORK =====
 ### These functions provide security validation for all user inputs
 
@@ -289,7 +307,7 @@ function show_sanitization_error {
     local input_type="$1"
     local error_msg="$2"
     
-    echo -e "${RED}Invalid $input_type input!${ENDCOLOR}" >&2
+    echo -e "${RED}✗ Invalid ${input_type} input.${ENDCOLOR}" >&2
     if [ -n "$error_msg" ]; then
         echo -e "${YELLOW}$error_msg${ENDCOLOR}" >&2
     fi
@@ -392,7 +410,7 @@ function warn_if_detached_head {
     on_branch && return 0
     local _action="${1:-this operation}"
     echo
-    echo -e "${YELLOW}You are in detached HEAD state.${ENDCOLOR}"
+    echo -e "${YELLOW}⚠  You are in detached HEAD state.${ENDCOLOR}"
     echo "Any new commits will not be on a branch and may be reclaimed by git's garbage collector."
     read -n 1 -p "Continue ${_action} anyway? (y/N) " _ans
     echo
@@ -472,8 +490,8 @@ function read_key {
 # $2: entered mode
 function wrong_mode {
     if [ -n "$2" ]; then
-        echo -e "Unknown mode ${YELLOW}$2${ENDCOLOR} for ${YELLOW}gitb $1${ENDCOLOR}"
-        echo -e "Use ${GREEN}gitb $1 help${ENDCOLOR} to get usage info"
+        echo -e "${RED}✗ Unknown mode ${YELLOW}$2${RED} for ${YELLOW}gitb $1${RED}.${ENDCOLOR}"
+        echo -e "Run ${GREEN}gitb $1 help${ENDCOLOR} to see available modes."
         exit
     fi
 }
@@ -884,7 +902,7 @@ function check_code {
     if [ "$1" != 0 ]; then
         echo
         echo
-        echo -e "${RED}Error during $3!${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot $3.${ENDCOLOR}"
         echo -e "$2"
         if [ -n "$git_add" ]; then
             git restore --staged "$git_add"
@@ -1089,9 +1107,9 @@ function choose_commit {
         echo "0. Exit"
     fi
 
-    echo "Enter = to show more"
+    echo -e "${BLUE}Tip: press = to show more commits${ENDCOLOR}"
     echo
-    
+
     read_prefix="Enter commit number: "
 
     choose "${commits_hash[@]}"
@@ -1229,7 +1247,7 @@ function list_branches {
 
     if [[ "$number_of_branches" == 0 ]]; then
         echo
-        echo -e "${YELLOW}There is no branches${ENDCOLOR}"
+        echo -e "${YELLOW}No branches found.${ENDCOLOR}"
         to_exit="true"
         return
     fi
@@ -1244,14 +1262,14 @@ function list_branches {
 
     if [[ "$number_of_branches" == 1 ]] && [[ "${branch_to_check}" == "${current_branch}" ]]; then
         echo
-        echo -e "There is only one branch: ${YELLOW}${current_branch}${ENDCOLOR}"
+        echo -e "Only one branch exists: ${YELLOW}${current_branch}${ENDCOLOR}"
         to_exit="true"
         return
     fi
 
     if [[ "$1" == "delete" ]] && [[ "$number_of_branches" == 2 ]] && [[ "${current_branch}" != "${main_branch}" ]]; then
         echo
-        echo -e "${YELLOW}There are no branches to delete${ENDCOLOR}"
+        echo -e "${YELLOW}No branches available to delete.${ENDCOLOR}"
         to_exit="true"
         return
     fi
@@ -1322,7 +1340,7 @@ function list_branches {
             done
             if [ $list_total_pages -gt 1 ] && [ $list_current_page -lt $list_total_pages ]; then
                 echo
-                printf "Page %s/%s. Press Enter for next page, or q to quit: " "$list_current_page" "$list_total_pages"
+                printf "Page %s/%s. Press Enter for next page, q to quit: " "$list_current_page" "$list_total_pages"
                 read -r -n 1 page_choice
                 echo
                 normalize_key "$page_choice"
@@ -1441,9 +1459,9 @@ function switch {
     ## Switch is OK
     if [ "$switch_code" == 0 ]; then
         if [ "$current_branch" == "$1" ]; then
-            echo -e "${GREEN}Already on '$1'${ENDCOLOR}"
+            echo -e "${GREEN}✓ Already on '$1'${ENDCOLOR}"
         else
-            echo -e "${GREEN}Switched to branch '$1'${ENDCOLOR}"
+            echo -e "${GREEN}✓ Switched to '$1'${ENDCOLOR}"
             changes=$(git_status)
             if [ -n "$changes" ] && [ -z "$2" ]; then
                 echo
@@ -1479,15 +1497,15 @@ function switch {
         else
             conflicts="$(echo "$switch_output" | tail -r | tail -n +3 | tail -r | tail -n +2)"
         fi
-        echo -e "${RED}Changes would be overwritten by switch to '$1':${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot switch to '$1' — these files would be overwritten:${ENDCOLOR}"
         echo -e "${conflicts//[[:blank:]]/}"
         echo
-        echo -e "${YELLOW}Commit these files and try to switch for one more time${ENDCOLOR}"
+        echo -e "${YELLOW}Commit or stash these files, then try again.${ENDCOLOR}"
         exit
     fi
 
     if [ $switch_code -ne 0 ]; then
-        echo -e "${RED}Cannot switch to '$1'! Error message:${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot switch to '$1'.${ENDCOLOR}"
         echo -e "$switch_output"
         exit $switch_code
     fi

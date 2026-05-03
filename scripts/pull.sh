@@ -63,17 +63,23 @@ function pull_script {
         echo -e "usage: ${YELLOW}gitb pull <mode>${ENDCOLOR}"
         echo
         msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Fetch current branch, try to fast-forward or ask about strategy"
-        msg="$msg\n${BOLD}fetch${ENDCOLOR}_fe_Fetch current branch without merge"
-        msg="$msg\n${BOLD}all${ENDCOLOR}_fa_Fetch all without merge"
-        msg="$msg\n${BOLD}upd${ENDCOLOR}_u_Run git remote update to fetch all branches"
-        msg="$msg\n${BOLD}ffonly${ENDCOLOR}_ff_Fetch and then merge in fast forward only mode"
-        msg="$msg\n${BOLD}merge${ENDCOLOR}_m_Fetch current branch and then merge it"
-        msg="$msg\n${BOLD}rebase${ENDCOLOR}_r_Fetch current branch and then rebase"
-        msg="$msg\n${BOLD}interactive${ENDCOLOR}_ri|rs_Fetch current branch and then rebase in interactive mode with --autosquash"
-        msg="$msg\n${BOLD}dry${ENDCOLOR}_d|dr_Preview incoming commits from remote without modifying local refs"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Fetch current branch, fast-forward if possible, otherwise ask"
+        msg="$msg\n${BOLD}fetch${ENDCOLOR}_fe_Fetch current branch without merging"
+        msg="$msg\n${BOLD}all${ENDCOLOR}_fa_Fetch every branch without merging"
+        msg="$msg\n${BOLD}upd${ENDCOLOR}_u_Run ${BLUE}git remote update${ENDCOLOR} to fetch all branches"
+        msg="$msg\n${BOLD}ffonly${ENDCOLOR}_ff_Fetch and merge only if a fast-forward is possible"
+        msg="$msg\n${BOLD}merge${ENDCOLOR}_m_Fetch and merge the current branch"
+        msg="$msg\n${BOLD}rebase${ENDCOLOR}_r_Fetch and rebase the current branch"
+        msg="$msg\n${BOLD}interactive${ENDCOLOR}_ri|rs_Fetch and interactively rebase with ${BLUE}--autosquash${ENDCOLOR}"
+        msg="$msg\n${BOLD}dry${ENDCOLOR}_d|dr_Preview incoming commits without modifying local refs"
         msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
         echo -e "$(echo -e "$msg" | column -ts'_')"
+        echo
+        echo -e "${YELLOW}Examples${ENDCOLOR}"
+        echo -e "  ${GREEN}gitb pull${ENDCOLOR}          Fetch + fast-forward, ask if a merge or rebase is needed"
+        echo -e "  ${GREEN}gitb pull dry${ENDCOLOR}      See what would arrive, without touching local refs"
+        echo -e "  ${GREEN}gitb pull rebase${ENDCOLOR}   Fetch and rebase local commits on top of the remote"
+        echo -e "  ${GREEN}gitb pull ffonly${ENDCOLOR}   Refuse to pull unless a clean fast-forward is possible"
         exit
     fi
 
@@ -85,8 +91,8 @@ function pull_script {
     fi
 
     if [ -z "$origin_name" ]; then
-        echo -e "${RED}No git remote configured.${ENDCOLOR}"
-        echo -e "Use ${BLUE}git remote add origin <url>${ENDCOLOR} to set it up first."
+        echo -e "${RED}✗ No git remote configured.${ENDCOLOR}"
+        echo -e "Run ${GREEN}git remote add origin <url>${ENDCOLOR} to set one up."
         exit 1
     fi
 
@@ -112,10 +118,10 @@ function pull_script {
 
         if [ $dry_code != 0 ]; then
             if [[ "$dry_output" == *"couldn't find remote ref"* ]]; then
-                echo -e "${YELLOW}There is no '$current_branch' in $origin_name${ENDCOLOR}"
+                echo -e "${YELLOW}Branch '$current_branch' does not exist on $origin_name.${ENDCOLOR}"
                 exit
             fi
-            echo -e "${RED}Cannot fetch! Error message:${ENDCOLOR}"
+            echo -e "${RED}✗ Cannot fetch.${ENDCOLOR}"
             echo -e "$dry_output"
             exit $dry_code
         fi
@@ -125,7 +131,7 @@ function pull_script {
         ahead_commits=$(commit_list 999 "tab" "FETCH_HEAD..HEAD")
 
         if [ -z "$behind_commits" ] && [ -z "$ahead_commits" ]; then
-            echo -e "${GREEN}Already up to date${ENDCOLOR}"
+            echo -e "${GREEN}✓ Already up to date${ENDCOLOR}"
             echo
             echo -e "${BLUE}Dry run only — no local refs were modified${ENDCOLOR}"
             exit
@@ -166,9 +172,9 @@ function pull_script {
             commits=$(commit_list 999 "tab" "HEAD..$origin_name/$current_branch")
             if [ "$commits" != "" ]; then
                 if [ -n "$all" ]; then
-                    echo -e "${GREEN}Successfully fetched all!${ENDCOLOR}"
+                    echo -e "${GREEN}✓ Fetched all remotes${ENDCOLOR}"
                 else
-                    echo -e "${GREEN}Successfully fetched '$origin_name/$current_branch'!${ENDCOLOR}"
+                    echo -e "${GREEN}✓ Fetched '$origin_name/$current_branch'${ENDCOLOR}"
                 fi
                 if [ "$fetch_output" != "" ]; then
                     echo
@@ -179,7 +185,7 @@ function pull_script {
                 echo -e "Your branch is behind ${YELLOW}$origin_name/$current_branch${ENDCOLOR} by ${BOLD}$count${ENDCOLOR} commits"
                 echo -e "$commits"
             else
-                echo -e "${GREEN}Already up to date${ENDCOLOR}"
+                echo -e "${GREEN}✓ Already up to date${ENDCOLOR}"
             fi
         fi
 
@@ -195,7 +201,7 @@ function pull_script {
         if [ $update_code == 0 ] ; then
             commits=$(commit_list 999 "tab" "HEAD..$origin_name/$current_branch")
             if [ "$commits" != "" ]; then
-                echo -e "${GREEN}Successfully updated from remote!${ENDCOLOR}"
+                echo -e "${GREEN}✓ Updated all remotes${ENDCOLOR}"
                 if [ "$update_output" != "" ]; then
                     echo
                     echo -e "$update_output"
@@ -205,12 +211,12 @@ function pull_script {
                 echo -e "Your branch is behind ${YELLOW}$origin_name/$current_branch${ENDCOLOR} by ${BOLD}$count${ENDCOLOR} commits"
                 echo -e "$commits"
             else
-                echo -e "${GREEN}Already up to date${ENDCOLOR}"
+                echo -e "${GREEN}✓ Already up to date${ENDCOLOR}"
             fi
             exit
         fi
 
-        echo -e "${RED}Cannot update! Error message:${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot update from remote.${ENDCOLOR}"
         echo -e "${update_output}"
         exit $update_code
     fi
@@ -242,12 +248,12 @@ function fetch {
     fi
 
     if [[ ${fetch_output} != *"couldn't find remote ref"* ]]; then
-        echo -e "${RED}Cannot fetch '$1'! Error message:${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot fetch '$1'.${ENDCOLOR}"
         echo -e "${fetch_output}"
         exit $fetch_code
     fi
 
-    echo -e "${YELLOW}There is no '$1' in $2${ENDCOLOR}"
+    echo -e "${YELLOW}Branch '$1' does not exist on $2.${ENDCOLOR}"
 }
 
 
@@ -269,21 +275,20 @@ function pull {
     merge_code=$?
     mode="fast-forward"
 
-    if [[ $merge_output == *"Already up to date"* ]]; then  
-        echo -e "${GREEN}Already up to date${ENDCOLOR}"
+    if [[ $merge_output == *"Already up to date"* ]]; then
+        echo -e "${GREEN}✓ Already up to date${ENDCOLOR}"
         return
     fi
 
     if [ $merge_code != 0 ] ; then
         if [[ $merge_output != *"possible to fast-forward"* ]]; then
-            echo -e "${RED}Cannot pull! Error message:${ENDCOLOR}"
+            echo -e "${RED}✗ Cannot pull.${ENDCOLOR}"
             echo "$merge_output"
             exit $merge_code
         fi
 
         if [ -n "$5" ]; then
-            echo -e "${RED}Cannot fast-forward!${ENDCOLOR}"
-            echo -e "Fast-forward only mode is enabled, aborting pull."
+            echo -e "${RED}✗ Cannot fast-forward — fast-forward-only mode is enabled, aborting pull.${ENDCOLOR}"
             exit 1
         fi
 
@@ -302,11 +307,11 @@ function pull {
             echo -e "${YELLOW}Rebasing...${ENDCOLOR}"
             choice="2"
         else
-            echo -e "${RED}Cannot fast forward!${ENDCOLOR} Choose an option:"
-            echo -e "1. ${BLUE}Merge.${ENDCOLOR} It saves commit's timeline, but creates a merge commit with message:"
+            echo -e "${YELLOW}⚠  Cannot fast-forward.${ENDCOLOR} Choose an option:"
+            echo -e "1. ${BLUE}Merge${ENDCOLOR} — preserves commit timeline; creates a merge commit:"
             echo -e "\t\t${YELLOW}Merge remote-tracking branch '$origin_name/$current_branch' into $current_branch${ENDCOLOR}"
-            echo -e "2. ${BLUE}Rebase.${ENDCOLOR} It takes all new local commits and places them on top of the remote branch"
-            echo -e "0. ${BLUE}Exit.${ENDCOLOR} No changes will be pulled and branch will be left as is"
+            echo -e "2. ${BLUE}Rebase${ENDCOLOR} — replays your local commits on top of the remote branch"
+            echo -e "0. ${BLUE}Exit${ENDCOLOR} — leave the branch unchanged"
 
             read -n 1 -s choice
             re='^[120]+$'
@@ -335,7 +340,7 @@ function pull {
         fi
     fi
 
-    echo -e "${GREEN}Successfully pulled with $mode!${ENDCOLOR}"
+    echo -e "${GREEN}✓ Pulled using $mode${ENDCOLOR}"
 
     if [ "$mode" == "merge" ] || [ "$mode" == "fast-forward" ]; then 
         ### Merge without conflicts

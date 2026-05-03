@@ -25,10 +25,10 @@ function push_tag {
     # Handle delete case
     if [ -n "$delete" ]; then
         if [[ "$push_output" == *"remote ref does not exist"* ]]; then
-            echo -e "${RED}Tag '$1' doesn't exist in the ${origin_name}${ENDCOLOR}"
+            echo -e "${YELLOW}Tag '$1' does not exist on ${origin_name}.${ENDCOLOR}"
             exit
         fi
-        echo -e "${GREEN}Tag '$1' is deleted from the ${origin_name}!${ENDCOLOR}"
+        echo -e "${GREEN}✓ Deleted tag '$1' on ${origin_name}${ENDCOLOR}"
         exit
     fi
     
@@ -43,7 +43,7 @@ function push_tag {
 
         number_of_tags=${#lines_with_success[@]}
         if [ "$number_of_tags" != 0 ]; then
-            echo -e "${GREEN}Pushed successfully!${ENDCOLOR}"
+            echo -e "${GREEN}✓ Pushed all tags${ENDCOLOR}"
 
             for index in "${!lines_with_success[@]}"
             do
@@ -62,7 +62,7 @@ function push_tag {
     # Handle errors
     if [ $push_code != 0 ] ; then
         if [[ "$push_output" == *"Updates were rejected because the tag already exists in the remote"* ]]; then
-            echo -e "${RED}Some tags were rejected${ENDCOLOR}"
+            echo -e "${YELLOW}⚠  Some tags were rejected (already exist on remote):${ENDCOLOR}"
 
             IFS=$'\n' read -rd '' -a lines_with_rejected <<< "$(sed -n '/\[rejected\]/p' <<< "$push_output")"
             for index in "${!lines_with_rejected[@]}"
@@ -75,18 +75,18 @@ function push_tag {
             exit
         fi
 
-        echo -e "${RED}Cannot push! Error message:${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot push tag.${ENDCOLOR}"
         echo "$push_output"
         exit $push_code
     fi
 
     # Print result
     if [[ $push_output == *"Everything up-to-date"* ]]; then
-        echo -e "${GREEN}Everything up-to-date${ENDCOLOR}"
+        echo -e "${GREEN}✓ Everything up to date${ENDCOLOR}"
     elif [ -z "$all" ]; then
-        echo -e "${GREEN}Successful push tag '$1'!${ENDCOLOR}"
+        echo -e "${GREEN}✓ Pushed tag '$1'${ENDCOLOR}"
     else
-        echo -e "${GREEN}Successful push all local tags!${ENDCOLOR}"
+        echo -e "${GREEN}✓ Pushed all local tags${ENDCOLOR}"
     fi
 
     print_link "Repo" "$repo"
@@ -174,18 +174,24 @@ function tag_script {
         echo -e "usage: ${YELLOW}gitb tag <mode>${ENDCOLOR}"
         echo
         msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Create a new tag from the last commit"
-        msg="$msg\n${BOLD}annotated${ENDCOLOR}_a|an_Create a new annotated tag from the last commit"
-        msg="$msg\n${BOLD}commit${ENDCOLOR}_c|co|cm_Create a new tag from a selected commit"
-        msg="$msg\n${BOLD}all${ENDCOLOR}_al_Create a new annotated tag from a selected commit"
-        msg="$msg\n${BOLD}push${ENDCOLOR}_ps|ph|p_Select a local tag and push it to the remote repository"
-        msg="$msg\n${BOLD}push-all${ENDCOLOR}_pa_Push all tags to the remote repository"
-        msg="$msg\n${BOLD}delete${ENDCOLOR}_del|d_Select a tag to delete"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Create a new tag on the last commit"
+        msg="$msg\n${BOLD}annotated${ENDCOLOR}_a|an_Create an annotated tag on the last commit"
+        msg="$msg\n${BOLD}commit${ENDCOLOR}_c|co|cm_Create a tag on a selected commit"
+        msg="$msg\n${BOLD}all${ENDCOLOR}_al_Create an annotated tag on a selected commit"
+        msg="$msg\n${BOLD}push${ENDCOLOR}_ps|ph|p_Pick a local tag and push it to remote"
+        msg="$msg\n${BOLD}push-all${ENDCOLOR}_pa_Push every local tag to remote"
+        msg="$msg\n${BOLD}delete${ENDCOLOR}_del|d_Pick a tag and delete it"
         msg="$msg\n${BOLD}delete-all${ENDCOLOR}_da_Delete all local tags"
-        msg="$msg\n${BOLD}list${ENDCOLOR}_log|l_Print a list of local tags"
-        msg="$msg\n${BOLD}remote${ENDCOLOR}_fetch|r|re_Fetch tags from the remote repository and print it"
+        msg="$msg\n${BOLD}list${ENDCOLOR}_log|l_List local tags"
+        msg="$msg\n${BOLD}remote${ENDCOLOR}_fetch|r|re_Fetch tags from remote and list them"
         msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
         echo -e "$(echo -e "$msg" | column -ts'_')"
+        echo
+        echo -e "${YELLOW}Examples${ENDCOLOR}"
+        echo -e "  ${GREEN}gitb tag${ENDCOLOR}          Tag the current commit (semver-incrementing helper)"
+        echo -e "  ${GREEN}gitb tag a${ENDCOLOR}        Create an annotated tag with a message"
+        echo -e "  ${GREEN}gitb tag push${ENDCOLOR}     Pick a local tag and push it"
+        echo -e "  ${GREEN}gitb tag delete${ENDCOLOR}   Pick a tag and remove it locally and on remote"
         exit
     fi
 
@@ -301,9 +307,9 @@ function tag_script {
         delete_result=$(git tag -d $tag_name 2>&1)
         check_code $? "$delete_result" "delete tag"
 
-        echo -e "${GREEN}Successfully deleted tag '${tag_name}'!${ENDCOLOR}"
+        echo -e "${GREEN}✓ Deleted tag '${tag_name}'${ENDCOLOR}"
         echo
-        echo -e "Do you want to delete this tag in the ${YELLOW}${origin_name}${ENDCOLOR} (y/n)?"
+        echo -e "Also delete this tag on ${YELLOW}${origin_name}${ENDCOLOR} (y/n)?"
         yes_no_choice "\nDeleting..."
         push_tag $tag_name "true"
 
@@ -333,9 +339,9 @@ function tag_script {
 
     ### Enter the name for a new tag
     echo
-    echo -e "${YELLOW}Enter the name for a new tag${ENDCOLOR}"
-    echo -e "If this is a release tag, use version number in semver format like '1.0.0-alpha'"
-    echo -e "Press Enter if you want to exit"
+    echo -e "${YELLOW}Enter the name for the new tag${ENDCOLOR}"
+    echo -e "For releases, use semver format (e.g. ${BLUE}1.0.0-alpha${ENDCOLOR})"
+    echo -e "Press Enter to exit without changes"
 
     if [ -n "${annotated}" ]; then
         prompt="$(echo -n -e "${BOLD}git tag -a${ENDCOLOR} ")"
@@ -358,7 +364,7 @@ function tag_script {
 
     if [[ "$tag_name" == "tag" ]]; then
         echo
-        echo -e "${RED}This name is forbidden!${ENDCOLOR}"
+        echo -e "${RED}✗ This name is reserved and cannot be used.${ENDCOLOR}"
         exit
     fi
 
@@ -383,9 +389,9 @@ function tag_script {
                 break
             fi
             echo
-            echo -e "${YELLOW}Tag message cannot be empty${ENDCOLOR}"
+            echo -e "${YELLOW}⚠  Tag message cannot be empty.${ENDCOLOR}"
             echo
-            read -n 1 -p "Do you want to try for one more time? (y/n) " -s -e choice
+            read -n 1 -p "Try again? (y/n) " -s -e choice
             if ! is_yes "$choice"; then
                 find . -name "$tag_file*" -delete
                 exit
@@ -413,9 +419,9 @@ function tag_script {
 
     if [ $tag_code != 0 ]; then
         if [[ $tag_output == *"already exists" ]]; then
-            echo -e "${RED}Tag '${tag_name}' already exists!${ENDCOLOR}"
+            echo -e "${RED}✗ Tag '${tag_name}' already exists.${ENDCOLOR}"
         else
-            echo -e "${RED}Cannot create tag '${tag_name}'! Error message:${ENDCOLOR}"
+            echo -e "${RED}✗ Cannot create tag '${tag_name}'.${ENDCOLOR}"
             echo -e "$tag_output"
         fi
         exit
@@ -429,7 +435,7 @@ function tag_script {
         is_commit_hash=" from commit '${commit_hash}'"
     fi
 
-    echo -e "${GREEN}Successfully created${is_annotated} tag '${tag_name}'${is_commit_hash}!${ENDCOLOR}"
+    echo -e "${GREEN}✓ Created${is_annotated} tag '${tag_name}'${is_commit_hash}${ENDCOLOR}"
 
     if [ -n "$tag_message" ]; then
         echo -e "$tag_message"
@@ -438,7 +444,7 @@ function tag_script {
 
 
     ### Push tag
-    echo -e "Do you want to push it to the ${YELLOW}${origin_name}${ENDCOLOR} (y/n)?"
+    echo -e "Do you want to push it to ${YELLOW}${origin_name}${ENDCOLOR} (y/n)?"
     yes_no_choice "\nPushing..."
 
     push_tag $tag_name

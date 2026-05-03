@@ -511,14 +511,14 @@ function squash_script {
     local clean_status
     clean_status=$(git status | tail -n 1)
     if [ "$clean_status" != "nothing to commit, working tree clean" ]; then
-        echo -e "${RED}Cannot squash! There are uncommitted changes:${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot squash — there are uncommitted changes:${ENDCOLOR}"
         git_status
         exit 1
     fi
 
     if [ -d "$(git rev-parse --git-dir)/rebase-merge" ] || [ -d "$(git rev-parse --git-dir)/rebase-apply" ]; then
-        echo -e "${RED}A rebase is already in progress.${ENDCOLOR}"
-        echo -e "Resolve it first with ${YELLOW}git rebase --abort${ENDCOLOR} or ${YELLOW}gitb undo rebase${ENDCOLOR}."
+        echo -e "${RED}✗ A rebase is already in progress.${ENDCOLOR}"
+        echo -e "Resolve it first with ${GREEN}git rebase --abort${ENDCOLOR} or ${GREEN}gitb undo rebase${ENDCOLOR}."
         exit 1
     fi
 
@@ -526,7 +526,7 @@ function squash_script {
     local resolved
     resolved=$(squash_resolve_base_ref "")
     if [ -z "$resolved" ]; then
-        echo -e "${RED}Cannot determine a base for the squash range.${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot determine a base for the squash range.${ENDCOLOR}"
         if [ "$current_branch" = "$main_branch" ]; then
             echo -e "Tag a release first (${YELLOW}gitb tag${ENDCOLOR}) or use a feature branch."
         else
@@ -541,7 +541,7 @@ function squash_script {
     commit_hashes_full=$(git rev-list --reverse "${base_ref}..HEAD" 2>/dev/null)
 
     if [ -z "$commit_hashes_full" ]; then
-        echo -e "${GREEN}Nothing to squash — no commits between ${source_label} (${base_ref::12}) and HEAD${ENDCOLOR}"
+        echo -e "${GREEN}✓ Nothing to squash — no commits between ${source_label} (${base_ref::12}) and HEAD${ENDCOLOR}"
         exit 0
     fi
 
@@ -549,12 +549,12 @@ function squash_script {
     commit_count=$(printf '%s\n' "$commit_hashes_full" | grep -c .)
 
     if [ "$commit_count" -lt 2 ]; then
-        echo -e "${GREEN}Nothing to squash — only ${commit_count} commit in range${ENDCOLOR}"
+        echo -e "${GREEN}✓ Nothing to squash — only ${commit_count} commit in range${ENDCOLOR}"
         exit 0
     fi
 
     if [ "$commit_count" -gt "$SQUASH_MAX_COMMITS" ]; then
-        echo -e "${RED}Range is too large: ${commit_count} commits (cap: ${SQUASH_MAX_COMMITS}).${ENDCOLOR}"
+        echo -e "${RED}✗ Range is too large: ${commit_count} commits (cap: ${SQUASH_MAX_COMMITS}).${ENDCOLOR}"
         echo -e "Tag a recent release or rebase onto a closer base before retrying."
         exit 1
     fi
@@ -581,12 +581,12 @@ function squash_script {
     ai_response=$(squash_call_ai_grouping "$base_ref" "$commit_count")
     local ai_status=$?
     if [ "$ai_status" -ne 0 ] || [ -z "$ai_response" ]; then
-        echo -e "${RED}AI grouping failed${ENDCOLOR}"
+        echo -e "${RED}✗ AI grouping failed.${ENDCOLOR}"
         exit 1
     fi
 
     if ! squash_parse_ai_plan "$ai_response" "$expected_short_hashes"; then
-        echo -e "${RED}Could not parse the AI plan.${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot parse the AI plan.${ENDCOLOR}"
         echo -e "${YELLOW}Raw response (first 30 lines):${ENDCOLOR}"
         printf '%s\n' "$ai_response" | head -n 30
         exit 1
@@ -594,7 +594,7 @@ function squash_script {
 
     echo
     if [ "$squash_group_count" -ge "$commit_count" ]; then
-        echo -e "${GREEN}AI didn't find groups to merge — every commit stays as its own change.${ENDCOLOR}"
+        echo -e "${GREEN}✓ AI found no groups to merge — every commit stays as its own change.${ENDCOLOR}"
         echo
     fi
     squash_print_plan
@@ -612,14 +612,14 @@ function squash_script {
     fi
 
     if [ -z "$mode_yes" ]; then
-        echo -e "Apply this plan? Original commits will be rewritten."
-        echo -e "${GRAY}You can recover the original branch with ${BOLD}gitb undo rebase${NORMAL}${GRAY} afterwards.${ENDCOLOR}"
-        echo -e "Proceed (y/n)?"
+        echo -e "${RED}⚠  Applying this plan rewrites your commit history.${ENDCOLOR}"
+        echo -e "${CYAN}💡 Recover the original branch with ${BOLD}gitb undo rebase${NORMAL}${CYAN} if needed.${ENDCOLOR}"
+        echo -e "Are you sure you want to proceed (y/n)?"
         local choice
         read -n 1 -s choice
         if ! is_yes "$choice"; then
             echo
-            echo -e "${YELLOW}Cancelled${ENDCOLOR}"
+            echo -e "${YELLOW}Cancelled.${ENDCOLOR}"
             exit 0
         fi
         echo
@@ -628,7 +628,7 @@ function squash_script {
     ### Build todo + message files in a temp dir, then rebase
     local work_dir
     work_dir=$(mktemp -d "${TMPDIR:-/tmp}/gitbasher-squash.XXXXXX") || {
-        echo -e "${RED}Failed to create temp directory${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot create temp directory.${ENDCOLOR}"
         exit 1
     }
     # Always clean up the temp dir, even on failure
@@ -639,12 +639,12 @@ function squash_script {
 
     echo -e "${YELLOW}Rebasing...${ENDCOLOR}"
     if ! squash_run_rebase "$base_ref" "$todo_file"; then
-        echo -e "${RED}Squash failed — your branch was restored.${ENDCOLOR}"
+        echo -e "${RED}✗ Squash failed — your branch was restored.${ENDCOLOR}"
         exit 1
     fi
 
     echo
-    echo -e "${GREEN}Successful squash!${ENDCOLOR}"
+    echo -e "${GREEN}✓ Squashed${ENDCOLOR}"
     echo -e "${YELLOW}New history:${ENDCOLOR}"
     git log --reverse --format="  ${YELLOW}%h${ENDCOLOR} (${BLUE}%cr${ENDCOLOR}) %s" "${base_ref}..HEAD"
     echo
@@ -656,10 +656,10 @@ function squash_script {
         push_output=$(git push --force-with-lease -u "$origin_name" "$current_branch" 2>&1)
         push_code=$?
         if [ "$push_code" -eq 0 ]; then
-            echo -e "${GREEN}Pushed!${ENDCOLOR}"
+            echo -e "${GREEN}✓ Pushed${ENDCOLOR}"
             echo "$push_output" | tail -n 5
         else
-            echo -e "${RED}Push failed:${ENDCOLOR}"
+            echo -e "${RED}✗ Push failed.${ENDCOLOR}"
             echo "$push_output"
             exit "$push_code"
         fi

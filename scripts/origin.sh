@@ -27,7 +27,7 @@ function read_remote_url {
 
     if ! validate_git_url "$raw_url"; then
         echo
-        echo -e "${RED}Invalid git URL format!${ENDCOLOR}" >&2
+        echo -e "${RED}✗ Invalid git URL format.${ENDCOLOR}" >&2
         echo -e "${YELLOW}Expected one of:${ENDCOLOR}" >&2
         echo -e "  https://host/user/repo.git" >&2
         echo -e "  git@host:user/repo.git" >&2
@@ -49,13 +49,13 @@ function check_remote_reachable {
     check=$(git ls-remote "$url" 2>&1)
 
     if [[ "$check" == *"does not appear to be a git"* ]]; then
-        echo -e "${RED}'$url' is not a git repository!${ENDCOLOR}" >&2
-        echo -e "${YELLOW}Check the URL and that you have access to it.${ENDCOLOR}" >&2
+        echo -e "${RED}✗ '$url' is not a git repository.${ENDCOLOR}" >&2
+        echo -e "${YELLOW}Check the URL and confirm you have access.${ENDCOLOR}" >&2
         return 1
     fi
 
     if [ -z "$check" ]; then
-        echo -e "${YELLOW}Note: repository '$url' appears to be empty${ENDCOLOR}"
+        echo -e "${YELLOW}⚠  Repository '$url' appears to be empty.${ENDCOLOR}"
     fi
     return 0
 }
@@ -67,7 +67,7 @@ function origin_show {
     remotes=$(git remote)
 
     if [ -z "$remotes" ]; then
-        echo -e "${YELLOW}No remotes configured in this repo${ENDCOLOR}"
+        echo -e "${YELLOW}No remotes configured in this repo.${ENDCOLOR}"
         echo
         echo -e "Add one with: ${GREEN}gitb origin set${ENDCOLOR}"
         return
@@ -134,16 +134,16 @@ function origin_set {
     local existing
     existing=$(git remote get-url origin 2>/dev/null)
     if [ -n "$existing" ]; then
-        echo -e "${YELLOW}Origin already configured:${ENDCOLOR} ${BLUE}$existing${ENDCOLOR}"
+        echo -e "${YELLOW}⚠  Origin already configured:${ENDCOLOR} ${BLUE}$existing${ENDCOLOR}"
         echo
-        echo -e "Use ${GREEN}gitb origin change${ENDCOLOR} to update the URL"
-        echo -e "Use ${GREEN}gitb origin remove${ENDCOLOR} to delete it first"
+        echo -e "Run ${GREEN}gitb origin change${ENDCOLOR} to update the URL."
+        echo -e "Run ${GREEN}gitb origin remove${ENDCOLOR} to delete it first."
         exit 1
     fi
 
     if [ -n "$1" ]; then
         if ! validate_git_url "$1"; then
-            echo -e "${RED}Invalid git URL format: $1${ENDCOLOR}" >&2
+            echo -e "${RED}✗ Invalid git URL format: $1${ENDCOLOR}" >&2
             exit 1
         fi
         new_url="$validated_url"
@@ -161,7 +161,7 @@ function origin_set {
 
     git remote add origin "$new_url"
     echo
-    echo -e "${GREEN}Origin added:${ENDCOLOR} ${BLUE}$new_url${ENDCOLOR}"
+    echo -e "${GREEN}✓ Added origin:${ENDCOLOR} ${BLUE}$new_url${ENDCOLOR}"
 }
 
 
@@ -181,9 +181,9 @@ function origin_change {
     fi
 
     if [ -z "$existing" ]; then
-        echo -e "${YELLOW}No remote configured${ENDCOLOR}"
+        echo -e "${YELLOW}No remote configured.${ENDCOLOR}"
         echo
-        echo -e "Use ${GREEN}gitb origin set${ENDCOLOR} to add one"
+        echo -e "Run ${GREEN}gitb origin set${ENDCOLOR} to add one."
         exit 1
     fi
 
@@ -193,7 +193,7 @@ function origin_change {
 
     if [ -n "$1" ]; then
         if ! validate_git_url "$1"; then
-            echo -e "${RED}Invalid git URL format: $1${ENDCOLOR}" >&2
+            echo -e "${RED}✗ Invalid git URL format: $1${ENDCOLOR}" >&2
             exit 1
         fi
         new_url="$validated_url"
@@ -203,7 +203,7 @@ function origin_change {
 
     if [ "$new_url" == "$existing" ]; then
         echo
-        echo -e "${YELLOW}URL unchanged${ENDCOLOR}"
+        echo -e "${YELLOW}URL unchanged.${ENDCOLOR}"
         exit
     fi
 
@@ -215,7 +215,7 @@ function origin_change {
 
     git remote set-url "$target_remote" "$new_url"
     echo
-    echo -e "${GREEN}Remote URL updated${ENDCOLOR}"
+    echo -e "${GREEN}✓ Updated remote URL${ENDCOLOR}"
     echo -e "  ${GRAY}$existing${ENDCOLOR}"
     echo -e "  ${GREEN}->${ENDCOLOR} ${BLUE}$new_url${ENDCOLOR}"
 }
@@ -230,7 +230,7 @@ function origin_rename {
     fi
 
     if [ -z "$current_name" ]; then
-        echo -e "${YELLOW}No remote configured${ENDCOLOR}"
+        echo -e "${YELLOW}No remote configured.${ENDCOLOR}"
         exit 1
     fi
 
@@ -258,19 +258,19 @@ function origin_rename {
 
     if [ "$new_name" == "$current_name" ]; then
         echo
-        echo -e "${YELLOW}Name unchanged${ENDCOLOR}"
+        echo -e "${YELLOW}Name unchanged.${ENDCOLOR}"
         exit
     fi
 
     if [ -n "$(git remote get-url "$new_name" 2>/dev/null)" ]; then
         echo
-        echo -e "${RED}Remote '$new_name' already exists${ENDCOLOR}" >&2
+        echo -e "${RED}✗ Remote '$new_name' already exists.${ENDCOLOR}" >&2
         exit 1
     fi
 
     git remote rename "$current_name" "$new_name"
     echo
-    echo -e "${GREEN}Remote renamed:${ENDCOLOR} ${GRAY}$current_name${ENDCOLOR} ${GREEN}->${ENDCOLOR} ${BLUE}$new_name${ENDCOLOR}"
+    echo -e "${GREEN}✓ Renamed remote:${ENDCOLOR} ${GRAY}$current_name${ENDCOLOR} ${GREEN}->${ENDCOLOR} ${BLUE}$new_name${ENDCOLOR}"
 }
 
 
@@ -283,7 +283,7 @@ function origin_remove {
     if [ -z "$existing" ]; then
         target=$(git remote | head -n 1)
         if [ -z "$target" ]; then
-            echo -e "${YELLOW}No remotes to remove${ENDCOLOR}"
+            echo -e "${YELLOW}No remotes to remove.${ENDCOLOR}"
             exit
         fi
         existing=$(git remote get-url "$target")
@@ -292,12 +292,13 @@ function origin_remove {
     echo -e "Remote: ${BLUE}$target${ENDCOLOR}"
     echo -e "URL: ${GRAY}$existing${ENDCOLOR}"
     echo
-    echo -e "Are you sure you want to remove this remote (y/n)?"
+    echo -e "${RED}⚠  This will remove the remote (you can re-add it later).${ENDCOLOR}"
+    echo -e "Are you sure (y/n)?"
     yes_no_choice "" "true"
 
     git remote remove "$target"
     echo
-    echo -e "${GREEN}Remote '$target' removed${ENDCOLOR}"
+    echo -e "${GREEN}✓ Removed remote '$target'${ENDCOLOR}"
 }
 
 
@@ -340,13 +341,19 @@ function origin_script {
         echo -e "usage: ${YELLOW}gitb origin <mode> [<url>|<name>]${ENDCOLOR}"
         echo
         msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_show|info_Show configured remotes"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_show|info_Show configured remotes and useful web links"
         msg="$msg\n${BOLD}set${ENDCOLOR}_add|new|a_Add a new origin (fails if origin already set)"
-        msg="$msg\n${BOLD}change${ENDCOLOR}_update|c|u|set-url_Change existing origin URL (after repo rename or move)"
-        msg="$msg\n${BOLD}rename${ENDCOLOR}_mv|ren_Rename a remote (e.g. origin -> upstream)"
+        msg="$msg\n${BOLD}change${ENDCOLOR}_update|c|u|set-url_Change the existing origin URL"
+        msg="$msg\n${BOLD}rename${ENDCOLOR}_mv|ren_Rename a remote (e.g. ${BLUE}origin -> upstream${ENDCOLOR})"
         msg="$msg\n${BOLD}remove${ENDCOLOR}_rm|del|d_Remove the remote"
         msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
         echo -e "$(echo -e "$msg" | column -ts '_')"
+        echo
+        echo -e "${YELLOW}Examples${ENDCOLOR}"
+        echo -e "  ${GREEN}gitb origin${ENDCOLOR}                                Show configured remotes"
+        echo -e "  ${GREEN}gitb origin set git@github.com:me/repo.git${ENDCOLOR}  Add a new origin from a URL"
+        echo -e "  ${GREEN}gitb origin change${ENDCOLOR}                         Update the URL after a repo move"
+        echo -e "  ${GREEN}gitb origin rename upstream${ENDCOLOR}                Rename current remote to ${BLUE}upstream${ENDCOLOR}"
         exit
     fi
 

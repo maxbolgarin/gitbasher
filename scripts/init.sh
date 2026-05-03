@@ -62,7 +62,7 @@ function unset_config_value {
         yes_no_choice "\nClear AI proxy globally" "false"
         if [ $? -eq 0 ]; then
             git config --global --unset "$1" 2>/dev/null
-            echo -e "${GREEN}$1 cleared globally${ENDCOLOR}"
+            echo -e "${GREEN}✓ Cleared $1 globally${ENDCOLOR}"
         fi
     fi
 }
@@ -125,10 +125,10 @@ if [ "$origin_name" == "" ]; then
     # Skip interactive prompt if in test mode or stdin is not a TTY (e.g., in tests or scripts)
     if [ -z "$GITBASHER_TEST_MODE" ] && [ -t 0 ]; then
         # Interactive mode: prompt user for remote setup
-        echo -e "${YELLOW}There is no configured remote in this repo!${ENDCOLOR}"
+        echo -e "${YELLOW}⚠  No remote is configured in this repo.${ENDCOLOR}"
         echo
-        echo -e "Use ${BLUE}git remote add origin <url>${ENDCOLOR} to add it manually"
-        echo -e "Press '${BOLD}y${ENDCOLOR}' to add it now or an any key to exit"
+        echo -e "Add one with: ${GREEN}git remote add origin <url>${ENDCOLOR}"
+        echo -e "Press ${BOLD}y${NORMAL} to add one now, or any other key to exit"
 
         read -n 1 -s choice
         if ! is_yes "$choice"; then
@@ -146,8 +146,8 @@ if [ "$origin_name" == "" ]; then
         # Validate remote URL format
         if ! validate_git_url "$remote_url"; then
             echo
-            echo -e "${RED}Invalid git URL format!${ENDCOLOR}"
-            echo -e "${YELLOW}Expected formats:${ENDCOLOR}"
+            echo -e "${RED}✗ Invalid git URL format.${ENDCOLOR}"
+            echo -e "${YELLOW}Expected one of:${ENDCOLOR}"
             echo -e "  • https://github.com/user/repo.git"
             echo -e "  • git@github.com:user/repo.git"
             echo -e "  • ssh://git@server.com/repo.git"
@@ -158,15 +158,15 @@ if [ "$origin_name" == "" ]; then
         remote_check=$(git ls-remote "$remote_url" 2>&1)
         if [[ "$remote_check" == *"does not appear to be a git"* ]]; then
             echo
-            echo -e "${RED}'$remote_url' is not a git repository!${ENDCOLOR}"
-            echo "Please make sure you have the correct access rights and the repository exists."
+            echo -e "${RED}✗ '$remote_url' is not a git repository.${ENDCOLOR}"
+            echo "Make sure you have the correct access rights and that the repo exists."
             exit
         fi
 
         git remote add origin "$remote_url"
-        echo -e "${GREEN}Remote successfully added!${ENDCOLOR}"
+        echo -e "${GREEN}✓ Added remote origin${ENDCOLOR}"
         if [ "$remote_check" == "" ]; then
-            echo -e "${YELLOW}Repository '$remote_url' is probably empty${ENDCOLOR}"
+            echo -e "${YELLOW}⚠  Repository '$remote_url' appears to be empty.${ENDCOLOR}"
         fi
         echo
         

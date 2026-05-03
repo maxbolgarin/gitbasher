@@ -46,13 +46,19 @@ function undo_script {
         echo -e "usage: ${YELLOW}gitb undo <mode>${ENDCOLOR}"
         echo
         msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_commit|c_Undo last commit (git reset --soft HEAD~1), keeps changes staged"
-        msg="$msg\n${BOLD}amend${ENDCOLOR}_a_Undo last amend, restoring the previous commit state via reflog"
-        msg="$msg\n${BOLD}merge${ENDCOLOR}_m_Undo last merge (git merge --abort or git reset --merge ORIG_HEAD)"
-        msg="$msg\n${BOLD}rebase${ENDCOLOR}_r_Undo last rebase (git rebase --abort or git reset --hard ORIG_HEAD)"
-        msg="$msg\n${BOLD}stash${ENDCOLOR}_s_Undo last stash pop by re-stashing the popped changes"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_commit|c_Undo the last commit ${BLUE}(${YELLOW}git reset --soft HEAD~1${BLUE})${ENDCOLOR}; keeps changes staged"
+        msg="$msg\n${BOLD}amend${ENDCOLOR}_a_Undo the last amend, restoring the previous commit via reflog"
+        msg="$msg\n${BOLD}merge${ENDCOLOR}_m_Undo the last merge ${BLUE}(${YELLOW}git merge --abort${BLUE} or ${YELLOW}git reset --merge ORIG_HEAD${BLUE})${ENDCOLOR}"
+        msg="$msg\n${BOLD}rebase${ENDCOLOR}_r_Undo the last rebase ${BLUE}(${YELLOW}git rebase --abort${BLUE} or ${YELLOW}git reset --hard ORIG_HEAD${BLUE})${ENDCOLOR}"
+        msg="$msg\n${BOLD}stash${ENDCOLOR}_s_Re-stash changes from the last ${BLUE}stash pop${ENDCOLOR}"
         msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
         echo -e "$(echo -e "$msg" | column -ts'_')"
+        echo
+        echo -e "${YELLOW}Examples${ENDCOLOR}"
+        echo -e "  ${GREEN}gitb undo${ENDCOLOR}          Undo the last commit, keep its changes staged"
+        echo -e "  ${GREEN}gitb undo amend${ENDCOLOR}    Restore the commit you just amended"
+        echo -e "  ${GREEN}gitb undo merge${ENDCOLOR}    Roll back the last merge (or abort if in progress)"
+        echo -e "  ${GREEN}gitb undo rebase${ENDCOLOR}   Restore the branch state from before the last rebase"
         exit
     fi
 
@@ -72,7 +78,7 @@ function undo_commit {
     # Check if there are any commits
     commit_count=$(git rev-list --count HEAD 2>/dev/null)
     if [ -z "$commit_count" ] || [ "$commit_count" -eq 0 ]; then
-        echo -e "${RED}No commits to undo${ENDCOLOR}"
+        echo -e "${YELLOW}No commits to undo.${ENDCOLOR}"
         exit 1
     fi
 
@@ -90,14 +96,14 @@ function undo_commit {
     reset_code=$?
 
     if [ $reset_code -ne 0 ]; then
-        echo -e "${RED}Cannot undo commit! Error message:${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot undo commit.${ENDCOLOR}"
         echo "$reset_output"
         exit $reset_code
     fi
 
     new_commit=$(git log -n 1 --pretty="%s | ${YELLOW}%h${ENDCOLOR} | ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})" 2>/dev/null)
 
-    echo -e "${GREEN}Commit undone successfully!${ENDCOLOR}"
+    echo -e "${GREEN}✓ Undid last commit${ENDCOLOR}"
     echo
     echo -e "${RED}Undone commit:${ENDCOLOR}\t$cancelled_commit"
     if [ -n "$new_commit" ]; then
@@ -124,7 +130,7 @@ function undo_amend {
         amend_ref=$(git reflog --pretty="%gd %gs" | grep "amend" | head -n 1 | awk '{print $1}')
 
         if [ -z "$amend_ref" ]; then
-            echo -e "${RED}No amend found in reflog${ENDCOLOR}"
+            echo -e "${YELLOW}No amend found in reflog.${ENDCOLOR}"
             exit 1
         fi
 
@@ -144,7 +150,7 @@ function undo_amend {
     pre_amend_commit=$(git log -n 1 --pretty="%s | ${YELLOW}%h${ENDCOLOR} | ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})" "$pre_amend_ref" 2>/dev/null)
 
     if [ -z "$pre_amend_commit" ]; then
-        echo -e "${RED}Cannot find the pre-amend state in reflog${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot find the pre-amend state in reflog.${ENDCOLOR}"
         exit 1
     fi
 
@@ -159,12 +165,12 @@ function undo_amend {
     reset_code=$?
 
     if [ $reset_code -ne 0 ]; then
-        echo -e "${RED}Cannot undo amend! Error message:${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot undo amend.${ENDCOLOR}"
         echo "$reset_output"
         exit $reset_code
     fi
 
-    echo -e "${GREEN}Amend undone successfully!${ENDCOLOR}"
+    echo -e "${GREEN}✓ Undid last amend${ENDCOLOR}"
     echo
     echo -e "${GREEN}Restored commit:${ENDCOLOR}"
     echo -e "\t$(git log -n 1 --pretty="%s | ${YELLOW}%h${ENDCOLOR} | ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})")"
@@ -178,20 +184,20 @@ function undo_amend {
 function undo_merge {
     # Check if a merge is in progress
     if [ -f "$(git rev-parse --git-dir)/MERGE_HEAD" ]; then
-        echo -e "${YELLOW}Merge in progress detected${ENDCOLOR}"
-        echo -e "Do you want to abort the ongoing merge (y/n)?"
+        echo -e "${YELLOW}⚠  A merge is in progress.${ENDCOLOR}"
+        echo -e "Abort the ongoing merge (y/n)?"
         yes_no_choice "Aborting merge..."
 
         abort_output=$(git merge --abort 2>&1)
         abort_code=$?
 
         if [ $abort_code -ne 0 ]; then
-            echo -e "${RED}Cannot abort merge! Error message:${ENDCOLOR}"
+            echo -e "${RED}✗ Cannot abort merge.${ENDCOLOR}"
             echo "$abort_output"
             exit $abort_code
         fi
 
-        echo -e "${GREEN}Merge aborted successfully!${ENDCOLOR}"
+        echo -e "${GREEN}✓ Aborted merge${ENDCOLOR}"
         exit
     fi
 
@@ -205,8 +211,8 @@ function undo_merge {
     # Check ORIG_HEAD exists
     orig_head=$(git rev-parse ORIG_HEAD 2>/dev/null)
     if [ -z "$orig_head" ]; then
-        echo -e "${RED}No ORIG_HEAD found - cannot determine pre-merge state${ENDCOLOR}"
-        echo -e "${YELLOW}Try using ${BOLD}gitb reset ref${NORMAL}${YELLOW} to manually select a reflog entry${ENDCOLOR}"
+        echo -e "${RED}✗ No ORIG_HEAD found — cannot determine pre-merge state.${ENDCOLOR}"
+        echo -e "${YELLOW}Try ${BOLD}gitb reset ref${NORMAL}${YELLOW} to pick a reflog entry manually.${ENDCOLOR}"
         exit 1
     fi
 
@@ -218,20 +224,20 @@ function undo_merge {
     echo -e "${GREEN}Restore to:${ENDCOLOR}\t$orig_commit"
     echo
 
-    echo -e "${RED}This will discard the merge commit and all merge changes${ENDCOLOR}"
-    echo -e "Do you want to undo the merge (y/n)?"
+    echo -e "${RED}⚠  This will discard the merge commit and all merge changes.${ENDCOLOR}"
+    echo -e "Are you sure you want to undo the merge (y/n)?"
     yes_no_choice "Undoing merge..."
 
     reset_output=$(git reset --merge ORIG_HEAD 2>&1)
     reset_code=$?
 
     if [ $reset_code -ne 0 ]; then
-        echo -e "${RED}Cannot undo merge! Error message:${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot undo merge.${ENDCOLOR}"
         echo "$reset_output"
         exit $reset_code
     fi
 
-    echo -e "${GREEN}Merge undone successfully!${ENDCOLOR}"
+    echo -e "${GREEN}✓ Undid last merge${ENDCOLOR}"
     echo
     echo -e "${GREEN}Restored to:${ENDCOLOR}"
     echo -e "\t$(git log -n 1 --pretty="%s | ${YELLOW}%h${ENDCOLOR} | ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})")"
@@ -242,28 +248,28 @@ function undo_merge {
 function undo_rebase {
     # Check if a rebase is in progress
     if [ -d "$(git rev-parse --git-dir)/rebase-merge" ] || [ -d "$(git rev-parse --git-dir)/rebase-apply" ]; then
-        echo -e "${YELLOW}Rebase in progress detected${ENDCOLOR}"
-        echo -e "Do you want to abort the ongoing rebase (y/n)?"
+        echo -e "${YELLOW}⚠  A rebase is in progress.${ENDCOLOR}"
+        echo -e "Abort the ongoing rebase (y/n)?"
         yes_no_choice "Aborting rebase..."
 
         abort_output=$(git rebase --abort 2>&1)
         abort_code=$?
 
         if [ $abort_code -ne 0 ]; then
-            echo -e "${RED}Cannot abort rebase! Error message:${ENDCOLOR}"
+            echo -e "${RED}✗ Cannot abort rebase.${ENDCOLOR}"
             echo "$abort_output"
             exit $abort_code
         fi
 
-        echo -e "${GREEN}Rebase aborted successfully!${ENDCOLOR}"
+        echo -e "${GREEN}✓ Aborted rebase${ENDCOLOR}"
         exit
     fi
 
     # Check ORIG_HEAD exists
     orig_head=$(git rev-parse ORIG_HEAD 2>/dev/null)
     if [ -z "$orig_head" ]; then
-        echo -e "${RED}No ORIG_HEAD found - cannot determine pre-rebase state${ENDCOLOR}"
-        echo -e "${YELLOW}Try using ${BOLD}gitb reset ref${NORMAL}${YELLOW} to manually select a reflog entry${ENDCOLOR}"
+        echo -e "${RED}✗ No ORIG_HEAD found — cannot determine pre-rebase state.${ENDCOLOR}"
+        echo -e "${YELLOW}Try ${BOLD}gitb reset ref${NORMAL}${YELLOW} to pick a reflog entry manually.${ENDCOLOR}"
         exit 1
     fi
 
@@ -275,20 +281,20 @@ function undo_rebase {
     echo -e "${GREEN}Pre-rebase state:${ENDCOLOR}\t$orig_commit"
     echo
 
-    echo -e "${RED}This will discard all rebase changes and restore the original branch state${ENDCOLOR}"
-    echo -e "Do you want to undo the rebase (y/n)?"
+    echo -e "${RED}⚠  This will discard all rebase changes and restore the original branch state.${ENDCOLOR}"
+    echo -e "Are you sure you want to undo the rebase (y/n)?"
     yes_no_choice "Undoing rebase..."
 
     reset_output=$(git reset --hard ORIG_HEAD 2>&1)
     reset_code=$?
 
     if [ $reset_code -ne 0 ]; then
-        echo -e "${RED}Cannot undo rebase! Error message:${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot undo rebase.${ENDCOLOR}"
         echo "$reset_output"
         exit $reset_code
     fi
 
-    echo -e "${GREEN}Rebase undone successfully!${ENDCOLOR}"
+    echo -e "${GREEN}✓ Undid last rebase${ENDCOLOR}"
     echo
     echo -e "${GREEN}Restored to:${ENDCOLOR}"
     echo -e "\t$(git log -n 1 --pretty="%s | ${YELLOW}%h${ENDCOLOR} | ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})")"
@@ -299,30 +305,28 @@ function undo_rebase {
 function undo_stash {
     # Check if there are any changes from a recent stash pop (tracked or untracked)
     if git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then
-        echo -e "${YELLOW}No changes detected in working tree${ENDCOLOR}"
-        echo -e "If stash pop had conflicts, resolve them first and then use this command"
-        echo
-        echo -e "Nothing to undo"
+        echo -e "${YELLOW}No changes detected in the working tree.${ENDCOLOR}"
+        echo -e "If a stash pop had conflicts, resolve them first, then run this again."
         exit
     fi
 
-    echo -e "${YELLOW}Current changes that will be re-stashed:${ENDCOLOR}"
+    echo -e "${YELLOW}Changes that will be re-stashed:${ENDCOLOR}"
     git_status
     echo
 
-    echo -e "This will stash all current changes to undo the last stash pop/apply"
-    echo -e "Do you want to continue (y/n)?"
+    echo -e "This will stash all current changes to undo the last stash pop/apply."
+    echo -e "Continue (y/n)?"
     yes_no_choice "Re-stashing changes..."
 
     stash_output=$(git stash push -m "undo: re-stashed changes" --include-untracked 2>&1)
     stash_code=$?
 
     if [ $stash_code -ne 0 ]; then
-        echo -e "${RED}Cannot re-stash changes! Error message:${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot re-stash changes.${ENDCOLOR}"
         echo "$stash_output"
         exit $stash_code
     fi
 
-    echo -e "${GREEN}Changes re-stashed successfully!${ENDCOLOR}"
-    echo -e "${YELLOW}Your changes are saved in the stash. Use ${BOLD}gitb stash pop${NORMAL}${YELLOW} to restore them.${ENDCOLOR}"
+    echo -e "${GREEN}✓ Re-stashed changes${ENDCOLOR}"
+    echo -e "${CYAN}💡 Use ${BOLD}gitb stash pop${NORMAL}${CYAN} to restore them.${ENDCOLOR}"
 }

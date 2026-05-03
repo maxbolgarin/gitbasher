@@ -24,7 +24,7 @@ function set_default_branch {
     echo 
 
     main_branch=$(set_config_value gitbasher.branch $branch_name)
-    echo -e "${GREEN}Set '${branch_name}' as a default gitbasher branch in '${project_name}' repo${ENDCOLOR}"
+    echo -e "${GREEN}✓ Set '${branch_name}' as the default gitbasher branch in '${project_name}'${ENDCOLOR}"
     echo
 
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
@@ -47,7 +47,7 @@ function set_sep {
     echo -e "6. type${YELLOW}+${ENDCOLOR}name"
     echo -e "7. type${YELLOW}=${ENDCOLOR}name"
     echo -e "8. type${YELLOW}@${ENDCOLOR}name"
-    echo "0. Exit without changes"
+    echo "0. Exit"
     
     declare -A seps=(
             [1]="/"
@@ -81,7 +81,7 @@ function set_sep {
     echo
 
     sep=$(set_config_value gitbasher.sep $new_sep)
-    echo -e "${GREEN}Set '${sep}' as a branch name separator in '${project_name}' repo${ENDCOLOR}"
+    echo -e "${GREEN}✓ Set '${sep}' as the branch name separator in '${project_name}'${ENDCOLOR}"
     echo
 
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
@@ -94,8 +94,8 @@ function set_sep {
 function set_editor {
     echo -e "${YELLOW}Enter an editor for commit messages${ENDCOLOR}"
     echo
-    echo -e "Enter the bin name of editor to run for creating commit messages (e.g. 'vi' or 'nano')"
-    echo -e "It will override ${YELLOW}core.editor${ENDCOLOR} git config value, press Enter if you want to exit"
+    echo -e "Enter the binary name (e.g. ${BLUE}vi${ENDCOLOR} or ${BLUE}nano${ENDCOLOR}) — overrides ${YELLOW}core.editor${ENDCOLOR}"
+    echo -e "Press Enter to exit without changes"
     echo -e "Current editor: ${YELLOW}${editor}${ENDCOLOR}"
     read -p "Editor: " choice
 
@@ -114,12 +114,12 @@ function set_editor {
 
     which_output=$(which "$choice")
     if [[ "${which_output}" == *"not found"* ]] || [[ "${which_output}" == "" ]]; then
-        echo -e "${RED}Binary '${choice}' not found!${ENDCOLOR}" >&2
+        echo -e "${RED}✗ Binary '${choice}' not found.${ENDCOLOR}" >&2
         exit 1
     fi
 
     editor=$(set_config_value core.editor $choice)
-    echo -e "${GREEN}Use editor '$editor' located at '$which_output'${ENDCOLOR}"
+    echo -e "${GREEN}✓ Using editor '$editor' (${which_output})${ENDCOLOR}"
     echo
 
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
@@ -134,10 +134,10 @@ function set_ticket {
     echo
 
     if [ -z "$ticket_name" ]; then
-        echo -e "${YELLOW}Ticket prefix is not set in gitbasher${ENDCOLOR}"
+        echo -e "${YELLOW}No ticket prefix is set.${ENDCOLOR}"
     else
         echo -e "Current ticket prefix: ${YELLOW}$ticket_name${ENDCOLOR}"
-        echo -e "Press Enter to exit without changes or enter 0 to remove existing ticket prefix"
+        echo -e "Press Enter to exit without changes, or 0 to remove the existing prefix"
     fi
 
     read -p "Ticket prefix: " -e ticket_name
@@ -145,7 +145,7 @@ function set_ticket {
     if [ "$ticket_name" == "0" ]; then
         unset_config_value gitbasher.ticket
         echo
-        echo -e "${GREEN}Ticket prefix removed from '${project_name}' repo${ENDCOLOR}"
+        echo -e "${GREEN}✓ Removed ticket prefix from '${project_name}'${ENDCOLOR}"
         exit
     fi
 
@@ -163,7 +163,7 @@ function set_ticket {
     echo 
 
     ticket_name=$(set_config_value gitbasher.ticket $ticket_name)
-    echo -e "${GREEN}Set '${ticket_name}' as a ticket name in '${project_name}' repo${ENDCOLOR}"
+    echo -e "${GREEN}✓ Set '${ticket_name}' as the ticket prefix in '${project_name}'${ENDCOLOR}"
     echo
 
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
@@ -182,13 +182,13 @@ function configure_ai_key {
     # Local providers don't take a key — short-circuit instead of prompting for nothing.
     if [ "$provider" = "ollama" ]; then
         echo -e "${YELLOW}Provider '${provider}' does not require an API key.${ENDCOLOR}"
-        echo -e "Switch providers with ${BLUE}gitb cfg provider${ENDCOLOR} if you want to enter one."
+        echo -e "Switch providers with ${GREEN}gitb cfg provider${ENDCOLOR} to set one."
         exit
     fi
 
     ai_api_key=$(get_ai_api_key)
     if [ -z "$ai_api_key" ]; then
-        echo -e "${YELLOW}AI API key is not set${ENDCOLOR}"
+        echo -e "${YELLOW}No AI API key is set.${ENDCOLOR}"
     else
         echo -e "AI API key is ${GREEN}configured${ENDCOLOR}: ${BLUE}$(mask_api_key "$ai_api_key")${ENDCOLOR}"
     fi
@@ -203,14 +203,14 @@ function configure_ai_key {
             ;;
     esac
     echo
-    echo -e "${YELLOW}Security Note:${ENDCOLOR} For better security, consider using environment variable:"
+    echo -e "${CYAN}💡 For better security, set the key via environment variable instead:${ENDCOLOR}"
     echo -e "  ${BLUE}export GITB_AI_API_KEY='your-api-key'${ENDCOLOR}"
-    echo -e "  Add this to your ~/.bashrc or ~/.zshrc to make it permanent"
+    echo -e "  Add this to your ~/.bashrc or ~/.zshrc to make it permanent."
     echo
-    echo -e "Press Enter to exit without changes or enter 0 to remove existing key"
+    echo -e "Press Enter to exit without changes, or 0 to remove the existing key"
 
     echo
-    echo -e "${YELLOW}API key enters silently, so you can't see it, but it is entered${ENDCOLOR}"
+    echo -e "${YELLOW}Input is hidden — type the key and press Enter.${ENDCOLOR}"
 
     read -p "API Key: " -s ai_key_input
     echo
@@ -222,7 +222,7 @@ function configure_ai_key {
     if [ "$ai_key_input" == "0" ]; then
         unset_config_value gitbasher.ai-api-key
         echo
-        echo -e "${GREEN}AI API key removed from '${project_name}' repo${ENDCOLOR}"
+        echo -e "${GREEN}✓ Removed AI API key from '${project_name}'${ENDCOLOR}"
         exit
     fi
 
@@ -230,7 +230,7 @@ function configure_ai_key {
 
     # Basic validation - check for reasonable API key format
     if [[ ! "$ai_key_input" =~ ^[a-zA-Z0-9._-]{20,}$ ]]; then
-        echo -e "${RED}Warning: API key format doesn't look like a valid ${provider} key${ENDCOLOR}" >&2
+        echo -e "${YELLOW}⚠  API key format does not look like a valid ${provider} key.${ENDCOLOR}" >&2
         read -n 1 -p "Continue anyway? (y/n) " -s choice
         echo
         if ! is_yes "$choice"; then
@@ -239,12 +239,12 @@ function configure_ai_key {
     fi
 
     ai_api_key=$(set_config_value gitbasher.ai-api-key "$ai_key_input")
-    echo -e "${GREEN}AI API key configured for '${project_name}' repo${ENDCOLOR}: ${BLUE}$(mask_api_key "$ai_api_key")${ENDCOLOR}"
+    echo -e "${GREEN}✓ Configured AI API key for '${project_name}':${ENDCOLOR} ${BLUE}$(mask_api_key "$ai_api_key")${ENDCOLOR}"
     echo
 
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
-    echo -e "${YELLOW}⚠️  Security Warning:${ENDCOLOR} Global API keys are stored in plaintext in ~/.gitconfig"
-    echo -e "${YELLOW}   Consider using environment variable GITB_AI_API_KEY instead for better security${ENDCOLOR}"
+    echo -e "${RED}⚠  Global API keys are stored in plaintext in ~/.gitconfig.${ENDCOLOR}"
+    echo -e "${CYAN}💡 For better security, set ${BLUE}GITB_AI_API_KEY${CYAN} as an environment variable instead.${ENDCOLOR}"
     yes_no_choice "\nSet AI API key globally" "true"
     ai_api_key=$(set_config_value gitbasher.ai-api-key "$ai_key_input" "true")
 }
@@ -284,7 +284,7 @@ function configure_ai_provider {
         git config --unset gitbasher.ai-provider 2>/dev/null
         git config --global --unset gitbasher.ai-provider 2>/dev/null
         echo
-        echo -e "${GREEN}Provider reset to default (${AI_DEFAULT_PROVIDER}).${ENDCOLOR}"
+        echo -e "${GREEN}✓ Reset provider to default (${AI_DEFAULT_PROVIDER})${ENDCOLOR}"
         exit
     fi
 
@@ -294,25 +294,25 @@ function configure_ai_provider {
         2) new_provider="openai" ;;
         3) new_provider="ollama" ;;
         *)
-            echo -e "${RED}Invalid choice${ENDCOLOR}" >&2
+            echo -e "${RED}✗ Invalid choice.${ENDCOLOR}" >&2
             exit 1
             ;;
     esac
 
     set_ai_provider "$new_provider"
-    echo -e "${GREEN}AI provider set to '${new_provider}' for '${project_name}' repo${ENDCOLOR}"
+    echo -e "${GREEN}✓ Set AI provider to '${new_provider}' for '${project_name}'${ENDCOLOR}"
 
     # Provider-specific follow-up hints so users aren't left guessing.
     case "$new_provider" in
         openai)
-            echo -e "Next: set your key with ${BLUE}gitb cfg ai${ENDCOLOR} (https://platform.openai.com/api-keys)"
+            echo -e "${CYAN}💡 Next: set your key with ${GREEN}gitb cfg ai${CYAN} (https://platform.openai.com/api-keys)${ENDCOLOR}"
             ;;
         openrouter)
-            echo -e "Next: set your key with ${BLUE}gitb cfg ai${ENDCOLOR} (https://openrouter.ai/keys)"
+            echo -e "${CYAN}💡 Next: set your key with ${GREEN}gitb cfg ai${CYAN} (https://openrouter.ai/keys)${ENDCOLOR}"
             ;;
         ollama)
-            echo -e "Make sure the Ollama daemon is running (${BLUE}ollama serve${ENDCOLOR}) and a model is pulled (${BLUE}ollama pull qwen3:8b${ENDCOLOR})."
-            echo -e "Pick a different model with ${BLUE}gitb cfg model${ENDCOLOR} if you have something else installed."
+            echo -e "${CYAN}💡 Make sure the Ollama daemon is running (${BLUE}ollama serve${CYAN}) and a model is pulled (${BLUE}ollama pull qwen3:8b${CYAN}).${ENDCOLOR}"
+            echo -e "${CYAN}💡 Pick a different model with ${GREEN}gitb cfg model${CYAN} if you have one installed already.${ENDCOLOR}"
             ;;
     esac
     echo
@@ -365,7 +365,7 @@ function configure_ai_model {
             ;;
     esac
     echo
-    echo -e "Press Enter to exit without changes or enter 0 to clear the override (back to per-task defaults)"
+    echo -e "Press Enter to exit without changes, or 0 to clear the override (use per-task defaults)"
 
     read -p "Model ID: " model_input
 
@@ -378,7 +378,7 @@ function configure_ai_model {
         git config --unset gitbasher.ai-model 2>/dev/null
         git config --global --unset gitbasher.ai-model 2>/dev/null
         echo
-        echo -e "${GREEN}Global model override cleared. Each task now uses its per-task default.${ENDCOLOR}"
+        echo -e "${GREEN}✓ Cleared global model override — each task now uses its per-task default${ENDCOLOR}"
         exit
     fi
 
@@ -386,14 +386,14 @@ function configure_ai_model {
 
     # Basic validation - check for reasonable model ID format
     if [[ ! "$model_input" =~ ^[a-zA-Z0-9._/-]+$ ]]; then
-        echo -e "${RED}Invalid model ID format${ENDCOLOR}" >&2
-        echo -e "${YELLOW}Model ID should contain only letters, numbers, dots, dashes, underscores, and slashes${ENDCOLOR}" >&2
+        echo -e "${RED}✗ Invalid model ID format.${ENDCOLOR}" >&2
+        echo -e "${YELLOW}Use only letters, numbers, dots, dashes, underscores, and slashes.${ENDCOLOR}" >&2
         exit 1
     fi
 
     # Set the model
     set_ai_model "$model_input"
-    echo -e "${GREEN}AI model set to '$model_input' for '${project_name}' repo${ENDCOLOR}"
+    echo -e "${GREEN}✓ Set AI model to '$model_input' for '${project_name}'${ENDCOLOR}"
     echo
 
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
@@ -409,7 +409,7 @@ function configure_ai_proxy {
     
     ai_proxy=$(get_ai_proxy)
     if [ -z "$ai_proxy" ]; then
-        echo -e "${YELLOW}AI proxy is not configured${ENDCOLOR}"
+        echo -e "${YELLOW}No AI proxy is configured.${ENDCOLOR}"
     else
         echo -e "Current AI proxy: ${GREEN}$ai_proxy${ENDCOLOR}"
     fi
@@ -421,7 +421,7 @@ function configure_ai_proxy {
     echo -e "  • ${BLUE}http://username:password@proxy.example.com:8080${ENDCOLOR}"
     echo -e "  • ${BLUE}http://[2001:db8::1]:8080${ENDCOLOR} (IPv6)"
     echo -e ""
-    echo -e "Press Enter to exit without changes or enter 0 to remove existing proxy"
+    echo -e "Press Enter to exit without changes, or 0 to remove the existing proxy"
 
     read -p "Proxy URL: " ai_proxy_input
 
@@ -432,7 +432,7 @@ function configure_ai_proxy {
     if [ "$ai_proxy_input" == "0" ]; then
         unset_config_value gitbasher.ai-proxy
         echo
-        echo -e "${GREEN}AI proxy removed from '${project_name}' repo${ENDCOLOR}"
+        echo -e "${GREEN}✓ Removed AI proxy from '${project_name}'${ENDCOLOR}"
         exit
     fi
 
@@ -440,7 +440,7 @@ function configure_ai_proxy {
 
     # Validate and sanitize proxy URL to prevent command injection
     if ! validate_proxy_url "$ai_proxy_input"; then
-        echo -e "${RED}Invalid proxy URL format: $ai_proxy_input${ENDCOLOR}" >&2
+        echo -e "${RED}✗ Invalid proxy URL format: $ai_proxy_input${ENDCOLOR}" >&2
         echo -e "${YELLOW}Expected format: protocol://host:port (e.g., http://proxy.example.com:8080)${ENDCOLOR}" >&2
         echo -e "${YELLOW}Or: host:port (e.g., proxy.example.com:8080)${ENDCOLOR}" >&2
         echo -e "${YELLOW}Supported protocols: http, https, socks5${ENDCOLOR}" >&2
@@ -451,7 +451,7 @@ function configure_ai_proxy {
     ai_proxy_input="$validated_proxy_url"
 
     set_ai_proxy "$ai_proxy_input"
-    echo -e "${GREEN}AI proxy configured for '${project_name}' repo${ENDCOLOR}: ${BLUE}$ai_proxy_input${ENDCOLOR}"
+    echo -e "${GREEN}✓ Configured AI proxy for '${project_name}':${ENDCOLOR} ${BLUE}$ai_proxy_input${ENDCOLOR}"
     echo
     echo -e "${YELLOW}Example usage:${ENDCOLOR}"
     echo -e "  ${BLUE}gitb commit ai${ENDCOLOR}    - Generate commit with AI through proxy"
@@ -499,9 +499,9 @@ function configure_ai_history {
 
     # Warn if value is outside recommended range
     if [ "$limit_input" -lt 5 ] || [ "$limit_input" -gt 20 ]; then
-        echo -e "${YELLOW}Warning: Value outside recommended range (5-20)${ENDCOLOR}"
+        echo -e "${YELLOW}⚠  Value is outside the recommended range (5-20).${ENDCOLOR}"
         if [ "$limit_input" -gt 20 ]; then
-            echo -e "${YELLOW}High values may exceed token limits and slow down AI responses${ENDCOLOR}"
+            echo -e "${YELLOW}High values may exceed token limits and slow down AI responses.${ENDCOLOR}"
         fi
         read -n 1 -p "Continue anyway? (y/n) " -s choice
         echo
@@ -511,7 +511,7 @@ function configure_ai_history {
     fi
 
     set_ai_commit_history_limit "$limit_input"
-    echo -e "${GREEN}AI commit history limit set to ${limit_input} for '${project_name}' repo${ENDCOLOR}"
+    echo -e "${GREEN}✓ Set AI commit history limit to ${limit_input} for '${project_name}'${ENDCOLOR}"
     echo
 
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
@@ -551,7 +551,7 @@ function configure_ai_diff {
         fi
         lines_input="$validated_number"
         if [ "$lines_input" -lt 50 ] || [ "$lines_input" -gt 2000 ]; then
-            echo -e "${YELLOW}Warning: Value outside recommended range (50-2000)${ENDCOLOR}"
+            echo -e "${YELLOW}⚠  Value is outside the recommended range (50-2000).${ENDCOLOR}"
             read -n 1 -p "Continue anyway? (y/n) " -s choice
             echo
             if ! is_yes "$choice"; then
@@ -559,7 +559,7 @@ function configure_ai_diff {
             fi
         fi
         set_ai_diff_limit "$lines_input"
-        echo -e "${GREEN}AI diff line limit set to ${lines_input}${ENDCOLOR}"
+        echo -e "${GREEN}✓ Set AI diff line limit to ${lines_input}${ENDCOLOR}"
     fi
 
     read -p "New diff char cap: " chars_input
@@ -570,7 +570,7 @@ function configure_ai_diff {
         fi
         chars_input="$validated_number"
         if [ "$chars_input" -lt 4000 ] || [ "$chars_input" -gt 100000 ]; then
-            echo -e "${YELLOW}Warning: Value outside recommended range (4000-100000)${ENDCOLOR}"
+            echo -e "${YELLOW}⚠  Value is outside the recommended range (4000-100000).${ENDCOLOR}"
             read -n 1 -p "Continue anyway? (y/n) " -s choice
             echo
             if ! is_yes "$choice"; then
@@ -578,11 +578,11 @@ function configure_ai_diff {
             fi
         fi
         set_ai_diff_max_chars "$chars_input"
-        echo -e "${GREEN}AI diff char cap set to ${chars_input}${ENDCOLOR}"
+        echo -e "${GREEN}✓ Set AI diff char cap to ${chars_input}${ENDCOLOR}"
     fi
 
     if [ -z "$lines_input" ] && [ -z "$chars_input" ]; then
-        echo -e "${YELLOW}No changes${ENDCOLOR}"
+        echo -e "${YELLOW}No changes.${ENDCOLOR}"
         exit
     fi
 
@@ -603,13 +603,13 @@ function set_scopes {
     echo -e "${YELLOW}Enter a list of predefined scopes${ENDCOLOR}"
     echo
     if [ "$scopes" == "" ]; then
-        echo -e "${YELLOW}Scopes list is not set${ENDCOLOR}"
+        echo -e "${YELLOW}No scopes list is set.${ENDCOLOR}"
     else
-        echo -e "Current list of scopes: ${YELLOW}$scopes${ENDCOLOR}"
+        echo -e "Current scopes: ${YELLOW}$scopes${ENDCOLOR}"
     fi
-    echo -e "Use only english letters and space as separator, maximum is 9 scopes"
+    echo -e "Use English letters separated by spaces (max 9 scopes)."
     if [ "$scopes" != "" ]; then
-        echo -e "Press Enter to exit without changes or enter 0 to remove existing scopes"
+        echo -e "Press Enter to exit without changes, or 0 to remove existing scopes"
     fi
 
     read -p "Scopes: " -e scopes_raw
@@ -622,7 +622,7 @@ function set_scopes {
         unset_config_value gitbasher.scopes
 
         echo
-        echo -e "${GREEN}Scopes list removed from '${project_name}' repo${ENDCOLOR}"
+        echo -e "${GREEN}✓ Removed scopes list from '${project_name}'${ENDCOLOR}"
         exit
     fi
 
@@ -639,7 +639,7 @@ function set_scopes {
 
     scopes="$scopes_raw"
 
-    echo -e "${GREEN}Set '${scopes}' as a scopes list in '${project_name}' repo${ENDCOLOR}"
+    echo -e "${GREEN}✓ Set '${scopes}' as the scopes list in '${project_name}'${ENDCOLOR}"
     echo
 
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
@@ -717,7 +717,7 @@ function delete_global {
     read -p "" choice
     re='^([0-9]|10)$'
     if ! [[ $choice =~ $re ]]; then
-        echo -e "${RED}Invalid choice${ENDCOLOR}" >&2
+        echo -e "${RED}✗ Invalid choice.${ENDCOLOR}" >&2
         return 1
     fi
 
@@ -729,43 +729,43 @@ function delete_global {
 
     case "$choice" in
         1)  
-            echo -e "${GREEN}Unset default branch from global settings${ENDCOLOR}"
+            echo -e "${GREEN}✓ Unset default branch from global settings${ENDCOLOR}"
             git config --global --unset gitbasher.branch
             ;;
         2)
-            echo -e "${GREEN}Unset branch separator from global settings${ENDCOLOR}"
+            echo -e "${GREEN}✓ Unset branch separator from global settings${ENDCOLOR}"
             git config --global --unset gitbasher.sep
             ;;
         3)
-            echo -e "${GREEN}Unset commit message editor from global settings${ENDCOLOR}"
+            echo -e "${GREEN}✓ Unset commit message editor from global settings${ENDCOLOR}"
             git config --global --unset core.editor
             ;;
         4)
-            echo -e "${GREEN}Unset ticket prefix from global settings${ENDCOLOR}"
+            echo -e "${GREEN}✓ Unset ticket prefix from global settings${ENDCOLOR}"
             git config --global --unset gitbasher.ticket
             ;;
         5)
-            echo -e "${GREEN}Unset scopes list from global settings${ENDCOLOR}"
+            echo -e "${GREEN}✓ Unset scopes list from global settings${ENDCOLOR}"
             git config --global --unset gitbasher.scopes
             ;;
         6)
-            echo -e "${GREEN}Unset AI API key from global settings${ENDCOLOR}"
+            echo -e "${GREEN}✓ Unset AI API key from global settings${ENDCOLOR}"
             git config --global --unset gitbasher.ai-api-key
             ;;
         7)
-            echo -e "${GREEN}Unset AI model from global settings${ENDCOLOR}"
+            echo -e "${GREEN}✓ Unset AI model from global settings${ENDCOLOR}"
             git config --global --unset gitbasher.ai-model
             ;;
         8)
-            echo -e "${GREEN}Unset AI proxy from global settings${ENDCOLOR}"
+            echo -e "${GREEN}✓ Unset AI proxy from global settings${ENDCOLOR}"
             git config --global --unset gitbasher.ai-proxy
             ;;
         9)
-            echo -e "${GREEN}Unset AI commit history limit from global settings${ENDCOLOR}"
+            echo -e "${GREEN}✓ Unset AI commit history limit from global settings${ENDCOLOR}"
             git config --global --unset gitbasher.ai-commit-history-limit
             ;;
         10)
-            echo -e "${GREEN}Unset AI diff payload settings from global settings${ENDCOLOR}"
+            echo -e "${GREEN}✓ Unset AI diff payload settings from global settings${ENDCOLOR}"
             git config --global --unset gitbasher.ai-diff-limit 2>/dev/null
             git config --global --unset gitbasher.ai-diff-max-chars 2>/dev/null
             ;;
@@ -810,11 +810,11 @@ function set_user {
     echo
 
     if [ "$user_name" != "" ]; then
-        echo -e "${GREEN}Set user name to '${user_name}'${ENDCOLOR}"
+        echo -e "${GREEN}✓ Set user name to '${user_name}'${ENDCOLOR}"
         git config --local --replace-all user.name "$user_name"
     fi
     if [ "$user_email" != "" ]; then
-        echo -e "${GREEN}Set user email to '${user_email}'${ENDCOLOR}"
+        echo -e "${GREEN}✓ Set user email to '${user_email}'${ENDCOLOR}"
         git config --local --replace-all user.email "$user_email"
     fi
 }
@@ -970,21 +970,27 @@ function config_script {
         msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
         msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Print current gitbasher configuration"
         msg="$msg\n${BOLD}user${ENDCOLOR}_name|email|u_Set user name and email"
-        msg="$msg\n${BOLD}default${ENDCOLOR}_def|d|b|main_Update gitbasher's default branch (not in remote git repo!)"
-        msg="$msg\n${BOLD}separator${ENDCOLOR}_sep|s_Update separator between type and name in branch"
-        msg="$msg\n${BOLD}editor${ENDCOLOR}_ed|e_Update text editor for the commit messages"
-        msg="$msg\n${BOLD}ticket${ENDCOLOR}_ti|t|jira_Set ticket prefix to help with commit/branch building"
-        msg="$msg\n${BOLD}scopes${ENDCOLOR}_sc_Set a list of scopes to help with commit building"
-        msg="$msg\n${BOLD}ai${ENDCOLOR}_llm|key_Set AI API key for commit message generation"
-        msg="$msg\n${BOLD}provider${ENDCOLOR}_prov_Choose AI provider (openrouter, openai, ollama)"
-        msg="$msg\n${BOLD}model${ENDCOLOR}_m_Set AI model for the active provider"
-        msg="$msg\n${BOLD}proxy${ENDCOLOR}_prx|p_Set HTTP proxy for AI requests (bypass geo-restrictions)"
-        msg="$msg\n${BOLD}history${ENDCOLOR}_hist_Set number of recent commits to include in AI prompts"
-        msg="$msg\n${BOLD}diff${ENDCOLOR}_payload_Set diff payload size (lines and char cap) sent to AI"
+        msg="$msg\n${BOLD}default${ENDCOLOR}_def|d|b|main_Set gitbasher's default branch (local only — does not change the remote)"
+        msg="$msg\n${BOLD}separator${ENDCOLOR}_sep|s_Set the separator between type and name in branches"
+        msg="$msg\n${BOLD}editor${ENDCOLOR}_ed|e_Set the editor for commit messages"
+        msg="$msg\n${BOLD}ticket${ENDCOLOR}_ti|t|jira_Set the ticket prefix used in commits and branches"
+        msg="$msg\n${BOLD}scopes${ENDCOLOR}_sc_Set the list of suggested commit scopes"
+        msg="$msg\n${BOLD}ai${ENDCOLOR}_llm|key_Set the AI API key"
+        msg="$msg\n${BOLD}provider${ENDCOLOR}_prov_Choose the AI provider (openrouter, openai, ollama)"
+        msg="$msg\n${BOLD}model${ENDCOLOR}_m_Set the AI model override"
+        msg="$msg\n${BOLD}proxy${ENDCOLOR}_prx|p_Set an HTTP/SOCKS proxy for AI requests"
+        msg="$msg\n${BOLD}history${ENDCOLOR}_hist_Set how many recent commits to include in AI prompts"
+        msg="$msg\n${BOLD}diff${ENDCOLOR}_payload_Set the diff payload size (lines and char cap) sent to AI"
         msg="$msg\n${BOLD}auto${ENDCOLOR}_completion|comp_Install/remove tab completion for bash, zsh, or fish"
-        msg="$msg\n${BOLD}delete${ENDCOLOR}_unset|del_Unset global configuration"
+        msg="$msg\n${BOLD}delete${ENDCOLOR}_unset|del_Unset a global gitbasher configuration value"
         msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
         echo -e "$(echo -e "$msg" | column -ts'_')"
+        echo
+        echo -e "${YELLOW}Examples${ENDCOLOR}"
+        echo -e "  ${GREEN}gitb cfg${ENDCOLOR}            Show current configuration"
+        echo -e "  ${GREEN}gitb cfg user${ENDCOLOR}       Set user.name and user.email"
+        echo -e "  ${GREEN}gitb cfg default${ENDCOLOR}    Choose the default gitbasher branch"
+        echo -e "  ${GREEN}gitb cfg ai${ENDCOLOR}         Set the AI API key (per-repo or globally)"
         exit
     fi
 

@@ -52,23 +52,29 @@ function cherry_script {
         echo -e "usage: ${YELLOW}gitb cherry <mode> [args]${ENDCOLOR}"
         echo
         msg="${YELLOW}Mode${ENDCOLOR}_\t${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Interactive mode: select commits from a branch to cherry-pick"
-        msg="$msg\n${BOLD}<commit-hash>${ENDCOLOR}_ _Shorthand for cherry-pick by hash"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Pick a branch and select commits to cherry-pick"
+        msg="$msg\n${BOLD}<commit-hash>${ENDCOLOR}_ _Shortcut for ${BLUE}gitb cherry hash <hash>${ENDCOLOR}"
         msg="$msg\n${BOLD}hash${ENDCOLOR}_hs_Cherry-pick a specific commit by its hash"
-        msg="$msg\n${BOLD}range${ENDCOLOR}_r_Cherry-pick a range of commits"
-        msg="$msg\n${BOLD}abort${ENDCOLOR}_a_Abort current cherry-pick operation"
+        msg="$msg\n${BOLD}range${ENDCOLOR}_r_Cherry-pick a range of commits ${BLUE}<from>..<to>${ENDCOLOR}"
+        msg="$msg\n${BOLD}abort${ENDCOLOR}_a_Abort the current cherry-pick"
         msg="$msg\n${BOLD}continue${ENDCOLOR}_cont|c_Continue cherry-pick after resolving conflicts"
         msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
         echo -e "$(echo -e "$msg" | column -ts'_')"
+        echo
+        echo -e "${YELLOW}Examples${ENDCOLOR}"
+        echo -e "  ${GREEN}gitb cherry${ENDCOLOR}                Pick a branch and choose commits to cherry-pick"
+        echo -e "  ${GREEN}gitb cherry abc1234${ENDCOLOR}        Cherry-pick commit ${BLUE}abc1234${ENDCOLOR}"
+        echo -e "  ${GREEN}gitb cherry range A..B${ENDCOLOR}     Cherry-pick all commits between ${BLUE}A${ENDCOLOR} and ${BLUE}B${ENDCOLOR}"
+        echo -e "  ${GREEN}gitb cherry continue${ENDCOLOR}       Resume after resolving conflicts"
         exit
     fi
 
     # Check if we're in the middle of a cherry-pick operation
     if [ -d ".git/sequencer" ]; then
         if [ -z "${continue_mode}" ] && [ -z "${abort_mode}" ]; then
-            echo -e "${YELLOW}You are in the middle of a cherry-pick operation${ENDCOLOR}"
-            echo -e "Use ${GREEN}gitb cherry continue${ENDCOLOR} to continue after resolving conflicts"
-            echo -e "Use ${GREEN}gitb cherry abort${ENDCOLOR} to abort the operation"
+            echo -e "${YELLOW}⚠  A cherry-pick is already in progress.${ENDCOLOR}"
+            echo -e "Run ${GREEN}gitb cherry continue${ENDCOLOR} after resolving conflicts."
+            echo -e "Run ${GREEN}gitb cherry abort${ENDCOLOR} to cancel."
             exit 1
         fi
     fi
@@ -76,41 +82,41 @@ function cherry_script {
     ### Handle abort mode
     if [ -n "${abort_mode}" ]; then
         if [ ! -d ".git/sequencer" ]; then
-            echo -e "${YELLOW}No cherry-pick operation in progress${ENDCOLOR}"
+            echo -e "${YELLOW}No cherry-pick is in progress.${ENDCOLOR}"
             exit
         fi
-        
-        echo -e "${YELLOW}Aborting cherry-pick operation...${ENDCOLOR}"
+
+        echo -e "${YELLOW}Aborting cherry-pick...${ENDCOLOR}"
         abort_output=$(git cherry-pick --abort 2>&1)
-        check_code $? "$abort_output" "cherry-pick abort"
-        
-        echo -e "${GREEN}Cherry-pick operation aborted successfully${ENDCOLOR}"
+        check_code $? "$abort_output" "abort cherry-pick"
+
+        echo -e "${GREEN}✓ Aborted cherry-pick${ENDCOLOR}"
         exit
     fi
 
     ### Handle continue mode
     if [ -n "${continue_mode}" ]; then
         if [ ! -d ".git/sequencer" ]; then
-            echo -e "${YELLOW}No cherry-pick operation in progress${ENDCOLOR}"
+            echo -e "${YELLOW}No cherry-pick is in progress.${ENDCOLOR}"
             exit
         fi
-        
+
         # Check if there are unresolved conflicts
         if git diff --name-only --diff-filter=U | grep -q .; then
-            echo -e "${RED}There are still unresolved conflicts${ENDCOLOR}"
+            echo -e "${RED}✗ There are still unresolved conflicts.${ENDCOLOR}"
             echo -e "${YELLOW}Conflicted files:${ENDCOLOR}"
             git diff --name-only --diff-filter=U | sed 's/^/  /'
             echo
-            echo -e "Resolve conflicts and then run ${GREEN}gitb cherry continue${ENDCOLOR} again"
+            echo -e "Resolve conflicts, then run ${GREEN}gitb cherry continue${ENDCOLOR} again."
             exit 1
         fi
-        
-        echo -e "${YELLOW}Continuing cherry-pick operation...${ENDCOLOR}"
+
+        echo -e "${YELLOW}Continuing cherry-pick...${ENDCOLOR}"
         continue_output=$(git cherry-pick --continue 2>&1)
         continue_code=$?
-        
+
         if [ $continue_code == 0 ]; then
-            echo -e "${GREEN}Cherry-pick operation completed successfully${ENDCOLOR}"
+            echo -e "${GREEN}✓ Cherry-pick completed${ENDCOLOR}"
             after_cherry_pick
         else
             handle_cherry_pick_conflicts "$continue_output" $continue_code
@@ -122,11 +128,11 @@ function cherry_script {
     if [ -z "${continue_mode}" ] && [ -z "${abort_mode}" ] && [ -z "${hash_mode}" ] && [ -z "${range_mode}" ]; then
         is_clean=$(git status --porcelain)
         if [ -n "$is_clean" ]; then
-            echo -e "${YELLOW}Warning: You have uncommitted changes${ENDCOLOR}"
+            echo -e "${YELLOW}⚠  You have uncommitted changes.${ENDCOLOR}"
             echo -e "Files with changes:"
             git status --porcelain | sed 's/^/  /'
             echo
-            echo -e "Continue with cherry-pick? This may cause conflicts. (y/n)"
+            echo -e "Continue with cherry-pick (may cause conflicts) (y/n)?"
             yes_no_choice "Proceeding..."
             echo
         fi
@@ -135,14 +141,14 @@ function cherry_script {
     ### Handle hash mode
     if [ -n "${hash_mode}" ]; then
         if [ -z "${commit_hash}" ]; then
-            echo -e "${RED}No commit hash provided${ENDCOLOR}"
-            echo -e "Usage: ${YELLOW}gitb cherry hash <commit-hash>${ENDCOLOR}"
+            echo -e "${RED}✗ No commit hash provided.${ENDCOLOR}"
+            echo -e "usage: ${YELLOW}gitb cherry hash <commit-hash>${ENDCOLOR}"
             exit 1
         fi
-        
+
         # Validate commit hash exists
         if ! git cat-file -e "${commit_hash}" 2>/dev/null; then
-            echo -e "${RED}Invalid commit hash: ${commit_hash}${ENDCOLOR}"
+            echo -e "${RED}✗ Invalid commit hash: ${commit_hash}${ENDCOLOR}"
             exit 1
         fi
         
@@ -153,14 +159,14 @@ function cherry_script {
     ### Handle range mode
     if [ -n "${range_mode}" ]; then
         if [ -z "${commit_range}" ]; then
-            echo -e "${RED}No commit range provided${ENDCOLOR}"
-            echo -e "Usage: ${YELLOW}gitb cherry range <from>..<to>${ENDCOLOR}"
+            echo -e "${RED}✗ No commit range provided.${ENDCOLOR}"
+            echo -e "usage: ${YELLOW}gitb cherry range <from>..<to>${ENDCOLOR}"
             exit 1
         fi
-        
+
         # Validate range format
         if [[ ! "${commit_range}" =~ \.\. ]]; then
-            echo -e "${RED}Invalid range format. Use: <from>..<to>${ENDCOLOR}"
+            echo -e "${RED}✗ Invalid range format. Use ${YELLOW}<from>..<to>${RED}.${ENDCOLOR}"
             exit 1
         fi
         
@@ -197,7 +203,7 @@ function perform_cherry_pick {
     cherry_code=$?
     
     if [ $cherry_code == 0 ]; then
-        echo -e "${GREEN}Cherry-pick completed successfully${ENDCOLOR}"
+        echo -e "${GREEN}✓ Cherry-pick completed${ENDCOLOR}"
         after_cherry_pick
     else
         handle_cherry_pick_conflicts "$cherry_output" $cherry_code
@@ -213,39 +219,39 @@ function handle_cherry_pick_conflicts {
     
     # Check for conflicts
     if [[ $output == *"fix conflicts and run \"git cherry-pick --continue\""* ]] || [[ $output == *"after resolving the conflicts"* ]]; then
-        echo -e "${RED}Cherry-pick conflicts detected${ENDCOLOR}"
+        echo -e "${YELLOW}⚠  Cherry-pick conflicts detected.${ENDCOLOR}"
         echo
         echo -e "${YELLOW}Conflicted files:${ENDCOLOR}"
         git diff --name-only --diff-filter=U | sed 's/^/  /'
         echo
-        echo -e "${YELLOW}Steps to resolve:${ENDCOLOR}"
+        echo -e "${YELLOW}Next steps:${ENDCOLOR}"
         echo -e "1. Edit the conflicted files to resolve conflicts"
-        echo -e "2. Add the resolved files: ${BLUE}git add <files>${ENDCOLOR}"
-        echo -e "3. Continue cherry-pick: ${GREEN}gitb cherry continue${ENDCOLOR}"
+        echo -e "2. Stage them: ${BLUE}git add <files>${ENDCOLOR}"
+        echo -e "3. Continue: ${GREEN}gitb cherry continue${ENDCOLOR}"
         echo
-        echo -e "Or abort the operation: ${GREEN}gitb cherry abort${ENDCOLOR}"
+        echo -e "Or abort: ${GREEN}gitb cherry abort${ENDCOLOR}"
         return
     fi
-    
+
     # Check for empty commit
     if [[ $output == *"The previous cherry-pick is now empty"* ]]; then
-        echo -e "${YELLOW}The commit is empty after cherry-pick (changes already applied)${ENDCOLOR}"
-        echo -e "Skip this commit? (y/n)"
+        echo -e "${YELLOW}This commit is empty after cherry-pick (changes already applied).${ENDCOLOR}"
+        echo -e "Skip it (y/n)?"
         yes_no_choice "Skipping empty commit..."
-        
+
         skip_output=$(git cherry-pick --skip 2>&1)
         if [ $? == 0 ]; then
-            echo -e "${GREEN}Empty commit skipped${ENDCOLOR}"
+            echo -e "${GREEN}✓ Skipped empty commit${ENDCOLOR}"
             after_cherry_pick
         else
-            echo -e "${RED}Failed to skip commit:${ENDCOLOR}"
+            echo -e "${RED}✗ Cannot skip commit.${ENDCOLOR}"
             echo "$skip_output"
         fi
         return
     fi
-    
+
     # Other errors
-    echo -e "${RED}Cherry-pick failed with error:${ENDCOLOR}"
+    echo -e "${RED}✗ Cherry-pick failed.${ENDCOLOR}"
     echo "$output"
     exit $code
 }
@@ -284,8 +290,8 @@ function choose_commits_interactive {
     mapfile -t all_commits < <(git rev-list "${current_branch}..${source_branch}" --reverse)
     
     if [ ${#all_commits[@]} -eq 0 ]; then
-        echo -e "${YELLOW}No commits to cherry-pick from '${source_branch}'${ENDCOLOR}"
-        echo -e "All commits from '${source_branch}' are already in '${current_branch}'"
+        echo -e "${YELLOW}No commits to cherry-pick from '${source_branch}'.${ENDCOLOR}"
+        echo -e "All its commits are already in '${current_branch}'."
         exit
     fi
     
@@ -320,7 +326,7 @@ function choose_commits_interactive {
         done
         echo -e "0. Exit"
         if [ "$show_all" = false ] && [ ${#all_commits[@]} -gt $max_commits ]; then
-            echo -e "Enter = to show all commits"
+            echo -e "${BLUE}Tip: press = to show all commits${ENDCOLOR}"
         fi
         echo
         
@@ -362,17 +368,17 @@ function choose_commits_interactive {
             elif [ "$num" -gt 0 ] && [ "$num" -le ${#commits[@]} ]; then
                 selected_commits+=("${commit_hashes[$((num-1))]}")
             else
-                echo -e "${RED}Invalid selection: $num (must be between 1 and ${#commits[@]})${ENDCOLOR}"
+                echo -e "${RED}✗ Invalid selection: $num (must be between 1 and ${#commits[@]}).${ENDCOLOR}"
                 exit 1
             fi
         else
-            echo -e "${RED}Invalid selection: '$num' (must be a number)${ENDCOLOR}"
+            echo -e "${RED}✗ Invalid selection: '$num' (must be a number).${ENDCOLOR}"
             exit 1
         fi
     done
-    
+
     if [ ${#selected_commits[@]} -eq 0 ]; then
-        echo -e "${YELLOW}No valid commits selected${ENDCOLOR}"
+        echo -e "${YELLOW}No valid commits selected.${ENDCOLOR}"
         exit
     fi
     
@@ -400,18 +406,18 @@ function choose_commits_interactive {
         if [ $cherry_code == 0 ]; then
             ((success_count++))
             message=$(git log -1 --pretty=format:"%s" "$commit")
-            echo -e "${GREEN}✓${ENDCOLOR} Successfully cherry-picked: $message"
+            echo -e "${GREEN}✓ Cherry-picked: $message${ENDCOLOR}"
         else
-            echo -e "${RED}✗${ENDCOLOR} Failed to cherry-pick ${commit::7}"
+            echo -e "${RED}✗ Cannot cherry-pick ${commit::7}.${ENDCOLOR}"
             handle_cherry_pick_conflicts "$cherry_output" $cherry_code
             # If we reach here, the conflict handling should have exited
             break
         fi
         echo
     done
-    
+
     if [ $success_count -eq $total_count ]; then
-        echo -e "${GREEN}All ${total_count} commits cherry-picked successfully!${ENDCOLOR}"
+        echo -e "${GREEN}✓ Cherry-picked all ${total_count} commits${ENDCOLOR}"
         after_cherry_pick
     fi
-} 
+}

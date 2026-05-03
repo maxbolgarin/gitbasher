@@ -15,6 +15,7 @@ push p ps pus
 pull pu pl pul
 merge m me
 rebase r re base
+squash sq tidy
 cherry ch cp
 sync sy
 wip w
@@ -36,11 +37,14 @@ status st
 prev -
 help man
 "
-_gitb_sub_commit="ai llm i fast f fasts fs sf ff push pu p scope s msg m ticket jira j t staged no-split nosplit nsp nsl fixup fix x amend am a split sp sl splitp spp slp aisplit isplit aispl ispl aisplitp isplitp aisplp isplp last l revert rev help h"
+_gitb_sub_commit="ai llm i fast f fasts fs sf ff ffp ffpush push pu p fastp fp pf fastsp fsp fps scope s msg m ticket jira j t staged st no-split nosplit nsp nsl fixup fix x fixupp fixp xp px fixupst xst stx fastfix fx xf fastfixp fxp xfp amend am a amendst ast sta amendf amf af fa split sp sl splitp spp slp aisplit isplit aispl ispl aisplitp isplitp aisplp isplp llmf aif if llmp aip ip llmst aist ist llmfp aifp ifp ipf llms ais is llmsf aisf isf llmsfp aisfp isfp llmm aim im llmmf aimf imf llmmfp aimfp imfp last l revert rev help h"
+_gitb_sub_commit_simple="ai llm i fast f push pu p scope s msg m ticket jira j t staged no-split nosplit nsp nsl fixup fix x amend am a split sp sl last l revert rev help h"
+_gitb_sub_wip_backend="stash s branch b worktree w wt tree nopush np n"
 _gitb_sub_push="yes y force f list log l help h"
 _gitb_sub_pull="fetch fe all fa upd u ffonly ff merge m rebase r interactive ri rs dry d dr help h"
 _gitb_sub_merge="main master m to-main to-master tm remote r help h"
 _gitb_sub_rebase="main master m interactive i autosquash a s ia fastautosquash fast sf f pull p help h"
+_gitb_sub_squash="preview p dry show yes y fast push ps help h"
 _gitb_sub_cherry="hash hs range r abort a continue cont c help h"
 _gitb_sub_sync="push p merge m mergep mp pm dry d dr help h"
 _gitb_sub_wip="up u down d help h"
@@ -63,6 +67,7 @@ _gitb_canonical() {
         pull|pu|pl|pul)               echo pull ;;
         merge|m|me)                   echo merge ;;
         rebase|r|re|base)             echo rebase ;;
+        squash|sq|tidy)               echo squash ;;
         cherry|ch|cp)                 echo cherry ;;
         sync|sy)                      echo sync ;;
         wip|w)                        echo wip ;;
@@ -79,8 +84,61 @@ _gitb_canonical() {
         *)                            echo "" ;;
     esac
 }
+_gitb_commit_state_aware() {
+    local cur="$1"
+    local has_action=""
+    local has_ai="" has_fast="" has_staged="" has_push=""
+    local has_scope="" has_msg="" has_ticket="" has_no_split=""
+    local i tok
+    for ((i=2; i<COMP_CWORD; i++)); do
+        tok="${COMP_WORDS[$i]}"
+        case "$tok" in
+            last|l)                   has_action="last" ;;
+            revert|rev)               has_action="revert" ;;
+            fixup|fix|x)              has_action="fixup" ;;
+            amend|am|a)               has_action="amend" ;;
+            split|sp|sl)              has_action="split" ;;
+            ai|llm|i)                 has_ai="true" ;;
+            fast|f)                   has_fast="true" ;;
+            staged|st)                has_staged="true" ;;
+            push|pu|p)                has_push="true" ;;
+            scope|s)                  has_scope="true" ;;
+            msg|m)                    has_msg="true" ;;
+            ticket|jira|j|t)          has_ticket="true" ;;
+            no-split|nosplit|nsp|nsl) has_no_split="true" ;;
+        esac
+    done
+    local candidates=()
+    case "$has_action" in
+        last|revert)
+            :
+            ;;
+        amend|fixup)
+            [ -z "${has_fast}${has_staged}" ] && candidates+=("fast" "staged")
+            [ -z "$has_push" ] && candidates+=("push")
+            ;;
+        split|"")
+            local has_strict_mod="${has_ai}${has_msg}${has_ticket}${has_scope}${has_no_split}"
+            local has_any_mod="${has_ai}${has_fast}${has_staged}${has_push}${has_scope}${has_msg}${has_ticket}${has_no_split}"
+            if [ -z "$has_action" ]; then
+                candidates+=("split")
+                [ -z "$has_strict_mod" ] && candidates+=("amend" "fixup")
+                [ -z "$has_any_mod" ] && candidates+=("last" "revert")
+            fi
+            [ -z "$has_ai" ]                  && candidates+=("ai")
+            [ -z "${has_fast}${has_staged}" ] && candidates+=("fast" "staged")
+            [ -z "$has_push" ]                && candidates+=("push")
+            [ -z "$has_scope" ]               && candidates+=("scope")
+            [ -z "$has_msg" ]                 && candidates+=("msg")
+            [ -z "$has_ticket" ]              && candidates+=("ticket")
+            [ -z "$has_no_split" ]            && candidates+=("no-split")
+            ;;
+    esac
+    candidates+=("help")
+    COMPREPLY=( $(compgen -W "${candidates[*]}" -- "$cur") )
+}
 _gitb() {
-    local cur cmd canonical
+    local cur cmd canonical sub
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     if [ "$COMP_CWORD" -eq 1 ]; then
@@ -89,6 +147,21 @@ _gitb() {
     fi
     cmd="${COMP_WORDS[1]}"
     canonical="$(_gitb_canonical "$cmd")"
+    sub="${COMP_WORDS[2]}"
+    if [ "$canonical" = "commit" ]; then
+        if [ "$COMP_CWORD" -eq 2 ]; then
+            COMPREPLY=( $(compgen -W "$_gitb_sub_commit" -- "$cur") )
+        else
+            _gitb_commit_state_aware "$cur"
+        fi
+        return 0
+    fi
+    if [ "$canonical" = "wip" ] && [ "$COMP_CWORD" -ge 3 ]; then
+        if [ "$sub" = "up" ] || [ "$sub" = "u" ] || [ "$sub" = "down" ] || [ "$sub" = "d" ]; then
+            COMPREPLY=( $(compgen -W "$_gitb_sub_wip_backend" -- "$cur") )
+            return 0
+        fi
+    fi
     if [ "$COMP_CWORD" -eq 2 ]; then
         local subs_var="_gitb_sub_${canonical}"
         local subs="${!subs_var}"
@@ -107,13 +180,8 @@ _gitb() {
         return 0
     fi
     if [ "$COMP_CWORD" -eq 3 ]; then
-        local sub="${COMP_WORDS[2]}"
         if [ "$canonical" = "log" ] && { [ "$sub" = "branch" ] || [ "$sub" = "b" ]; }; then
             COMPREPLY=( $(compgen -W "$_gitb_sub_log_branch" -- "$cur") )
-            return 0
-        fi
-        if [ "$canonical" = "wip" ]; then
-            COMPREPLY=( $(compgen -W "stash branch worktree nopush np n" -- "$cur") )
             return 0
         fi
         if [ "$canonical" = "config" ] && { [ "$sub" = "auto" ] || [ "$sub" = "completion" ] || [ "$sub" = "comp" ]; }; then
@@ -122,7 +190,6 @@ _gitb() {
         fi
     fi
     if [ "$COMP_CWORD" -eq 4 ]; then
-        local sub="${COMP_WORDS[2]}"
         if [ "$canonical" = "config" ] && { [ "$sub" = "auto" ] || [ "$sub" = "completion" ] || [ "$sub" = "comp" ]; }; then
             COMPREPLY=( $(compgen -W "bash zsh fish" -- "$cur") )
             return 0
@@ -142,6 +209,88 @@ cat <<'GITB_ZSH_EOF'
 _gitb() {
     local context state line
     typeset -A opt_args
+    if (( CURRENT >= 3 )); then
+        case "$words[2]" in
+            commit|c|co|com)
+                local -a flags
+                if (( CURRENT == 3 )); then
+                    flags=(
+                        'ai[AI-generated message]' 'fast[fast commit]'
+                        'ff[ultrafast AI commit]' 'ffp[ultrafast AI commit and push]'
+                        'push[commit and push]'
+                        'scope[with scope prompt]' 'msg[manual message]' 'ticket[with ticket prefix]'
+                        'staged[only staged files]' 'no-split[disable split]'
+                        'fixup[create fixup commit]' 'amend[amend last commit]'
+                        'split[split into atomic commits]'
+                        'last[show last commit]' 'revert[revert a commit]' 'help[show help]'
+                    )
+                    _values 'commit flag' $flags
+                    return
+                fi
+                local has_action=""
+                local has_ai="" has_fast="" has_staged="" has_push=""
+                local has_scope="" has_msg="" has_ticket="" has_no_split=""
+                local i tok
+                for ((i=3; i<CURRENT; i++)); do
+                    tok="${words[$i]}"
+                    case "$tok" in
+                        last|l)                   has_action="last" ;;
+                        revert|rev)               has_action="revert" ;;
+                        fixup|fix|x)              has_action="fixup" ;;
+                        amend|am|a)               has_action="amend" ;;
+                        split|sp|sl)              has_action="split" ;;
+                        ai|llm|i)                 has_ai="true" ;;
+                        fast|f)                   has_fast="true" ;;
+                        staged|st)                has_staged="true" ;;
+                        push|pu|p)                has_push="true" ;;
+                        scope|s)                  has_scope="true" ;;
+                        msg|m)                    has_msg="true" ;;
+                        ticket|jira|j|t)          has_ticket="true" ;;
+                        no-split|nosplit|nsp|nsl) has_no_split="true" ;;
+                    esac
+                done
+                flags=()
+                case "$has_action" in
+                    last|revert)
+                        ;;
+                    amend|fixup)
+                        [ -z "${has_fast}${has_staged}" ] && flags+=('fast[fast commit (git add .)]' 'staged[only staged files]')
+                        [ -z "$has_push" ] && flags+=('push[commit and push]')
+                        ;;
+                    split|"")
+                        local has_strict_mod="${has_ai}${has_msg}${has_ticket}${has_scope}${has_no_split}"
+                        local has_any_mod="${has_ai}${has_fast}${has_staged}${has_push}${has_scope}${has_msg}${has_ticket}${has_no_split}"
+                        if [ -z "$has_action" ]; then
+                            flags+=('split[split into atomic commits]')
+                            [ -z "$has_strict_mod" ] && flags+=('amend[amend last commit]' 'fixup[create fixup commit]')
+                            [ -z "$has_any_mod" ] && flags+=('last[reuse last message]' 'revert[revert a commit]')
+                        fi
+                        [ -z "$has_ai" ]                  && flags+=('ai[AI-generated message]')
+                        [ -z "${has_fast}${has_staged}" ] && flags+=('fast[fast commit (git add .)]' 'staged[only staged files]')
+                        [ -z "$has_push" ]                && flags+=('push[commit and push]')
+                        [ -z "$has_scope" ]               && flags+=('scope[with scope prompt]')
+                        [ -z "$has_msg" ]                 && flags+=('msg[manual message]')
+                        [ -z "$has_ticket" ]              && flags+=('ticket[with ticket prefix]')
+                        [ -z "$has_no_split" ]            && flags+=('no-split[disable split]')
+                        ;;
+                esac
+                _values 'commit flag' $flags
+                return
+                ;;
+            wip|w)
+                if (( CURRENT >= 4 )); then
+                    case "$words[3]" in
+                        up|u|down|d)
+                            _values 'wip backend / flag' \
+                                'stash[stash backend]' 'branch[branch backend]' \
+                                'worktree[worktree backend]' 'nopush[skip push]'
+                            return
+                            ;;
+                    esac
+                fi
+                ;;
+        esac
+    fi
     _arguments -C \
         '1: :->command' \
         '2: :->subcommand' \
@@ -157,6 +306,7 @@ _gitb() {
                 'pull:Pull updates (alias: pu, pl, pul)'
                 'merge:Merge a branch (alias: m, me)'
                 'rebase:Rebase a branch (alias: r, re, base)'
+                'squash:AI-group branch commits (alias: sq, tidy)'
                 'cherry:Cherry-pick commits (alias: ch, cp)'
                 'sync:Sync with remote (alias: sy)'
                 'wip:Work-in-progress save/restore (alias: w)'
@@ -189,7 +339,7 @@ _gitb() {
                         'ticket[with ticket prefix]' 'staged[only staged files]' \
                         'no-split[disable split]' 'fixup[create fixup commit]' \
                         'amend[amend last commit]' 'split[split into atomic commits]' \
-                        'splitp[split and push]' 'aisplit[AI-grouped split]' 'aisplitp[AI split and push]' \
+                        'splitp[split and push]'  \
                         'last[show last commit]' 'revert[revert a commit]' 'help[show help]'
                     ;;
                 push|p|ps|pus)
@@ -207,6 +357,9 @@ _gitb() {
                     local -a branches
                     branches=( ${(f)"$(git for-each-ref --format='%(refname:short)' refs/heads 2>/dev/null)"} )
                     _values 'rebase mode' 'main[rebase onto main]' 'interactive[interactive]' 'autosquash[autosquash]' 'fastautosquash[fast autosquash]' 'pull[pull commits]' 'help[show help]' $branches
+                    ;;
+                squash|sq|tidy)
+                    _values 'squash mode' 'preview[show plan only]' 'yes[skip confirmation]' 'push[force-push after squash]' 'help[show help]'
                     ;;
                 cherry|ch|cp)
                     _values 'cherry mode' 'hash[pick by hash]' 'range[pick a range]' 'abort[abort cherry-pick]' 'continue[continue cherry-pick]' 'help[show help]'
@@ -332,6 +485,9 @@ complete -c gitb -n __gitb_no_subcmd -a merge        -d 'Merge a branch'
 complete -c gitb -n __gitb_no_subcmd -a m            -d 'Alias of merge'
 complete -c gitb -n __gitb_no_subcmd -a rebase       -d 'Rebase'
 complete -c gitb -n __gitb_no_subcmd -a r            -d 'Alias of rebase'
+complete -c gitb -n __gitb_no_subcmd -a squash       -d 'AI-group branch commits'
+complete -c gitb -n __gitb_no_subcmd -a sq           -d 'Alias of squash'
+complete -c gitb -n __gitb_no_subcmd -a tidy         -d 'Alias of squash'
 complete -c gitb -n __gitb_no_subcmd -a cherry       -d 'Cherry-pick commits'
 complete -c gitb -n __gitb_no_subcmd -a ch           -d 'Alias of cherry'
 complete -c gitb -n __gitb_no_subcmd -a sync         -d 'Sync with remote'
@@ -368,8 +524,18 @@ complete -c gitb -n __gitb_no_subcmd -a status       -d 'Project status'
 complete -c gitb -n __gitb_no_subcmd -a st           -d 'Alias of status'
 complete -c gitb -n __gitb_no_subcmd -a prev         -d 'Switch to previous branch'
 complete -c gitb -n __gitb_no_subcmd -a help         -d 'Show help'
-set -l __gitb_commit "__gitb_using_cmd commit c co com; and __gitb_at_position 2"
-complete -c gitb -n "$__gitb_commit" -a "ai fast fasts ff push scope msg ticket staged no-split fixup amend split splitp aisplit aisplitp last revert help"
+function __gitb_at_commit_pos2
+    set -l tokens (commandline -opc)
+    test (count $tokens) -eq 2; or return 1
+    contains -- $tokens[2] commit c co com
+end
+function __gitb_at_commit_extra
+    set -l tokens (commandline -opc)
+    test (count $tokens) -ge 3; or return 1
+    contains -- $tokens[2] commit c co com
+end
+complete -c gitb -n __gitb_at_commit_pos2 -a "ai fast fasts ff ffp push fastp scope msg ticket staged no-split fixup amend split splitp aisplit aisplitp aip aif aifp last revert help"
+complete -c gitb -n __gitb_at_commit_extra -a "ai fast push scope msg ticket staged no-split fixup amend split last revert help"
 set -l __gitb_push "__gitb_using_cmd push p ps pus; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_push" -a "yes force list help"
 set -l __gitb_pull "__gitb_using_cmd pull pu pl pul; and __gitb_at_position 2"
@@ -380,6 +546,8 @@ complete -c gitb -n "$__gitb_merge" -a "(__gitb_local_branches)" -d branch
 set -l __gitb_rebase "__gitb_using_cmd rebase r re base; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_rebase" -a "main interactive autosquash fastautosquash pull help"
 complete -c gitb -n "$__gitb_rebase" -a "(__gitb_local_branches)" -d branch
+set -l __gitb_squash "__gitb_using_cmd squash sq tidy; and __gitb_at_position 2"
+complete -c gitb -n "$__gitb_squash" -a "preview yes push help"
 set -l __gitb_cherry "__gitb_using_cmd cherry ch cp; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_cherry" -a "hash range abort continue help"
 set -l __gitb_sync "__gitb_using_cmd sync sy; and __gitb_at_position 2"
@@ -416,7 +584,7 @@ end
 complete -c gitb -n __gitb_at_log_branch -a "local remote all help"
 function __gitb_at_wip_backend
     set -l tokens (commandline -opc)
-    test (count $tokens) -eq 3; or return 1
+    test (count $tokens) -ge 3; or return 1
     contains -- $tokens[2] wip w; or return 1
     contains -- $tokens[3] up u down d
 end
@@ -646,8 +814,8 @@ function completion_script {
     if [ -z "$shell" ]; then
         shell=$(_gitb_detect_shell)
         if [ -z "$shell" ]; then
-            echo -e "${RED}Could not detect shell from \$SHELL='${SHELL}'${ENDCOLOR}"
-            echo -e "Specify it explicitly: ${BOLD}gitb cfg auto ${action} <bash|zsh|fish>${NORMAL}"
+            echo -e "${RED}✗ Cannot detect shell from \$SHELL='${SHELL}'.${ENDCOLOR}"
+            echo -e "Specify it explicitly: ${GREEN}gitb cfg auto ${action} <bash|zsh|fish>${ENDCOLOR}"
             return 1
         fi
     fi
@@ -655,7 +823,7 @@ function completion_script {
     case "$shell" in
         bash|zsh|fish) ;;
         *)
-            echo -e "${RED}Unknown shell '${shell}'${ENDCOLOR}"
+            echo -e "${RED}✗ Unknown shell '${shell}'.${ENDCOLOR}"
             echo -e "Supported: bash, zsh, fish"
             return 1
             ;;
@@ -672,8 +840,8 @@ function completion_script {
             "_gitb_${shell}_completion_content"
             ;;
         *)
-            echo -e "${RED}Unknown action '${action}'${ENDCOLOR}"
-            echo -e "Use ${BOLD}gitb cfg auto help${NORMAL} to see available actions."
+            echo -e "${RED}✗ Unknown action '${action}'.${ENDCOLOR}"
+            echo -e "Run ${GREEN}gitb cfg auto help${ENDCOLOR} to see available actions."
             return 1
             ;;
     esac

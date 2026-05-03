@@ -39,16 +39,21 @@ function merge_script {
         echo -e "usage: ${YELLOW}gitb merge <mode>${ENDCOLOR}"
         echo
         msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Select a branch to merge into the current one and fix conflicts"
-        msg="$msg\n${BOLD}main${ENDCOLOR}_master|m_Merge $main_branch to the current branch and fix conflicts"
-        msg="$msg\n${BOLD}to-main${ENDCOLOR}_to-master|tm_Switch to $main_branch and merge the current branch into $main_branch"
-        msg="$msg\n${BOLD}remote${ENDCOLOR}_r_Fetch $origin_name and select a remote branch to merge into current"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Pick a branch to merge into the current one"
+        msg="$msg\n${BOLD}main${ENDCOLOR}_master|m_Merge $main_branch into the current branch"
+        msg="$msg\n${BOLD}to-main${ENDCOLOR}_to-master|tm_Switch to $main_branch, then merge the current branch into it"
+        msg="$msg\n${BOLD}remote${ENDCOLOR}_r_Fetch $origin_name and pick a remote branch to merge in"
         msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
         echo -e "$(echo -e "$msg" | column -ts'_')"
         echo
-        echo -e "${YELLOW}Conflict resolution options (available during merge conflicts):${ENDCOLOR}"
-        echo -e "Accept all incoming changes\tResolve all conflicts by accepting changes from the target branch"
-        echo -e "Accept all current changes\tResolve all conflicts by keeping changes from your current branch"
+        echo -e "${YELLOW}Conflict resolution${ENDCOLOR} ${BLUE}(during a merge conflict)${ENDCOLOR}"
+        echo -e "  Accept all incoming changes\tKeep changes from the branch being merged in"
+        echo -e "  Accept all current changes\tKeep changes from your current branch"
+        echo
+        echo -e "${YELLOW}Examples${ENDCOLOR}"
+        echo -e "  ${GREEN}gitb merge${ENDCOLOR}        Pick a branch and merge it into ${YELLOW}${current_branch:-current}${ENDCOLOR}"
+        echo -e "  ${GREEN}gitb merge main${ENDCOLOR}   Merge ${YELLOW}$main_branch${ENDCOLOR} into the current branch"
+        echo -e "  ${GREEN}gitb merge tm${ENDCOLOR}     Switch to ${YELLOW}$main_branch${ENDCOLOR} and merge the current branch into it"
         exit
     fi
 
@@ -64,9 +69,9 @@ function merge_script {
         current_remote_commit=$(git ls-remote "$origin_name" "refs/heads/$current_branch" 2>/dev/null | cut -f1)
         
         if [ -z "$current_remote_commit" ]; then
-            echo -e "${YELLOW}Remote branch ${origin_name}/${current_branch} not found - proceeding with local merge${ENDCOLOR}"
+            echo -e "${YELLOW}Remote branch ${origin_name}/${current_branch} not found — proceeding with local merge.${ENDCOLOR}"
         elif [ "$current_local_commit" != "$current_remote_commit" ]; then
-            echo -e "${YELLOW}Remote changes detected in current branch ${current_branch}!${ENDCOLOR}"
+            echo -e "${YELLOW}⚠  Remote changes detected on ${current_branch}.${ENDCOLOR}"
             echo
             echo -e "Do you want to pull ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} first (y/n)?"
             read -n 1 -s choice
@@ -78,7 +83,7 @@ function merge_script {
                 pull_code=$?
                 
                 if [ $pull_code -eq 0 ]; then
-                    echo -e "${GREEN}Successfully pulled current branch${ENDCOLOR}"
+                    echo -e "${GREEN}✓ Pulled ${origin_name}/${current_branch}${ENDCOLOR}"
                     if [[ $pull_output == *"file changed"* ]] || [[ $pull_output == *"files changed"* ]]; then
                         # Extract only the file statistics (lines starting with space and containing |)
                         # and the summary line (contains "file changed" or "files changed")
@@ -89,13 +94,13 @@ function merge_script {
                         fi
                     fi
                 else
-                    echo -e "${RED}Failed to pull current branch:${ENDCOLOR}"
+                    echo -e "${RED}✗ Cannot pull current branch.${ENDCOLOR}"
                     echo "$pull_output"
                     exit $pull_code
                 fi
             fi
         else
-            echo -e "${GREEN}Current branch is up to date with remote${ENDCOLOR}"
+            echo -e "${GREEN}✓ Current branch is up to date with remote${ENDCOLOR}"
         fi
         echo
     fi
@@ -104,14 +109,14 @@ function merge_script {
     ### Select branch which will be merged
     if [ -n "$main" ]; then
         if [ "$current_branch" == "${main_branch}" ]; then
-            echo -e "${YELLOW}Already on ${main_branch}${ENDCOLOR}"
+            echo -e "${YELLOW}Already on ${main_branch}.${ENDCOLOR}"
             exit
         fi
         merge_branch=${main_branch}
 
     elif [ -n "$to_main" ]; then
         if [ "$current_branch" == "${main_branch}" ]; then
-            echo -e "${YELLOW}Already on ${main_branch}${ENDCOLOR}"
+            echo -e "${YELLOW}Already on ${main_branch}.${ENDCOLOR}"
             exit
         fi
         merge_branch=${current_branch}
@@ -155,9 +160,9 @@ function merge_script {
         remote_commit=$(git ls-remote "$origin_name" "refs/heads/$merge_branch" 2>/dev/null | cut -f1)
         
         if [ -z "$remote_commit" ]; then
-            echo -e "${YELLOW}Remote branch ${origin_name}/${merge_branch} not found - proceeding with local merge${ENDCOLOR}"
+            echo -e "${YELLOW}Remote branch ${origin_name}/${merge_branch} not found — proceeding with local merge.${ENDCOLOR}"
         elif [ "$local_commit" != "$remote_commit" ]; then
-            echo -e "${YELLOW}Remote changes detected!${ENDCOLOR}"
+            echo -e "${YELLOW}⚠  Remote changes detected.${ENDCOLOR}"
             echo
             echo -e "Do you want to fetch ${YELLOW}${origin_name}/${merge_branch}${ENDCOLOR} before merge (y/n)?"
             read -n 1 -s choice
@@ -169,7 +174,7 @@ function merge_script {
                 merge_from_origin=true
             fi
         else
-            echo -e "${GREEN}Local branch is up to date with remote${ENDCOLOR}"
+            echo -e "${GREEN}✓ Local branch is up to date with remote${ENDCOLOR}"
         fi
         echo
     fi
@@ -190,7 +195,7 @@ function merge_script {
 
     ### Nothing to merge
     if [[ $merge_output == *"Already up to date"* ]]; then
-        echo -e "${GREEN}Nothing to merge - already up to date${ENDCOLOR}"
+        echo -e "${GREEN}✓ Nothing to merge — already up to date${ENDCOLOR}"
         exit
     fi
 
@@ -198,10 +203,10 @@ function merge_script {
 
     commit_message_after_merge="$(git --no-pager log --pretty="%s" -1)"
     if [[ "$commit_message_after_merge" != "$commit_message_before_merge" ]]; then
-        echo -e "${GREEN}Successful merge!${ENDCOLOR} ${BLUE}[$merge_branch${ENDCOLOR} -> ${BLUE}$current_branch]${ENDCOLOR}"
+        echo -e "${GREEN}✓ Merged${ENDCOLOR} ${BLUE}[$merge_branch -> $current_branch]${ENDCOLOR}"
         echo -e "$commit_message_after_merge"
     else
-        echo -e "${GREEN}Successful fast-forward merge!${ENDCOLOR} ${BLUE}[$merge_branch${ENDCOLOR} -> ${BLUE}$current_branch]${ENDCOLOR}"
+        echo -e "${GREEN}✓ Fast-forward merged${ENDCOLOR} ${BLUE}[$merge_branch -> $current_branch]${ENDCOLOR}"
     fi
 
     # Always get proper file statistics using git show for successful merges
@@ -256,32 +261,31 @@ function merge {
 
     ### Cannot merge because there are uncommitted files that changed in origin
     if [[ $merge_output == *"Please commit your changes or stash them before you merge"* ]]; then
-        echo -e "${RED}Cannot $operation! There are uncommited changes that will be overwritten by $operation${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot $operation — uncommitted changes would be overwritten.${ENDCOLOR}"
         # Platform-specific reverse command: tac (Linux) or tail -r (BSD/macOS)
         if which tac >/dev/null 2>&1; then
             files_to_commit=$(echo "$merge_output" | tail -n +2 | tac | tail -n +4 | tac)
         else
             files_to_commit=$(echo "$merge_output" | tail -n +2 | tail -r | tail -n +4 | tail -r)
         fi
-        echo -e "${YELLOW}Files with changes${ENDCOLOR}"
+        echo -e "${YELLOW}Files with changes:${ENDCOLOR}"
         echo "$files_to_commit"
         exit $merge_code
     fi
 
     if [[ $merge_output == *"possible to fast-forward"* ]]; then
-        echo -e "${RED}Branches cannot be fast forwarded!${ENDCOLOR}"
-        echo -e "You should use merge or rebase"
+        echo -e "${RED}✗ Cannot fast-forward — use merge or rebase instead.${ENDCOLOR}"
         exit $merge_code
     fi
 
     ### Cannot merge because of some other error
     if [[ $merge_output != *"fix conflicts and then commit the result"* ]]; then
-        echo -e "${RED}Cannot $operation! Error message:${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot $operation.${ENDCOLOR}"
         echo "$merge_output"
         exit $merge_code
     fi
 
-    echo -e "${RED}Cannot $operation! There are conflicts in staged files${ENDCOLOR}"
+    echo -e "${YELLOW}⚠  Conflicts detected — staged files need manual resolution.${ENDCOLOR}"
     resolve_conflicts $1 $2 $3
 
     # if we got here - conflicts were resolved
@@ -299,19 +303,18 @@ function resolve_conflicts {
     ### Ask user what he wants to do
     echo
     default_message="Merge branch '$2/$1' into '$current_branch'"
-    echo -e "${YELLOW}You should resolve conflicts manually${ENDCOLOR}"
-    echo -e "After resolving, select an option to continue"
+    echo -e "${YELLOW}Resolve conflicts manually, then choose an option:${ENDCOLOR}"
     echo -e "1. Create a merge commit with a generated message:"
     printf "\t${YELLOW}${default_message}${ENDCOLOR}\n"
-    echo -e "2. Create a merge commit with an entered message"
-    echo -e "3. Abort merge and return to the original state: ${YELLOW}git merge --abort${ENDCOLOR}"
-    echo -e "4. Accept all incoming changes: ${GREEN}git checkout --theirs .${ENDCOLOR}"
-    echo -e "5. Accept all current changes: ${GREEN}git checkout --ours .${ENDCOLOR}"
-    echo -e "0. Exit from this script ${BOLD}without${NORMAL} merge abort"
+    echo -e "2. Create a merge commit with a custom message"
+    echo -e "3. Abort merge and return to original state ${BLUE}(${YELLOW}git merge --abort${BLUE})${ENDCOLOR}"
+    echo -e "4. Accept all incoming changes ${BLUE}(${GREEN}git checkout --theirs .${BLUE})${ENDCOLOR}"
+    echo -e "5. Accept all current changes ${BLUE}(${GREEN}git checkout --ours .${BLUE})${ENDCOLOR}"
+    echo -e "0. Exit (leave merge in progress; do ${BOLD}not${NORMAL} abort)"
 
     ### Print files with conflicts
     echo
-    echo -e "${YELLOW}Files with conflicts${ENDCOLOR}"
+    echo -e "${YELLOW}Files with conflicts:${ENDCOLOR}"
     IFS=$'\n' read -rd '' -a files_with_conflicts <<<"$(git --no-pager diff --name-only --diff-filter=U --relative)"
     for file in "${files_with_conflicts[@]}"; do
         echo -e "\t$file"
@@ -337,7 +340,8 @@ function resolve_conflicts {
 
         if [ "$choice" == "4" ]; then
             echo
-            echo -e "Are you sure you want to ${GREEN}accept all incoming changes${ENDCOLOR} and discard current changes (y/n)?"
+            echo -e "${RED}⚠  This will discard your current changes for these files.${ENDCOLOR}"
+            echo -e "Are you sure you want to ${GREEN}accept all incoming changes${ENDCOLOR} (y/n)?"
             read -n 1 -s choice_yes
             if is_yes "$choice_yes"; then
                 echo
@@ -346,7 +350,7 @@ function resolve_conflicts {
                 # Check for deleted files in conflicts
                 deleted_files=$(git --no-pager diff --name-only --diff-filter=D --relative 2>/dev/null)
                 if [ -n "$deleted_files" ]; then
-                    echo -e "${YELLOW}Warning: Some files were deleted in the incoming branch:${ENDCOLOR}"
+                    echo -e "${YELLOW}⚠  Some files were deleted in the incoming branch:${ENDCOLOR}"
                     echo "$deleted_files" | sed 's/^/\t/'
                     echo
                     echo -e "Do you want to continue and accept the deletions (y/n)?"
@@ -362,12 +366,12 @@ function resolve_conflicts {
                 checkout_code=$?
                 
                 if [ $checkout_code -ne 0 ]; then
-                    echo -e "${RED}Failed to accept incoming changes:${ENDCOLOR}"
+                    echo -e "${RED}✗ Cannot accept incoming changes.${ENDCOLOR}"
                     echo "$checkout_output"
                     echo
-                    echo -e "${YELLOW}This might be due to deleted files. You can:${ENDCOLOR}"
+                    echo -e "${YELLOW}This might be due to deleted files. Choose an option:${ENDCOLOR}"
                     echo -e "1. Manually resolve conflicts and stage files"
-                    echo -e "2. Try again (if you want to force accept)"
+                    echo -e "2. Force-accept (drops missing files)"
                     echo -e "3. Abort merge"
                     echo
                     echo -e "What would you like to do (1/2/3)?"
@@ -400,10 +404,10 @@ function resolve_conflicts {
                 commit_code=$?
                 
                 if [ $commit_code -eq 0 ]; then
-                    echo -e "${GREEN}Successfully accepted all incoming changes and created merge commit!${ENDCOLOR}"
+                    echo -e "${GREEN}✓ Accepted all incoming changes and created merge commit${ENDCOLOR}"
                     return
                 else
-                    echo -e "${RED}Failed to create merge commit:${ENDCOLOR}"
+                    echo -e "${RED}✗ Cannot create merge commit.${ENDCOLOR}"
                     echo "$commit_result"
                     exit $commit_code
                 fi
@@ -415,7 +419,8 @@ function resolve_conflicts {
 
         if [ "$choice" == "5" ]; then
             echo
-            echo -e "Are you sure you want to ${GREEN}accept all current changes${ENDCOLOR} and discard incoming changes (y/n)?"
+            echo -e "${RED}⚠  This will discard the incoming changes for these files.${ENDCOLOR}"
+            echo -e "Are you sure you want to ${GREEN}accept all current changes${ENDCOLOR} (y/n)?"
             read -n 1 -s choice_yes
             if is_yes "$choice_yes"; then
                 echo
@@ -424,7 +429,7 @@ function resolve_conflicts {
                 # Check for deleted files in conflicts
                 deleted_files=$(git --no-pager diff --name-only --diff-filter=D --relative 2>/dev/null)
                 if [ -n "$deleted_files" ]; then
-                    echo -e "${YELLOW}Warning: Some files were deleted in the current branch:${ENDCOLOR}"
+                    echo -e "${YELLOW}⚠  Some files were deleted in the current branch:${ENDCOLOR}"
                     echo "$deleted_files" | sed 's/^/\t/'
                     echo
                     echo -e "Do you want to continue and accept the deletions (y/n)?"
@@ -440,7 +445,7 @@ function resolve_conflicts {
                 checkout_code=$?
                 
                 if [ $checkout_code -ne 0 ]; then
-                    echo -e "${RED}Failed to accept current changes:${ENDCOLOR}"
+                    echo -e "${RED}✗ Cannot accept current changes.${ENDCOLOR}"
                     echo "$checkout_output"
                     echo
                     echo -e "${YELLOW}This might be due to deleted files. You can:${ENDCOLOR}"
@@ -478,10 +483,10 @@ function resolve_conflicts {
                 commit_code=$?
                 
                 if [ $commit_code -eq 0 ]; then
-                    echo -e "${GREEN}Successfully accepted all current changes and created merge commit!${ENDCOLOR}"
+                    echo -e "${GREEN}✓ Accepted all current changes and created merge commit${ENDCOLOR}"
                     return
                 else
-                    echo -e "${RED}Failed to create merge commit:${ENDCOLOR}"
+                    echo -e "${RED}✗ Cannot create merge commit.${ENDCOLOR}"
                     echo "$commit_result"
                     exit $commit_code
                 fi
@@ -547,7 +552,7 @@ function merge_commit {
         result=$(git commit -m "$commit_message" 2>&1)
         commit_status=$?
         if [[ $result != *"not staged for commit"* ]] && [[ $result != *"nothing to commit"* ]]; then
-            check_code $commit_status "$result" "creating default merge commit"
+            check_code $commit_status "$result" "create default merge commit"
         fi
 
 
@@ -573,7 +578,7 @@ ${staged_with_tab}
                 break
             fi
             echo
-            echo -e "${YELLOW}Merge commit message cannot be empty${ENDCOLOR}"
+            echo -e "${YELLOW}⚠  Merge commit message cannot be empty.${ENDCOLOR}"
             echo
             read -n 1 -p "Do you want to try for one more time? (y/n) " -s -e choice
             if ! is_yes "$choice"; then
@@ -590,7 +595,7 @@ ${staged_with_tab}
         commit_status=$?
 
         if [[ $result != *"not staged for commit"* ]] && [[ $result != *"nothing to commit"* ]]; then
-            check_code $commit_status "$result" "creating merge commit"
+            check_code $commit_status "$result" "create merge commit"
         fi
     fi
 }

@@ -26,8 +26,11 @@ function print_git_warning_output {
     while IFS= read -r line; do
         [ -z "$line" ] && continue
         case "$line" in
-            warning:*|hint:*)
-                echo -e "${RED}${line}${ENDCOLOR}"
+            warning:*)
+                echo -e "${YELLOW}${line}${ENDCOLOR}"
+                ;;
+            hint:*)
+                echo -e "${CYAN}${line}${ENDCOLOR}"
                 ;;
             *)
                 echo "$line"
@@ -48,8 +51,8 @@ function unstage_embedded_repositories_from_fast_add {
         [ -z "$file" ] && continue
         if [ -d "$file" ] && [ -e "$file/.git" ]; then
             git restore --staged -- "$file" >/dev/null 2>&1
-            echo -e "${RED}warning: skipped embedded git repository in fast mode: ${file}${ENDCOLOR}"
-            echo -e "${RED}hint: Select it manually if you really want to commit it.${ENDCOLOR}"
+            echo -e "${YELLOW}⚠  Skipped embedded git repository in fast mode: ${file}${ENDCOLOR}"
+            echo -e "${CYAN}💡 Select it manually if you really want to commit it.${ENDCOLOR}"
         fi
     done <<< "$staged_files"
 }
@@ -474,8 +477,8 @@ function print_split_type_menu {
     echo -e "7. ${BLUE}${BOLD}chore${ENDCOLOR}:\tmaintenance and housekeeping"
     echo -e "8. ${BLUE}${BOLD}docs${ENDCOLOR}:\tdocumentation changes"
     echo -e "9. ${BOLD}plain${ENDCOLOR}:\twrite plain commit without type and scope"
-    echo -e "s. ${YELLOW}${BOLD}skip${ENDCOLOR}:\tskip this group and leave its files unstaged"
-    echo -e "0. ${RED}${BOLD}abort${ENDCOLOR}:\tabort split and restore original staging"
+    echo -e "s. ${YELLOW}${BOLD}skip${ENDCOLOR}:\tSkip this group and leave its files unstaged"
+    echo -e "0. ${RED}${BOLD}abort${ENDCOLOR}:\tAbort split and restore original staging"
     echo
 }
 
@@ -493,7 +496,7 @@ function print_commit_type_menu {
     echo -e "7. ${BLUE}${BOLD}chore${ENDCOLOR}:\tmaintenance and housekeeping"
     echo -e "8. ${BLUE}${BOLD}docs${ENDCOLOR}:\tdocumentation changes"
     echo -e "9. ${BOLD}plain${ENDCOLOR}:\twrite plain commit without type and scope"
-    echo -e "0. ${RED}${BOLD}exit${ENDCOLOR}:\texit without changes"
+    echo -e "0. ${RED}${BOLD}exit${ENDCOLOR}:\tExit without changes"
 }
 
 function print_split_groups_preview {
@@ -536,7 +539,7 @@ function perform_commit_split {
     local original_staged
     original_staged=$(git -c core.quotePath=false diff --name-only --cached)
     if [ -z "$original_staged" ]; then
-        echo -e "${RED}No staged files to split${ENDCOLOR}"
+        echo -e "${RED}✗ No staged files to split.${ENDCOLOR}"
         return 1
     fi
 
@@ -580,12 +583,12 @@ function perform_commit_split {
         done <<< "$files_str"
 
         if [ ${#files_array[@]} -eq 0 ]; then
-            echo -e "${YELLOW}No files in this group, skipping${ENDCOLOR}"
+            echo -e "${YELLOW}No files in this group, skipping.${ENDCOLOR}"
             continue
         fi
 
         if ! git add -- "${files_array[@]}"; then
-            echo -e "${RED}Failed to stage files for scope '${scope}'${ENDCOLOR}"
+            echo -e "${RED}✗ Cannot stage files for scope '${scope}'.${ENDCOLOR}"
             _restore_split_snapshot "$snapshot_file"
             trap - INT TERM
             return 1
@@ -667,7 +670,7 @@ ${ai_msg}"
 
         # Auto-accept can't fall back to a prompt — fail loudly when AI didn't deliver
         if [ -z "$msg" ] && [ -n "$auto_accept" ]; then
-            echo -e "${RED}AI message generation failed; auto-accept mode cannot prompt for a manual message.${ENDCOLOR}"
+            echo -e "${RED}✗ AI message generation failed — auto-accept mode cannot prompt for a manual message.${ENDCOLOR}"
             echo -e "${YELLOW}Configure AI (gitb cfg ai) or use a non-ff mode.${ENDCOLOR}"
             _restore_split_snapshot "$snapshot_file"
             trap - INT TERM
@@ -746,7 +749,7 @@ ${ai_msg}"
         local result
         result=$(git commit -m "$msg" 2>&1)
         if [ $? -ne 0 ]; then
-            echo -e "${RED}Commit failed:${ENDCOLOR}"
+            echo -e "${RED}✗ Commit failed:${ENDCOLOR}"
             echo "$result"
             _restore_split_snapshot "$snapshot_file"
             trap - INT TERM
@@ -758,7 +761,7 @@ ${ai_msg}"
         last_hash=$(git rev-parse --short HEAD)
         commit_hashes+=("$last_hash")
         commit_headers+=("$msg")
-        echo -e "${GREEN}Committed ${last_hash} ${msg}${ENDCOLOR}"
+        echo -e "${GREEN}✓ Committed ${last_hash} ${msg}${ENDCOLOR}"
     done
 
     rm -f "$snapshot_file"
@@ -773,7 +776,7 @@ ${ai_msg}"
         echo -e "${YELLOW}No commits were created.${ENDCOLOR}"
         exit 0
     fi
-    echo -e "${GREEN}Created ${commit_count} atomic commit(s) on ${current_branch}:${ENDCOLOR}"
+    echo -e "${GREEN}✓ Created ${commit_count} atomic commit(s) on ${current_branch}:${ENDCOLOR}"
     for i in "${!commit_hashes[@]}"; do
         echo -e "  ${BLUE}${commit_hashes[$i]}${ENDCOLOR} ${commit_headers[$i]}"
     done
@@ -909,7 +912,7 @@ function handle_ai_commit_generation {
 
         if [ $? -ne 0 ] || [ -z "$ai_commit_message" ]; then
             echo
-            echo -e "${RED}Failed to generate AI commit message${ENDCOLOR}"
+            echo -e "${RED}✗ Cannot generate AI commit message.${ENDCOLOR}"
             cleanup_on_exit "$git_add"
             exit 1
         fi
@@ -993,9 +996,9 @@ ${ai_commit_message}"
                     break
                 fi
                 echo
-                echo -e "${YELLOW}Commit message cannot be empty${ENDCOLOR}"
+                echo -e "${YELLOW}⚠  Commit message cannot be empty.${ENDCOLOR}"
                 echo
-                read -n 1 -p "Try for one more time? (y/n) " -s -e choice
+                read -n 1 -p "Try again? (y/n) " -s -e choice
                 if ! is_yes "$choice"; then
                     cleanup_on_exit "$git_add"
                     rm -f "$commitmsg_file"
@@ -1062,9 +1065,9 @@ ${ai_commit_message}"
 #     * commit - message
 function after_commit {
     if [ -n "$1" ]; then
-        echo -e "${GREEN}Successful commit $1!${ENDCOLOR}"
+        echo -e "${GREEN}✓ Committed ($1)${ENDCOLOR}"
     else
-        echo -e "${GREEN}Successful commit!${ENDCOLOR}"
+        echo -e "${GREEN}✓ Committed${ENDCOLOR}"
     fi
     
     echo
@@ -1116,6 +1119,103 @@ function set_commit_flag_from_token {
         *) return 1;;
     esac
     return 0
+}
+
+
+### Reject combinations the help text already documents as invalid (line 1295-).
+# Without this, dispatch silently picks one action and ignores the rest, e.g.
+# `commit ai revert` runs revert and silently drops the AI step.
+function validate_commit_flag_combo {
+    local actions=() invalid=()
+
+    [ -n "$last" ]   && actions+=("last")
+    [ -n "$revert" ] && actions+=("revert")
+    [ -n "$fixup" ]  && actions+=("fixup")
+    [ -n "$amend" ]  && actions+=("amend")
+    [ -n "$split" ]  && actions+=("split")
+
+    if [ ${#actions[@]} -gt 1 ]; then
+        echo -e "${RED}✗ Cannot combine actions: ${actions[*]}${ENDCOLOR}"
+        echo -e "Pick one of: last, revert, fixup, amend, split."
+        exit 1
+    fi
+
+    local lone=""
+    [ -n "$last" ]   && lone="last"
+    [ -n "$revert" ] && lone="revert"
+    if [ -n "$lone" ]; then
+        [ -n "$llm" ]      && invalid+=("ai")
+        [ -n "$fast" ]     && invalid+=("fast")
+        [ -n "$push" ]     && invalid+=("push")
+        [ -n "$scope" ]    && invalid+=("scope")
+        [ -n "$msg" ]      && invalid+=("msg")
+        [ -n "$ticket" ]   && invalid+=("ticket")
+        [ -n "$staged" ]   && invalid+=("staged")
+        [ -n "$no_split" ] && invalid+=("no-split")
+        if [ ${#invalid[@]} -gt 0 ]; then
+            echo -e "${RED}✗ '${lone}' takes no modifiers (got: ${invalid[*]})${ENDCOLOR}"
+            exit 1
+        fi
+    fi
+
+    if [ -n "$amend" ] || [ -n "$fixup" ]; then
+        local action_name
+        [ -n "$amend" ] && action_name="amend" || action_name="fixup"
+        invalid=()
+        [ -n "$llm" ]      && invalid+=("ai")
+        [ -n "$msg" ]      && invalid+=("msg")
+        [ -n "$ticket" ]   && invalid+=("ticket")
+        [ -n "$scope" ]    && invalid+=("scope")
+        [ -n "$no_split" ] && invalid+=("no-split")
+        if [ ${#invalid[@]} -gt 0 ]; then
+            echo -e "${RED}✗ '${action_name}' does not use: ${invalid[*]}${ENDCOLOR}"
+            echo -e "Only fast, staged, push apply (the message is reused / autosquashed)."
+            exit 1
+        fi
+    fi
+
+    if [ -n "$fast" ] && [ -n "$staged" ]; then
+        echo -e "${RED}✗ 'fast' and 'staged' are mutually exclusive${ENDCOLOR}"
+        echo -e "fast stages everything; staged commits what's already in the index."
+        exit 1
+    fi
+}
+
+
+### Print a one-line summary of how the parsed flags will be interpreted.
+# Helps users catch typos like `amend fasts` (a typo of `fastfix`) where the
+# parser accepts the input but the chosen action wouldn't match intent.
+function summarize_commit_intent {
+    local action="commit" mods=()
+
+    if [ -n "$auto_accept" ]; then
+        action="ultrafast commit (ai + fast + auto-accept)"
+    elif [ -n "$last" ]; then
+        action="amend last commit (reuse message)"
+    elif [ -n "$revert" ]; then
+        action="revert a commit"
+    elif [ -n "$amend" ]; then
+        action="amend last commit"
+    elif [ -n "$fixup" ]; then
+        action="fixup an earlier commit"
+    elif [ -n "$split" ]; then
+        action="split staged changes into atomic commits"
+    fi
+
+    [ -n "$llm" ] && [ -z "$auto_accept" ] && mods+=("ai message")
+    [ -n "$fast" ]     && [ -z "$auto_accept" ] && mods+=("fast")
+    [ -n "$staged" ]   && mods+=("staged")
+    [ -n "$scope" ]    && mods+=("scope")
+    [ -n "$msg" ]      && mods+=("msg")
+    [ -n "$ticket" ]   && mods+=("ticket")
+    [ -n "$no_split" ] && mods+=("no-split")
+    [ -n "$push" ]     && mods+=("push")
+
+    local line="→ ${action}"
+    if [ ${#mods[@]} -gt 0 ]; then
+        line="${line} (modifiers: ${mods[*]})"
+    fi
+    echo -e "${YELLOW}${line}${ENDCOLOR}"
 }
 
 
@@ -1189,6 +1289,8 @@ function commit_script {
             wrong_mode "commit" $1
     esac
     fi
+
+    validate_commit_flag_combo
 
 
     ### Print header
@@ -1297,6 +1399,12 @@ function commit_script {
     fi
 
 
+    ### Print a one-line summary of how flags were interpreted so users can
+    ### catch typos before any work runs.
+    summarize_commit_intent
+    echo
+
+
     ### Refuse to silently create unreachable commits in detached-HEAD state
     warn_if_detached_head "commit"
 
@@ -1315,7 +1423,7 @@ function commit_script {
         if [ -z "${revert}" ]; then
             # Clean up cached git add when working tree is clean
             git config --unset gitbasher.cached-git-add 2>/dev/null
-            echo -e "${GREEN}Nothing to commit, working tree clean${ENDCOLOR}"
+            echo -e "${GREEN}✓ Nothing to commit — working tree clean${ENDCOLOR}"
 
             # If in push mode, check for unpushed commits
             if [ -n "${push}" ]; then
@@ -1337,7 +1445,7 @@ function commit_script {
             exit
         fi
     elif [ -n "${revert}" ]; then
-        echo -e "${RED}Cannot revert! There are uncommited changes:${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot revert — there are uncommitted changes.${ENDCOLOR}"
         exit
     fi
 
@@ -1346,7 +1454,7 @@ function commit_script {
     if [ -n "${staged}" ]; then
         staged_files_check=$(git -c core.quotePath=false diff --name-only --cached)
         if [ -z "$staged_files_check" ]; then
-            echo -e "${RED}No staged files found!${ENDCOLOR}"
+            echo -e "${RED}✗ No staged files found.${ENDCOLOR}"
             exit 1
         fi
         echo -e "${YELLOW}Using already staged files:${ENDCOLOR}"
@@ -1391,7 +1499,7 @@ function commit_script {
                     use_saved_git_add="true"
                 else
                     echo
-                    echo -e "${RED}Failed to apply saved git add arguments, continuing normally${ENDCOLOR}"
+                    echo -e "${YELLOW}⚠  Could not reuse saved git add arguments — continuing without them.${ENDCOLOR}"
                     git config --unset gitbasher.cached-git-add 2>/dev/null
                 fi
                 echo
@@ -1474,7 +1582,7 @@ function commit_script {
                         git_add="$git_add_with_star"
                         break
                     else
-                        echo -e "${RED}Failed to add files with wildcard:${ENDCOLOR} ${BOLD}$result_star${ENDCOLOR}"
+                        echo -e "${RED}✗ Cannot add files with wildcard:${ENDCOLOR} ${BOLD}$result_star${ENDCOLOR}"
                         echo
                     fi
                 else
@@ -1607,7 +1715,7 @@ function commit_script {
         fi
         
         result=$(git commit --fixup $commit_hash 2>&1)
-        check_code $? "$result" "fixup"
+        check_code $? "$result" "create fixup commit"
         
         # Clean up cached git add and commit message on successful fixup
         git config --unset gitbasher.cached-git-add 2>/dev/null
@@ -1697,9 +1805,9 @@ function commit_script {
             step="2"
         fi
         echo
-        echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Enter a ${YELLOW}scope${ENDCOLOR} of changes to provide some additional context"
+        echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Enter a ${YELLOW}scope${ENDCOLOR} for additional context"
         echo -e "Final message will be ${BLUE}${commit_type}${ENDCOLOR}(${YELLOW}<scope>${ENDCOLOR}): ${BLUE}<summary>${ENDCOLOR}"
-        echo -e "Press Enter to continue without scope or enter 0 to exit without changes"
+        echo -e "Press Enter to skip the scope, or 0 to exit without changes"
         
         # Detect possible scopes from staged files
         detect_scopes_from_staged_files
@@ -1750,7 +1858,7 @@ function commit_script {
                     commit="$commit($commit_scope): "
                     break
                 else
-                    echo -e "${RED}Invalid scope index! Please choose from 1-${#scopes_array[@]} or enter custom scope.${ENDCOLOR}"
+                    echo -e "${RED}✗ Invalid scope index. Please choose 1-${#scopes_array[@]} or enter a custom scope.${ENDCOLOR}"
                     continue
                 fi
             else
@@ -1844,9 +1952,9 @@ ${staged_with_tab}
                 break
             fi
             echo
-            echo -e "${YELLOW}Commit message cannot be empty${ENDCOLOR}"
+            echo -e "${YELLOW}⚠  Commit message cannot be empty.${ENDCOLOR}"
             echo
-            read -n 1 -p "Try for one more time? (y/n) " -s -e choice
+            read -n 1 -p "Try again? (y/n) " -s -e choice
             if ! is_yes "$choice"; then
                 cleanup_on_exit "$git_add"
                 rm -f "$commitmsg_file"
@@ -1877,9 +1985,9 @@ ${staged_with_tab}
     ### Commit Step 5: enter tracker ticket
     if [ -n "${ticket}" ]; then
         echo
-        echo -e "${YELLOW}Step 5.${ENDCOLOR} Enter the number of a resolved issue (e.g. in JIRA or Youtrack)"
-        echo -e "It will be added to the end of the summary header"
-        echo -e "Press Enter to continue or 0 to exit without changes"
+        echo -e "${YELLOW}Step 5.${ENDCOLOR} Enter the number of a resolved issue (e.g. JIRA or YouTrack)"
+        echo -e "It will be appended to the summary header"
+        echo -e "Press Enter to skip, or 0 to exit without changes"
 
         if [ -n "$ticket_name" ]; then
             read -p "${ticket_name}${sep}" -e commit_ticket

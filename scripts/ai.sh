@@ -564,7 +564,7 @@ function call_ai_api {
     if [ -n "$proxy_url" ]; then
         # Validate and sanitize proxy URL to prevent command injection
         if ! validate_proxy_url "$proxy_url"; then
-            echo -e "${RED}Invalid proxy URL format: $proxy_url${ENDCOLOR}" >&2
+            echo -e "${RED}✗ Invalid proxy URL format: $proxy_url${ENDCOLOR}" >&2
             echo -e "${YELLOW}Expected format: protocol://host:port (e.g., http://proxy.example.com:8080)${ENDCOLOR}" >&2
             echo -e "${YELLOW}Or: host:port (e.g., proxy.example.com:8080)${ENDCOLOR}" >&2
             clear_sensitive_vars
@@ -609,7 +609,7 @@ function call_ai_api {
     
     if [ $curl_exit_code -ne 0 ] || [ -z "$response" ]; then
         echo
-        echo -e "${RED}Failed to connect to AI service${ENDCOLOR}" >&2
+        echo -e "${RED}✗ Cannot connect to AI service.${ENDCOLOR}" >&2
         echo -e "${YELLOW}Debug Information:${ENDCOLOR}" >&2
         echo -e "  • Curl exit code: $curl_exit_code" >&2
         echo -e "  • Response length: ${#response}" >&2
@@ -626,11 +626,11 @@ function call_ai_api {
             local proxy_test=$(curl --proxy "$safe_proxy_url" --connect-timeout 5 --max-time 10 -s https://ifconfig.me 2>&1)
             local proxy_test_code=$?
             if [ $proxy_test_code -eq 0 ]; then
-                echo -e "  ✅ Proxy connection: Working" >&2
-                echo -e "  📍 Your IP via proxy: $(echo "$proxy_test" | head -1)" >&2
+                echo -e "  ${GREEN}✓ Proxy connection working${ENDCOLOR}" >&2
+                echo -e "  Your IP via proxy: $(echo "$proxy_test" | head -1)" >&2
             else
-                echo -e "  ❌ Proxy connection: Failed (exit code: $proxy_test_code)" >&2
-                echo -e "  📝 Error: $proxy_test" >&2
+                echo -e "  ${RED}✗ Proxy connection failed (exit code: $proxy_test_code)${ENDCOLOR}" >&2
+                echo -e "  Error: $proxy_test" >&2
             fi
         else
             # Pull just the scheme+host out of the full chat-completions URL so
@@ -645,14 +645,14 @@ function call_ai_api {
             local direct_test=$(curl --connect-timeout 5 --max-time 10 -s -I "$probe_host" 2>&1)
             local direct_test_code=$?
             if [ $direct_test_code -eq 0 ]; then
-                echo -e "  ✅ ${provider} endpoint: Reachable" >&2
+                echo -e "  ${GREEN}✓ ${provider} endpoint reachable${ENDCOLOR}" >&2
             else
-                echo -e "  ❌ ${provider} endpoint: Failed (exit code: $direct_test_code)" >&2
-                echo -e "  📝 Error: $(echo "$direct_test" | head -1)" >&2
+                echo -e "  ${RED}✗ ${provider} endpoint failed (exit code: $direct_test_code)${ENDCOLOR}" >&2
+                echo -e "  Error: $(echo "$direct_test" | head -1)" >&2
                 if [ "$provider" = "ollama" ]; then
-                    echo -e "  💡 Make sure the Ollama daemon is running: ${BOLD}ollama serve${ENDCOLOR}" >&2
+                    echo -e "  ${CYAN}💡 Make sure the Ollama daemon is running: ${BOLD}ollama serve${ENDCOLOR}" >&2
                 else
-                    echo -e "  💡 Consider configuring a proxy: gitb cfg proxy" >&2
+                    echo -e "  ${CYAN}💡 Consider configuring a proxy: ${GREEN}gitb cfg proxy${ENDCOLOR}" >&2
                 fi
             fi
         fi
@@ -689,10 +689,10 @@ function call_ai_api {
         echo >&2
         echo -e "${RED}AI API Error${ENDCOLOR}" >&2
         if [ -n "$error_code" ]; then
-            echo -e "${RED}Error Code: $error_code${ENDCOLOR}" >&2
+            echo -e "${RED}✗ Error code: $error_code${ENDCOLOR}" >&2
         fi
         if [ -n "$error_message" ]; then
-            echo -e "${RED}Error Message: $error_message${ENDCOLOR}" >&2
+            echo -e "${RED}✗ Error message: $error_message${ENDCOLOR}" >&2
         fi
         
         # Show full API response for debugging
@@ -800,7 +800,7 @@ function call_ai_api {
     fi
     
     if [ -z "$ai_response" ]; then
-        echo -e "${RED}Failed to parse AI response${ENDCOLOR}" >&2
+        echo -e "${RED}✗ Cannot parse AI response.${ENDCOLOR}" >&2
         echo -e "${YELLOW}Raw API response:${ENDCOLOR}" >&2
         echo "$response" | head -5 >&2
         echo -e "${YELLOW}...${ENDCOLOR}" >&2
@@ -1064,7 +1064,7 @@ function generate_ai_commit_message {
 
     local staged_files=$(git -c core.quotePath=false diff --name-only --cached)
     if [ -z "$staged_files" ]; then
-        echo -e "${RED}No staged files found${ENDCOLOR}" >&2
+        echo -e "${RED}✗ No staged files found.${ENDCOLOR}" >&2
         return 1
     fi
 

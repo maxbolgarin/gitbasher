@@ -47,13 +47,19 @@ function reset_script {
         echo -e "usage: ${YELLOW}gitb reset <mode>${ENDCOLOR}"
         echo
         msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Preview and reset last commit (git reset --mixed HEAD^)"
-        msg="$msg\n${BOLD}soft${ENDCOLOR}_s_Preview and reset last commit, keeping changes staged (git reset --soft HEAD^)"
-        msg="$msg\n${BOLD}undo${ENDCOLOR}_u_Preview and undo last reset (git reset --mixed HEAD@{1})"
-        msg="$msg\n${BOLD}interactive${ENDCOLOR}_i_Select a commit to reset, then preview before applying"
-        msg="$msg\n${BOLD}ref${ENDCOLOR}_r_Select a HEAD reference to reset, then preview before applying"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Reset the last commit ${BLUE}(${YELLOW}git reset --mixed HEAD^${BLUE})${ENDCOLOR} — leaves changes unstaged"
+        msg="$msg\n${BOLD}soft${ENDCOLOR}_s_Reset the last commit ${BLUE}(${YELLOW}git reset --soft HEAD^${BLUE})${ENDCOLOR} — keeps changes staged"
+        msg="$msg\n${BOLD}undo${ENDCOLOR}_u_Undo the last reset ${BLUE}(${YELLOW}git reset --mixed HEAD@{1}${BLUE})${ENDCOLOR}"
+        msg="$msg\n${BOLD}interactive${ENDCOLOR}_i_Pick a commit to reset to, then preview before applying"
+        msg="$msg\n${BOLD}ref${ENDCOLOR}_r_Pick a reflog ref to reset to, then preview before applying"
         msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
         echo -e "$(echo -e "$msg" | column -ts'_')"
+        echo
+        echo -e "${YELLOW}Examples${ENDCOLOR}"
+        echo -e "  ${GREEN}gitb reset${ENDCOLOR}        Drop the last commit, keep its changes unstaged"
+        echo -e "  ${GREEN}gitb reset soft${ENDCOLOR}   Drop the last commit, keep its changes staged"
+        echo -e "  ${GREEN}gitb reset undo${ENDCOLOR}   Bring back the commit you just reset"
+        echo -e "  ${GREEN}gitb reset i${ENDCOLOR}      Pick any commit to reset to, with a preview"
         exit
     fi
 
@@ -62,9 +68,9 @@ function reset_script {
 
     if [ -n "$interactive" ]; then
         if [ -n "$ref" ]; then
-            echo -e "${YELLOW}Select a ref to move into:${ENDCOLOR}"
+            echo -e "${YELLOW}Select a ref to move HEAD to:${ENDCOLOR}"
             ref_list 31
-            echo "0. Exit..."
+            echo "0. Exit"
             echo
             printf "Enter ref number: "
             choose "${refs_hash[@]}"
@@ -90,7 +96,7 @@ function reset_script {
     
     target_commit=$(git log -n 1 --pretty="%s | ${YELLOW}%h${ENDCOLOR} | ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})" "$move_ref" 2>/dev/null)
     if [ -z "$target_commit" ]; then
-        echo -e "${RED}Cannot resolve reset target:${ENDCOLOR} $move_ref"
+        echo -e "${RED}✗ Cannot resolve reset target: $move_ref${ENDCOLOR}"
         exit 1
     fi
 
@@ -103,11 +109,11 @@ function reset_script {
     echo
 
     if [ "$args" = "--soft" ]; then
-        echo -e "This will move HEAD and ${GREEN}keep reset changes staged${ENDCOLOR}"
+        echo -e "This will move HEAD and ${GREEN}keep reset changes staged${ENDCOLOR}."
     else
-        echo -e "This will move HEAD and ${YELLOW}leave reset changes unstaged${ENDCOLOR}"
+        echo -e "${YELLOW}⚠  This will move HEAD; reset changes will be left unstaged.${ENDCOLOR}"
     fi
-    echo -e "Do you want to continue (y/n)?"
+    echo -e "Are you sure you want to continue (y/n)?"
     yes_no_choice "Resetting..."
 
     reset_output=$(git reset "$args" "$move_ref" 2>&1)
@@ -116,7 +122,7 @@ function reset_script {
     new_commit=$(git log -n 1 --pretty="%s | ${YELLOW}%h${ENDCOLOR} | ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})")
     new_action=$(git reflog -n 1 --pretty="%gs | ${YELLOW}%h${ENDCOLOR} | ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})")
 
-    echo -e "${GREEN}Reset completed successfully!${ENDCOLOR}"
+    echo -e "${GREEN}✓ Reset complete${ENDCOLOR}"
     echo
 
     msg="${GREEN}New last commit:${ENDCOLOR}|${new_commit}"

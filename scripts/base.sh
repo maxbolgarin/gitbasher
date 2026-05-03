@@ -31,6 +31,7 @@ function print_help {
     printf "$row"  "$CMD" "tag"               "$ALIAS" "t|tg"        "Create, push, list, fetch, and delete tags"
     printf "$row"  "$CMD" "merge"             "$ALIAS" "m|me"        "Merge branches into the current branch or $main_branch"
     printf "$row"  "$CMD" "rebase"            "$ALIAS" "r|re|base"   "Rebase current branch, autosquash, or pull commits"
+    printf "$row"  "$CMD" "squash"            "$ALIAS" "sq|tidy"     "AI-group branch commits into clean, changelog-ready history"
     printf "$row"  "$CMD" "cherry"            "$ALIAS" "ch|cp"       "Cherry-pick commits from other branches"
     printf "$row"  "$CMD" "sync"              "$ALIAS" "sy"          "Sync current branch with $main_branch (fetch + rebase/merge)"
     printf "$row"  "$CMD" "wip"               "$ALIAS" "w"           "Stash work-in-progress and optionally back it up remotely"
@@ -54,7 +55,7 @@ function print_help {
     echo
 
     printf "$hdr2" "$CMD" "Tips"                "$ALIAS" "" "Details"
-    printf "$rowb" "$CMD" "gitb <command> help" "$ALIAS" "" "Show command-specific modes and aliases"
+    printf "$rowb" "$CMD" "gitb <command> help" "$ALIAS" "" "Show command-specific modes, aliases, and examples"
     printf "$rowb" "$CMD" "gitb --help"         "$ALIAS" "" "Show this help"
     printf "$rowb" "$CMD" "gitb -"              "$ALIAS" "" "Switch to the previous branch"
 
@@ -117,8 +118,11 @@ case "$1" in
     merge|m|me)         
         merge_script $2
     ;;
-    rebase|r|re|base)         
+    rebase|r|re|base)
         rebase_script $2
+    ;;
+    squash|sq|tidy)
+        squash_script "$2"
     ;;
     cherry|ch|cp)
         cherry_script $2 $3

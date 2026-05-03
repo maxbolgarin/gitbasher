@@ -72,8 +72,8 @@ function gitlog_branch {
             return
         ;;
         *)
-            echo -e "${RED}Unknown mode: $mode${ENDCOLOR}"
-            echo -e "Use ${GREEN}gitb log branch help${ENDCOLOR} to see available modes"
+            echo -e "${RED}✗ Unknown mode: $mode${ENDCOLOR}"
+            echo -e "Run ${GREEN}gitb log branch help${ENDCOLOR} to see available modes."
             return
         ;;
     esac
@@ -158,7 +158,7 @@ function gitlog_search {
             echo -e "${YELLOW}GIT LOG SEARCH BY MESSAGE${ENDCOLOR}"
             echo
             echo -e "${YELLOW}Search commits by message content:${ENDCOLOR}"
-            echo -e "Press Enter to exit"
+            echo -e "Press Enter to exit without changes"
             
             read -p "Enter search term: " -e search_term
             if [ -z "$search_term" ]; then
@@ -181,7 +181,7 @@ function gitlog_search {
             echo -e "${YELLOW}GIT LOG SEARCH BY AUTHOR${ENDCOLOR}"
             echo
             echo -e "${YELLOW}Search commits by author name or email:${ENDCOLOR}"
-            echo -e "Press Enter to exit"
+            echo -e "Press Enter to exit without changes"
             
             read -p "Enter author name or email: " -e author_term
             if [ -z "$author_term" ]; then
@@ -204,7 +204,7 @@ function gitlog_search {
             echo -e "${YELLOW}GIT LOG SEARCH BY FILE${ENDCOLOR}"
             echo
             echo -e "${YELLOW}Search commits that modified specific file(s):${ENDCOLOR}"
-            echo -e "Press Enter to exit"
+            echo -e "Press Enter to exit without changes"
             
             read -p "Enter file path or pattern: " -e file_path
             if [ -z "$file_path" ]; then
@@ -227,7 +227,7 @@ function gitlog_search {
             echo -e "${YELLOW}GIT LOG SEARCH BY CONTENT CHANGES${ENDCOLOR}"
             echo
             echo -e "${YELLOW}Search commits that added or removed specific content:${ENDCOLOR}"
-            echo -e "Press Enter to exit"
+            echo -e "Press Enter to exit without changes"
             
             read -p "Enter content to search for: " -e content_term
             if [ -z "$content_term" ]; then
@@ -289,7 +289,7 @@ function gitlog_search {
             echo -e "${YELLOW}GIT LOG SEARCH BY COMMIT HASH${ENDCOLOR}"
             echo
             echo -e "${YELLOW}Search for commits by hash pattern:${ENDCOLOR}"
-            echo -e "Press Enter to exit"
+            echo -e "Press Enter to exit without changes"
             
             read -p "Enter commit hash (full or partial): " -e hash_term
             if [ -z "$hash_term" ]; then
@@ -298,12 +298,12 @@ function gitlog_search {
             
             # Sanitize hash input (only allow hex characters)
             if [[ ! "$hash_term" =~ ^[a-fA-F0-9]+$ ]]; then
-                echo -e "${RED}Invalid commit hash format! Use only hexadecimal characters.${ENDCOLOR}"
+                echo -e "${RED}✗ Invalid commit hash format. Use only hexadecimal characters.${ENDCOLOR}"
                 return
             fi
             
             if [ ${#hash_term} -lt 4 ]; then
-                echo -e "${RED}Hash too short! Use at least 4 characters.${ENDCOLOR}"
+                echo -e "${RED}✗ Hash too short — use at least 4 characters.${ENDCOLOR}"
                 return
             fi
             
@@ -343,7 +343,7 @@ function gitlog_search {
                 "6") gitlog_search "hash" ;;
                 "0") return ;;
                 *) 
-                    echo -e "${RED}Invalid choice!${ENDCOLOR}"
+                    echo -e "${RED}✗ Invalid choice.${ENDCOLOR}"
                     return
                 ;;
             esac
@@ -371,7 +371,7 @@ function gitlog_search {
             echo -e "  gitb log search file"
         ;;
         *)
-            echo -e "${RED}Unknown search mode: $search_mode${ENDCOLOR}"
+            echo -e "${RED}✗ Unknown search mode: $search_mode${ENDCOLOR}"
             echo -e "Use ${GREEN}gitb log search help${ENDCOLOR} to see available modes"
         ;;
     esac

@@ -95,12 +95,12 @@ function list_worktrees_data {
 function choose_worktree {
     local filter="$1"
     if ! list_worktrees_data; then
-        echo -e "${RED}Failed to list worktrees${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot list worktrees.${ENDCOLOR}"
         return 1
     fi
 
     if [ ${#worktrees_path[@]} -eq 0 ]; then
-        echo -e "${YELLOW}No worktrees found${ENDCOLOR}"
+        echo -e "${YELLOW}No worktrees found.${ENDCOLOR}"
         return 1
     fi
 
@@ -263,9 +263,9 @@ function prompt_worktree_branch {
         fi
         wt_branch_name="$sanitized_git_name"
     else
-        echo -e "${YELLOW}Step 1.${ENDCOLOR} Enter a ${YELLOW}prefix${ENDCOLOR} for the new branch (worktree from ${BOLD}${BLUE}${from_label}${ENDCOLOR})"
-        echo -e "A branch will be created with '${YELLOW}${sep}${ENDCOLOR}' as a separator (e.g., ${YELLOW}prefix${sep}name${ENDCOLOR})"
-        echo -e "Press Enter to continue without prefix or enter 0 to exit without changes"
+        echo -e "${YELLOW}Step 1.${ENDCOLOR} Pick a ${YELLOW}prefix${ENDCOLOR} for the new branch (worktree from ${BOLD}${BLUE}${from_label}${ENDCOLOR})"
+        echo -e "Branch name will be ${YELLOW}<prefix>${sep}<name>${ENDCOLOR}"
+        echo -e "Press Enter to skip the prefix, or 0 to exit without changes"
 
         IFS=' ' read -r -a prefixes_array <<< "$all_prefixes"
         declare -A prefixes_map
@@ -313,7 +313,7 @@ function prompt_worktree_branch {
                     branch_type_and_sep="${branch_type}${sep}"
                     break
                 else
-                    echo -e "${RED}Please enter a valid option number or custom prefix.${ENDCOLOR}"
+                    echo -e "${RED}✗ Please enter a valid option number or a custom prefix.${ENDCOLOR}"
                     echo
                     continue
                 fi
@@ -340,7 +340,7 @@ function prompt_worktree_branch {
 
     if [[ "$wt_branch_name" == "HEAD" ]] || [[ "$wt_branch_name" == "$origin_name" ]]; then
         echo
-        echo -e "${RED}This name is forbidden${ENDCOLOR}"
+        echo -e "${RED}✗ This name is reserved and cannot be used.${ENDCOLOR}"
         return 1
     fi
 
@@ -374,7 +374,7 @@ function prompt_worktree_path {
 
     if [ -e "$wt_path" ]; then
         echo
-        echo -e "${RED}Path '${wt_path}' already exists${ENDCOLOR}"
+        echo -e "${RED}✗ Path '${wt_path}' already exists.${ENDCOLOR}"
         return 1
     fi
 
@@ -397,7 +397,7 @@ function worktree_add {
             local fetch_output
             fetch_output=$(git fetch "$origin_name" "$main_branch" 2>&1)
             if [ $? -ne 0 ]; then
-                echo -e "${RED}Failed to fetch ${main_branch}${ENDCOLOR}"
+                echo -e "${RED}✗ Cannot fetch ${main_branch}.${ENDCOLOR}"
                 echo "$fetch_output"
                 return 1
             fi
@@ -423,7 +423,7 @@ function worktree_add {
 
         if git show-ref --verify --quiet "refs/heads/$wt_branch_name" 2>/dev/null; then
             echo
-            echo -e "${RED}Branch '${wt_branch_name}' already exists${ENDCOLOR}"
+            echo -e "${RED}✗ Branch '${wt_branch_name}' already exists.${ENDCOLOR}"
             echo -e "Use ${BOLD}gitb worktree addb${NORMAL} to attach an existing branch to a new worktree"
             return 1
         fi
@@ -443,13 +443,13 @@ function worktree_add {
 
         echo
         if [ $add_code -eq 0 ]; then
-            echo -e "${GREEN}Worktree created${ENDCOLOR}"
+            echo -e "${GREEN}✓ Created worktree${ENDCOLOR}"
             echo -e "  branch: ${BLUE}${wt_branch_name}${ENDCOLOR}"
             echo -e "  path:   ${wt_path}"
             echo
             echo -e "Switch into it: ${YELLOW}cd ${wt_path}${ENDCOLOR}"
         else
-            echo -e "${RED}Failed to create worktree${ENDCOLOR}"
+            echo -e "${RED}✗ Cannot create worktree.${ENDCOLOR}"
             echo "$add_output"
             return $add_code
         fi
@@ -464,7 +464,7 @@ function worktree_add {
         echo
 
         if [ "$branch_name" == "$current_branch" ]; then
-            echo -e "${RED}Branch '${branch_name}' is already checked out in this worktree${ENDCOLOR}"
+            echo -e "${RED}✗ Branch '${branch_name}' is already checked out in this worktree.${ENDCOLOR}"
             return 1
         fi
 
@@ -483,16 +483,16 @@ function worktree_add {
 
         echo
         if [ $add_code -eq 0 ]; then
-            echo -e "${GREEN}Worktree created${ENDCOLOR}"
+            echo -e "${GREEN}✓ Created worktree${ENDCOLOR}"
             echo -e "  branch: ${BLUE}${branch_name}${ENDCOLOR}"
             echo -e "  path:   ${wt_path}"
             echo
             echo -e "Switch into it: ${YELLOW}cd ${wt_path}${ENDCOLOR}"
         else
             if [[ "$add_output" == *"already used by worktree"* ]]; then
-                echo -e "${RED}Branch '${branch_name}' is already checked out in another worktree${ENDCOLOR}"
+                echo -e "${RED}✗ Branch '${branch_name}' is already checked out in another worktree.${ENDCOLOR}"
             else
-                echo -e "${RED}Failed to create worktree${ENDCOLOR}"
+                echo -e "${RED}✗ Cannot create worktree.${ENDCOLOR}"
             fi
             echo "$add_output"
             return $add_code
@@ -502,7 +502,7 @@ function worktree_add {
 
     if [ "$source_mode" == "remote" ]; then
         if [ -z "$origin_name" ]; then
-            echo -e "${RED}No git remote configured${ENDCOLOR}"
+            echo -e "${RED}✗ No git remote configured.${ENDCOLOR}"
             return 1
         fi
 
@@ -511,7 +511,7 @@ function worktree_add {
         local fetch_output
         fetch_output=$(git fetch "$origin_name" 2>&1)
         if [ $? -ne 0 ]; then
-            echo -e "${RED}Failed to fetch remote${ENDCOLOR}"
+            echo -e "${RED}✗ Cannot fetch remote.${ENDCOLOR}"
             echo "$fetch_output"
             return 1
         fi
@@ -540,13 +540,13 @@ function worktree_add {
 
         echo
         if [ $add_code -eq 0 ]; then
-            echo -e "${GREEN}Worktree created${ENDCOLOR}"
+            echo -e "${GREEN}✓ Created worktree${ENDCOLOR}"
             echo -e "  branch: ${BLUE}${branch_name}${ENDCOLOR}"
             echo -e "  path:   ${wt_path}"
             echo
             echo -e "Switch into it: ${YELLOW}cd ${wt_path}${ENDCOLOR}"
         else
-            echo -e "${RED}Failed to create worktree${ENDCOLOR}"
+            echo -e "${RED}✗ Cannot create worktree.${ENDCOLOR}"
             echo "$add_output"
             return $add_code
         fi
@@ -566,7 +566,7 @@ function _do_worktree_remove {
     local rm_code=$?
 
     if [ $rm_code -eq 0 ]; then
-        echo -e "${GREEN}Worktree removed${ENDCOLOR}"
+        echo -e "${GREEN}✓ Removed worktree${ENDCOLOR}"
         return 0
     fi
 
@@ -584,12 +584,12 @@ function _do_worktree_remove {
         rm_code=$?
 
         if [ $rm_code -eq 0 ]; then
-            echo -e "${GREEN}Worktree removed${ENDCOLOR}"
+            echo -e "${GREEN}✓ Removed worktree${ENDCOLOR}"
             return 0
         fi
     fi
 
-    echo -e "${RED}Failed to remove worktree${ENDCOLOR}"
+    echo -e "${RED}✗ Cannot remove worktree.${ENDCOLOR}"
     echo "$rm_output"
     return $rm_code
 }
@@ -616,7 +616,7 @@ function worktree_prune {
     local dry_run
     dry_run=$(git worktree prune --dry-run --verbose 2>&1)
     if [ -z "$dry_run" ]; then
-        echo -e "${GREEN}Nothing to prune${ENDCOLOR}"
+        echo -e "${GREEN}✓ Nothing to prune${ENDCOLOR}"
         return 0
     fi
 
@@ -639,7 +639,7 @@ function worktree_prune {
         return 0
     fi
 
-    echo -e "${RED}Failed to prune worktrees${ENDCOLOR}"
+    echo -e "${RED}✗ Cannot prune worktrees.${ENDCOLOR}"
     echo "$prune_output"
     return $prune_code
 }
@@ -678,11 +678,11 @@ function _do_worktree_lock_unlock {
     local code=$?
 
     if [ $code -eq 0 ]; then
-        echo -e "${GREEN}Worktree ${action}ed${ENDCOLOR}: ${selected_worktree_path}"
+        echo -e "${GREEN}✓ Worktree ${action}ed:${ENDCOLOR} ${selected_worktree_path}"
         return 0
     fi
 
-    echo -e "${RED}Failed to ${action} worktree${ENDCOLOR}"
+    echo -e "${RED}✗ Cannot ${action} worktree.${ENDCOLOR}"
     echo "$out"
     return $code
 }
@@ -725,7 +725,7 @@ function _do_worktree_move {
 
     if [ -e "$new_path" ]; then
         echo
-        echo -e "${RED}Path '${new_path}' already exists${ENDCOLOR}"
+        echo -e "${RED}✗ Path '${new_path}' already exists.${ENDCOLOR}"
         return 1
     fi
 
@@ -737,11 +737,11 @@ function _do_worktree_move {
     local mv_code=$?
 
     if [ $mv_code -eq 0 ]; then
-        echo -e "${GREEN}Worktree moved${ENDCOLOR}"
+        echo -e "${GREEN}✓ Moved worktree${ENDCOLOR}"
         return 0
     fi
 
-    echo -e "${RED}Failed to move worktree${ENDCOLOR}"
+    echo -e "${RED}✗ Cannot move worktree.${ENDCOLOR}"
     echo "$mv_output"
     return $mv_code
 }
@@ -841,7 +841,7 @@ function worktree_goto {
 
     if [ ! -d "$selected_worktree_path" ]; then
         echo
-        echo -e "${RED}Path '${selected_worktree_path}' does not exist on disk${ENDCOLOR}"
+        echo -e "${RED}✗ Path '${selected_worktree_path}' does not exist on disk.${ENDCOLOR}"
         echo -e "Try ${BOLD}gitb worktree prune${NORMAL} to clean up stale records"
         return 1
     fi
@@ -932,9 +932,15 @@ function worktree_script {
         echo -e "$(echo -e "$msg" | column -ts'_')"
         echo
         echo -e "${YELLOW}Tips${ENDCOLOR}"
-        echo -e "  - Default worktree path: ${BOLD}<repo>/.worktree/<branch>${NORMAL} (add ${BOLD}.worktree/${NORMAL} to .gitignore)"
-        echo -e "  - Override the base directory with ${BOLD}git config gitbasher.worktreebase <dir>${NORMAL} (relative paths resolve against repo root)"
-        echo -e "  - Use ${BOLD}cd \$(gitb worktree path)${NORMAL} to jump into a worktree"
+        echo -e "  ${CYAN}💡${ENDCOLOR} Default worktree path: ${BOLD}<repo>/.worktree/<branch>${NORMAL} (add ${BOLD}.worktree/${NORMAL} to .gitignore)"
+        echo -e "  ${CYAN}💡${ENDCOLOR} Override base dir: ${BOLD}git config gitbasher.worktreebase <dir>${NORMAL}"
+        echo -e "  ${CYAN}💡${ENDCOLOR} Jump into a worktree: ${BOLD}cd \$(gitb worktree path)${NORMAL}"
+        echo
+        echo -e "${YELLOW}Examples${ENDCOLOR}"
+        echo -e "  ${GREEN}gitb worktree${ENDCOLOR}        Open the interactive menu"
+        echo -e "  ${GREEN}gitb wt new${ENDCOLOR}          Create a worktree on a new branch from current HEAD"
+        echo -e "  ${GREEN}gitb wt nd${ENDCOLOR}           Fetch ${YELLOW}$main_branch${ENDCOLOR}, then create a worktree on a new branch from it"
+        echo -e "  ${GREEN}gitb wt rm${ENDCOLOR}           Pick a worktree and remove it"
         exit
     fi
 
@@ -1000,11 +1006,11 @@ function worktree_script {
 
     if [ -n "$list_mode" ]; then
         if ! list_worktrees_data; then
-            echo -e "${RED}Failed to list worktrees${ENDCOLOR}"
+            echo -e "${RED}✗ Cannot list worktrees.${ENDCOLOR}"
             exit 1
         fi
         if [ ${#worktrees_path[@]} -eq 0 ]; then
-            echo -e "${YELLOW}No worktrees found${ENDCOLOR}"
+            echo -e "${YELLOW}No worktrees found.${ENDCOLOR}"
             exit
         fi
         local lines_str

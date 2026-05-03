@@ -17,7 +17,7 @@ function select_files_for_stash {
     echo
 
     echo -e "Enter file patterns or paths to stash (like ${BOLD}git add${ENDCOLOR} command)"
-    echo "Press Enter if you want to exit"
+    echo "Press Enter to exit without changes"
 
     while [ true ]; do
         read -p "$(echo -n -e "${BOLD}files to stash${ENDCOLOR} ")" -e git_add
@@ -50,11 +50,11 @@ function select_files_for_stash {
                     git_add="$git_add_with_star"
                     break
                 else
-                    echo -e "${RED}No changed files match pattern: $git_add_with_star${ENDCOLOR}"
+                    echo -e "${RED}✗ No changed files match pattern: $git_add_with_star${ENDCOLOR}"
                     echo
                 fi
             else
-                echo -e "${RED}No changed files match pattern: $git_add${ENDCOLOR}"
+                echo -e "${RED}✗ No changed files match pattern: $git_add${ENDCOLOR}"
                 echo
             fi
         fi
@@ -71,7 +71,7 @@ function list_stashes {
     IFS=$'\n' read -rd '' -a stashes_refs <<<"$(git stash list --pretty=format:"%gd")"
 
     if [ ${#stashes_info[@]} -eq 0 ]; then
-        echo -e "${GREEN}No stashes found${ENDCOLOR}"
+        echo -e "${YELLOW}No stashes found.${ENDCOLOR}"
         return 1
     fi
 
@@ -177,16 +177,22 @@ function stash_script {
         echo -e "usage: ${YELLOW}gitb stash <mode>${ENDCOLOR}"
         echo
         msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Show interactive menu"
-        msg="$msg\n${BOLD}all${ENDCOLOR}_ _Stash all changes"
-        msg="$msg\n${BOLD}select${ENDCOLOR}_sel_Select files to stash"
-        msg="$msg\n${BOLD}list${ENDCOLOR}_l_List all stashes"
-        msg="$msg\n${BOLD}pop${ENDCOLOR}_p_Pop from selected stash"
-        msg="$msg\n${BOLD}show${ENDCOLOR}_s_Show stash contents"
-        msg="$msg\n${BOLD}apply${ENDCOLOR}_a_Apply selected stash without removing it"
-        msg="$msg\n${BOLD}drop${ENDCOLOR}_d_Drop selected stash"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Show the interactive menu"
+        msg="$msg\n${BOLD}all${ENDCOLOR}_ _Stash all changes (including untracked)"
+        msg="$msg\n${BOLD}select${ENDCOLOR}_sel_Pick specific files to stash"
+        msg="$msg\n${BOLD}list${ENDCOLOR}_l_List existing stashes"
+        msg="$msg\n${BOLD}pop${ENDCOLOR}_p_Pop a stash (apply and remove)"
+        msg="$msg\n${BOLD}show${ENDCOLOR}_s_Show the contents of a stash"
+        msg="$msg\n${BOLD}apply${ENDCOLOR}_a_Apply a stash without removing it"
+        msg="$msg\n${BOLD}drop${ENDCOLOR}_d_Drop (delete) a stash"
         msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
         echo -e "$(echo -e "$msg" | column -ts'_')"
+        echo
+        echo -e "${YELLOW}Examples${ENDCOLOR}"
+        echo -e "  ${GREEN}gitb stash${ENDCOLOR}        Open the interactive menu"
+        echo -e "  ${GREEN}gitb stash all${ENDCOLOR}    Stash everything with one prompt for a message"
+        echo -e "  ${GREEN}gitb stash pop${ENDCOLOR}    Pick a stash and pop it"
+        echo -e "  ${GREEN}gitb stash list${ENDCOLOR}   See what's stashed"
         exit
     fi
 
@@ -197,12 +203,12 @@ function stash_script {
         echo "1. Select files to stash"
         echo "2. Stash all changes"
         echo "3. List all stashes"
-        echo "4. Pop from stash"
+        echo "4. Pop from a stash"
         echo "5. Show stash contents"
         echo "6. Apply stash (without removing)"
-        echo "7. Drop stash"
+        echo "7. Drop a stash"
         echo "0. Exit"
-        
+
         read -n 1 -s choice
         echo
 
@@ -215,7 +221,7 @@ function stash_script {
             6) apply_mode="true";;
             7) drop_mode="true";;
             0) exit;;
-            *) echo -e "${RED}Invalid option${ENDCOLOR}"; exit 1;;
+            *) echo -e "${RED}✗ Invalid choice.${ENDCOLOR}"; exit 1;;
         esac
     fi
 
@@ -249,7 +255,7 @@ function stash_script {
         # First stage the files
         result=$(git add $git_add 2>&1)
         if [ $? -ne 0 ]; then
-            echo -e "${RED}Failed to stage files! Error:${ENDCOLOR}"
+            echo -e "${RED}✗ Cannot stage files.${ENDCOLOR}"
             echo "$result"
             exit 1
         fi
@@ -259,10 +265,10 @@ function stash_script {
         stash_code=$?
 
         if [ $stash_code -eq 0 ]; then
-            echo -e "${GREEN}Successfully stashed selected files!${ENDCOLOR}"
+            echo -e "${GREEN}✓ Stashed selected files${ENDCOLOR}"
             echo "$stash_output"
         else
-            echo -e "${RED}Failed to stash files! Error:${ENDCOLOR}"
+            echo -e "${RED}✗ Cannot stash files.${ENDCOLOR}"
             echo "$stash_output"
             # Restore staged files on error
             git restore --staged "$git_add" 2>/dev/null
@@ -274,7 +280,7 @@ function stash_script {
     if [ -n "$all_mode" ]; then
         # Check if there are changes to stash
         if git diff --quiet && git diff --cached --quiet; then
-            echo -e "${GREEN}No changes to stash${ENDCOLOR}"
+            echo -e "${GREEN}✓ No changes to stash${ENDCOLOR}"
             exit
         fi
 
@@ -297,10 +303,10 @@ function stash_script {
         stash_code=$?
 
         if [ $stash_code -eq 0 ]; then
-            echo -e "${GREEN}Successfully stashed all changes!${ENDCOLOR}"
+            echo -e "${GREEN}✓ Stashed all changes${ENDCOLOR}"
             echo "$stash_output"
         else
-            echo -e "${RED}Failed to stash changes! Error:${ENDCOLOR}"
+            echo -e "${RED}✗ Cannot stash changes.${ENDCOLOR}"
             echo "$stash_output"
             exit $stash_code
         fi
@@ -326,10 +332,10 @@ function stash_script {
         pop_code=$?
 
         if [ $pop_code -eq 0 ]; then
-            echo -e "${GREEN}Successfully popped from stash!${ENDCOLOR}"
+            echo -e "${GREEN}✓ Popped stash${ENDCOLOR}"
             echo "$pop_output"
         else
-            echo -e "${RED}Failed to pop from stash! Error:${ENDCOLOR}"
+            echo -e "${RED}✗ Cannot pop stash.${ENDCOLOR}"
             echo "$pop_output"
             exit $pop_code
         fi
@@ -357,10 +363,10 @@ function stash_script {
         apply_code=$?
 
         if [ $apply_code -eq 0 ]; then
-            echo -e "${GREEN}Successfully applied stash!${ENDCOLOR}"
+            echo -e "${GREEN}✓ Applied stash${ENDCOLOR}"
             echo "$apply_output"
         else
-            echo -e "${RED}Failed to apply stash! Error:${ENDCOLOR}"
+            echo -e "${RED}✗ Cannot apply stash.${ENDCOLOR}"
             echo "$apply_output"
             exit $apply_code
         fi
@@ -373,20 +379,20 @@ function stash_script {
         fi
         
         echo
-        echo -e "${RED}Are you sure you want to drop stash $selected_stash? This cannot be undone!${ENDCOLOR}"
-        echo -e "Do you want to continue (y/n)?"
+        echo -e "${RED}⚠  Dropping stash $selected_stash cannot be undone.${ENDCOLOR}"
+        echo -e "Are you sure you want to drop it (y/n)?"
         yes_no_choice "Dropping stash"
 
         drop_output=$(git stash drop "$selected_stash" 2>&1)
         drop_code=$?
 
         if [ $drop_code -eq 0 ]; then
-            echo -e "${GREEN}Successfully dropped stash!${ENDCOLOR}"
+            echo -e "${GREEN}✓ Dropped stash${ENDCOLOR}"
             echo "$drop_output"
         else
-            echo -e "${RED}Failed to drop stash! Error:${ENDCOLOR}"
+            echo -e "${RED}✗ Cannot drop stash.${ENDCOLOR}"
             echo "$drop_output"
             exit $drop_code
         fi
     fi
-} 
+}

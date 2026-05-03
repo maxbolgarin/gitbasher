@@ -21,7 +21,7 @@ function push {
     push_code=$?
 
     if [ $push_code -eq 0 ] ; then
-        echo -e "${GREEN}Successful push!${ENDCOLOR}"
+        echo -e "${GREEN}✓ Pushed to ${origin_name}/${current_branch}${ENDCOLOR}"
 
         repo=$(get_repo)
         host=$(get_repo_host "$repo")
@@ -85,7 +85,7 @@ function push {
     fi
 
     if [[ $push_output != *"[rejected]"* ]]; then
-        echo -e "${RED}Cannot push! Error message:${ENDCOLOR}"
+        echo -e "${RED}✗ Cannot push.${ENDCOLOR}"
         echo "$push_output"
         exit $push_code
     fi
@@ -129,12 +129,18 @@ function push_script {
         echo -e "usage: ${YELLOW}gitb push <mode>${ENDCOLOR}"
         echo
         msg="${YELLOW}Mode${ENDCOLOR}_${GREEN}Aliases${ENDCOLOR}_\t${BLUE}Description${ENDCOLOR}"
-        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Print list of commits, push them to current branch or pull changes first"
-        msg="$msg\n${BOLD}yes${ENDCOLOR}_y_Same as <empty> but without pressing 'y'"
-        msg="$msg\n${BOLD}force${ENDCOLOR}_f_Same as <empty> but with --force"
-        msg="$msg\n${BOLD}list${ENDCOLOR}_log|l_Print a list of unpushed local commits without actual pushing it"
+        msg="$msg\n${BOLD}<empty>${ENDCOLOR}_ _Show unpushed commits and push the current branch (pulls first if needed)"
+        msg="$msg\n${BOLD}yes${ENDCOLOR}_y_Push without confirmation"
+        msg="$msg\n${BOLD}force${ENDCOLOR}_f_Push with ${RED}--force${ENDCOLOR} (overwrites remote history)"
+        msg="$msg\n${BOLD}list${ENDCOLOR}_log|l_Show unpushed commits without pushing"
         msg="$msg\n${BOLD}help${ENDCOLOR}_h_Show this help"
         echo -e "$(echo -e "$msg" | column -ts'_')"
+        echo
+        echo -e "${YELLOW}Examples${ENDCOLOR}"
+        echo -e "  ${GREEN}gitb push${ENDCOLOR}         Show unpushed commits, then ask before pushing"
+        echo -e "  ${GREEN}gitb push y${ENDCOLOR}       Push current branch immediately, no prompt"
+        echo -e "  ${GREEN}gitb push force${ENDCOLOR}   Force-push (use after a rebase that rewrites pushed history)"
+        echo -e "  ${GREEN}gitb push list${ENDCOLOR}    Preview commits that would be pushed"
         exit
     fi
 
@@ -147,12 +153,12 @@ function push_script {
     get_push_list ${current_branch} ${main_branch} ${origin_name}
 
     if [ -z "$push_list" ]; then
-        echo -e "${GREEN}Nothing to push${ENDCOLOR}"
+        echo -e "${GREEN}✓ Nothing to push${ENDCOLOR}"
         exit
     fi
 
     if [ "${history_from}" != "${origin_name}/${current_branch}" ]; then
-        echo -e "Branch ${YELLOW}${current_branch}${ENDCOLOR} doesn't exist in the ${YELLOW}${origin_name}${ENDCOLOR}, get commits diff from the base commit"
+        echo -e "${BLUE}Branch ${YELLOW}${current_branch}${BLUE} does not exist on ${YELLOW}${origin_name}${BLUE}; showing commits since the base commit.${ENDCOLOR}"
     fi
 
     ### Print list of unpushed commits
@@ -174,10 +180,13 @@ function push_script {
 
     ### If not in fast mode - ask if user wants to push
     if [ -z "${fast}" ]; then
-        echo -e "Do you want to push${RED}${force_arg}${ENDCOLOR} this commits to ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} (y/n)?"
-        if [ "${current_branch}" == "${main_branch}" ]; then
-            echo -e "${RED}Warning!${ENDCOLOR} You are going to push right in the default ${YELLOW}${main_branch}${ENDCOLOR} branch"
+        if [ -n "${force}" ]; then
+            echo -e "${RED}⚠  Force-push will overwrite remote history on ${YELLOW}${origin_name}/${current_branch}${RED}.${ENDCOLOR}"
         fi
+        if [ "${current_branch}" == "${main_branch}" ]; then
+            echo -e "${RED}⚠  You are about to push directly to the default branch ${YELLOW}${main_branch}${RED}.${ENDCOLOR}"
+        fi
+        echo -e "Do you want to push${RED}${force_arg}${ENDCOLOR} these commits to ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} (y/n)?"
         yes_no_choice "Pushing..."
     else
         echo -e "${YELLOW}Pushing...${ENDCOLOR}"
@@ -190,7 +199,7 @@ function push_script {
 
 
     ### Get push error - there is unpulled changes
-    echo -e "${RED}Cannot push!${ENDCOLOR} There are unpulled changes in ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR}"
+    echo -e "${RED}✗ Cannot push — there are unpulled changes in ${YELLOW}${origin_name}/${current_branch}${RED}.${ENDCOLOR}"
     echo
     if [ -n "${fast}" ]; then
         echo -e "${YELLOW}Pulling...${ENDCOLOR}"

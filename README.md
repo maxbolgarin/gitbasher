@@ -25,11 +25,11 @@
 
 - **What it is** — a single-binary `bash` wrapper for `git`. Short interactive commands replace long flag chains.
 - **Who it's for** — developers who want clean conventional commits, smart pull/push/sync, and undo-everything safety without memorizing git plumbing.
-- **What's different** — AI commit messages that can run **fully local** via Ollama (no key, no network), atomic split, WIP backup across machines, full worktree menu — all in one bash file with zero runtime deps.
+- **What's different** — AI commit messages that can run **fully local** via Ollama (no key, no network), atomic split, WIP backup across machines, full worktree menu — all in one bash file.
 
 ```bash
 gitb commit push       # stage, write a conventional commit, push — in one flow
-gitb c ai              # AI-generated commit message
+gitb commit ai         # AI-generated commit message
 gitb sync              # fetch main + rebase your branch
 gitb wip up            # stash WIP, push backup branch, clean working tree
 gitb undo              # roll back your last commit / amend / merge / rebase / stash
@@ -39,10 +39,12 @@ gitb undo              # roll back your last commit / amend / merge / rebase / s
 
 ## Before & after
 
+You just write what you want to do, and gitbasher will do it for you. All commands have a short alias, for example `gitb c` is equivalent to `gitb commit`. 
+
 | Task | Plain `git` | With `gitb` |
 |------|-------------|-------------|
-| Start a feature off updated main | `git fetch && git checkout main && git pull --ff-only && git checkout -b feat/x` | `gitb b nd` |
-| Conventional commit + push | `git add -A && git commit -m "feat(x): …" && git push -u origin HEAD` | `gitb c aifp` |
+| Start a feature off updated main | `git fetch && git checkout main && git pull --ff-only && git checkout -b feat/x` | `gitb branch newd` |
+| Conventional commit + push | `git add -A && git commit -m "feat(x): …" && git push -u origin HEAD` | `gitb commit ai fast push` |
 | Sync your branch with main | `git fetch && git rebase origin/main && git push --force-with-lease` | `gitb sync push` |
 | Save WIP & clean tree across machines | `git stash -u && git push origin "HEAD:wip/$(git symbolic-ref --short HEAD)"` | `gitb wip up` |
 | Undo last commit (keep changes staged) | `git reset --soft HEAD~1` | `gitb undo` |
@@ -111,18 +113,6 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 
 ---
 
-## What's new in v3.10
-
-- **`gitb squash`** — AI folds WIP / fixup commits into clean, changelog-ready history. Try `gitb squash preview` to see the plan first.
-- **Multi-provider AI** — pick **OpenRouter** (default), **OpenAI** direct (GPT-5.4 family), or **Ollama** for fully-local commits with no key and no network.
-- **`gitb worktree`** — full menu: add / list / remove / move / lock / prune, plus `gitb wip up worktree` for parallel WIP.
-- **`gitb update`** — self-update to the latest release.
-- **`gitb cfg completion`** — install / uninstall bash & zsh tab completion for `gitb` and its modes.
-
-Full notes: [GitHub Releases](https://github.com/maxbolgarin/gitbasher/releases).
-
----
-
 ## Table of contents
 - [Why gitbasher](#why-gitbasher)
 - [All features at a glance](#all-features-at-a-glance)
@@ -174,26 +164,18 @@ Total: **23 top-level commands**, **60+ aliases**, **100+ modes**.
 
 ### Daily development
 ```bash
-gitb st              # status
-gitb pu              # pull
-gitb b n             # new feature branch
+gitb status            
+gitb pull              
+gitb branch new        
 # ... code ...
-gitb c ai            # AI commit
-gitb p               # push
-```
-
-### Start a new feature
-```bash
-gitb b nd            # branch newd: switch to main, pull, branch off
-# ... code ...
-gitb c push          # commit + push
+gitb commit ai fast push                    
 ```
 
 ### Code-review cycle
 ```bash
-gitb c fix           # fixup commit for review feedback
-gitb r a             # autosquash fixups
-gitb p f             # force-push cleaned history
+gitb commit fix          
+gitb rebase autosquash           
+gitb push force           
 ```
 
 ### Sync with main mid-feature
@@ -283,21 +265,6 @@ For the security-conscious, prefer the env var to avoid the key landing in `~/.g
 ```bash
 export GITB_AI_API_KEY='sk-...'
 ```
-
-### Commands
-
-| Goal | Command | What it does |
-|------|---------|--------------|
-| Staged files ready | `gitb c ai` | AI message from staged diff |
-| Quick fix | `gitb c aif` | `git add .` + AI message |
-| Ship now | `gitb c aip` | AI message + push |
-| Full workflow | `gitb c aifp` | `add .` + AI + push |
-| Manual type/scope | `gitb c ais` | You pick type/scope, AI writes summary |
-| Detailed message | `gitb c aim` | Multiline subject + body |
-| Atomic split (AI) | `gitb c aisplit` | AI groups your diff into one commit per scope, writes each message |
-| Hands-free | `gitb c ff` / `ffp` | `add .` + AI-grouped split + AI messages, no prompts |
-
-Modes are composable: `gitb c ai fast push` is identical to `gitb c aifp`.
 
 <details>
 <summary><b>Default models per provider</b> (click to expand)</summary>
@@ -390,43 +357,57 @@ git config gitbasher.ai-base-url http://my-gateway:4000/v1/chat/completions
 
 ### `gitb commit`
 
-> **Multi-word modes.** Modifiers can be written as separate words in any order — `gitb commit ai fast push`, `gitb c ai f p`, and `gitb c aifp` are all equivalent. Modifier words: `ai`/`llm`/`i`, `fast`/`f`, `push`/`pu`/`p`, `scope`/`s`, `msg`/`m`, `staged`, `fixup`/`fix`/`x`, `amend`/`am`/`a`, `split`/`sp`/`sl`, `ticket`/`jira`/`j`/`t`, `last`/`l`, `revert`/`rev`. The `ff`/`ffp` ultrafast modes remain compact-only.
+A commit invocation is one **action** plus zero or more **modifiers**. Words can be combined freely (`ai fast push`) or written as a single compact token (`aifp`). Aliases are interchangeable.
 
-<details>
-<summary>All commit modes (28)</summary>
+```text
+gitb commit [<flag> ...]     # space-separated, any order
+gitb commit <combined>       # compact form: ff, aifp, fastsp, ...
+```
 
-| Mode | Aliases | Description |
+**Actions** — pick one; default is a regular commit.
+
+| Action | Aliases | Description |
+|--------|---------|-------------|
+| `<empty>` | | Interactive commit: choose files, type, scope, and summary |
+| `split` | `sp` `sl` | Split staged changes into one commit per detected scope |
+| `fixup` | `x` `fix` | Create a `--fixup` commit against an older commit |
+| `amend` | `a` `am` | Add changes into the last commit (no message edit) |
+| `last` | `l` | Rewrite the last commit message |
+| `revert` | `rev` | Revert a commit (`git revert --no-edit`) |
+| `ff` | | Ultrafast: `ai + split + fast` with no prompts (use `ffp` to also push) |
+| `help` | `h` `--help` `-h` | Show inline help |
+
+**Modifiers** — stack with an action, any order.
+
+| Flag | Aliases | Description |
 |------|---------|-------------|
-| `<empty>` | | Select files, build conventional message |
-| `msg` | `m` | Multiline message in `$EDITOR` |
-| `ticket` | `t` `jira` `j` | Prepend tracker ticket to header |
-| `fast` | `f` | `git add .` + commit without scope |
-| `fasts` | `fs` | `git add .` + commit with scope |
-| `push` | `p` `pu` | Commit + push |
-| `fastp` | `fp` | Fast commit + push |
-| `fastsp` | `fsp` `fps` | Fast commit with scope + push |
-| `split` | `sp` `sl` | One commit per detected scope (heuristic, manual messages) |
-| `splitp` | `spp` `slp` | `split` + push |
-| `aisplit` | `isplit` `aispl` `ispl` | AI refines grouping and writes each message |
-| `aisplitp` | `isplitp` `aisplp` `islp` | `aisplit` + push |
-| `ff` | | Ultrafast: add all, AI-grouped split, AI messages, no prompts |
-| `ffp` | `ffpush` | `ff` + push |
-| `ai` | `llm` `i` | AI-generated commit message |
-| `aif` | `llmf` `if` | Fast AI commit, no confirmation |
-| `aip` | `llmp` `ip` | AI commit + push |
-| `aifp` | `llmfp` `ifp` | Fast AI commit + push |
-| `ais` | `llms` `is` | AI summary, manual type/scope |
-| `aim` | `llmm` `im` | AI multiline message |
-| `fixup` | `fix` `x` | Fixup commit (for autosquash) |
-| `fixupp` | `fixp` `xp` | Fixup commit + push |
-| `fastfix` | `fx` | Fast fixup (all files) |
-| `fastfixp` | `fxp` | Fast fixup + push |
-| `amend` | `am` `a` | Amend selected files into last commit |
-| `amendf` | `amf` `af` | Amend all files |
-| `last` | `l` | Edit last commit's message |
-| `revert` | `rev` | Revert a selected commit |
+| `fast` | `f` | Stage all changes (`git add .`) before committing |
+| `staged` | `st` | Use already-staged files (skip the add step) |
+| `push` | `p` `pu` | Push after the commit succeeds |
+| `scope` | `s` | Force a scope: `type(scope): message` (useful with fast mode) |
+| `no-split` | `nsp` `nsl` | Disable automatic split detection for this commit |
+| `ai` | `i` `llm` | Generate the commit message with AI |
+| `msg` | `m` | Open `$EDITOR` for a multiline message body |
+| `ticket` | `t` `j` `jira` | Append ticket info to the header |
 
-</details>
+**Examples**
+
+| Command | What it does |
+|---------|--------------|
+| `gitb commit` | Interactive commit |
+| `gitb commit fast` | `git add .` then enter a message |
+| `gitb commit ai fast push` | AI message + add all + commit + push |
+| `gitb commit aifp` | Same as above (compact form) |
+| `gitb commit ai split push` | AI groups staged files into commits, then push |
+| `gitb commit fixup push` | Pick an older commit, fixup it, then push |
+| `gitb commit amend fast` | Add all current changes into the last commit |
+| `gitb commit ff` | Full auto: AI splits and writes everything |
+
+**How modes combine**
+- Word order doesn't matter: `ai fast push` == `push fast ai` == `aifp`.
+- Modifiers stack on actions: `ai+fixup`, `fast+amend`, `split+push`, `ai+staged`, …
+- `fast` and `staged` are mutually exclusive (one stages all, the other uses what's staged).
+- `last` and `revert` take no modifiers; `ff` only accepts `push` (as `ffp`).
 
 ### `gitb push`
 

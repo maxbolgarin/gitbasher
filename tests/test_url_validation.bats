@@ -158,7 +158,7 @@ setup() {
 }
 
 @test "mask_api_key: never reveals key prefix" {
-    local key="sk-or-v1-abcdefghijklmnop"
+    local key="sk-or-v1-abcdefghijklmnop"  # gitleaks:allow - test fixture, not a real key
     result=$(mask_api_key "$key")
     [[ "$result" != *"sk-or-v1"* ]]
     [[ "$result" == *"mnop" ]]

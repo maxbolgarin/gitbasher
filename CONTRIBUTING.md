@@ -37,13 +37,13 @@ A BATS test is required for any non-trivial fix or new behavior. Place it in `te
 
 ## Linting
 
-The project does not yet enforce ShellCheck in CI, but contributors should run it locally before submitting:
+ShellCheck runs in CI (`.github/workflows/build.yml`, `shellcheck` job, `severity: error`) and blocks the build on findings. Run it locally before pushing to fail fast:
 
 ```bash
 shellcheck scripts/*.sh install.sh
 ```
 
-Aim for **no new** warnings. Pre-existing warnings outside the area you touched are not your responsibility — note them in the PR if you spot something risky.
+Aim for **no new** warnings. The CI bar is `severity: error`; widening to `severity: warning` is a goal once the existing baseline is clean. Pre-existing warnings outside the area you touched are not your responsibility — note them in the PR if you spot something risky.
 
 ## Coding conventions
 

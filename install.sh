@@ -1,15 +1,21 @@
 #!/usr/bin/env bash
 # gitbasher installer
 #
-# Usage:
+# Usage (install or upgrade):
 #   curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash
 #   curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash -s -- --sudo
+#
+# Re-running this installer is the supported upgrade path: it replaces the
+# existing binary in place. Pin a specific tag with GITB_VERSION=v4.0.0 (or
+# any released tag); leave it unset to grab the latest release. Once installed,
+# `gitb update` does the same thing without needing the curl one-liner.
 #
 # Flags:
 #   --sudo         Install system-wide to /usr/local/bin (uses sudo if needed)
 #
 # Environment:
-#   GITB_VERSION   Tag to install (default: latest)
+#   GITB_VERSION   Tag to install (default: latest). Use 'latest' to upgrade
+#                  to the newest release, or 'v3.10.2' to roll back.
 #   GITB_DIR       Target directory (default: ~/.local/bin, or /usr/local/bin with --sudo)
 #   GITB_SUDO      Set to 1 for system-wide install (same as --sudo)
 #   GITB_NO_SUDO   Set to 1 to forbid sudo even when needed (kept for back-compat)
@@ -27,7 +33,7 @@ for arg in "$@"; do
         --sudo)    USE_SUDO=1 ;;
         --no-sudo) NO_SUDO=1 ;;
         -h|--help)
-            sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'
             exit 0 ;;
         *) printf "Unknown argument: %s\n" "$arg" >&2; exit 2 ;;
     esac
@@ -123,7 +129,21 @@ else
     SHA_URL="https://github.com/$REPO/releases/download/$VERSION/gitb.sha256"
 fi
 
-info "Installing gitbasher ($VERSION) to ${BOLD}$TARGET_DIR/gitb${OFF}"
+# Detect an existing install so we can show the user what they're upgrading from
+# (or rolling back to). This runs whichever `gitb` is on PATH, not specifically
+# the one in $TARGET_DIR — the user might be reinstalling to a different path.
+existing_version=""
+if command -v gitb >/dev/null 2>&1; then
+    existing_version=$(gitb --version 2>/dev/null | awk 'NR==1 {for (i=1; i<=NF; i++) if ($i ~ /^v?[0-9]/) { print $i; exit }}')
+fi
+
+if [ -n "$existing_version" ]; then
+    requested="$VERSION"
+    [ "$requested" = "latest" ] && requested="latest release"
+    info "Upgrading gitbasher: ${BOLD}$existing_version${OFF} → ${BOLD}$requested${OFF} (target: $TARGET_DIR/gitb)"
+else
+    info "Installing gitbasher ($VERSION) to ${BOLD}$TARGET_DIR/gitb${OFF}"
+fi
 [ -n "$SUDO" ] && warn "Requires sudo for $TARGET_DIR — you may be prompted for your password."
 
 ### --- download ---
@@ -209,9 +229,13 @@ case ":$PATH:" in
             fish) shell_rc="$HOME/.config/fish/config.fish" ;;
         esac
         if [ -n "$shell_rc" ]; then
-            printf "  Add it with: ${BOLD}echo 'export PATH=\"%s:\$PATH\"' >> %s${OFF}\n" "$TARGET_DIR" "$shell_rc"
+            # Use %q so $TARGET_DIR / $shell_rc with whitespace or shell metacharacters
+            # render as a safely-quoted snippet the user can paste verbatim.
+            printf "  Add it with: ${BOLD}echo %q >> %q${OFF}\n" \
+                "export PATH=\"$TARGET_DIR:\$PATH\"" \
+                "$shell_rc"
         else
-            printf "  Add ${BOLD}%s${OFF} to your PATH.\n" "$TARGET_DIR"
+            printf "  Add ${BOLD}%q${OFF} to your PATH.\n" "$TARGET_DIR"
         fi
         ;;
 esac

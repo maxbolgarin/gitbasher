@@ -885,6 +885,28 @@ gitb cfg              # check config
 gitb cfg ai           # set API key
 gitb cfg proxy        # in restricted regions
 ```
+
+If `gitb commit ai` hangs, returns `connection refused`, or times out:
+
+- **Network reachability** — test the provider directly: `curl -fsSL https://api.openai.com/v1/models -H "Authorization: Bearer $OPENAI_API_KEY"` (or the equivalent for OpenRouter/Ollama). If that fails, gitbasher will too.
+- **Corporate proxy / restricted region** — `gitb cfg proxy` accepts `host:port` or `protocol://host:port`. Verify with `curl -x "$proxy" https://api.openai.com`.
+- **Local Ollama** — confirm the daemon is running (`curl http://localhost:11434/api/tags`). The default model must be pulled first (`ollama pull llama3`).
+- **Stale or rotated key** — `gitb cfg ai` re-prompts; prefer the env-var path (`export GITB_AI_API_KEY_OPENAI=...`) over `git config` so a leaked repo doesn't carry the secret.
+</details>
+
+<details>
+<summary><b>"could not lock config file" / git config permission</b></summary>
+
+`git config --global` writes to `~/.gitconfig`. If gitbasher reports `could not lock config file`:
+
+```bash
+ls -la ~/.gitconfig            # check ownership and permissions
+sudo chown "$USER" ~/.gitconfig
+chmod u+w ~/.gitconfig
+rm -f ~/.gitconfig.lock        # stale lock from a crashed git process
+```
+
+Per-repo settings live in `.git/config` and need write access to that file (`chmod u+w .git/config` if mounted read-only).
 </details>
 
 <details>

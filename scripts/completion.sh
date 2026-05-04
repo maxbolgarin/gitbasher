@@ -8,6 +8,7 @@
 
 ### Print bash completion script content
 function _gitb_bash_completion_content {
+# kcov-skip-start
 cat <<'GITB_BASH_EOF'
 _gitb_commands="
 commit c co com
@@ -206,11 +207,13 @@ _gitb() {
 }
 complete -F _gitb gitb
 GITB_BASH_EOF
+# kcov-skip-end
 }
 
 
 ### Print zsh completion script content
 function _gitb_zsh_completion_content {
+# kcov-skip-start
 cat <<'GITB_ZSH_EOF'
 #compdef gitb
 _gitb() {
@@ -453,11 +456,13 @@ _gitb() {
 }
 compdef _gitb gitb
 GITB_ZSH_EOF
+# kcov-skip-end
 }
 
 
 ### Print fish completion script content
 function _gitb_fish_completion_content {
+# kcov-skip-start
 cat <<'GITB_FISH_EOF'
 function __gitb_no_subcmd
     set -l tokens (commandline -opc)
@@ -616,6 +621,7 @@ function __gitb_at_config_auto_shell
 end
 complete -c gitb -n __gitb_at_config_auto_shell -a "bash zsh fish"
 GITB_FISH_EOF
+# kcov-skip-end
 }
 
 

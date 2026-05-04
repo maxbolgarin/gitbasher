@@ -171,6 +171,7 @@ function tag_script {
 
 
     if [ -n "$help" ]; then
+        # kcov-skip-start
         echo -e "usage: ${YELLOW}gitb tag <mode>${ENDCOLOR}"
         echo
         local PAD=22
@@ -193,6 +194,7 @@ function tag_script {
         echo -e "  ${GREEN}gitb tag push${ENDCOLOR}     Pick a local tag and push it"
         echo -e "  ${GREEN}gitb tag delete${ENDCOLOR}   Pick a tag and remove it locally and on remote"
         exit
+        # kcov-skip-end
     fi
 
 

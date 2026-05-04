@@ -911,6 +911,7 @@ function worktree_script {
     echo
 
     if [ -n "$help" ]; then
+        # kcov-skip-start
         echo -e "usage: ${YELLOW}gitb worktree <mode>${ENDCOLOR}"
         echo
         local PAD=26
@@ -942,6 +943,7 @@ function worktree_script {
         echo -e "  ${GREEN}gitb wt nd${ENDCOLOR}           Fetch ${YELLOW}$main_branch${ENDCOLOR}, then create a worktree on a new branch from it"
         echo -e "  ${GREEN}gitb wt rm${ENDCOLOR}           Pick a worktree and remove it"
         exit
+        # kcov-skip-end
     fi
 
     ### Interactive menu when no mode is given

@@ -54,6 +54,7 @@ function _compare_versions {
 # Echoes the raw response (or empty on failure). Sets _gitb_update_fetch_err on
 # failure so callers can show a useful message.
 function _fetch_latest_release {
+    # kcov-skip-start
     _gitb_update_fetch_err=""
     local url="https://api.github.com/repos/${GITBASHER_REPO}/releases/latest"
     local body=""
@@ -79,6 +80,7 @@ function _fetch_latest_release {
     fi
 
     echo "$body"
+    # kcov-skip-end
 }
 
 
@@ -180,6 +182,7 @@ function _gitb_is_npm_install {
 ### Download the latest gitb binary into a temp file. Echoes the temp path on
 ### success; sets _gitb_update_download_err on failure.
 function _download_latest_gitb {
+    # kcov-skip-start
     _gitb_update_download_err=""
     local url="https://github.com/${GITBASHER_REPO}/releases/latest/download/gitb"
     local tmp
@@ -215,6 +218,7 @@ function _download_latest_gitb {
 
     echo "$tmp"
     return 0
+    # kcov-skip-end
 }
 
 
@@ -279,6 +283,7 @@ function update_script {
     echo
 
     if [ -n "$help" ]; then
+        # kcov-skip-start
         echo -e "usage: ${YELLOW}gitb update <mode>${ENDCOLOR}"
         echo
         local PAD=14
@@ -293,6 +298,7 @@ function update_script {
         echo -e "  ${GREEN}gitb update check${ENDCOLOR}  Just check, don't install"
         echo -e "  ${GREEN}gitb update force${ENDCOLOR}  Re-download the latest release over the current one"
         exit
+        # kcov-skip-end
     fi
 
     local current_version="$GITBASHER_VERSION"

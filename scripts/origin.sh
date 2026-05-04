@@ -338,6 +338,7 @@ function origin_script {
     echo
 
     if [ -n "$help" ]; then
+        # kcov-skip-start
         echo -e "usage: ${YELLOW}gitb origin <mode> [<url>|<name>]${ENDCOLOR}"
         echo
         local PAD=30
@@ -355,6 +356,7 @@ function origin_script {
         echo -e "  ${GREEN}gitb origin change${ENDCOLOR}                         Update the URL after a repo move"
         echo -e "  ${GREEN}gitb origin rename upstream${ENDCOLOR}                Rename current remote to ${BLUE}upstream${ENDCOLOR}"
         exit
+        # kcov-skip-end
     fi
 
     if [ -n "$show_origin" ]; then

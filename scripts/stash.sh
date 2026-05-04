@@ -174,6 +174,7 @@ function stash_script {
     echo
 
     if [ -n "$help" ]; then
+        # kcov-skip-start
         echo -e "usage: ${YELLOW}gitb stash <mode>${ENDCOLOR}"
         echo
         local PAD=14
@@ -194,6 +195,7 @@ function stash_script {
         echo -e "  ${GREEN}gitb stash pop${ENDCOLOR}    Pick a stash and pop it"
         echo -e "  ${GREEN}gitb stash list${ENDCOLOR}   See what's stashed"
         exit
+        # kcov-skip-end
     fi
 
     ### Interactive menu mode

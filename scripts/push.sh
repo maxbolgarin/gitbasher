@@ -128,6 +128,7 @@ function push_script {
 
 
     if [ -n "$help" ]; then
+        # kcov-skip-start
         echo -e "usage: ${YELLOW}gitb push <mode>${ENDCOLOR}"
         echo
         local PAD=16
@@ -144,6 +145,7 @@ function push_script {
         echo -e "  ${GREEN}gitb push force${ENDCOLOR}   Force-push (use after a rebase that rewrites pushed history)"
         echo -e "  ${GREEN}gitb push list${ENDCOLOR}    Preview commits that would be pushed"
         exit
+        # kcov-skip-end
     fi
 
 

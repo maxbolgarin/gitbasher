@@ -669,8 +669,10 @@ function squash_script {
     echo
 
     if [ -n "$help" ]; then
+        # kcov-skip-start
         squash_print_help
         exit
+        # kcov-skip-end
     fi
 
     ### Preconditions

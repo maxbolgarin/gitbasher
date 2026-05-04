@@ -1395,6 +1395,7 @@ function commit_script {
     echo
 
     if [ -n "$help" ]; then
+        # kcov-skip-start
         echo -e "usage: ${YELLOW}gitb commit [<flag> ...]${ENDCOLOR}     ${BLUE}# space-separated, any order${ENDCOLOR}"
         echo -e "       ${YELLOW}gitb commit <combined>${ENDCOLOR}        ${BLUE}# compact form: ff, aifp, fastsp, ...${ENDCOLOR}"
         echo
@@ -1444,6 +1445,7 @@ function commit_script {
         # Clean up cached git add on help exit
         git config --unset gitbasher.cached-git-add 2>/dev/null || true
         exit 0
+        # kcov-skip-end
     fi
 
 

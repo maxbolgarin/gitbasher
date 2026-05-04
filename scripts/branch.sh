@@ -67,6 +67,7 @@ function branch_script {
     
 
     if [ -n "$help" ]; then
+        # kcov-skip-start
         echo -e "usage: ${YELLOW}gitb branch <mode>${ENDCOLOR}"
         echo
         local PAD=18
@@ -90,6 +91,7 @@ function branch_script {
         echo -e "  ${GREEN}gitb branch main${ENDCOLOR}   Jump straight to ${YELLOW}$main_branch${ENDCOLOR}"
         echo -e "  ${GREEN}gitb branch gone${ENDCOLOR}   Clean up local branches whose remote was deleted"
         exit
+        # kcov-skip-end
     fi
         
    

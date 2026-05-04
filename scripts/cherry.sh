@@ -49,6 +49,7 @@ function cherry_script {
     echo
 
     if [ -n "$help" ]; then
+        # kcov-skip-start
         echo -e "usage: ${YELLOW}gitb cherry <mode> [args]${ENDCOLOR}"
         echo
         local PAD=20
@@ -67,6 +68,7 @@ function cherry_script {
         echo -e "  ${GREEN}gitb cherry range A..B${ENDCOLOR}     Cherry-pick all commits between ${BLUE}A${ENDCOLOR} and ${BLUE}B${ENDCOLOR}"
         echo -e "  ${GREEN}gitb cherry continue${ENDCOLOR}       Resume after resolving conflicts"
         exit
+        # kcov-skip-end
     fi
 
     # Check if we're in the middle of a cherry-pick operation

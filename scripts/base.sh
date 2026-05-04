@@ -3,6 +3,7 @@
 
 ### Print usage information
 function print_help {
+    # kcov-skip-start
     echo -e "${BOLD}gitbasher${NORMAL} v${GITBASHER_VERSION} ${GRAY}— git, made fluent${ENDCOLOR}"
     echo
     echo -e "usage: ${YELLOW}gitb <command> [mode]${ENDCOLOR}"
@@ -56,6 +57,7 @@ function print_help {
     echo -e "Run ${YELLOW}gitb <command> help${ENDCOLOR} for modes and examples"
 
     exit
+    # kcov-skip-end
 }
 
 project_name="$(get_repo_name)"

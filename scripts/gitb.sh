@@ -3,6 +3,7 @@
 ### Here is main script for running gitbasher
 # https://github.com/maxbolgarin/gitbasher
 
+# kcov-skip-start
 GITBASHER_VERSION="dev"
 
 if [ "$1" == "init" ] || [ "$1" == "i" ]; then
@@ -96,3 +97,4 @@ source scripts/uninstall.sh || { echo "gitbasher: failed to load scripts/uninsta
 source scripts/completion.sh || { echo "gitbasher: failed to load scripts/completion.sh" >&2; exit 1; }
 
 source scripts/base.sh || { echo "gitbasher: failed to load scripts/base.sh" >&2; exit 1; }
+# kcov-skip-end

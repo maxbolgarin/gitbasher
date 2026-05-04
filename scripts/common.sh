@@ -329,8 +329,10 @@ function show_sanitization_error {
 # $1: column width for the "mode (aliases)" column, in characters. The same
 #     value must be passed to every print_help_row call so the columns line up.
 function print_help_header {
+    # kcov-skip-start
     local pad="$1"
     printf "  ${YELLOW}%-*s${ENDCOLOR}  ${BLUE}%s${ENDCOLOR}\n" "$pad" "Mode" "Description"
+    # kcov-skip-end
 }
 
 ### Print one row of a help table.
@@ -342,6 +344,7 @@ function print_help_header {
 #     escapes (\e, \033) in the expanded ${BLUE}/${YELLOW}/etc. variables get
 #     interpreted, matching the behavior of `echo -e` used elsewhere.
 function print_help_row {
+    # kcov-skip-start
     local pad="$1"
     local mode="$2"
     local aliases="$3"
@@ -353,6 +356,7 @@ function print_help_row {
         label="${mode}"
     fi
     printf "  ${BOLD}%-*s${NORMAL}  %b\n" "$pad" "$label" "$desc"
+    # kcov-skip-end
 }
 
 ### ===== END HELP TABLE FORMATTERS =====

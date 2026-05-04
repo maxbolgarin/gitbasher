@@ -68,7 +68,8 @@ jobs:
 
   coverage:
     needs: build
-    runs-on: ubuntu-latest
+    # noble (24.04) dropped kcov from the apt repos — pin to jammy where it ships.
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
@@ -91,10 +92,20 @@ jobs:
           # Merge into a single report
           kcov --merge coverage/merged coverage/test_*
 
-      - name: Upload coverage report
+      - name: Upload coverage report (artifact)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: bash-coverage
           path: coverage/merged
           retention-days: 14
+
+      # kcov writes cobertura.xml inside the merged dir. Codecov accepts it
+      # tokenless for public repos and powers the README badge.
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage/merged/cobertura.xml
+          flags: bash
+          fail_ci_if_error: false

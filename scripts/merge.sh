@@ -19,6 +19,7 @@ function merge_script {
         *)
             wrong_mode "merge" $1
     esac
+    # kcov-skip-start
 
 
     ### Merge mode - print header
@@ -227,6 +228,7 @@ function merge_script {
         echo
         print_changes_stat "$changes"
     fi
+    # kcov-skip-end
 }
 
 

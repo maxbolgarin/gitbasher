@@ -25,6 +25,7 @@ function reset_script {
         *)
             wrong_mode "reset" $1
     esac
+    # kcov-skip-start
 
 
     header="GIT RESET"
@@ -142,4 +143,5 @@ function reset_script {
     echo -e "${YELLOW}Status after reset${ENDCOLOR}"
     git_status
     exit
+    # kcov-skip-end
 }

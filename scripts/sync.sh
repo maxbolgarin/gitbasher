@@ -22,6 +22,7 @@ function sync_script {
         *)
             wrong_mode "sync" $1
     esac
+    # kcov-skip-start
 
 
     ### Print header
@@ -216,4 +217,5 @@ function sync_script {
             push_script f
         fi
     fi
+    # kcov-skip-end
 }

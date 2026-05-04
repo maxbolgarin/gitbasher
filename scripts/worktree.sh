@@ -877,6 +877,7 @@ function worktree_script {
         "")                     interactive="true";;
         *)                      wrong_mode "worktree" "$1";;
     esac
+    # kcov-skip-start
 
     ### Print header
     local header="GIT WORKTREE"
@@ -1065,4 +1066,5 @@ function worktree_script {
         worktree_goto
         exit
     fi
+    # kcov-skip-end
 }

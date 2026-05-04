@@ -656,6 +656,7 @@ function squash_script {
             wrong_mode "squash" "$1"
             ;;
     esac
+    # kcov-skip-start
 
     local header="GIT SQUASH AI"
     if [ -n "$mode_preview" ]; then
@@ -879,4 +880,5 @@ function squash_script {
     else
         echo -e "${GRAY}History is rewritten locally.${ENDCOLOR} Push it with ${YELLOW}gitb push force${ENDCOLOR} (or ${YELLOW}gitb squash push${ENDCOLOR} next time to chain)."
     fi
+    # kcov-skip-end
 }

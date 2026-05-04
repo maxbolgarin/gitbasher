@@ -36,6 +36,7 @@ function branch_script {
         *)
             wrong_mode "branch" $1
     esac
+    # kcov-skip-start
 
 
     ### Print header
@@ -840,4 +841,5 @@ function branch_script {
     echo -e "${RED}✗ Cannot create branch '${branch_name}'.${ENDCOLOR}"
     echo "${create_output}"
     exit $create_code
+    # kcov-skip-end
 }

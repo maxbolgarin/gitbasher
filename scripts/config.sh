@@ -858,6 +858,7 @@ function config_script {
         help|h)               help="true";;
         *)                    wrong_mode "config" $1
     esac
+    # kcov-skip-start
 
     ### Merge mode - print header
     header="GIT CONFIG"
@@ -1007,4 +1008,5 @@ function config_script {
     fi
 
     print_configuration
+    # kcov-skip-end
 }

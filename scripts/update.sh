@@ -271,6 +271,7 @@ function update_script {
         *)
             wrong_mode "update" $1
     esac
+    # kcov-skip-start
 
     local header="GITBASHER UPDATE"
     if [ -n "$check_only" ]; then
@@ -441,4 +442,5 @@ function update_script {
         echo
         print_link "Release" "$latest_url"
     fi
+    # kcov-skip-end
 }

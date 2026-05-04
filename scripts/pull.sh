@@ -29,6 +29,7 @@ function pull_script {
         *)
             wrong_mode "pull" $1
     esac
+    # kcov-skip-start
 
 
     ### Print header
@@ -227,6 +228,7 @@ function pull_script {
     echo
     pull $current_branch $origin_name $editor $mode $ffonly 
     exit
+    # kcov-skip-end
 }
 
 

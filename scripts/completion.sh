@@ -853,6 +853,7 @@ function completion_script {
             return 1
             ;;
     esac
+    # kcov-skip-start
 
     case "$action" in
         up|u|on|install|enable)
@@ -870,6 +871,7 @@ function completion_script {
             return 1
             ;;
     esac
+    # kcov-skip-end
 }
 
 

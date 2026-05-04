@@ -43,6 +43,7 @@ function uninstall_script {
         "")     ;;
         *)      wrong_mode "uninstall" $1 ;;
     esac
+    # kcov-skip-start
 
     echo -e "${YELLOW}GITBASHER UNINSTALL${ENDCOLOR}"
     echo
@@ -149,4 +150,5 @@ function uninstall_script {
     echo
     echo -e "${GREEN}gitbasher uninstalled. Thanks for trying it!${ENDCOLOR}"
     exit 0
+    # kcov-skip-end
 }

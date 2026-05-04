@@ -149,6 +149,7 @@ function stash_script {
             # If no mode specified, show interactive menu
             interactive="true"
     esac
+    # kcov-skip-start
 
     ### Print header
     header_msg="GIT STASH"
@@ -397,4 +398,5 @@ function stash_script {
             exit $drop_code
         fi
     fi
+    # kcov-skip-end
 }

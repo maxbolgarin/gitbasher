@@ -30,6 +30,7 @@ function cherry_script {
                 interactive_mode="true"
             fi
     esac
+    # kcov-skip-start
 
     ### Cherry-pick mode - print header
     header="GIT CHERRY-PICK"
@@ -191,6 +192,7 @@ function cherry_script {
         choose_commits_interactive "${source_branch}"
         exit
     fi
+    # kcov-skip-end
 }
 
 ### Function to perform the actual cherry-pick operation

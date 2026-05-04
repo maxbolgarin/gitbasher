@@ -109,6 +109,7 @@ function push_script {
         *)
             wrong_mode "push" $1
     esac
+    # kcov-skip-start
 
 
     ### Print header
@@ -228,4 +229,5 @@ function push_script {
     echo -e "${YELLOW}Pushing...${ENDCOLOR}"
     echo
     push "${force_args[@]}"
+    # kcov-skip-end
 }

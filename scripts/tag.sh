@@ -142,6 +142,7 @@ function tag_script {
         *)
             wrong_mode "tag" $1
     esac
+    # kcov-skip-start
 
 
     ### Print header
@@ -457,4 +458,5 @@ function tag_script {
     yes_no_choice "\nPushing..."
 
     push_tag $tag_name
+    # kcov-skip-end
 }

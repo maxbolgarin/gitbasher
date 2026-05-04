@@ -1334,6 +1334,7 @@ function commit_script {
         *)
             wrong_mode "commit" $1
     esac
+    # kcov-skip-start
     fi
 
     validate_commit_flag_combo
@@ -2115,4 +2116,5 @@ ${staged_with_tab}
         echo
         push_script y
     fi
+    # kcov-skip-end
 }

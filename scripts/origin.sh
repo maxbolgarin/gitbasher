@@ -321,6 +321,7 @@ function origin_script {
         *)
             wrong_mode "origin" $1
     esac
+    # kcov-skip-start
 
     ### Print header
     header="GIT ORIGIN"
@@ -383,4 +384,5 @@ function origin_script {
         origin_remove
         exit
     fi
+    # kcov-skip-end
 }

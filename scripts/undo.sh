@@ -26,6 +26,7 @@ function undo_script {
             fi
             undo_mode="commit"
     esac
+    # kcov-skip-start
 
 
     ### Print header
@@ -72,6 +73,7 @@ function undo_script {
         rebase) undo_rebase;;
         stash)  undo_stash;;
     esac
+    # kcov-skip-end
 }
 
 

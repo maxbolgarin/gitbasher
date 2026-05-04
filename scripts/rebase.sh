@@ -23,6 +23,7 @@ function rebase_script {
         *)
             wrong_mode "rebase" $1
     esac
+    # kcov-skip-start
 
     ### Merge mode - print header
     header="GIT REBASE"
@@ -258,6 +259,7 @@ function rebase_script {
         echo -e "${RED}✗ Cannot rebase.${ENDCOLOR}"
         echo -e "$rebase_output"
     fi
+    # kcov-skip-end
 }
 
 

@@ -11,7 +11,7 @@ jobs:
   shellcheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # Catches real bugs (unquoted vars, incorrect test ops, GNU-only flags) without
       # blocking on style warnings. Severity can be widened to "warning" later once
@@ -30,7 +30,7 @@ jobs:
     # undefined inputs, deprecated syntax); jq -e validates parseability.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Validate package.json and .releaserc.json
         run: |
@@ -49,7 +49,7 @@ jobs:
     # and above to keep the bar tight without blocking on pure advisory noise.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -72,7 +72,7 @@ jobs:
     needs: lint-config
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -102,7 +102,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -142,7 +142,7 @@ jobs:
     # noble (24.04) dropped kcov from the apt repos — pin to jammy where it ships.
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install BATS and kcov
         run: |

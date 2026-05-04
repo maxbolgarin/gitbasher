@@ -451,7 +451,7 @@ function print_split_type_menu {
     local scope="$1"
     local ai_available="$2"
 
-    echo -e "${YELLOW}What type of changes for ${BLUE}${scope}${ENDCOLOR}?${ENDCOLOR}"
+    echo -e "${YELLOW}What type of changes for ${BLUE}${BOLD}${scope}${ENDCOLOR}${YELLOW}?${ENDCOLOR}"
     echo -e "Final message will be ${YELLOW}<type>${ENDCOLOR}(${BLUE}<scope>${ENDCOLOR}): ${BLUE}<summary>${ENDCOLOR}"
     echo -e "1. ${BLUE}${BOLD}feat${ENDCOLOR}:\tnew feature, logic change or performance improvement"
     echo -e "2. ${BLUE}${BOLD}fix${ENDCOLOR}:\t\tsmall changes, eg. bug fix"
@@ -507,7 +507,7 @@ function print_split_groups_preview {
     local scope file_count file_color staged_status
     for scope in "${split_group_keys[@]}"; do
         file_count=$(printf '%s\n' "${split_groups[$scope]}" | grep -c .)
-        echo -e "  ${BLUE}${BOLD}${scope}${ENDCOLOR} (${file_count} file(s)):"
+        echo -e "  ${BLUE}${BOLD}${scope}${ENDCOLOR} ${GRAY}(${file_count} file(s))${ENDCOLOR}:"
         while IFS= read -r file; do
             [ -z "$file" ] && continue
             staged_status="${staged_status_by_file[$file]}"
@@ -636,7 +636,7 @@ function perform_commit_split {
     for scope in "${split_group_keys[@]}"; do
         idx=$((idx + 1))
         echo
-        echo -e "${BOLD}── Split commit ${idx}/${total}: scope '${BLUE}${scope}' ──${ENDCOLOR}"
+        echo -e "${CYAN}──${ENDCOLOR} ${BOLD}Split commit ${idx}/${total}${ENDCOLOR} ${GRAY}·${ENDCOLOR} scope ${BLUE}${BOLD}${scope}${ENDCOLOR} ${CYAN}──${ENDCOLOR}"
 
         # Reset everything that's currently staged, then stage only this group
         local currently_staged
@@ -667,17 +667,15 @@ function perform_commit_split {
 
         echo -e "${YELLOW}Files in this commit:${ENDCOLOR}"
         print_staged_files
-        echo
 
-        # "misc" is internal — never emit it as a real scope
         scope_for_msg="$scope"
-        [ "$scope" = "misc" ] && scope_for_msg=""
 
         msg=""
 
         # AI path — only when the user explicitly asked for AI (llm flag set
         # by ai/aisplit/aif/ff/etc). Without llm, we go straight to manual.
         if [ -n "$llm" ] && [ "$ai_ok" = "true" ]; then
+            echo
             run_split_ai_for_scope "$scope" "$scope_for_msg" "$files_str"
             case $? in
                 2) continue ;;
@@ -729,7 +727,6 @@ function perform_commit_split {
                         if [ "$ai_ok" != "true" ]; then
                             continue
                         fi
-                        echo
                         run_split_ai_for_scope "$scope" "$scope_for_msg" "$files_str"
                         case $? in
                             0) break ;;
@@ -809,7 +806,7 @@ function perform_commit_split {
         last_hash=$(git rev-parse --short HEAD)
         commit_hashes+=("$last_hash")
         commit_headers+=("$msg")
-        echo -e "${GREEN}✓ Committed ${last_hash} ${msg}${ENDCOLOR}"
+        echo -e "${GREEN}✓ Committed${ENDCOLOR} ${BLUE}${last_hash}${ENDCOLOR} ${msg}"
     done
 
     rm -f "$snapshot_file"

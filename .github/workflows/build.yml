@@ -80,18 +80,11 @@ jobs:
 
       # Run each .bats file under kcov so coverage data merges across files.
       # --include-path scopes coverage to the source we actually ship.
-      # install.sh is the curl/wget bootstrap — it runs once outside CI and
-      # every branch shells out to apt/brew, so it's excluded from coverage.
-      # --exclude-region brackets blocks unsuited to unit tests (network curl
-      # wrappers, completion heredocs, help-text printers); --exclude-line
-      # drops single noisy lines (color constants, version-banner prints).
       - name: Run BATS under kcov
         run: |
           mkdir -p coverage
           for f in tests/*.bats; do
-            kcov --include-path=scripts \
-                 --exclude-region='kcov-skip-start,kcov-skip-end' \
-                 --exclude-line='kcov-skip-line' \
+            kcov --include-path=scripts,install.sh \
                  --bash-dont-parse-binary-dir \
                  "coverage/$(basename "$f" .bats)" \
                  bats "$f" || true
@@ -99,20 +92,10 @@ jobs:
           # Merge into a single report
           kcov --merge coverage/merged coverage/test_*
 
-      - name: Upload coverage report (artifact)
+      - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: bash-coverage
           path: coverage/merged
           retention-days: 14
-
-      # kcov writes cobertura.xml inside the merged dir. Codecov accepts it
-      # tokenless for public repos and powers the README badge.
-      - name: Upload coverage to Codecov
-        if: always()
-        uses: codecov/codecov-action@v4
-        with:
-          files: coverage/merged/cobertura.xml
-          flags: bash
-          fail_ci_if_error: false

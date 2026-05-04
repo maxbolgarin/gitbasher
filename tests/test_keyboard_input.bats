@@ -273,3 +273,97 @@ PY
     assert_success
     [[ "$output" == *"<>"* ]]
 }
+
+@test "read_silent_input: Esc cancels and returns empty" {
+    run python3 - <<'PY'
+import os, pty, select, subprocess, sys, time
+
+root = os.environ["GITBASHER_ROOT"]
+script = f'''
+set -e
+source "{root}/scripts/init.sh"
+source "{root}/scripts/common.sh"
+read_silent_input value "Key: "
+printf "<%s>\\n" "$value"
+'''
+
+master, slave = pty.openpty()
+proc = subprocess.Popen(["bash", "-lc", script], stdin=slave, stdout=slave, stderr=slave, close_fds=True)
+os.close(slave)
+
+output = b""
+sent = False
+deadline = time.time() + 5
+while time.time() < deadline:
+    ready, _, _ = select.select([master], [], [], 0.05)
+    if ready:
+        try:
+            chunk = os.read(master, 1024)
+        except OSError:
+            break
+        if not chunk:
+            break
+        output += chunk
+        if b"Key:" in output and not sent:
+            os.write(master, b"abc\x1b")
+            sent = True
+    if proc.poll() is not None:
+        break
+
+if proc.poll() is None:
+    proc.kill()
+    proc.wait()
+
+sys.stdout.write(output.decode("utf-8", errors="replace"))
+sys.exit(proc.returncode)
+PY
+    assert_success
+    [[ "$output" == *"<>"* ]]
+}
+
+@test "read_silent_input: Enter returns typed input" {
+    run python3 - <<'PY'
+import os, pty, select, subprocess, sys, time
+
+root = os.environ["GITBASHER_ROOT"]
+script = f'''
+set -e
+source "{root}/scripts/init.sh"
+source "{root}/scripts/common.sh"
+read_silent_input value "Key: "
+printf "<%s>\\n" "$value"
+'''
+
+master, slave = pty.openpty()
+proc = subprocess.Popen(["bash", "-lc", script], stdin=slave, stdout=slave, stderr=slave, close_fds=True)
+os.close(slave)
+
+output = b""
+sent = False
+deadline = time.time() + 5
+while time.time() < deadline:
+    ready, _, _ = select.select([master], [], [], 0.05)
+    if ready:
+        try:
+            chunk = os.read(master, 1024)
+        except OSError:
+            break
+        if not chunk:
+            break
+        output += chunk
+        if b"Key:" in output and not sent:
+            os.write(master, b"sk-test123\r")
+            sent = True
+    if proc.poll() is not None:
+        break
+
+if proc.poll() is None:
+    proc.kill()
+    proc.wait()
+
+sys.stdout.write(output.decode("utf-8", errors="replace"))
+sys.exit(proc.returncode)
+PY
+    assert_success
+    [[ "$output" == *"<sk-test123>"* ]]
+}

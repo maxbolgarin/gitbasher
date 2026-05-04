@@ -202,3 +202,44 @@ teardown() {
     val=$(get_ai_commit_history_limit)
     [ "$val" = "20" ]
 }
+
+# ===== ai_provider_requires_api_key =====
+
+@test "ai_provider_requires_api_key: returns 1 for ollama" {
+    set_ai_provider "ollama" >/dev/null
+    run ai_provider_requires_api_key
+    [ "$status" -eq 1 ]
+}
+
+@test "ai_provider_requires_api_key: returns 0 for openai" {
+    set_ai_provider "openai" >/dev/null
+    run ai_provider_requires_api_key
+    [ "$status" -eq 0 ]
+}
+
+@test "ai_provider_requires_api_key: returns 0 for openrouter (default)" {
+    run ai_provider_requires_api_key
+    [ "$status" -eq 0 ]
+}
+
+# ===== get_ai_api_url =====
+
+@test "get_ai_api_url: custom base URL wins over provider default" {
+    set_ai_provider "openai" >/dev/null
+    set_ai_base_url "https://example.test/v1/chat/completions" >/dev/null
+    [ "$(get_ai_api_url)" = "https://example.test/v1/chat/completions" ]
+}
+
+@test "get_ai_api_url: openai provider returns OpenAI URL" {
+    set_ai_provider "openai" >/dev/null
+    [ "$(get_ai_api_url)" = "$OPENAI_API_URL" ]
+}
+
+@test "get_ai_api_url: ollama provider returns Ollama URL" {
+    set_ai_provider "ollama" >/dev/null
+    [ "$(get_ai_api_url)" = "$OLLAMA_API_URL" ]
+}
+
+@test "get_ai_api_url: defaults to OpenRouter when provider unset" {
+    [ "$(get_ai_api_url)" = "$OPENROUTER_API_URL" ]
+}

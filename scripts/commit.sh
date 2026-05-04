@@ -104,8 +104,19 @@ function detect_scopes_from_staged_files {
 
                     component_lower="${component,,}"
                     # Filter out generic containers and dependency/output dirs
-                    # that are rarely meaningful as a per-commit scope.
-                    if [[ "$component_lower" =~ ^(src|lib|node_modules|vendor|tmp|temp|cache|logs|log)$ ]]; then
+                    # that are rarely meaningful as a per-commit scope. In a
+                    # monorepo, the container dir (`services/`, `apps/`,
+                    # `packages/`) and Go-idiom containers (`cmd/`,
+                    # `internal/`) wrap the actual scope — the service or
+                    # package name lives one level deeper. Generic source
+                    # roots (`src`, `lib`, `scripts`, `bin`) are also peeled:
+                    # `scripts/foo.sh` becomes `foo` via the stem fallback in
+                    # build_split_groups_from_staged, while
+                    # `scripts/llm_comparison/x.py` becomes `llm_comparison`.
+                    # Tests/docs/build dirs are intentionally left in:
+                    # they're meaningful scopes in some projects
+                    # (test(integration), pkg/foo).
+                    if [[ "$component_lower" =~ ^(src|lib|libs|scripts|bin|node_modules|vendor|tmp|temp|cache|logs|log|services|apps|packages|modules|components|cmd|internal)$ ]]; then
                         continue
                     fi
 
@@ -237,19 +248,45 @@ function build_split_groups_from_staged {
         assigned=""
         IFS='/' read -r -a comps <<< "$file"
 
-        # Walk detected scopes in priority order; first match wins.
-        for scope in "${scopes_arr[@]}"; do
-            for comp in "${comps[@]}"; do
-                [ -z "$comp" ] && continue
-                comp_lower="${comp,,}"
-                comp_no_ext_lower="${comp_lower%.*}"
-                [ -z "$comp_no_ext_lower" ] && comp_no_ext_lower="$comp_lower"
+        # Walk this file's path from root → leaf and pick the SHALLOWEST
+        # component that matches a detected scope. This keeps per-feature
+        # scopes like `bff` from losing to deep generic dirs like `handler`
+        # in monorepo layouts (services/bff/internal/handler/foo.go → bff,
+        # not handler). Skip the last component — that's the filename.
+        local last_idx_inner=$((${#comps[@]} - 1))
+        local i_inner
+        for i_inner in "${!comps[@]}"; do
+            [ "$i_inner" -eq "$last_idx_inner" ] && continue
+            comp="${comps[$i_inner]}"
+            [ -z "$comp" ] && continue
+            comp_lower="${comp,,}"
+            comp_no_ext_lower="${comp_lower%.*}"
+            [ -z "$comp_no_ext_lower" ] && comp_no_ext_lower="$comp_lower"
+            for scope in "${scopes_arr[@]}"; do
                 if [ "$comp_lower" = "$scope" ] || [ "$comp_no_ext_lower" = "$scope" ]; then
                     assigned="$scope"
                     break 2
                 fi
             done
         done
+
+        # Filename-stem fallback. When the file lives under one or more
+        # directories but none matched a detected scope (typical when every
+        # parent dir is a generic container like `scripts/`, `lib/`, `src/`),
+        # use the filename's stem so a one-off `scripts/commit.sh` becomes
+        # the `commit` scope instead of getting bucketed into misc. Root
+        # files (no parent dirs) still fall through to misc.
+        if [ -z "$assigned" ] && [ "$last_idx_inner" -gt 0 ]; then
+            local stem="${comps[$last_idx_inner]}"
+            stem="${stem%.*}"          # drop the extension
+            stem="${stem,,}"           # lowercase
+            # Skip stems that are generic across many languages and rarely
+            # carry semantic meaning (the per-feature scope is the parent
+            # dir, which we've already filtered for being too generic).
+            if [ -n "$stem" ] && [[ ! "$stem" =~ ^(index|main|mod|init|app|__init__|setup|config|types|utils|util|helpers|helper|common|shared)$ ]]; then
+                assigned="$stem"
+            fi
+        fi
 
         [ -z "$assigned" ] && assigned="misc"
 

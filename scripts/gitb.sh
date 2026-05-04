@@ -3,6 +3,13 @@
 ### Here is main script for running gitbasher
 # https://github.com/maxbolgarin/gitbasher
 
+# Pipe failures must propagate so a broken `cmd1 | cmd2` doesn't silently succeed.
+# `set -e` / `set -u` are intentionally not enabled here — many helpers across the
+# sourced scripts rely on inspecting non-zero exit codes via `$?` / `||` / `if`,
+# and on `${VAR:-}`-style defaults. Enabling them globally would require a full
+# per-script audit; tracked in the v4 readiness plan.
+set -o pipefail
+
 GITBASHER_VERSION="dev"
 
 if [ "$1" == "init" ] || [ "$1" == "i" ]; then

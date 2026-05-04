@@ -177,10 +177,69 @@ function _gitb_is_npm_install {
 }
 
 
+### Verify the SHA-256 of a downloaded gitb binary against the .sha256 asset
+### published alongside it. Mirrors install.sh: refuses on mismatch; warns and
+### allows when the .sha256 asset can't be fetched (older or hand-rolled
+### releases may lack it). Sets _gitb_update_download_err on hard mismatch and
+### _gitb_update_sha_warning when verification was skipped.
+# $1: path to the downloaded binary
+# Returns: 0 on verified or warned-and-continued; 1 on mismatch.
+function _verify_gitb_sha256 {
+    local downloaded="$1"
+    local sha_url="https://github.com/${GITBASHER_REPO}/releases/latest/download/gitb.sha256"
+
+    local sha_cmd=""
+    if command -v shasum >/dev/null 2>&1; then
+        sha_cmd="shasum -a 256"
+    elif command -v sha256sum >/dev/null 2>&1; then
+        sha_cmd="sha256sum"
+    else
+        _gitb_update_sha_warning="Neither shasum nor sha256sum is available — proceeding without verification."
+        return 0
+    fi
+
+    local tmp_sha
+    tmp_sha=$(mktemp 2>/dev/null || mktemp -t gitb.sha256)
+    if [ -z "$tmp_sha" ]; then
+        _gitb_update_sha_warning="Could not create temp file for checksum — proceeding without verification."
+        return 0
+    fi
+
+    local fetched=0
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL --proto '=https' --tlsv1.2 --max-time 30 -o "$tmp_sha" "$sha_url" 2>/dev/null && fetched=1
+    elif command -v wget >/dev/null 2>&1; then
+        wget --https-only --timeout=30 -qO "$tmp_sha" "$sha_url" 2>/dev/null && fetched=1
+    fi
+
+    if [ "$fetched" != "1" ] || [ ! -s "$tmp_sha" ]; then
+        rm -f "$tmp_sha"
+        _gitb_update_sha_warning="Could not fetch ${sha_url} — proceeding without verification."
+        return 0
+    fi
+
+    local expected actual
+    expected=$(awk 'NR==1 {print $1}' "$tmp_sha")
+    actual=$($sha_cmd "$downloaded" | awk '{print $1}')
+    rm -f "$tmp_sha"
+
+    if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+        _gitb_update_download_err="Checksum mismatch (expected ${expected:-<empty>}, got ${actual:-<empty>}). Refusing to install."
+        return 1
+    fi
+
+    _gitb_update_sha_verified=1
+    return 0
+}
+
+
 ### Download the latest gitb binary into a temp file. Echoes the temp path on
-### success; sets _gitb_update_download_err on failure.
+### success; sets _gitb_update_download_err on failure. Verifies SHA-256
+### against the .sha256 asset before returning.
 function _download_latest_gitb {
     _gitb_update_download_err=""
+    _gitb_update_sha_warning=""
+    _gitb_update_sha_verified=0
     local url="https://github.com/${GITBASHER_REPO}/releases/latest/download/gitb"
     local tmp
     tmp=$(mktemp 2>/dev/null || mktemp -t gitb)
@@ -210,6 +269,11 @@ function _download_latest_gitb {
     if ! head -c 64 "$tmp" | grep -q '^#!.*bash'; then
         rm -f "$tmp"
         _gitb_update_download_err="Downloaded file is not a bash script (got HTML or empty body)."
+        return 1
+    fi
+
+    if ! _verify_gitb_sha256 "$tmp"; then
+        rm -f "$tmp"
         return 1
     fi
 
@@ -410,6 +474,12 @@ function update_script {
         echo
         print_link "Releases" "$GITBASHER_RELEASES_URL"
         exit 1
+    fi
+
+    if [ "${_gitb_update_sha_verified:-0}" = "1" ]; then
+        echo -e "${GREEN}✓ Verified SHA-256 checksum${ENDCOLOR}"
+    elif [ -n "${_gitb_update_sha_warning:-}" ]; then
+        echo -e "${YELLOW}⚠  ${_gitb_update_sha_warning}${ENDCOLOR}"
     fi
 
     if ! _install_gitb_binary "$tmp_path" "$install_path"; then

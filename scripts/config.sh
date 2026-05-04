@@ -205,19 +205,51 @@ function configure_ai_key {
     fi
     case "$provider" in
         openai)
-            echo -e "Enter your ${YELLOW}OpenAI API key${ENDCOLOR} to enable AI commit message generation"
-            echo -e "Get your API key from: ${BLUE}https://platform.openai.com/api-keys${ENDCOLOR}"
+            local provider_label="OpenAI"
+            local key_url="https://platform.openai.com/api-keys"
             ;;
         *)
-            echo -e "Enter your ${YELLOW}OpenRouter API key${ENDCOLOR} to enable AI commit message generation"
-            echo -e "Get your API key from: ${BLUE}https://openrouter.ai/keys${ENDCOLOR}"
+            local provider_label="OpenRouter"
+            local key_url="https://openrouter.ai/keys"
             ;;
     esac
+    echo -e "Enter your ${YELLOW}${provider_label} API key${ENDCOLOR} to enable AI commit message generation"
+    echo -e "Get your API key from: ${BLUE}${key_url}${ENDCOLOR}"
     echo
-    echo -e "${CYAN}💡 For better security, set the key via environment variable instead:${ENDCOLOR}"
-    echo -e "  ${BLUE}export GITB_AI_API_KEY_${provider_upper}='your-api-key'${ENDCOLOR}"
-    echo -e "  Add this to your ~/.bashrc or ~/.zshrc to make it permanent."
+
+    # Storage choice: environment variable is the safer default and what
+    # SECURITY.md recommends — keys never land on disk where a leaked repo
+    # config could carry them. Offer it explicitly before falling back to
+    # the git-config path. See SECURITY.md ("AI keys") for the rationale.
+    local rc_file="${HOME}/.zshrc"
+    case "${SHELL##*/}" in
+        bash) rc_file="${HOME}/.bashrc" ;;
+        zsh)  rc_file="${HOME}/.zshrc" ;;
+        fish) rc_file="${HOME}/.config/fish/config.fish" ;;
+    esac
+
+    echo -e "${YELLOW}Storage options:${ENDCOLOR}"
+    echo -e "  ${GREEN}env var${ENDCOLOR}    — recommended; the key never touches disk via gitbasher"
+    echo -e "  ${BLUE}git config${ENDCOLOR} — convenient, but stored in plaintext under .git/config (or ~/.gitconfig if global)"
     echo
+    read -n 1 -p "Use environment variable (recommended)? (y/n) " ai_storage_choice
+    echo
+    if is_yes "$ai_storage_choice"; then
+        echo
+        echo -e "Add this to ${BLUE}${rc_file}${ENDCOLOR} (or paste in your current shell):"
+        echo -e "  ${GREEN}export GITB_AI_API_KEY_${provider_upper}='your-${provider}-key'${ENDCOLOR}"
+        echo
+        echo -e "${CYAN}gitbasher checks env vars before git config every run, so this takes precedence.${ENDCOLOR}"
+        echo -e "Append it now with:"
+        echo -e "  ${GREEN}echo \"export GITB_AI_API_KEY_${provider_upper}='your-${provider}-key'\" >> $(printf '%q' "$rc_file")${ENDCOLOR}"
+        exit
+    fi
+
+    # Falling through to the git-config path. Make the security trade-off
+    # explicit one more time so the user is not surprised if their config
+    # leaks via a shared repo or a misconfigured backup.
+    echo
+    echo -e "${YELLOW}⚠  Storing in git config writes the key in plaintext.${ENDCOLOR}"
     echo -e "Press Enter or Esc to exit without changes, or 0 to remove the existing key"
 
     echo

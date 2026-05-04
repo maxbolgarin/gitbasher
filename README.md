@@ -1,7 +1,3 @@
-<p align="center">
-  <img src=".github/logo.jpg" width="240" alt="gitbasher logo" />
-</p>
-
 <h1 align="center">gitbasher</h1>
 
 <p align="center">
@@ -12,7 +8,6 @@
   <a href="https://github.com/maxbolgarin/gitbasher/releases/latest"><img src="https://img.shields.io/github/v/release/maxbolgarin/gitbasher.svg?style=flat-square" alt="Latest Release"></a>
   <a href="https://github.com/maxbolgarin/gitbasher/blob/main/LICENSE"><img src="https://img.shields.io/github/license/maxbolgarin/gitbasher.svg" alt="License"></a>
   <a href="https://github.com/maxbolgarin/gitbasher/actions"><img src="https://github.com/maxbolgarin/gitbasher/actions/workflows/build.yml/badge.svg" alt="Build Status"></a>
-  <a href="https://www.npmjs.com/package/gitbasher"><img src="https://img.shields.io/npm/v/gitbasher.svg?label=npm" alt="npm version"></a>
 </p>
 
 <p align="center">
@@ -109,7 +104,7 @@ gitb pull         # smart pull (rebase / merge / ff)
 gitb branch new   # create a new conventionally-named branch
 ```
 
-Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb st`, …) and inline help (`gitb commit help`).
+Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb s`, …) and inline help (`gitb commit help`).
 
 ---
 
@@ -149,9 +144,9 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 | **Branches** | `branch` (`b`), `prev` (`-`) | List / switch / create-from-current / create-from-updated-main / delete (orphaned, merged, gone) / recent / previous / checkout-tag |
 | **Integration** | `merge` (`m`), `rebase` (`r`), `squash` (`sq`), `cherry` (`ch`) | Merge into current / into main / from remote · rebase onto main / interactive / autosquash / fastautosquash / pull-commits · AI-driven squash of branch commits into changelog-ready history · cherry-pick by hash, range, or interactive |
 | **Tags & releases** | `tag` (`t`) | Lightweight, annotated, from-commit, push, push-all, delete, delete-all, list, fetch-remote |
-| **Save & rollback** | `wip` (`up`/`down`), `undo` (`un`), `reset` (`res`), `stash` (`s`) | Save WIP via stash / branch / worktree (auto-detected on restore) · undo last commit/amend/merge/rebase/stash · interactive reset · full stash menu |
+| **Save & rollback** | `wip` (`up`/`down`), `undo` (`un`), `reset` (`res`), `stash` (`st`) | Save WIP via stash / branch / worktree (auto-detected on restore) · undo last commit/amend/merge/rebase/stash · interactive reset · full stash menu |
 | **Worktrees** | `worktree` (`wt`) | Add / list / remove / move / lock / prune git worktrees, with new branch from current/main or from existing/remote branches |
-| **Inspect** | `status` (`st`), `log` (`l`), `reflog` (`rl`), `last-commit` (`lc`), `last-ref` (`lr`) | Pretty repo status, multi-mode log + search, reflog viewer, quick last-commit / last-ref summary |
+| **Inspect** | `status` (`s`), `log` (`l`), `reflog` (`rl`), `last-commit` (`lc`), `last-ref` (`lr`) | Pretty repo status, multi-mode log + search, reflog viewer, quick last-commit / last-ref summary |
 | **Hooks** | `hook` (`ho`) | List / create from templates / edit / toggle / remove / test / show — for every git hook |
 | **Repo setup** | `init` (`i`), `origin` (`or`, `o`, `remote`) | `git init` from gitbasher · add/change/rename/remove the remote origin |
 | **Config** | `config` (`cfg`) | User, default branch, separator, editor, ticket prefix, scopes, AI provider/key/model, proxy, completion |
@@ -340,14 +335,14 @@ git config gitbasher.ai-base-url http://my-gateway:4000/v1/chat/completions
 | [`wip`](#gitb-wip) | `w` | Stash all + backup to remote (`up`) / restore (`down`) |
 | [`undo`](#gitb-undo) | `un` | Undo last commit / amend / merge / rebase / stash |
 | [`reset`](#gitb-reset) | `res` | Friendly `git reset` with preview, approval, and undo support |
-| [`stash`](#gitb-stash) | `s` `sta` | Full stash menu: select, all, list, pop, apply, show, drop |
+| [`stash`](#gitb-stash) | `st` `sta` | Full stash menu: select, all, list, pop, apply, show, drop |
 | [`worktree`](#gitb-worktree) | `wt` `tree` | Manage git worktrees: add, list, remove, move, lock, prune |
 | [`hook`](#gitb-hook) | `ho` `hk` | Manage git hooks: list, create, edit, toggle, remove, test, show |
 | [`origin`](#gitb-origin) | `or` `o` `remote` | Add, change, rename, or remove the remote origin |
 | [`init`](#gitb-init) | `i` | `git init` + optional origin setup prompt |
 | [`config`](#gitb-config) | `cf` `cfg` `conf` | Configure user, branch, AI, scopes, ticket prefix, etc. |
 | [`log`](#gitb-log) | `l` `lg` | Pretty log: current, branch, compare, search |
-| [`status`](#info-commands) | `st` | Repo status and changed files |
+| [`status`](#info-commands) | `s` | Repo status and changed files |
 | [`reflog`](#info-commands) | `rl` `rlg` | Pretty reflog |
 | [`last-commit`](#info-commands) | `lc` `lastc` | Show the last commit |
 | [`last-ref`](#info-commands) | `lr` `lastr` | Show the last reference |
@@ -798,7 +793,7 @@ gitb origin remove                               # delete the remote
 
 | Command | Aliases | Description |
 |---------|---------|-------------|
-| `status` | `st` | Repo info and changed files |
+| `status` | `s` | Repo info and changed files |
 | `reflog` | `rl` `rlg` | Pretty reflog |
 | `last-commit` | `lc` `lastc` | Show the last commit |
 | `last-ref` | `lr` `lastr` | Show the last reference |

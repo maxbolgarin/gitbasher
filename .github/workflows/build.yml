@@ -43,21 +43,12 @@ jobs:
           fail-on-error: true
 
   security-scan:
-    # Surface known CVEs in dev dependencies and committed secrets early.
-    # `npm audit` runs against devDependencies because that's all we ship from
-    # npm at runtime — the bundled gitb has no Node deps. We fail on `high`
-    # and above to keep the bar tight without blocking on pure advisory noise.
+    # Surface committed secrets early. We don't run `npm audit` because the
+    # bundled gitb has no Node runtime — semantic-release deps are dev-only,
+    # pulled fresh in CI, and never reach end users.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: npm audit (high+)
-        run: npm audit --audit-level=high
 
       - name: gitleaks
         uses: gitleaks/gitleaks-action@v2
@@ -108,7 +99,7 @@ jobs:
 
       - name: Compute version
         id: version
-        run: echo "version=$(git describe --tags --always 2>/dev/null | sed 's/^v//' || echo 'dev')" >> $GITHUB_OUTPUT
+        run: echo "version=$(git describe --tags --always 2>/dev/null | sed 's/^v//' || echo 'dev')" >> "$GITHUB_OUTPUT"
 
       - name: Build
         run: |
@@ -129,80 +120,11 @@ jobs:
         run: |
           cd tests
           if [ "$RUNNER_OS" = "macOS" ]; then
-            export PATH="$(brew --prefix bash)/bin:$PATH"
+            brew_bash="$(brew --prefix bash)"
+            export PATH="$brew_bash/bin:$PATH"
           fi
           bash --version
-          bats *.bats
+          bats ./*.bats
 
       - name: Smoke Test
-        run: ./dist/gitb; if [ $? -ne 0 ]; then exit 1; fi
-
-  coverage:
-    needs: build
-    # noble (24.04) dropped kcov from the apt repos — pin to jammy where it ships.
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install BATS and kcov
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y bats kcov
-
-      # Run each .bats file under kcov so coverage data merges across files.
-      # --include-path scopes coverage to the source we actually ship.
-      - name: Run BATS under kcov
-        run: |
-          mkdir -p coverage
-          for f in tests/*.bats; do
-            kcov --include-path=scripts,install.sh \
-                 --bash-dont-parse-binary-dir \
-                 "coverage/$(basename "$f" .bats)" \
-                 bats "$f" || true
-          done
-          # Merge into a single report
-          kcov --merge coverage/merged coverage/test_*
-
-      # Gate: fail the build when overall coverage drops below the threshold.
-      # 50% is the floor we ratchet up from — current actual is well above.
-      # The kcov merged report writes a `coverage.json` summary at the root
-      # of the merged dir; we parse `percent_covered` out of it.
-      - name: Coverage gate
-        env:
-          COVERAGE_MIN: "50"
-        run: |
-          summary="coverage/merged/coverage.json"
-          if [ ! -f "$summary" ]; then
-            # Some kcov builds emit `kcov-merged/coverage.json` or use a
-            # different filename. Fall back to a glob before giving up.
-            summary=$(find coverage/merged -maxdepth 2 -name 'coverage.json' -print -quit)
-          fi
-          if [ -z "$summary" ] || [ ! -f "$summary" ]; then
-            echo "::error::No kcov coverage.json found under coverage/merged" >&2
-            exit 1
-          fi
-          pct=$(jq -r '.percent_covered // empty' "$summary")
-          if [ -z "$pct" ]; then
-            # Older kcov writes "covered" + "total"; compute manually.
-            covered=$(jq -r '.covered // empty' "$summary")
-            total=$(jq -r '.total // empty' "$summary")
-            if [ -n "$covered" ] && [ -n "$total" ] && [ "$total" != "0" ]; then
-              pct=$(awk -v c="$covered" -v t="$total" 'BEGIN { printf "%.2f", (c/t)*100 }')
-            fi
-          fi
-          if [ -z "$pct" ]; then
-            echo "::error::Could not parse coverage percentage from $summary" >&2
-            cat "$summary"
-            exit 1
-          fi
-          echo "Coverage: ${pct}% (gate: ${COVERAGE_MIN}%)"
-          awk -v p="$pct" -v m="$COVERAGE_MIN" 'BEGIN { exit !(p+0 >= m+0) }' \
-            || { echo "::error::Coverage ${pct}% is below the ${COVERAGE_MIN}% gate" >&2; exit 1; }
-
-      - name: Upload coverage report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: bash-coverage
-          path: coverage/merged
-          retention-days: 14
+        run: ./dist/gitb

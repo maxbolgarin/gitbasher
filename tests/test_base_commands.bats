@@ -32,7 +32,7 @@ teardown() {
     [[ "$output" == *"RECOVERY"* ]]
     [[ "$output" == *"SETUP"* ]]
     # Each command listed with its inline aliases
-    [[ "$output" == *"status (st)"* ]]
+    [[ "$output" == *"status (s)"* ]]
     [[ "$output" == *"commit (c, co, com)"* ]]
     [[ "$output" == *"branch (b, br, bran)"* ]]
     # Footer hint pointing at per-command help

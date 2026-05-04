@@ -24,7 +24,7 @@ teardown() {
     yellow=$(printf '%b' "$YELLOW")
     red=$(printf '%b' "$RED")
 
-    [[ "$output" == *"What type of changes for ${blue}makefile${endcolor}?"* ]]
+    [[ "$output" == *"What type of changes for ${blue}${bold}makefile${endcolor}${yellow}?${endcolor}"* ]]
     [[ "$output" == *"1. ${blue}${bold}feat${endcolor}"* ]]
     [[ "$output" == *"9. ${bold}plain${endcolor}"* ]]
     [[ "$output" == *"${yellow}${bold}skip${endcolor}"* ]]

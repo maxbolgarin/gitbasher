@@ -30,10 +30,12 @@ stage() {
     [ -z "$detected_scopes" ]
 }
 
-@test "scope: single file in flat layout uses filename token" {
+@test "scope: single root-level file produces no scope" {
+    # Root files (no directory) intentionally yield no scope token; they end
+    # up in the "misc" group during atomic-split commits.
     stage "router.go"
     detect_scopes_from_staged_files
-    [[ "$detected_scopes" == *"router"* ]]
+    [ -z "$detected_scopes" ]
 }
 
 @test "scope: directory name dominates over filename when shared" {
@@ -54,13 +56,14 @@ stage() {
     [[ "$detected_scopes" != *" src "* && "$detected_scopes" != "src "* && "$detected_scopes" != *" src" && "$detected_scopes" != "src" ]]
 }
 
-@test "scope: 'tests' and 'lib' are filtered as non-meaningful" {
+@test "scope: 'lib' is filtered, but 'tests' is now a valid scope" {
     stage "tests/foo.bats"
     stage "lib/bar.sh"
     detect_scopes_from_staged_files
-    # Neither bare 'tests' nor bare 'lib' should appear as a top scope
-    [[ "$detected_scopes" != *"tests"* ]]
+    # 'lib' is still a generic container — filtered out
     [[ "$detected_scopes" != *"lib"* ]]
+    # 'tests' is meaningful as a per-commit scope
+    [[ "$detected_scopes" == *"tests"* ]]
 }
 
 @test "scope: dotfiles handled without empty-token errors" {

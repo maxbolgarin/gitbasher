@@ -9,6 +9,7 @@ build:
 install: build
 	@cp ./dist/gitb ~/.local/bin/gitb
 	@chmod +x ~/.local/bin/gitb
+	@rm ./dist/gitb
 
 .PHONY: release
 release: build

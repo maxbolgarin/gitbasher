@@ -45,9 +45,6 @@
         "CHANGELOG.md",
         "LICENSE"
     ],
-    "engines": {
-        "node": ">=14.0.0"
-    },
     "devDependencies": {
         "semantic-release": "latest",
         "@semantic-release/commit-analyzer": "latest",

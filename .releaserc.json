@@ -84,7 +84,8 @@
     [
       "@semantic-release/git",
       {
-        "assets": ["dist/gitb", "package.json", "CHANGELOG.md"],
+        "_comment": "dist/gitb is intentionally NOT committed — the release pipeline builds it fresh and ships it via @semantic-release/github + @semantic-release/npm. Committing the binary causes source/bundle drift and bloats history.",
+        "assets": ["package.json", "CHANGELOG.md"],
         "message": "chore(release): ${nextRelease.version} [skip ci]"
       }
     ]

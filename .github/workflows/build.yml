@@ -52,11 +52,15 @@ jobs:
 
       - name: Install BATS (macOS)
         if: matrix.os == 'macos-latest'
-        run: brew install bats-core
+        run: brew install bats-core bash
 
       - name: Run BATS Tests
         run: |
           cd tests
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            export PATH="$(brew --prefix bash)/bin:$PATH"
+          fi
+          bash --version
           bats *.bats
 
       - name: Smoke Test

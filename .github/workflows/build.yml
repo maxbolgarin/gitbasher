@@ -3,6 +3,8 @@ name: Build and Test
 on:
   push:
     branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
@@ -13,13 +15,82 @@ jobs:
 
       # Catches real bugs (unquoted vars, incorrect test ops, GNU-only flags) without
       # blocking on style warnings. Severity can be widened to "warning" later once
-      # the existing baseline is clean.
+      # the existing baseline is clean. dist/build.sh is included so the bundler
+      # itself is held to the same bar as the scripts it bundles.
       - name: ShellCheck
         uses: ludeeus/action-shellcheck@master
         with:
           severity: error
           scandir: ./scripts
-          additional_files: install.sh
+          additional_files: install.sh dist/build.sh
+
+  lint-config:
+    # Catch syntax errors in YAML / JSON config before they break a release.
+    # actionlint surfaces workflow-level mistakes (bad `if:` expressions,
+    # undefined inputs, deprecated syntax); jq -e validates parseability.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate package.json and .releaserc.json
+        run: |
+          jq -e . package.json > /dev/null
+          jq -e . .releaserc.json > /dev/null
+
+      - name: actionlint
+        uses: raven-actions/actionlint@v2
+        with:
+          fail-on-error: true
+
+  security-scan:
+    # Surface known CVEs in dev dependencies and committed secrets early.
+    # `npm audit` runs against devDependencies because that's all we ship from
+    # npm at runtime — the bundled gitb has no Node deps. We fail on `high`
+    # and above to keep the bar tight without blocking on pure advisory noise.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: npm audit (high+)
+        run: npm audit --audit-level=high
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release-dry-run:
+    # PR-only: validates that .releaserc.json + Conventional Commits parse
+    # cleanly and would produce a coherent release. Catches plugin config
+    # errors before they hit main and break the actual release workflow.
+    if: github.event_name == 'pull_request'
+    needs: lint-config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install semantic-release
+        run: npm install --no-audit --no-fund
+
+      - name: semantic-release --dry-run
+        env:
+          # `--dry-run` doesn't publish, but plugins still demand a token.
+          # GITHUB_TOKEN is enough; NPM_TOKEN is intentionally not set to
+          # ensure the dry run can never reach npm even if a plugin slips.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx semantic-release --dry-run --no-ci
 
   build:
     needs: shellcheck
@@ -91,6 +162,42 @@ jobs:
           done
           # Merge into a single report
           kcov --merge coverage/merged coverage/test_*
+
+      # Gate: fail the build when overall coverage drops below the threshold.
+      # 50% is the floor we ratchet up from — current actual is well above.
+      # The kcov merged report writes a `coverage.json` summary at the root
+      # of the merged dir; we parse `percent_covered` out of it.
+      - name: Coverage gate
+        env:
+          COVERAGE_MIN: "50"
+        run: |
+          summary="coverage/merged/coverage.json"
+          if [ ! -f "$summary" ]; then
+            # Some kcov builds emit `kcov-merged/coverage.json` or use a
+            # different filename. Fall back to a glob before giving up.
+            summary=$(find coverage/merged -maxdepth 2 -name 'coverage.json' -print -quit)
+          fi
+          if [ -z "$summary" ] || [ ! -f "$summary" ]; then
+            echo "::error::No kcov coverage.json found under coverage/merged" >&2
+            exit 1
+          fi
+          pct=$(jq -r '.percent_covered // empty' "$summary")
+          if [ -z "$pct" ]; then
+            # Older kcov writes "covered" + "total"; compute manually.
+            covered=$(jq -r '.covered // empty' "$summary")
+            total=$(jq -r '.total // empty' "$summary")
+            if [ -n "$covered" ] && [ -n "$total" ] && [ "$total" != "0" ]; then
+              pct=$(awk -v c="$covered" -v t="$total" 'BEGIN { printf "%.2f", (c/t)*100 }')
+            fi
+          fi
+          if [ -z "$pct" ]; then
+            echo "::error::Could not parse coverage percentage from $summary" >&2
+            cat "$summary"
+            exit 1
+          fi
+          echo "Coverage: ${pct}% (gate: ${COVERAGE_MIN}%)"
+          awk -v p="$pct" -v m="$COVERAGE_MIN" 'BEGIN { exit !(p+0 >= m+0) }' \
+            || { echo "::error::Coverage ${pct}% is below the ${COVERAGE_MIN}% gate" >&2; exit 1; }
 
       - name: Upload coverage report
         if: always()

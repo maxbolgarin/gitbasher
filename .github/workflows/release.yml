@@ -3,6 +3,13 @@ name: Release
 on:
   workflow_dispatch:
 
+# Even though releases only fire on manual dispatch, guard against
+# accidental concurrent runs (rapid double-click on "Run workflow") so we
+# never half-publish a tag.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest

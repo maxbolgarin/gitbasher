@@ -1,0 +1,48 @@
+version: 2
+
+# Keep semantic-release plugins and GitHub Actions up to date so dependency
+# CVEs surface as PRs we can review, not as silent supply-chain risk. The
+# package itself only ships pure Bash at runtime — Node deps are dev-only.
+
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: "Europe/Berlin"
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - npm
+    commit-message:
+      # Conventional Commits — `build` (devDependencies) is config'd as
+      # patch-release in .releaserc.json, but Dependabot bumps usually want
+      # to be no-op for users so prefer the `build` type that maps cleanly.
+      prefix: build
+      prefix-development: build
+      include: scope
+    groups:
+      # Bundle all semantic-release plugins into one PR so we don't churn
+      # the maintainer with N PRs every Monday.
+      semantic-release:
+        patterns:
+          - "semantic-release"
+          - "@semantic-release/*"
+          - "conventional-changelog-*"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: "Europe/Berlin"
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: ci
+      include: scope

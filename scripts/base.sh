@@ -50,6 +50,7 @@ function print_help {
     printf "$row" "$CMD" "worktree (wt, tree)"     "Manage git worktrees"
     printf "$row" "$CMD" "config (cf, cfg, conf)"  "Configure gitbasher"
     printf "$row" "$CMD" "update (up, upd)"        "Check for and install gitbasher updates"
+    printf "$row" "$CMD" "uninstall (uns, uni)"    "Remove gitbasher config and binary"
     echo
 
     echo -e "Run ${YELLOW}gitb <command> help${ENDCOLOR} for modes and examples"
@@ -157,6 +158,9 @@ case "$1" in
     ;;
     update|up|upd)
         update_script "$2"
+    ;;
+    uninstall|uns|uni)
+        uninstall_script "$2"
     ;;
     init|i)
         # git init already ran in gitb.sh; init.sh handles the optional

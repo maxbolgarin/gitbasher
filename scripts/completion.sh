@@ -35,6 +35,8 @@ last-commit lc lastc
 last-ref lr lastr
 status s
 prev -
+update up upd
+uninstall uns uni
 help man
 "
 _gitb_sub_commit="ai llm i fast f fasts fs sf ff ffp ffpush push pu p fastp fp pf fastsp fsp fps scope s msg m ticket jira j t staged st no-split nosplit nsp nsl fixup fix x fixupp fixp xp px fixupst xst stx fastfix fx xf fastfixp fxp xfp amend am a amendst ast sta amendf amf af fa split sp sl splitp spp slp aisplit isplit aispl ispl aisplitp isplitp aisplp isplp llmf aif if llmp aip ip llmst aist ist llmfp aifp ifp ipf llms ais is llmsf aisf isf llmsfp aisfp isfp llmm aim im llmmf aimf imf llmmfp aimfp imfp last l revert rev help h"
@@ -331,6 +333,8 @@ _gitb() {
                 'last-ref:Show last ref'
                 'status:Project status (alias: s)'
                 'prev:Switch to previous branch (alias: -)'
+                'update:Self-update gitbasher (alias: up, upd)'
+                'uninstall:Remove gitbasher config and binary (alias: uns, uni)'
                 'help:Show help'
             )
             _describe -t commands 'gitb command' cmds
@@ -528,6 +532,9 @@ complete -c gitb -n __gitb_no_subcmd -a last-ref     -d 'Show last ref'
 complete -c gitb -n __gitb_no_subcmd -a status       -d 'Project status'
 complete -c gitb -n __gitb_no_subcmd -a s            -d 'Alias of status'
 complete -c gitb -n __gitb_no_subcmd -a prev         -d 'Switch to previous branch'
+complete -c gitb -n __gitb_no_subcmd -a update       -d 'Self-update gitbasher'
+complete -c gitb -n __gitb_no_subcmd -a uninstall    -d 'Remove gitbasher config and binary'
+complete -c gitb -n __gitb_no_subcmd -a uns          -d 'Alias of uninstall'
 complete -c gitb -n __gitb_no_subcmd -a help         -d 'Show help'
 function __gitb_at_commit_pos2
     set -l tokens (commandline -opc)

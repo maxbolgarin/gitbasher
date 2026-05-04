@@ -533,6 +533,8 @@ function read_editable_input {
 
     # Readline normally treats Esc as a prefix key. For GitBasher prompts, a
     # plain Esc should behave like "clear this prompt and submit empty".
+    # `bind` is a no-op in non-interactive shells unless emacs mode is on.
+    set -o emacs 2>/dev/null
     bind '"\e": "\C-a\C-k\C-m"' 2>/dev/null || true
 
     if [ $# -ge 3 ]; then
@@ -540,6 +542,45 @@ function read_editable_input {
     else
         IFS= read -r -e -p "$_prompt" "$_var"
     fi
+}
+
+### Read silent (no-echo) input, allowing Esc to cancel by submitting empty.
+# Used for secret prompts (API keys) where readline (`read -e`) cannot be
+# combined with silent mode. Backspace deletes the last typed byte.
+# $1: variable name to store input (default: REPLY)
+# $2: optional prompt text
+function read_silent_input {
+    local _var="${1:-REPLY}"
+    local _prompt="${2:-}"
+    local _input=""
+    local _char
+
+    if [ -n "$_prompt" ]; then
+        printf '%s' "$_prompt"
+    fi
+
+    while IFS= read -r -s -n 1 _char; do
+        # `read -n 1` returns empty when Enter is pressed
+        if [ -z "$_char" ]; then
+            break
+        fi
+        # ESC: drain any follow-on bytes (arrow keys etc.) and cancel
+        if [ "$_char" = $'\e' ]; then
+            _input=""
+            local _drain
+            while IFS= read -r -s -n 1 -t 0.01 _drain; do :; done
+            break
+        fi
+        # Backspace / DEL
+        if [ "$_char" = $'\x7f' ] || [ "$_char" = $'\b' ]; then
+            [ -n "$_input" ] && _input="${_input%?}"
+            continue
+        fi
+        _input+="$_char"
+    done
+    echo
+
+    printf -v "$_var" '%s' "$_input"
 }
 
 ### ===== END KEYBOARD INPUT HELPERS =====

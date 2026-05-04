@@ -174,6 +174,15 @@ function set_ticket {
 
 ### Function asks user to set AI API key
 function configure_ai_key {
+    # Walk the user through provider selection first when no provider is set.
+    # Otherwise we'd silently default to openrouter and ask for the wrong key.
+    # configure_ai_provider chains into key entry on its own when applicable.
+    if [ -z "$(git config --get gitbasher.ai-provider 2>/dev/null)" ] \
+       && [ -z "$(git config --global --get gitbasher.ai-provider 2>/dev/null)" ]; then
+        configure_ai_provider
+        return
+    fi
+
     local provider=$(get_ai_provider)
     local provider_upper
     provider_upper=$(echo "$provider" | tr '[:lower:]' '[:upper:]')
@@ -209,13 +218,12 @@ function configure_ai_key {
     echo -e "  ${BLUE}export GITB_AI_API_KEY_${provider_upper}='your-api-key'${ENDCOLOR}"
     echo -e "  Add this to your ~/.bashrc or ~/.zshrc to make it permanent."
     echo
-    echo -e "Press Enter to exit without changes, or 0 to remove the existing key"
+    echo -e "Press Enter or Esc to exit without changes, or 0 to remove the existing key"
 
     echo
     echo -e "${YELLOW}Input is hidden — type the key and press Enter.${ENDCOLOR}"
 
-    read -p "API Key: " -s ai_key_input
-    echo
+    read_silent_input ai_key_input "API Key: "
 
     if [ "$ai_key_input" == "" ]; then
         exit

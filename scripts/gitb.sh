@@ -92,6 +92,7 @@ source scripts/worktree.sh || { echo "gitbasher: failed to load scripts/worktree
 source scripts/hooks.sh || { echo "gitbasher: failed to load scripts/hooks.sh" >&2; exit 1; }
 source scripts/origin.sh || { echo "gitbasher: failed to load scripts/origin.sh" >&2; exit 1; }
 source scripts/update.sh || { echo "gitbasher: failed to load scripts/update.sh" >&2; exit 1; }
+source scripts/uninstall.sh || { echo "gitbasher: failed to load scripts/uninstall.sh" >&2; exit 1; }
 source scripts/completion.sh || { echo "gitbasher: failed to load scripts/completion.sh" >&2; exit 1; }
 
 source scripts/base.sh || { echo "gitbasher: failed to load scripts/base.sh" >&2; exit 1; }

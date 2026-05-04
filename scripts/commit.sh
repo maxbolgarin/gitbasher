@@ -420,12 +420,59 @@ Output TSV (scope<TAB>file) for every staged file. No prose."
     return 0
 }
 
+### Stage a single file with the correct git operation based on its original
+### staged change type. Plain `git add <path>` cannot replay a staged deletion
+### when the working-tree file still exists (it would re-add the file from the
+### worktree, undoing the delete). For deletions we use `git rm --cached`,
+### which preserves the worktree copy while staging the index removal.
+# $1: file path
+# $2: change type (M, A, D, R, C, T, U). Empty = treat as add.
+function _stage_file_by_status {
+    local file="$1" status="$2"
+    [ -z "$file" ] && return 0
+    case "$status" in
+        D)
+            # Index deletion that the user intends to commit. Worktree file may
+            # exist or not; --cached --ignore-unmatch handles either case
+            # without touching the worktree copy.
+            git rm --cached --ignore-unmatch -- "$file" >/dev/null 2>&1
+            ;;
+        *)
+            git add -- "$file" >/dev/null 2>&1
+            ;;
+    esac
+}
+
+### Capture the change type for each currently-staged file into a map.
+# Sets the global associative array `_split_status_by_file` (file → A/M/D/...).
+# For renames/copies (R, C), git emits the new path as the second field — we
+# key the map by that new path and treat it as an add. The old path is
+# recorded as a deletion so it gets removed from the index when restaged.
+function _capture_split_statuses {
+    unset _split_status_by_file
+    declare -gA _split_status_by_file=()
+    local line status old new
+    while IFS=$'\t' read -r status old new; do
+        [ -z "$status" ] && continue
+        case "$status" in
+            R*|C*)
+                _split_status_by_file[$old]="D"
+                _split_status_by_file[$new]="M"
+                ;;
+            *)
+                _split_status_by_file[$old]="${status:0:1}"
+                ;;
+        esac
+    done < <(git -c core.quotePath=false diff --name-status --cached)
+}
+
 ### Restore the original staging snapshot (used when user aborts mid-split).
-# Best-effort: re-stages every file that was originally staged. Files that
-# were already committed earlier in the split loop are silently skipped by
-# `git add` (no diff vs HEAD). Already-made commits are preserved as-is —
-# the user can `git reset --soft HEAD~N` if they want to undo them.
-# $1: snapshot file path (one filename per line)
+# Best-effort: re-stages every file that was originally staged, replaying
+# the original change type so deletions stay deletions and modifications stay
+# modifications. Files that were already committed earlier in the split loop
+# are silently skipped (no diff vs HEAD). Already-made commits are preserved
+# as-is — the user can `git reset --soft HEAD~N` if they want to undo them.
+# $1: snapshot file path (one "STATUS<TAB>FILE" entry per line)
 function _restore_split_snapshot {
     local snapshot="$1"
     [ -f "$snapshot" ] || return
@@ -439,9 +486,12 @@ function _restore_split_snapshot {
         done <<< "$currently_staged"
     fi
 
-    # Re-stage every file from the snapshot that still exists / has changes
-    while IFS= read -r f; do
-        [ -n "$f" ] && git add -- "$f" >/dev/null 2>&1
+    # Re-stage every file from the snapshot, honoring the original change
+    # type so a staged deletion stays a deletion (not a fresh add).
+    local status file
+    while IFS=$'\t' read -r status file; do
+        [ -z "$file" ] && continue
+        _stage_file_by_status "$file" "$status"
     done < "$snapshot"
 
     rm -f "$snapshot"
@@ -613,10 +663,22 @@ function perform_commit_split {
         return 1
     fi
 
+    # Build a status map (file → A/M/D/...) so per-scope staging can replay
+    # the right git operation. Without this, deletions get silently turned
+    # into "no change" because plain `git add <path>` re-adds the worktree
+    # copy when the file still exists on disk.
+    _capture_split_statuses
+
     local snapshot_file
     snapshot_file=$(mktemp "${TMPDIR:-/tmp}/gitb-split-snapshot.XXXXXX")
     chmod 600 "$snapshot_file" 2>/dev/null || true
-    printf '%s\n' "$original_staged" > "$snapshot_file"
+    # Snapshot stores STATUS<TAB>FILE per line so abort-restore can also
+    # replay deletions correctly.
+    : > "$snapshot_file"
+    while IFS= read -r f; do
+        [ -z "$f" ] && continue
+        printf '%s\t%s\n' "${_split_status_by_file[$f]:-M}" "$f" >> "$snapshot_file"
+    done <<< "$original_staged"
     # Restore staging if the user kills the process mid-split
     trap "_restore_split_snapshot '$snapshot_file'" INT TERM
 
@@ -658,11 +720,30 @@ function perform_commit_split {
             continue
         fi
 
-        if ! git add -- "${files_array[@]}"; then
+        # Stage each file using the original change type so deletions stay
+        # deletions (otherwise `git add` would re-add the worktree copy and
+        # the index ends up empty for that scope, breaking AI generation).
+        local stage_failed=0
+        for f in "${files_array[@]}"; do
+            if ! _stage_file_by_status "$f" "${_split_status_by_file[$f]:-M}"; then
+                stage_failed=1
+                break
+            fi
+        done
+        if [ "$stage_failed" = "1" ]; then
             echo -e "${RED}✗ Cannot stage files for scope '${scope}'.${ENDCOLOR}"
             _restore_split_snapshot "$snapshot_file"
             trap - INT TERM
             return 1
+        fi
+
+        # If the working tree matches HEAD for every file in this group
+        # (e.g. the user `git add`-ed identical content, or restage replayed
+        # a no-op), bail out gracefully instead of feeding an empty diff to
+        # the AI message generator.
+        if [ -z "$(git diff --name-only --cached)" ]; then
+            echo -e "${YELLOW}No staged changes for scope '${scope}', skipping.${ENDCOLOR}"
+            continue
         fi
 
         echo -e "${YELLOW}Files in this commit:${ENDCOLOR}"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-GITBASHER_VERSION="3.10.2-113-gf77eb2f"
+GITBASHER_VERSION="3.10.2-116-g3b60c3e"
 if [ "$1" == "init" ] || [ "$1" == "i" ]; then
     git init
 fi
@@ -5581,15 +5581,15 @@ function print_split_type_menu {
     local ai_available="$2"
     echo -e "${YELLOW}What type of changes for ${BLUE}${BOLD}${scope}${ENDCOLOR}${YELLOW}?${ENDCOLOR}"
     echo -e "Final message will be ${YELLOW}<type>${ENDCOLOR}(${BLUE}<scope>${ENDCOLOR}): ${BLUE}<summary>${ENDCOLOR}"
-    echo -e "1. ${BLUE}${BOLD}feat${ENDCOLOR}:\tnew feature, logic change or performance improvement"
-    echo -e "2. ${BLUE}${BOLD}fix${ENDCOLOR}:\t\tsmall changes, eg. bug fix"
-    echo -e "3. ${BLUE}${BOLD}refactor${ENDCOLOR}:\tcode change that neither fixes a bug nor adds a feature, style changes"
-    echo -e "4. ${BLUE}${BOLD}test${ENDCOLOR}:\tadding missing tests or changing existing tests"
-    echo -e "5. ${BLUE}${BOLD}build${ENDCOLOR}:\tchanges that affect the build system or external dependencies"
-    echo -e "6. ${BLUE}${BOLD}ci${ENDCOLOR}:\t\tchanges to CI configuration files and scripts"
-    echo -e "7. ${BLUE}${BOLD}chore${ENDCOLOR}:\tmaintenance and housekeeping"
-    echo -e "8. ${BLUE}${BOLD}docs${ENDCOLOR}:\tdocumentation changes"
-    echo -e "9. ${BOLD}plain${ENDCOLOR}:\twrite plain commit without type and scope"
+    echo -e "1. ${BOLD}feat${ENDCOLOR}:\tnew feature, logic change or performance improvement"
+    echo -e "2. ${BOLD}fix${ENDCOLOR}:\t\tsmall changes, eg. bug fix"
+    echo -e "3. ${BOLD}refactor${ENDCOLOR}:\tcode change that neither fixes a bug nor adds a feature, style changes"
+    echo -e "4. ${BOLD}test${ENDCOLOR}:\tadding missing tests or changing existing tests"
+    echo -e "5. ${BOLD}build${ENDCOLOR}:\tchanges that affect the build system or external dependencies"
+    echo -e "6. ${BOLD}ci${ENDCOLOR}:\t\tchanges to CI configuration files and scripts"
+    echo -e "7. ${BOLD}chore${ENDCOLOR}:\tmaintenance and housekeeping"
+    echo -e "8. ${BOLD}docs${ENDCOLOR}:\tdocumentation changes"
+    echo -e "9. ${BLUE}${BOLD}plain${ENDCOLOR}:\twrite plain commit without type and scope"
     if [ "$ai_available" = "true" ]; then
         echo -e "g. ${GREEN}${BOLD}ai${ENDCOLOR}:\t\tgenerate commit message using AI"
     fi
@@ -5602,15 +5602,15 @@ function print_commit_type_menu {
     local ai_available="$2"
     echo -e "${YELLOW}Step ${step}.${ENDCOLOR} What ${YELLOW}type${ENDCOLOR} of changes do you want to commit?"
     echo -e "Final message will be ${YELLOW}<type>${ENDCOLOR}(${BLUE}<scope>${ENDCOLOR}): ${BLUE}<summary>${ENDCOLOR}"
-    echo -e "1. ${BLUE}${BOLD}feat${ENDCOLOR}:\tnew feature, logic change or performance improvement"
-    echo -e "2. ${BLUE}${BOLD}fix${ENDCOLOR}:\t\tsmall changes, eg. bug fix"
-    echo -e "3. ${BLUE}${BOLD}refactor${ENDCOLOR}:\tcode change that neither fixes a bug nor adds a feature, style changes"
-    echo -e "4. ${BLUE}${BOLD}test${ENDCOLOR}:\tadding missing tests or changing existing tests"
-    echo -e "5. ${BLUE}${BOLD}build${ENDCOLOR}:\tchanges that affect the build system or external dependencies"
-    echo -e "6. ${BLUE}${BOLD}ci${ENDCOLOR}:\t\tchanges to CI configuration files and scripts"
-    echo -e "7. ${BLUE}${BOLD}chore${ENDCOLOR}:\tmaintenance and housekeeping"
-    echo -e "8. ${BLUE}${BOLD}docs${ENDCOLOR}:\tdocumentation changes"
-    echo -e "9. ${BOLD}plain${ENDCOLOR}:\twrite plain commit without type and scope"
+    echo -e "1. ${BOLD}feat${ENDCOLOR}:\tnew feature, logic change or performance improvement"
+    echo -e "2. ${BOLD}fix${ENDCOLOR}:\t\tsmall changes, eg. bug fix"
+    echo -e "3. ${BOLD}refactor${ENDCOLOR}:\tcode change that neither fixes a bug nor adds a feature, style changes"
+    echo -e "4. ${BOLD}test${ENDCOLOR}:\tadding missing tests or changing existing tests"
+    echo -e "5. ${BOLD}build${ENDCOLOR}:\tchanges that affect the build system or external dependencies"
+    echo -e "6. ${BOLD}ci${ENDCOLOR}:\t\tchanges to CI configuration files and scripts"
+    echo -e "7. ${BOLD}chore${ENDCOLOR}:\tmaintenance and housekeeping"
+    echo -e "8. ${BOLD}docs${ENDCOLOR}:\tdocumentation changes"
+    echo -e "9. ${BLUE}${BOLD}plain${ENDCOLOR}:\twrite plain commit without type and scope"
     if [ "$ai_available" = "true" ]; then
         echo -e "g. ${GREEN}${BOLD}ai${ENDCOLOR}:\t\tgenerate commit message using AI"
     fi

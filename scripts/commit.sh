@@ -70,6 +70,69 @@ function stage_fast_changes {
     return 0
 }
 
+### Returns 0 (true) when the given scope adds no information beyond the
+### Conventional Commit type. The type already encodes the change kind, so
+### `test(tests):`, `docs(docs):`, `build(build):` are pure noise — drop
+### the scope and emit `type:` instead. Covers each Conventional Commit type
+### (feat, fix, refactor, test, docs, chore, build, ci, perf, style, revert)
+### with its singular/plural/synonym forms.
+function is_redundant_scope {
+    local type_lower="${1,,}"
+    local scope_lower="${2,,}"
+    [ -z "$scope_lower" ] && return 1
+    case "$type_lower" in
+        feat)     [[ "$scope_lower" =~ ^(feat|feats|feature|features)$ ]] && return 0 ;;
+        fix)      [[ "$scope_lower" =~ ^(fix|fixes|bugfix|bugfixes)$ ]] && return 0 ;;
+        refactor) [[ "$scope_lower" =~ ^(refactor|refactors|refactoring)$ ]] && return 0 ;;
+        test)     [[ "$scope_lower" =~ ^(test|tests|testing)$ ]] && return 0 ;;
+        docs)     [[ "$scope_lower" =~ ^(doc|docs|documentation)$ ]] && return 0 ;;
+        chore)    [[ "$scope_lower" =~ ^(chore|chores)$ ]] && return 0 ;;
+        build)    [[ "$scope_lower" =~ ^(build|builds|building)$ ]] && return 0 ;;
+        ci)       [[ "$scope_lower" =~ ^(ci|cicd|ci-cd)$ ]] && return 0 ;;
+        perf)     [[ "$scope_lower" =~ ^(perf|performance|perfs)$ ]] && return 0 ;;
+        style)    [[ "$scope_lower" =~ ^(style|styles|styling)$ ]] && return 0 ;;
+        revert)   [[ "$scope_lower" =~ ^(revert|reverts)$ ]] && return 0 ;;
+    esac
+    return 1
+}
+
+### Trim quoting/whitespace and drop a redundant scope from an AI-generated
+### commit message. Use this at every site that captures AI output so a new
+### call site can't forget the strip step (the bug that produced
+### `test(tests): ...` despite is_redundant_scope being wired up elsewhere).
+### LC_ALL=C avoids "illegal byte sequence" errors from BSD sed when the AI
+### response contains non-ASCII characters.
+function clean_ai_commit_message {
+    local cleaned
+    cleaned=$(echo "$1" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    strip_redundant_scope "$cleaned"
+}
+
+### Strip a redundant scope from a commit message subject. If the subject
+### matches `type(scope): ...` (or `type(scope)!: ...`) and the scope is
+### redundant per is_redundant_scope, emit `type: ...` (or `type!: ...`).
+### Body and footer lines are preserved unchanged.
+function strip_redundant_scope {
+    local msg="$1"
+    local subject="${msg%%$'\n'*}"
+    local body=""
+    [[ "$msg" == *$'\n'* ]] && body=$'\n'"${msg#*$'\n'}"
+
+    # Bash's [[ =~ ]] parser stumbles on unbalanced parens in a literal
+    # regex (even in 5.x); store the pattern in a variable to dodge it.
+    local conv_pattern='^([a-z]+)\(([^)]+)\)(!?:.*)$'
+    if [[ "$subject" =~ $conv_pattern ]]; then
+        local type_str="${BASH_REMATCH[1]}"
+        local scope_str="${BASH_REMATCH[2]}"
+        local rest="${BASH_REMATCH[3]}"
+        if is_redundant_scope "$type_str" "$scope_str"; then
+            printf '%s%s\n' "${type_str}${rest}" "$body"
+            return 0
+        fi
+    fi
+    printf '%s\n' "$msg"
+}
+
 ### Function to detect scopes from staged files
 # Returns: detected_scopes variable set with space-separated scope names
 function detect_scopes_from_staged_files {
@@ -631,7 +694,7 @@ function run_split_ai_for_scope {
         echo -e "${RED}✗ AI message generation failed.${ENDCOLOR}"
         return 1
     fi
-    ai_msg=$(echo "$ai_msg" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    ai_msg=$(clean_ai_commit_message "$ai_msg")
 
     if [ -n "$auto_accept" ]; then
         msg="$ai_msg"
@@ -659,7 +722,7 @@ ${ai_msg}"
             echo -e "${RED}✗ AI message regeneration failed.${ENDCOLOR}"
             return 1
         fi
-        ai_msg=$(echo "$ai_msg" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        ai_msg=$(clean_ai_commit_message "$ai_msg")
         echo
         echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
         echo
@@ -882,6 +945,9 @@ function perform_commit_split {
             if [ -z "$msg" ]; then
                 prefix=""
                 if [ -z "$is_empty_msg" ]; then
+                    if [ -n "$scope_for_msg" ] && is_redundant_scope "$commit_type" "$scope_for_msg"; then
+                        scope_for_msg=""
+                    fi
                     if [ -n "$scope_for_msg" ]; then
                         prefix="${commit_type}(${scope_for_msg}): "
                     else
@@ -1080,9 +1146,7 @@ function handle_ai_commit_generation {
             exit 1
         fi
 
-        # Clean up the AI response (remove quotes, trim)
-        # LC_ALL=C avoids "illegal byte sequence" errors from BSD sed when the AI response contains non-ASCII characters.
-        ai_commit_message=$(echo "$ai_commit_message" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        ai_commit_message=$(clean_ai_commit_message "$ai_commit_message")
 
         echo
         echo -e "${GREEN}AI generated commit message:${ENDCOLOR}"
@@ -2042,7 +2106,12 @@ function commit_script {
                     selected_scope="${scopes_array[$index]}"
                     # Remove the asterisk marker if present
                     commit_scope="${selected_scope#*}"
-                    commit="$commit($commit_scope): "
+                    if is_redundant_scope "$commit_type" "$commit_scope"; then
+                        commit_scope=""
+                        commit="$commit: "
+                    else
+                        commit="$commit($commit_scope): "
+                    fi
                     break
                 else
                     echo -e "${RED}✗ Invalid scope index. Please choose 1-${#scopes_array[@]} or enter a custom scope.${ENDCOLOR}"
@@ -2055,7 +2124,12 @@ function commit_script {
                     continue
                 fi
                 commit_scope="$sanitized_git_name"
-                commit="$commit($commit_scope): "
+                if is_redundant_scope "$commit_type" "$commit_scope"; then
+                    commit_scope=""
+                    commit="$commit: "
+                else
+                    commit="$commit($commit_scope): "
+                fi
                 break
             fi
         done

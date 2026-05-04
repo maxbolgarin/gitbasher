@@ -60,7 +60,12 @@ teardown() {
 }
 
 @test "find_wip_worktree: locates worktree on the wip branch" {
-    local target="$(mktemp -d)/wip-wt"
+    # Canonicalize the parent: on macOS `mktemp -d` returns under /var which
+    # is a symlink to /private/var, but `git worktree list --porcelain` reports
+    # the resolved path — comparison would mismatch otherwise.
+    local parent
+    parent=$(cd "$(mktemp -d)" && pwd -P)
+    local target="$parent/wip-wt"
     git worktree add -b "wip/main" "$target" HEAD >/dev/null 2>&1
 
     find_wip_worktree

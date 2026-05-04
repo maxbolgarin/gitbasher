@@ -8,7 +8,6 @@
   <a href="https://github.com/maxbolgarin/gitbasher/releases/latest"><img src="https://img.shields.io/github/v/release/maxbolgarin/gitbasher.svg?style=flat-square" alt="Latest Release"></a>
   <a href="https://github.com/maxbolgarin/gitbasher/blob/main/LICENSE"><img src="https://img.shields.io/github/license/maxbolgarin/gitbasher.svg" alt="License"></a>
   <a href="https://github.com/maxbolgarin/gitbasher/actions"><img src="https://github.com/maxbolgarin/gitbasher/actions/workflows/build.yml/badge.svg" alt="Build Status"></a>
-  <a href="https://codecov.io/gh/maxbolgarin/gitbasher"><img src="https://codecov.io/gh/maxbolgarin/gitbasher/branch/main/graph/badge.svg" alt="Coverage"></a>
 </p>
 
 <p align="center">

@@ -26,7 +26,6 @@ function undo_script {
             fi
             undo_mode="commit"
     esac
-    # kcov-skip-start
 
 
     ### Print header
@@ -44,7 +43,6 @@ function undo_script {
 
 
     if [ -n "$help" ]; then
-        # kcov-skip-start
         echo -e "usage: ${YELLOW}gitb undo <mode>${ENDCOLOR}"
         echo
         local PAD=22
@@ -62,7 +60,6 @@ function undo_script {
         echo -e "  ${GREEN}gitb undo merge${ENDCOLOR}    Roll back the last merge (or abort if in progress)"
         echo -e "  ${GREEN}gitb undo rebase${ENDCOLOR}   Restore the branch state from before the last rebase"
         exit
-        # kcov-skip-end
     fi
 
 
@@ -73,7 +70,6 @@ function undo_script {
         rebase) undo_rebase;;
         stash)  undo_stash;;
     esac
-    # kcov-skip-end
 }
 
 

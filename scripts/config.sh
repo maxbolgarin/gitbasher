@@ -858,7 +858,6 @@ function config_script {
         help|h)               help="true";;
         *)                    wrong_mode "config" $1
     esac
-    # kcov-skip-start
 
     ### Merge mode - print header
     header="GIT CONFIG"
@@ -976,7 +975,6 @@ function config_script {
     fi
 
     if [ -n "$help" ]; then
-        # kcov-skip-start
         echo -e "usage: ${YELLOW}gitb config <mode>${ENDCOLOR}"
         echo
         local PAD=26
@@ -1004,9 +1002,7 @@ function config_script {
         echo -e "  ${GREEN}gitb cfg default${ENDCOLOR}    Choose the default gitbasher branch"
         echo -e "  ${GREEN}gitb cfg ai${ENDCOLOR}         Set the AI API key (per-repo or globally)"
         exit
-        # kcov-skip-end
     fi
 
     print_configuration
-    # kcov-skip-end
 }

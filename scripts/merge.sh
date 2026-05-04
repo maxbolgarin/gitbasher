@@ -19,7 +19,6 @@ function merge_script {
         *)
             wrong_mode "merge" $1
     esac
-    # kcov-skip-start
 
 
     ### Merge mode - print header
@@ -37,7 +36,6 @@ function merge_script {
 
 
     if [ -n "$help" ]; then
-        # kcov-skip-start
         echo -e "usage: ${YELLOW}gitb merge <mode>${ENDCOLOR}"
         echo
         local PAD=26
@@ -57,7 +55,6 @@ function merge_script {
         echo -e "  ${GREEN}gitb merge main${ENDCOLOR}   Merge ${YELLOW}$main_branch${ENDCOLOR} into the current branch"
         echo -e "  ${GREEN}gitb merge tm${ENDCOLOR}     Switch to ${YELLOW}$main_branch${ENDCOLOR} and merge the current branch into it"
         exit
-        # kcov-skip-end
     fi
 
 
@@ -228,7 +225,6 @@ function merge_script {
         echo
         print_changes_stat "$changes"
     fi
-    # kcov-skip-end
 }
 
 

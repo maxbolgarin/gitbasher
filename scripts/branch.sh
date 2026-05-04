@@ -36,7 +36,6 @@ function branch_script {
         *)
             wrong_mode "branch" $1
     esac
-    # kcov-skip-start
 
 
     ### Print header
@@ -68,7 +67,6 @@ function branch_script {
     
 
     if [ -n "$help" ]; then
-        # kcov-skip-start
         echo -e "usage: ${YELLOW}gitb branch <mode>${ENDCOLOR}"
         echo
         local PAD=18
@@ -92,7 +90,6 @@ function branch_script {
         echo -e "  ${GREEN}gitb branch main${ENDCOLOR}   Jump straight to ${YELLOW}$main_branch${ENDCOLOR}"
         echo -e "  ${GREEN}gitb branch gone${ENDCOLOR}   Clean up local branches whose remote was deleted"
         exit
-        # kcov-skip-end
     fi
         
    
@@ -841,5 +838,4 @@ function branch_script {
     echo -e "${RED}✗ Cannot create branch '${branch_name}'.${ENDCOLOR}"
     echo "${create_output}"
     exit $create_code
-    # kcov-skip-end
 }

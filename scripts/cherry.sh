@@ -30,7 +30,6 @@ function cherry_script {
                 interactive_mode="true"
             fi
     esac
-    # kcov-skip-start
 
     ### Cherry-pick mode - print header
     header="GIT CHERRY-PICK"
@@ -50,7 +49,6 @@ function cherry_script {
     echo
 
     if [ -n "$help" ]; then
-        # kcov-skip-start
         echo -e "usage: ${YELLOW}gitb cherry <mode> [args]${ENDCOLOR}"
         echo
         local PAD=20
@@ -69,7 +67,6 @@ function cherry_script {
         echo -e "  ${GREEN}gitb cherry range A..B${ENDCOLOR}     Cherry-pick all commits between ${BLUE}A${ENDCOLOR} and ${BLUE}B${ENDCOLOR}"
         echo -e "  ${GREEN}gitb cherry continue${ENDCOLOR}       Resume after resolving conflicts"
         exit
-        # kcov-skip-end
     fi
 
     # Check if we're in the middle of a cherry-pick operation
@@ -192,7 +189,6 @@ function cherry_script {
         choose_commits_interactive "${source_branch}"
         exit
     fi
-    # kcov-skip-end
 }
 
 ### Function to perform the actual cherry-pick operation

@@ -563,7 +563,6 @@ function validate_proxy_url {
 # $4: target API URL (full /chat/completions endpoint)
 # $5: provider name — controls which provider-specific headers are sent
 function secure_curl_with_api_key {
-    # kcov-skip-start
     local proxy_url="$1"
     local api_key="$2"
     local json_payload="$3"
@@ -621,7 +620,6 @@ EOF
             "${curl_cmd[@]}" 2>&1
         fi
     )
-    # kcov-skip-end
 }
 
 ### Escape a string for embedding inside JSON double quotes (fallback when jq is unavailable).
@@ -644,7 +642,6 @@ function _json_escape_for_payload {
 #     schema, so this passes through untouched.
 # Returns: AI response text
 function call_ai_api {
-    # kcov-skip-start
     # Set trap to clear sensitive variables on exit/interrupt
     trap 'clear_sensitive_vars' EXIT INT TERM
 
@@ -969,7 +966,6 @@ function check_ai_available {
     fi
 
     return 0
-    # kcov-skip-end
 }
 
 ### Build the SYSTEM message for commit-message generation

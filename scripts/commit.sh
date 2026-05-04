@@ -1334,7 +1334,6 @@ function commit_script {
         *)
             wrong_mode "commit" $1
     esac
-    # kcov-skip-start
     fi
 
     validate_commit_flag_combo
@@ -1396,7 +1395,6 @@ function commit_script {
     echo
 
     if [ -n "$help" ]; then
-        # kcov-skip-start
         echo -e "usage: ${YELLOW}gitb commit [<flag> ...]${ENDCOLOR}     ${BLUE}# space-separated, any order${ENDCOLOR}"
         echo -e "       ${YELLOW}gitb commit <combined>${ENDCOLOR}        ${BLUE}# compact form: ff, aifp, fastsp, ...${ENDCOLOR}"
         echo
@@ -1446,7 +1444,6 @@ function commit_script {
         # Clean up cached git add on help exit
         git config --unset gitbasher.cached-git-add 2>/dev/null || true
         exit 0
-        # kcov-skip-end
     fi
 
 
@@ -2116,5 +2113,4 @@ ${staged_with_tab}
         echo
         push_script y
     fi
-    # kcov-skip-end
 }

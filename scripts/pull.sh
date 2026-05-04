@@ -29,7 +29,6 @@ function pull_script {
         *)
             wrong_mode "pull" $1
     esac
-    # kcov-skip-start
 
 
     ### Print header
@@ -61,7 +60,6 @@ function pull_script {
 
 
     if [ -n "$help" ]; then
-        # kcov-skip-start
         echo -e "usage: ${YELLOW}gitb pull <mode>${ENDCOLOR}"
         echo
         local PAD=22
@@ -83,7 +81,6 @@ function pull_script {
         echo -e "  ${GREEN}gitb pull rebase${ENDCOLOR}   Fetch and rebase local commits on top of the remote"
         echo -e "  ${GREEN}gitb pull ffonly${ENDCOLOR}   Refuse to pull unless a clean fast-forward is possible"
         exit
-        # kcov-skip-end
     fi
 
 
@@ -228,7 +225,6 @@ function pull_script {
     echo
     pull $current_branch $origin_name $editor $mode $ffonly 
     exit
-    # kcov-skip-end
 }
 
 

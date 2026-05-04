@@ -43,13 +43,11 @@ function uninstall_script {
         "")     ;;
         *)      wrong_mode "uninstall" $1 ;;
     esac
-    # kcov-skip-start
 
     echo -e "${YELLOW}GITBASHER UNINSTALL${ENDCOLOR}"
     echo
 
     if [ -n "$help" ]; then
-        # kcov-skip-start
         echo -e "usage: ${YELLOW}gitb uninstall${ENDCOLOR}"
         echo
         echo -e "Removes all ${BLUE}gitbasher.*${ENDCOLOR} entries from your local and global"
@@ -64,7 +62,6 @@ function uninstall_script {
         echo -e "  - npm-installed gitb is detected and the npm command is shown instead."
         echo -e "  - Dev runs (from ${BLUE}scripts/gitb.sh${ENDCOLOR}) only clean config; the source tree is left alone."
         exit
-        # kcov-skip-end
     fi
 
     local local_keys global_keys local_count global_count binary_path
@@ -150,5 +147,4 @@ function uninstall_script {
     echo
     echo -e "${GREEN}gitbasher uninstalled. Thanks for trying it!${ENDCOLOR}"
     exit 0
-    # kcov-skip-end
 }

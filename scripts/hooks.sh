@@ -1008,7 +1008,6 @@ function hooks_script {
             fi
         ;;
         "help"|"h")
-            # kcov-skip-start
             echo -e "${YELLOW}GIT HOOK${ENDCOLOR}"
             echo
             echo -e "usage: ${YELLOW}gitb hook <mode> [hook-type]${ENDCOLOR}"
@@ -1042,7 +1041,6 @@ function hooks_script {
             echo -e "  ${GREEN}gitb hook list${ENDCOLOR}                  List installed hooks"
             echo -e "  ${GREEN}gitb hook create pre-commit${ENDCOLOR}     Create a pre-commit hook directly"
             echo -e "  ${GREEN}gitb hook install${ENDCOLOR}               Install all sample hooks"
-            # kcov-skip-end
         ;;
         *)
             wrong_mode "hooks" "$mode"

@@ -142,7 +142,6 @@ function tag_script {
         *)
             wrong_mode "tag" $1
     esac
-    # kcov-skip-start
 
 
     ### Print header
@@ -172,7 +171,6 @@ function tag_script {
 
 
     if [ -n "$help" ]; then
-        # kcov-skip-start
         echo -e "usage: ${YELLOW}gitb tag <mode>${ENDCOLOR}"
         echo
         local PAD=22
@@ -195,7 +193,6 @@ function tag_script {
         echo -e "  ${GREEN}gitb tag push${ENDCOLOR}     Pick a local tag and push it"
         echo -e "  ${GREEN}gitb tag delete${ENDCOLOR}   Pick a tag and remove it locally and on remote"
         exit
-        # kcov-skip-end
     fi
 
 
@@ -458,5 +455,4 @@ function tag_script {
     yes_no_choice "\nPushing..."
 
     push_tag $tag_name
-    # kcov-skip-end
 }

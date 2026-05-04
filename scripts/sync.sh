@@ -22,7 +22,6 @@ function sync_script {
         *)
             wrong_mode "sync" $1
     esac
-    # kcov-skip-start
 
 
     ### Print header
@@ -44,7 +43,6 @@ function sync_script {
 
 
     if [ -n "$help" ]; then
-        # kcov-skip-start
         echo -e "usage: ${YELLOW}gitb sync <mode>${ENDCOLOR}"
         echo
         local PAD=18
@@ -62,7 +60,6 @@ function sync_script {
         echo -e "  ${GREEN}gitb sync merge${ENDCOLOR}  Merge ${YELLOW}$main_branch${ENDCOLOR} into current branch (preserves history)"
         echo -e "  ${GREEN}gitb sync dry${ENDCOLOR}    Preview what sync would change, without touching anything"
         exit
-        # kcov-skip-end
     fi
 
 
@@ -217,5 +214,4 @@ function sync_script {
             push_script f
         fi
     fi
-    # kcov-skip-end
 }

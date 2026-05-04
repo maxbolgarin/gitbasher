@@ -25,7 +25,6 @@ function reset_script {
         *)
             wrong_mode "reset" $1
     esac
-    # kcov-skip-start
 
 
     header="GIT RESET"
@@ -45,7 +44,6 @@ function reset_script {
 
 
     if [ -n "$help" ]; then
-        # kcov-skip-start
         echo -e "usage: ${YELLOW}gitb reset <mode>${ENDCOLOR}"
         echo
         local PAD=18
@@ -63,7 +61,6 @@ function reset_script {
         echo -e "  ${GREEN}gitb reset undo${ENDCOLOR}   Bring back the commit you just reset"
         echo -e "  ${GREEN}gitb reset i${ENDCOLOR}      Pick any commit to reset to, with a preview"
         exit
-        # kcov-skip-end
     fi
 
     cancelled_commit=$(git log -n 1 --pretty="%s | ${YELLOW}%h${ENDCOLOR} | ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})")
@@ -143,5 +140,4 @@ function reset_script {
     echo -e "${YELLOW}Status after reset${ENDCOLOR}"
     git_status
     exit
-    # kcov-skip-end
 }

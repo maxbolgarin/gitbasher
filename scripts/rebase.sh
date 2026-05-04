@@ -23,7 +23,6 @@ function rebase_script {
         *)
             wrong_mode "rebase" $1
     esac
-    # kcov-skip-start
 
     ### Merge mode - print header
     header="GIT REBASE"
@@ -43,7 +42,6 @@ function rebase_script {
 
 
     if [ -n "$help" ]; then
-        # kcov-skip-start
         echo -e "usage: ${YELLOW}gitb rebase <mode>${ENDCOLOR}"
         echo
         local PAD=30
@@ -66,7 +64,6 @@ function rebase_script {
         echo -e "  ${GREEN}gitb rebase a${ENDCOLOR}      Interactive autosquash on the current branch"
         echo -e "  ${GREEN}gitb rebase f${ENDCOLOR}      Auto-apply fixup commits without prompts"
         exit
-        # kcov-skip-end
     fi
 
 
@@ -259,7 +256,6 @@ function rebase_script {
         echo -e "${RED}✗ Cannot rebase.${ENDCOLOR}"
         echo -e "$rebase_output"
     fi
-    # kcov-skip-end
 }
 
 

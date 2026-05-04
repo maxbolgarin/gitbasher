@@ -1,13 +1,8 @@
 #!/usr/bin/env bash
 
-# Entire file is the top-level dispatcher — only reachable when gitb runs
-# as an entrypoint. Bats sources individual scripts directly; this file is
-# never sourced by any test, so its contents register as 0% covered.
-# kcov-skip-start
 
 ### Print usage information
 function print_help {
-    # kcov-skip-start
     echo -e "${BOLD}gitbasher${NORMAL} v${GITBASHER_VERSION} ${GRAY}— git, made fluent${ENDCOLOR}"
     echo
     echo -e "usage: ${YELLOW}gitb <command> [mode]${ENDCOLOR}"
@@ -61,7 +56,6 @@ function print_help {
     echo -e "Run ${YELLOW}gitb <command> help${ENDCOLOR} for modes and examples"
 
     exit
-    # kcov-skip-end
 }
 
 project_name="$(get_repo_name)"
@@ -198,4 +192,3 @@ case "$1" in
 esac
 
 exit $?
-# kcov-skip-end

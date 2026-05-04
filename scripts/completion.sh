@@ -24,7 +24,7 @@ tag t tg
 config cf cfg conf
 undo un
 reset res
-stash s sta
+stash st sta
 worktree wt tree
 hook ho hk
 origin or o remote
@@ -33,7 +33,7 @@ log l lg
 reflog rl rlg
 last-commit lc lastc
 last-ref lr lastr
-status st
+status s
 prev -
 help man
 "
@@ -76,7 +76,7 @@ _gitb_canonical() {
         config|cf|cfg|conf)           echo config ;;
         undo|un)                      echo undo ;;
         reset|res)                    echo reset ;;
-        stash|s|sta)                  echo stash ;;
+        stash|st|sta)                 echo stash ;;
         worktree|wt|tree)             echo worktree ;;
         hook|ho|hk)                   echo hook ;;
         origin|or|o|remote)           echo origin ;;
@@ -320,7 +320,7 @@ _gitb() {
                 'config:Configure gitbasher (alias: cf, cfg, conf)'
                 'undo:Undo recent operation (alias: un)'
                 'reset:Reset HEAD (alias: res)'
-                'stash:Stash operations (alias: s, sta)'
+                'stash:Stash operations (alias: st, sta)'
                 'worktree:Worktree operations (alias: wt, tree)'
                 'hook:Manage git hooks (alias: ho, hk)'
                 'origin:Manage remote (alias: or, o, remote)'
@@ -329,7 +329,7 @@ _gitb() {
                 'reflog:Show reflog (alias: rl, rlg)'
                 'last-commit:Show last commit'
                 'last-ref:Show last ref'
-                'status:Project status (alias: st)'
+                'status:Project status (alias: s)'
                 'prev:Switch to previous branch (alias: -)'
                 'help:Show help'
             )
@@ -392,7 +392,7 @@ _gitb() {
                 reset|res)
                     _values 'reset mode' 'soft[soft reset]' 'undo[reset to before last action]' 'interactive[interactive reset]' 'help[show help]'
                     ;;
-                stash|s|sta)
+                stash|st|sta)
                     _values 'stash mode' 'select[select a stash]' 'all[stash everything]' 'list[list stashes]' 'pop[pop a stash]' 'show[show stash]' 'drop[drop a stash]' 'apply[apply a stash]' 'help[show help]'
                     ;;
                 worktree|wt|tree)
@@ -510,7 +510,7 @@ complete -c gitb -n __gitb_no_subcmd -a un           -d 'Alias of undo'
 complete -c gitb -n __gitb_no_subcmd -a reset        -d 'Reset HEAD'
 complete -c gitb -n __gitb_no_subcmd -a res          -d 'Alias of reset'
 complete -c gitb -n __gitb_no_subcmd -a stash        -d 'Stash operations'
-complete -c gitb -n __gitb_no_subcmd -a s            -d 'Alias of stash'
+complete -c gitb -n __gitb_no_subcmd -a st           -d 'Alias of stash'
 complete -c gitb -n __gitb_no_subcmd -a worktree     -d 'Worktree operations'
 complete -c gitb -n __gitb_no_subcmd -a wt           -d 'Alias of worktree'
 complete -c gitb -n __gitb_no_subcmd -a hook         -d 'Manage git hooks'
@@ -526,7 +526,7 @@ complete -c gitb -n __gitb_no_subcmd -a reflog       -d 'Show reflog'
 complete -c gitb -n __gitb_no_subcmd -a last-commit  -d 'Show last commit'
 complete -c gitb -n __gitb_no_subcmd -a last-ref     -d 'Show last ref'
 complete -c gitb -n __gitb_no_subcmd -a status       -d 'Project status'
-complete -c gitb -n __gitb_no_subcmd -a st           -d 'Alias of status'
+complete -c gitb -n __gitb_no_subcmd -a s            -d 'Alias of status'
 complete -c gitb -n __gitb_no_subcmd -a prev         -d 'Switch to previous branch'
 complete -c gitb -n __gitb_no_subcmd -a help         -d 'Show help'
 function __gitb_at_commit_pos2
@@ -570,7 +570,7 @@ set -l __gitb_undo "__gitb_using_cmd undo un; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_undo" -a "commit amend merge rebase stash help"
 set -l __gitb_reset "__gitb_using_cmd reset res; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_reset" -a "soft undo interactive help"
-set -l __gitb_stash "__gitb_using_cmd stash s sta; and __gitb_at_position 2"
+set -l __gitb_stash "__gitb_using_cmd stash st sta; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_stash" -a "select all list pop show drop apply help"
 set -l __gitb_worktree "__gitb_using_cmd worktree wt tree; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_worktree" -a "list add addd addb addr remove prune lock unlock move path help"

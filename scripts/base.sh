@@ -13,7 +13,7 @@ function print_help {
     local row="  ${BOLD}%-*s${NORMAL}  %s\n"
 
     printf "$hdr" "DAILY"
-    printf "$row" "$CMD" "status (st)"             "Show repo state and changed files"
+    printf "$row" "$CMD" "status (s)"              "Show repo state and changed files"
     printf "$row" "$CMD" "commit (c, co, com)"     "Create commits — interactive, AI, amend, revert"
     printf "$row" "$CMD" "push (p, ps, pus)"       "Push current branch safely"
     printf "$row" "$CMD" "pull (pu, pl, pul)"      "Pull from remote"
@@ -40,7 +40,7 @@ function print_help {
     printf "$hdr" "RECOVERY"
     printf "$row" "$CMD" "undo (un)"               "Undo commit, amend, merge, rebase, stash"
     printf "$row" "$CMD" "reset (res)"             "Preview and apply git reset flows"
-    printf "$row" "$CMD" "stash (s, sta)"          "Manage git stashes"
+    printf "$row" "$CMD" "stash (st, sta)"         "Manage git stashes"
     printf "$row" "$CMD" "wip (w)"                 "Stash work-in-progress, optionally back up remote"
     echo
 
@@ -143,7 +143,7 @@ case "$1" in
     reset|res)
         reset_script $2
     ;;
-    stash|s|sta)
+    stash|st|sta)
         stash_script $2
     ;;
     worktree|wt|tree)
@@ -175,7 +175,7 @@ case "$1" in
     last-ref|lr|lastr)
         last_ref
     ;;
-    status|st)
+    status|s)
         project_status
     ;;
     prev|-)

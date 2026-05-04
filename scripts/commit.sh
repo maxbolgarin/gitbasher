@@ -88,47 +88,31 @@ function detect_scopes_from_staged_files {
         local -A scope_counts
         local -A scope_depths
         
+        # Only directory components contribute to scope candidates — filenames
+        # are skipped so single root-level files (README.md, package.json, etc.)
+        # don't generate noisy one-off scopes. Root files end up in the "misc"
+        # group during atomic-split commits.
         while IFS= read -r file; do
             if [ -n "$file" ]; then
-                # Split the full path into components
                 IFS='/' read -r -a path_components <<< "$file"
-                
-                # Process each directory component
+                local last_idx=$((${#path_components[@]} - 1))
+
                 for i in "${!path_components[@]}"; do
+                    [ "$i" -eq "$last_idx" ] && continue
                     component="${path_components[$i]}"
-                    
-                    # Skip empty components
-                    if [ -n "$component" ]; then
-                        # For the last component (filename), remove extension if present
-                        if [ $i -eq $((${#path_components[@]} - 1)) ]; then
-                            component_no_ext="${component%.*}"
-                            # Handle dotfiles (e.g., .gitignore) where extension removal results in empty string
-                            if [ -z "$component_no_ext" ]; then
-                                component_no_ext="$component"
-                            fi
-                            component_no_ext_lower="${component_no_ext,,}"
-                            # Skip empty subscripts to avoid bash array errors
-                            if [ -n "$component_no_ext_lower" ]; then
-                                scope_counts["$component_no_ext_lower"]=$((${scope_counts["$component_no_ext_lower"]:-0} + 1))
-                                # Track minimum depth for this token
-                                current_depth=$((i + 1))
-                                if [ -z "${scope_depths["$component_no_ext_lower"]}" ] || [ $current_depth -lt ${scope_depths["$component_no_ext_lower"]} ]; then
-                                    scope_depths["$component_no_ext_lower"]=$current_depth
-                                fi
-                            fi
-                        else
-                            # Directory component - filter out common non-meaningful directories
-                            component_lower="${component,,}"
-                            # Skip empty subscripts to avoid bash array errors
-                            if [ -n "$component_lower" ] && [[ ! "$component_lower" =~ ^(src|lib|test|tests|spec|specs|build|dist|node_modules|vendor|tmp|temp|cache|logs|log)$ ]]; then
-                                scope_counts["$component_lower"]=$((${scope_counts["$component_lower"]:-0} + 1))
-                                # Track minimum depth for this token
-                                current_depth=$((i + 1))
-                                if [ -z "${scope_depths["$component_lower"]}" ] || [ $current_depth -lt ${scope_depths["$component_lower"]} ]; then
-                                    scope_depths["$component_lower"]=$current_depth
-                                fi
-                            fi
-                        fi
+                    [ -z "$component" ] && continue
+
+                    component_lower="${component,,}"
+                    # Filter out generic containers and dependency/output dirs
+                    # that are rarely meaningful as a per-commit scope.
+                    if [[ "$component_lower" =~ ^(src|lib|node_modules|vendor|tmp|temp|cache|logs|log)$ ]]; then
+                        continue
+                    fi
+
+                    scope_counts["$component_lower"]=$((${scope_counts["$component_lower"]:-0} + 1))
+                    current_depth=$((i + 1))
+                    if [ -z "${scope_depths["$component_lower"]}" ] || [ $current_depth -lt ${scope_depths["$component_lower"]} ]; then
+                        scope_depths["$component_lower"]=$current_depth
                     fi
                 done
             fi

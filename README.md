@@ -127,8 +127,9 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 | **Hooks** | `hook` (`ho`) | List / create from templates / edit / toggle / remove / test / show — for every git hook |
 | **Repo setup** | `init` (`i`), `origin` (`or`, `o`, `remote`) | `git init` from gitbasher · add/change/rename/remove the remote origin |
 | **Config** | `config` (`cfg`) | User, default branch, separator, editor, ticket prefix, scopes, AI provider/key/model, proxy, completion |
+| **Lifecycle** | `update` (`up`), `uninstall` (`uns`) | Self-update from latest GitHub release · one-shot uninstall (config + binary) |
 
-Total: **23 top-level commands**, **60+ aliases**, **100+ modes**.
+Total: **24 top-level commands**, **60+ aliases**, **100+ modes**.
 
 ---
 
@@ -835,19 +836,22 @@ GITB_VERSION=v3.10.2 curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gi
 
 ## Uninstall
 
-### From ~/.local/bin
+### One command (recommended)
 ```bash
-rm -f ~/.local/bin/gitb
+gitb uninstall
 ```
+Lists every `gitbasher.*` key it will remove from your local + global git config and the binary path it will delete, then asks for confirmation. Detects npm installs and prints the right `npm uninstall -g gitbasher` command instead of touching `node_modules`.
 
-### From /usr/local/bin
+### Manual
+If `gitb` is already gone from PATH:
 ```bash
-sudo rm -f /usr/local/bin/gitb
-```
+rm -f ~/.local/bin/gitb                # default install location
+sudo rm -f /usr/local/bin/gitb         # if installed with --sudo
+npm uninstall -g gitbasher             # if installed via npm
 
-### From npm (global)
-```bash
-npm uninstall -g gitbasher
+# Wipe leftover gitbasher.* keys from git config
+git config --global --remove-section gitbasher 2>/dev/null
+git config --local  --remove-section gitbasher 2>/dev/null   # per repo
 ```
 
 ---

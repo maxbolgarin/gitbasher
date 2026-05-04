@@ -1592,21 +1592,21 @@ function commit_script {
             git config --unset gitbasher.cached-git-add 2>/dev/null
             echo -e "${GREEN}✓ Nothing to commit — working tree clean${ENDCOLOR}"
 
-            # If in push mode, check for unpushed commits
+            # If in push mode, check for unpushed commits and delegate to
+            # push_script — it owns the full push UX (header, list, prompt,
+            # pull-on-conflict, success links). Don't duplicate any of that here.
             if [ -n "${push}" ]; then
-                echo
                 get_push_list ${current_branch} ${main_branch} ${origin_name}
 
                 if [ -n "$push_list" ]; then
-                    echo -e "${YELLOW}But there are unpushed commits:${ENDCOLOR}"
                     echo
-                    count=$(echo -e "$push_list" | wc -l | sed 's/^ *//;s/ *$//')
-                    echo -e "Your branch is ahead ${YELLOW}${history_from}${ENDCOLOR} by ${BOLD}$count${ENDCOLOR} commits"
-                    echo -e "$push_list"
+                    echo -e "${YELLOW}But there are unpushed commits.${ENDCOLOR}"
                     echo
-                    echo -e "Do you want to push these commits to ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} (y/n)?"
-                    yes_no_choice "Pushing..."
-                    push_script y
+                    if [ -n "${auto_accept}" ]; then
+                        push_script y
+                    else
+                        push_script
+                    fi
                 fi
             fi
             exit

@@ -25,8 +25,8 @@ teardown() {
     red=$(printf '%b' "$RED")
 
     [[ "$output" == *"What type of changes for ${blue}${bold}makefile${endcolor}${yellow}?${endcolor}"* ]]
-    [[ "$output" == *"1. ${blue}${bold}feat${endcolor}"* ]]
-    [[ "$output" == *"9. ${bold}plain${endcolor}"* ]]
+    [[ "$output" == *"1. ${bold}feat${endcolor}"* ]]
+    [[ "$output" == *"9. ${blue}${bold}plain${endcolor}"* ]]
     [[ "$output" == *"${yellow}${bold}skip${endcolor}"* ]]
     [[ "$output" == *"${red}${bold}abort${endcolor}"* ]]
 }
@@ -43,8 +43,8 @@ teardown() {
 
     [[ "$output" == *"${yellow}Step 2.${endcolor} What ${yellow}type${endcolor} of changes do you want to commit?"* ]]
     [[ "$output" == *"Final message will be ${yellow}<type>${endcolor}(${blue}<scope>${endcolor}): ${blue}<summary>${endcolor}"* ]]
-    [[ "$output" == *"1. ${blue}${bold}feat${endcolor}"* ]]
-    [[ "$output" == *"9. ${bold}plain${endcolor}"* ]]
+    [[ "$output" == *"1. ${bold}feat${endcolor}"* ]]
+    [[ "$output" == *"9. ${blue}${bold}plain${endcolor}"* ]]
     [[ "$output" == *"${red}${bold}exit${endcolor}"* ]]
 }
 

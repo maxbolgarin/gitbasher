@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-GITBASHER_VERSION="3.10.2-120-g5a131c4"
+GITBASHER_VERSION="3.10.2-125-g64ce77c"
 if [ "$1" == "init" ] || [ "$1" == "i" ]; then
     git init
 fi
@@ -9034,7 +9034,9 @@ function wip_worktree_default_path {
         base=".worktree"
     fi
     if [[ "$base" == /* ]]; then
-        echo "${base%/}/${safe_branch}"
+        local repo_dir
+        repo_dir=$(basename "$repo_root")
+        echo "${base%/}/${repo_dir}-${safe_branch}"
     else
         echo "${repo_root}/${base%/}/${safe_branch}"
     fi

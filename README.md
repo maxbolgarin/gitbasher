@@ -49,43 +49,18 @@ You just write what you want to do, and gitbasher will do it for you. All comman
 
 ## Install in 10 seconds
 
-**One-liner (no Node required):**
+### One-liner
 ```bash
 curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash
 ```
 
 The installer drops `gitb` into `~/.local/bin` by default — no `sudo`, no password prompt. It downloads the latest release, verifies its SHA-256, and prints a PATH hint if needed.
 
-**Other install paths:**
+
+### npm (easy to remember)
 ```bash
-# system-wide install (sudo, /usr/local/bin)
-curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash -s -- --sudo
-
-# custom location
-GITB_DIR=/opt/bin     curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash
-
-# pin a release
-GITB_VERSION=v3.10.2  curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash
-
-# npm
 npm install -g gitbasher
-
-# inspect before running
-curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh -o install.sh && less install.sh && bash install.sh
 ```
-
-> **Windows:** run inside [WSL](https://learn.microsoft.com/en-us/windows/wsl/setup/environment).
-
-**Requirements:** `bash` 4.0+, `git` 2.23+ (macOS: `brew install bash git`).
-
-**Uninstall:**
-```bash
-npm uninstall -g gitbasher          # if installed via npm
-rm -f ~/.local/bin/gitb             # if installed via curl (default location)
-sudo rm -f /usr/local/bin/gitb      # if installed via curl with --sudo
-```
-
-To clear gitbasher's saved settings (AI key, default branch, scopes, …) see [Configuration](#configuration).
 
 ---
 
@@ -115,6 +90,8 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 - [AI-powered commits](#ai-powered-commits)
 - [Command reference](#command-reference)
 - [Configuration](#configuration)
+- [Other install paths](#other-install-paths)
+- [Uninstall](#uninstall)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 
@@ -834,6 +811,44 @@ echo 'alias gb="gitb b"'   >> ~/.bashrc
 ```
 
 **zsh tip:** if zsh autocorrects `gitb` → `git`, add `alias gitb='nocorrect gitb'` to `~/.zshrc`.
+
+---
+
+## Other install paths
+
+### System-wide install
+```bash
+# system-wide install (sudo, /usr/local/bin)
+curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash -s -- --sudo
+```
+
+### Custom location
+```bash
+GITB_DIR=/opt/bin curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash
+```
+
+
+### Pin a release
+```bash
+GITB_VERSION=v3.10.2 curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash
+```
+
+## Uninstall
+
+### From ~/.local/bin
+```bash
+rm -f ~/.local/bin/gitb
+```
+
+### From /usr/local/bin
+```bash
+sudo rm -f /usr/local/bin/gitb
+```
+
+### From npm (global)
+```bash
+npm uninstall -g gitbasher
+```
 
 ---
 

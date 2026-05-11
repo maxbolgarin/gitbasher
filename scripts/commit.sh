@@ -1341,8 +1341,8 @@ function set_commit_flag_from_token {
         fixup|fix|x)         fixup="true";;
         amend|am|a)          amend="true";;
         split|sp|sl)         split="true";;
-        last|l)              last="true";;
         revert|rev)          revert="true";;
+        last|l)              last="true";; # deprecated alias of `gitb edit`; kept for back-compat
         help|h)              help="true";;
         *) return 1;;
     esac
@@ -1356,7 +1356,6 @@ function set_commit_flag_from_token {
 function validate_commit_flag_combo {
     local actions=() invalid=()
 
-    [ -n "$last" ]   && actions+=("last")
     [ -n "$revert" ] && actions+=("revert")
     [ -n "$fixup" ]  && actions+=("fixup")
     [ -n "$amend" ]  && actions+=("amend")
@@ -1364,23 +1363,8 @@ function validate_commit_flag_combo {
 
     if [ ${#actions[@]} -gt 1 ]; then
         echo -e "${RED}✗ Cannot combine actions: ${actions[*]}${ENDCOLOR}"
-        echo -e "Pick one of: last, revert, fixup, amend, split."
+        echo -e "Pick one of: revert, fixup, amend, split."
         exit 1
-    fi
-
-    if [ -n "$last" ]; then
-        [ -n "$llm" ]      && invalid+=("ai")
-        [ -n "$fast" ]     && invalid+=("fast")
-        [ -n "$push" ]     && invalid+=("push")
-        [ -n "$scope" ]    && invalid+=("scope")
-        [ -n "$msg" ]      && invalid+=("msg")
-        [ -n "$ticket" ]   && invalid+=("ticket")
-        [ -n "$staged" ]   && invalid+=("staged")
-        [ -n "$no_split" ] && invalid+=("no-split")
-        if [ ${#invalid[@]} -gt 0 ]; then
-            echo -e "${RED}✗ 'last' takes no modifiers (got: ${invalid[*]})${ENDCOLOR}"
-            exit 1
-        fi
     fi
 
     if [ -n "$revert" ]; then
@@ -1430,8 +1414,6 @@ function summarize_commit_intent {
 
     if [ -n "$auto_accept" ]; then
         action="ultrafast commit (ai + fast + auto-accept)"
-    elif [ -n "$last" ]; then
-        action="amend last commit (reuse message)"
     elif [ -n "$revert" ]; then
         action="revert a commit"
     elif [ -n "$amend" ]; then
@@ -1477,7 +1459,6 @@ function summarize_commit_intent {
     # fastfixp: fast fixup commit with push
     # amend: add to the last without edit (add to last commit)
     # amendf: add all fiels to the last commit without edit
-    # last: change commit message to the last one
     # revert: revert commit
     # help: print help
 function commit_script {
@@ -1511,7 +1492,7 @@ function commit_script {
         amend|am|a)         amend="true";;
         amendst|ast|sta)    amend="true"; staged="true";;
         amendf|amf|af|fa)   amend="true"; fast="true";;
-        last|l)             last="true";;
+        last|l)             last="true";; # deprecated alias of `gitb edit`; kept for back-compat
         revert|rev)         revert="true";;
         revertp|revp|rp)    revert="true"; push="true";;
         llm|ai|i)           llm="true";;
@@ -1529,6 +1510,15 @@ function commit_script {
         *)
             wrong_mode "commit" $1
     esac
+    fi
+
+    ### Deprecated alias: `gitb commit last` -> `gitb edit`.
+    # Kept for backwards compatibility; not surfaced in help, completions, or
+    # summaries. Routes silently so users with the old habit still get the
+    # same `git commit --amend` editor flow.
+    if [ -n "$last" ]; then
+        edit_script ""
+        exit
     fi
 
     validate_commit_flag_combo
@@ -1580,8 +1570,6 @@ function commit_script {
         header_msg="$header_msg TICKET"
     elif [ -n "${amend}" ]; then
         header_msg="$header_msg AMEND LAST"
-    elif [ -n "${last}" ]; then
-        header_msg="$header_msg LAST"
     elif [ -n "${revert}" ]; then
         header_msg="$header_msg REVERT"
     fi
@@ -1604,7 +1592,6 @@ function commit_script {
         print_help_row $PAD "split"   "sp, sl"         "Split staged changes into one commit per detected scope"
         print_help_row $PAD "fixup"   "x, fix"         "Create a ${GREEN}--fixup${ENDCOLOR} commit against an older commit"
         print_help_row $PAD "amend"   "a, am"          "Add changes into the last commit (no message edit)"
-        print_help_row $PAD "last"    "l"              "Rewrite the last commit message"
         print_help_row $PAD "revert"  "rev"            "Revert a commit (${GREEN}git revert --no-edit${ENDCOLOR})"
         print_help_row $PAD "ff"      ""               "Ultrafast: ${BOLD}ai + split + fast${NORMAL} with no prompts (use ${BOLD}ffp${NORMAL} to also push)"
         print_help_row $PAD "help"    "h, --help, -h"  "Show this help"
@@ -1635,7 +1622,7 @@ function commit_script {
         echo -e "  ${BLUE}•${ENDCOLOR} Word order doesn't matter: ${GREEN}ai fast push${ENDCOLOR} == ${GREEN}push fast ai${ENDCOLOR} == ${GREEN}aifp${ENDCOLOR}"
         echo -e "  ${BLUE}•${ENDCOLOR} Modifiers stack on actions: ${GREEN}ai+fixup${ENDCOLOR}, ${GREEN}fast+amend${ENDCOLOR}, ${GREEN}split+push${ENDCOLOR}, ${GREEN}ai+staged${ENDCOLOR}, ..."
         echo -e "  ${BLUE}•${ENDCOLOR} ${BOLD}fast${NORMAL} and ${BOLD}staged${NORMAL} are mutually exclusive (one stages all, the other uses what's staged)"
-        echo -e "  ${BLUE}•${ENDCOLOR} ${BOLD}last${NORMAL} takes no modifiers; ${BOLD}revert${NORMAL} and ${BOLD}ff${NORMAL} only accept ${BOLD}push${NORMAL} (as ${BOLD}revp${NORMAL}/${BOLD}ffp${NORMAL})"
+        echo -e "  ${BLUE}•${ENDCOLOR} ${BOLD}revert${NORMAL} and ${BOLD}ff${NORMAL} only accept ${BOLD}push${NORMAL} (as ${BOLD}revp${NORMAL}/${BOLD}ffp${NORMAL}); to rewrite the last message use ${GREEN}gitb edit${ENDCOLOR}"
         # Clean up cached git add on help exit
         git config --unset gitbasher.cached-git-add 2>/dev/null || true
         exit 0
@@ -1650,14 +1637,6 @@ function commit_script {
 
     ### Refuse to silently create unreachable commits in detached-HEAD state
     warn_if_detached_head "commit"
-
-
-    if [ -n "$last" ]; then
-        # Clean up cached git add before amending last commit
-        git config --unset gitbasher.cached-git-add 2>/dev/null
-        git commit --amend
-        exit
-    fi
 
 
     ### Check if there are unstaged files

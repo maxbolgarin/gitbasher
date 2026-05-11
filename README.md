@@ -116,7 +116,7 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 
 | Group | Commands | What you get |
 |-------|----------|--------------|
-| **Commit** | `commit` (`c`) | Interactive conventional commits, fast-mode, AI messages, atomic split, fixup, amend, last-message edit, revert |
+| **Commit** | `commit` (`c`), `edit` (`ed`) | Interactive conventional commits, fast-mode, AI messages, atomic split, fixup, amend, revert; `gitb edit` rewrites the last commit message |
 | **Sync remote** | `push` (`p`), `pull` (`pu`), `sync` (`sy`) | Safe push (with force/list), smart pull (rebase / merge / ff), one-shot rebase-on-main with optional force-push |
 | **Branches** | `branch` (`b`), `prev` (`-`) | List / switch / create-from-current / create-from-updated-main / delete (orphaned, merged, gone) / recent / previous / checkout-tag |
 | **Integration** | `merge` (`m`), `rebase` (`r`), `squash` (`sq`), `cherry` (`ch`) | Merge into current / into main / from remote · rebase onto main / interactive / autosquash / fastautosquash / pull-commits · AI-driven squash of branch commits into changelog-ready history · cherry-pick by hash, range, or interactive |
@@ -301,6 +301,7 @@ git config gitbasher.ai-base-url http://my-gateway:4000/v1/chat/completions
 | Command | Aliases | Description |
 |---------|---------|-------------|
 | [`commit`](#gitb-commit) | `c` `co` `com` | Create commits (interactive, fast, AI, split, fixup, amend, revert, …) |
+| [`edit`](#gitb-edit) | `ed` `ee` | Rewrite the last commit message (`git commit --amend`) |
 | [`push`](#gitb-push) | `p` `ps` `pus` | Push with conflict handling, force, or list-only |
 | [`pull`](#gitb-pull) | `pu` `pl` `pul` | Smart pull: rebase / merge / ff / fetch-only / interactive / dry-run |
 | [`branch`](#gitb-branch) | `b` `br` `bran` | Switch / list / create / delete / recent / gone / checkout-tag |
@@ -345,7 +346,6 @@ gitb commit <combined>       # compact form: ff, aifp, fastsp, ...
 | `split` | `sp` `sl` | Split staged changes into one commit per detected scope |
 | `fixup` | `x` `fix` | Create a `--fixup` commit against an older commit |
 | `amend` | `a` `am` | Add changes into the last commit (no message edit) |
-| `last` | `l` | Rewrite the last commit message |
 | `revert` | `rev` | Revert a commit (`git revert --no-edit`) |
 | `ff` | | Ultrafast: `ai + split + fast` with no prompts (use `ffp` to also push) |
 | `help` | `h` `--help` `-h` | Show inline help |
@@ -380,7 +380,20 @@ gitb commit <combined>       # compact form: ff, aifp, fastsp, ...
 - Word order doesn't matter: `ai fast push` == `push fast ai` == `aifp`.
 - Modifiers stack on actions: `ai+fixup`, `fast+amend`, `split+push`, `ai+staged`, …
 - `fast` and `staged` are mutually exclusive (one stages all, the other uses what's staged).
-- `last` and `revert` take no modifiers; `ff` only accepts `push` (as `ffp`).
+- `revert` and `ff` only accept `push` (as `revp` / `ffp`); to rewrite the last commit message use [`gitb edit`](#gitb-edit).
+
+### `gitb edit`
+
+Rewrites the **last commit message** by opening `git commit --amend` in your editor. The working tree and staged files are untouched.
+
+```bash
+gitb edit          # open editor on the last commit message
+gitb edit help     # show inline help
+```
+
+- If the commit was already pushed, run `gitb push force` afterwards.
+- To add staged changes into the last commit, use `gitb commit amend` instead.
+- To undo the amend, use `gitb undo amend`.
 
 ### `gitb push`
 

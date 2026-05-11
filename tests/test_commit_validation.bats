@@ -34,33 +34,11 @@ teardown() {
     [[ "$output" == *"amend"* ]]
 }
 
-@test "rejects two action flags: last + revert" {
-    last="true"; revert="true"
-    run validate_commit_flag_combo
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"Cannot combine actions"* ]]
-}
-
 @test "rejects three action flags: split + amend + revert" {
     split="true"; amend="true"; revert="true"
     run validate_commit_flag_combo
     [ "$status" -eq 1 ]
     [[ "$output" == *"Cannot combine actions"* ]]
-}
-
-@test "rejects last + ai" {
-    last="true"; llm="true"
-    run validate_commit_flag_combo
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"'last' takes no modifiers"* ]]
-    [[ "$output" == *"ai"* ]]
-}
-
-@test "rejects last + push" {
-    last="true"; push="true"
-    run validate_commit_flag_combo
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"'last' takes no modifiers"* ]]
 }
 
 @test "rejects revert + ai" {
@@ -177,12 +155,6 @@ teardown() {
     [ "$status" -eq 0 ]
 }
 
-@test "accepts last alone" {
-    last="true"
-    run validate_commit_flag_combo
-    [ "$status" -eq 0 ]
-}
-
 @test "accepts revert alone" {
     revert="true"
     run validate_commit_flag_combo
@@ -242,13 +214,6 @@ teardown() {
     run summarize_commit_intent
     [[ "$output" == *"ultrafast"* ]]
     [[ "$output" == *"push"* ]]
-}
-
-@test "summary: last" {
-    last="true"
-    run summarize_commit_intent
-    [[ "$output" == *"amend last commit"* ]]
-    [[ "$output" == *"reuse message"* ]]
 }
 
 @test "summary: revert" {

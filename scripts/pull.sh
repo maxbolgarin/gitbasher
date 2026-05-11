@@ -176,7 +176,8 @@ function pull_script {
                 else
                     echo -e "${GREEN}✓ Fetched '$origin_name/$current_branch'${ENDCOLOR}"
                 fi
-                if [ "$fetch_output" != "" ]; then
+                ### Skip re-echo when progress (and the summary) was already streamed live
+                if [ "$fetch_output" != "" ] && [ -z "$fetch_progress_shown" ]; then
                     echo
                     echo -e "$fetch_output"
                 fi
@@ -234,13 +235,40 @@ function pull_script {
 # $3: is all
 # Returns:
 #      * fetch_code - if it is not zero - there is no such branch in origin
+#      * fetch_output - captured combined stdout/stderr
+#      * fetch_progress_shown - "true" when git's progress was streamed live to the terminal
 function fetch {
-    if [ -n "$3" ]; then
-        fetch_output=$(git fetch --all 2>&1)
-        fetch_code=$?
-    else
-        fetch_output=$(git fetch "$2" "$1" 2>&1)
-        fetch_code=$?
+    fetch_progress_shown=""
+
+    ### Stream git's native progress bar to the terminal when running interactively,
+    ### so the user gets feedback during long fetches. Output is still captured via
+    ### tee so error handling and downstream checks (e.g. "couldn't find remote ref")
+    ### keep working. Fall back to silent capture when there's no TTY (tests, CI).
+    if [ -t 1 ] && [ -t 2 ]; then
+        local tmp_file
+        tmp_file=$(mktemp 2>/dev/null)
+        if [ -n "$tmp_file" ]; then
+            if [ -n "$3" ]; then
+                git fetch --all --progress 2>&1 | tee "$tmp_file"
+                fetch_code=${PIPESTATUS[0]}
+            else
+                git fetch --progress "$2" "$1" 2>&1 | tee "$tmp_file"
+                fetch_code=${PIPESTATUS[0]}
+            fi
+            fetch_output=$(cat "$tmp_file")
+            rm -f "$tmp_file"
+            fetch_progress_shown="true"
+        fi
+    fi
+
+    if [ -z "$fetch_progress_shown" ]; then
+        if [ -n "$3" ]; then
+            fetch_output=$(git fetch --all 2>&1)
+            fetch_code=$?
+        else
+            fetch_output=$(git fetch "$2" "$1" 2>&1)
+            fetch_code=$?
+        fi
     fi
 
     if [ $fetch_code == 0 ] ; then
@@ -249,7 +277,10 @@ function fetch {
 
     if [[ ${fetch_output} != *"couldn't find remote ref"* ]]; then
         echo -e "${RED}✗ Cannot fetch '$1'.${ENDCOLOR}"
-        echo -e "${fetch_output}"
+        ### Avoid re-printing output that the user already saw streamed live
+        if [ -z "$fetch_progress_shown" ]; then
+            echo -e "${fetch_output}"
+        fi
         exit $fetch_code
     fi
 

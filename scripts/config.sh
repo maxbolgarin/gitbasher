@@ -7,6 +7,12 @@
 
 ### Function asks user to select default gitbasher branch
 function set_default_branch {
+    if [ "$GITBASHER_NO_REPO" = "true" ]; then
+        echo -e "${RED}✗ Cannot pick a default branch outside a git repository.${ENDCOLOR}" >&2
+        echo -e "Run this inside a repo, or set one directly with ${GREEN}git config --global gitbasher.branch <name>${ENDCOLOR}." >&2
+        exit 1
+    fi
+
     echo -e "${YELLOW}Fetching remote branches...${ENDCOLOR}"
     echo
 
@@ -27,6 +33,7 @@ function set_default_branch {
     echo -e "${GREEN}✓ Set '${branch_name}' as the default gitbasher branch in '${project_name}'${ENDCOLOR}"
     echo
 
+    [ "$GITBASHER_NO_REPO" = "true" ] && exit
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet '${branch_name}' globally" "true"
     main_branch=$(set_config_value gitbasher.branch $branch_name "true")
@@ -84,6 +91,7 @@ function set_sep {
     echo -e "${GREEN}✓ Set '${sep}' as the branch name separator in '${project_name}'${ENDCOLOR}"
     echo
 
+    [ "$GITBASHER_NO_REPO" = "true" ] && exit
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet '${sep}' globally" "true"
     sep=$(set_config_value gitbasher.sep "$new_sep" "true")
@@ -122,6 +130,7 @@ function set_editor {
     echo -e "${GREEN}✓ Using editor '$editor' (${which_output})${ENDCOLOR}"
     echo
 
+    [ "$GITBASHER_NO_REPO" = "true" ] && exit
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet '${editor}' globally" "true"
     editor=$(set_config_value core.editor "$choice" "true")
@@ -166,6 +175,7 @@ function set_ticket {
     echo -e "${GREEN}✓ Set '${ticket_name}' as the ticket prefix in '${project_name}'${ENDCOLOR}"
     echo
 
+    [ "$GITBASHER_NO_REPO" = "true" ] && exit
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet '${ticket_name}' globally" "true"
     ticket_name=$(set_config_value gitbasher.ticket $ticket_name "true")
@@ -284,6 +294,7 @@ function configure_ai_key {
     echo -e "${GREEN}✓ Configured AI API key for '${provider}' in '${project_name}':${ENDCOLOR} ${BLUE}$(mask_api_key "$ai_api_key")${ENDCOLOR}"
     echo
 
+    [ "$GITBASHER_NO_REPO" = "true" ] && exit
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     echo -e "${RED}⚠  Global API keys are stored in plaintext in ~/.gitconfig.${ENDCOLOR}"
     echo -e "${CYAN}💡 For better security, set ${BLUE}GITB_AI_API_KEY_${provider_upper}${CYAN} as an environment variable instead.${ENDCOLOR}"
@@ -358,9 +369,11 @@ function configure_ai_provider {
     esac
     echo
 
-    echo -e "Do you want to set this provider ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
-    yes_no_choice "\nSet AI provider globally" "true"
-    set_config_value gitbasher.ai-provider "$new_provider" "true"
+    if [ "$GITBASHER_NO_REPO" != "true" ]; then
+        echo -e "Do you want to set this provider ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+        yes_no_choice "\nSet AI provider globally" "true"
+        set_config_value gitbasher.ai-provider "$new_provider" "true"
+    fi
 
     # If the new provider needs an API key but none is configured for it,
     # walk the user through setting one now — this is the surprise the user
@@ -455,6 +468,7 @@ function configure_ai_model {
     echo -e "${GREEN}✓ Set AI model to '$model_input' for '${project_name}'${ENDCOLOR}"
     echo
 
+    [ "$GITBASHER_NO_REPO" = "true" ] && exit
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet AI model globally" "true"
     set_config_value gitbasher.ai-model "$model_input" "true"
@@ -517,6 +531,7 @@ function configure_ai_proxy {
     echo -e "  ${BLUE}gitb commit aif${ENDCOLOR}   - Fast AI commit through proxy"
     echo
    
+    [ "$GITBASHER_NO_REPO" = "true" ] && exit
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet AI proxy globally" "true"
     set_ai_proxy "$ai_proxy_input"
@@ -573,6 +588,7 @@ function configure_ai_history {
     echo -e "${GREEN}✓ Set AI commit history limit to ${limit_input} for '${project_name}'${ENDCOLOR}"
     echo
 
+    [ "$GITBASHER_NO_REPO" = "true" ] && exit
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet AI commit history limit globally" "true"
     git config --global gitbasher.ai-commit-history-limit "$limit_input"
@@ -646,6 +662,7 @@ function configure_ai_diff {
     fi
 
     echo
+    [ "$GITBASHER_NO_REPO" = "true" ] && exit
     echo -e "Do you want to apply ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nApply AI diff settings globally" "true"
     if [ -n "$lines_input" ]; then
@@ -694,6 +711,13 @@ function set_scopes {
     fi
     scopes_raw="$validated_scopes"
 
+    if [ "$GITBASHER_NO_REPO" = "true" ]; then
+        git config --global --replace-all gitbasher.scopes "$scopes_raw"
+        scopes="$scopes_raw"
+        echo -e "${GREEN}✓ Set '${scopes}' as the global scopes list${ENDCOLOR}"
+        return
+    fi
+
     git config --local --replace-all gitbasher.scopes "$scopes_raw"
 
     scopes="$scopes_raw"
@@ -701,6 +725,7 @@ function set_scopes {
     echo -e "${GREEN}✓ Set '${scopes}' as the scopes list in '${project_name}'${ENDCOLOR}"
     echo
 
+    [ "$GITBASHER_NO_REPO" = "true" ] && exit
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet '${scopes}' globally" "true"
 
@@ -851,13 +876,18 @@ function set_user {
 
     echo
 
+    local _user_scope="--local"
+    if [ "$GITBASHER_NO_REPO" = "true" ]; then
+        _user_scope="--global"
+    fi
+
     if [ "$user_name" != "" ]; then
         echo -e "${GREEN}✓ Set user name to '${user_name}'${ENDCOLOR}"
-        git config --local --replace-all user.name "$user_name"
+        git config "$_user_scope" --replace-all user.name "$user_name"
     fi
     if [ "$user_email" != "" ]; then
         echo -e "${GREEN}✓ Set user email to '${user_email}'${ENDCOLOR}"
-        git config --local --replace-all user.email "$user_email"
+        git config "$_user_scope" --replace-all user.email "$user_email"
     fi
 }
 

@@ -16,10 +16,27 @@ if [ "$1" == "init" ] || [ "$1" == "i" ]; then
     git init
 fi
 
+### Some subcommands work without a git repository — they only touch the
+### user's global gitbasher config, the installed binary, or print help.
+### Allow gitb to run from anywhere in those cases instead of bailing out.
+GITBASHER_NO_REPO=""
 git_check=$(git branch --show-current 2>&1)
 if [[ "$git_check" == *"fatal: not a git repository"* ]]; then
-    echo "You can use gitb only in a git repository"
-    exit
+    case "${1:-}" in
+        ""|help|man|--help|-h|version|--version|-v|\
+        config|cf|cfg|conf|\
+        update|up|upd|\
+        uninstall|uns|uni|\
+        init|i)
+            GITBASHER_NO_REPO="true"
+            export GITBASHER_NO_REPO
+            ;;
+        *)
+            echo "You can use 'gitb $1' only in a git repository."
+            echo "Run 'gitb help' to see commands that work anywhere (config, update, uninstall)."
+            exit 1
+            ;;
+    esac
 fi
 
 
@@ -54,7 +71,11 @@ fi
 
 
 ### Detect a stale .git/index.lock from a previously interrupted git operation
-git_dir=$(git rev-parse --git-dir 2>/dev/null)
+if [ "$GITBASHER_NO_REPO" = "true" ]; then
+    git_dir=""
+else
+    git_dir=$(git rev-parse --git-dir 2>/dev/null)
+fi
 if [ -n "$git_dir" ] && [ -e "$git_dir/index.lock" ]; then
     printf "\033[33mDetected %s/index.lock from a possibly interrupted git operation.\033[0m\n" "$git_dir"
     printf "Another git process may be running. Remove the lock and continue?\n"

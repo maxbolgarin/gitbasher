@@ -21,7 +21,10 @@ NORMAL="\033[0m"
 # $2: default value
 # Returns: config value
 function get_config_value {
-    value=$(git config --local --get "$1")
+    # Outside a repo, --local prints "fatal: --local can only be used inside a
+    # git repository" to stderr; quiet it so non-repo help / config prints
+    # don't get spammed with errors.
+    value=$(git config --local --get "$1" 2>/dev/null)
     if [ "$value" == "" ]; then
         value=$(git config --global --get "$1")
         if [ "$value" == "" ]; then
@@ -37,8 +40,10 @@ function get_config_value {
 # $2: value
 # $3: global flag
 # Returns: value
+# When running outside a git repository (GITBASHER_NO_REPO=true) every write
+# is routed to --global, since --local would fail with no .git/config to write.
 function set_config_value {
-    if [ -z "$3" ]; then
+    if [ -z "$3" ] && [ "$GITBASHER_NO_REPO" != "true" ]; then
         git config --local "$1" "$2"
     else
         git config --global "$1" "$2"
@@ -51,6 +56,11 @@ function set_config_value {
 # $1: config name
 # Returns: value
 function unset_config_value {
+    if [ "$GITBASHER_NO_REPO" = "true" ]; then
+        git config --global --unset "$1" 2>/dev/null
+        return
+    fi
+
     git config --unset "$1"
 
     # Check if global config exists and ask user if they want to clear it too
@@ -116,23 +126,35 @@ fi
 
 
 ### Branches
-current_branch=$(git branch --show-current)
+# Outside a git repo we can't (and don't need to) discover the current/default
+# branch. The subcommands that are allowed in no-repo mode (config, update,
+# uninstall, help) never read these, so leave them empty/defaulted.
+if [ "$GITBASHER_NO_REPO" = "true" ]; then
+    current_branch=""
+    main_branch=$(get_config_value gitbasher.branch "main")
+else
+    current_branch=$(git branch --show-current)
 
-main_branch=$(get_config_value gitbasher.branch "main")
-if [[ "$( git branch | grep -E "^[[:space:]*]*main[[:space:]]*$" )" == "" ]] && [[ "$( git branch | grep -E "^[[:space:]*]*master[[:space:]]*$" )" != "" ]]; then
-    main_branch="master"
-elif [[ "$(git branch | cat)" == "" ]]; then
-    main_branch=$current_branch
-fi
+    main_branch=$(get_config_value gitbasher.branch "main")
+    if [[ "$( git branch | grep -E "^[[:space:]*]*main[[:space:]]*$" )" == "" ]] && [[ "$( git branch | grep -E "^[[:space:]*]*master[[:space:]]*$" )" != "" ]]; then
+        main_branch="master"
+    elif [[ "$(git branch | cat)" == "" ]]; then
+        main_branch=$current_branch
+    fi
 
-if [ "$(get_config_value gitbasher.branch "")" == "" ]; then
-    git config --local gitbasher.branch "$main_branch"
+    if [ "$(get_config_value gitbasher.branch "")" == "" ]; then
+        git config --local gitbasher.branch "$main_branch"
+    fi
 fi
 
 
 ### Remote
-origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')
-if [ "$origin_name" == "" ]; then 
+if [ "$GITBASHER_NO_REPO" = "true" ]; then
+    origin_name=""
+else
+    origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')
+fi
+if [ "$origin_name" == "" ] && [ "$GITBASHER_NO_REPO" != "true" ]; then
     # Skip interactive prompt if in test mode or stdin is not a TTY (e.g., in tests or scripts)
     if [ -z "$GITBASHER_TEST_MODE" ] && [ -t 0 ]; then
         # Interactive mode: prompt user for remote setup
@@ -210,5 +232,12 @@ fi
 
 
 ### Is this is a first run of gitbasher in this project?
-is_first=$(get_config_value gitbasher.isfirst "true")
-git config --local gitbasher.isfirst "false"
+# The first-run welcome only makes sense for an actual project — skip it in
+# no-repo mode so we don't try to write gitbasher.isfirst into a missing
+# .git/config.
+if [ "$GITBASHER_NO_REPO" = "true" ]; then
+    is_first="false"
+else
+    is_first=$(get_config_value gitbasher.isfirst "true")
+    git config --local gitbasher.isfirst "false"
+fi

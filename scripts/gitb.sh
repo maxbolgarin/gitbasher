@@ -16,11 +16,23 @@ if [ "$1" == "init" ] || [ "$1" == "i" ]; then
     git init
 fi
 
+# `clone` is the only other command that runs from outside a git repo: it
+# creates the repo it then operates on. Skip the "not a git repository" guard
+# below so the clone handler can run; init.sh has its own guard for the same
+# situation.
+_gitb_outside_repo_ok=""
+case "$1" in
+    clone|cl|clo) _gitb_outside_repo_ok="true" ;;
+esac
+
 git_check=$(git branch --show-current 2>&1)
 if [[ "$git_check" == *"fatal: not a git repository"* ]]; then
-    echo "You can use gitb only in a git repository"
-    exit
+    if [ -z "$_gitb_outside_repo_ok" ]; then
+        echo "You can use gitb only in a git repository"
+        exit
+    fi
 fi
+unset _gitb_outside_repo_ok
 
 
 ### Cannot use bash version less than 4 because of many features that was added to language in that version
@@ -98,6 +110,7 @@ source scripts/gitlog.sh || { echo "gitbasher: failed to load scripts/gitlog.sh"
 source scripts/worktree.sh || { echo "gitbasher: failed to load scripts/worktree.sh" >&2; exit 1; }
 source scripts/hooks.sh || { echo "gitbasher: failed to load scripts/hooks.sh" >&2; exit 1; }
 source scripts/origin.sh || { echo "gitbasher: failed to load scripts/origin.sh" >&2; exit 1; }
+source scripts/clone.sh || { echo "gitbasher: failed to load scripts/clone.sh" >&2; exit 1; }
 source scripts/update.sh || { echo "gitbasher: failed to load scripts/update.sh" >&2; exit 1; }
 source scripts/uninstall.sh || { echo "gitbasher: failed to load scripts/uninstall.sh" >&2; exit 1; }
 source scripts/completion.sh || { echo "gitbasher: failed to load scripts/completion.sh" >&2; exit 1; }

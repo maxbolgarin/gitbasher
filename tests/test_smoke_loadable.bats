@@ -61,6 +61,12 @@ teardown() {
     [ "$status" -eq 0 ]
 }
 
+@test "smoke: clone.sh: source + dispatch help" {
+    source "${GITBASHER_ROOT}/scripts/clone.sh"
+    run clone_script help
+    [ "$status" -eq 0 ]
+}
+
 @test "smoke: commit.sh: source + dispatch help" {
     source "${GITBASHER_ROOT}/scripts/commit.sh"
     run commit_script help

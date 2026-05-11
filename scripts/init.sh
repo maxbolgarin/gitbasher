@@ -21,9 +21,12 @@ NORMAL="\033[0m"
 # $2: default value
 # Returns: config value
 function get_config_value {
-    value=$(git config --local --get "$1")
+    # Silence stderr: `git config --local --get` prints "fatal: --local can
+    # only be used inside a git repository" when called outside a repo, which
+    # leaks during the `gitb clone` flow that runs from a non-repo cwd.
+    value=$(git config --local --get "$1" 2>/dev/null)
     if [ "$value" == "" ]; then
-        value=$(git config --global --get "$1")
+        value=$(git config --global --get "$1" 2>/dev/null)
         if [ "$value" == "" ]; then
             value=$2
         fi
@@ -110,10 +113,24 @@ function validate_git_url {
 # helper functions above without paying the ~150ms tax of probing git config
 # / remotes / branches. Not a user-facing knob; values other than empty are
 # treated as "skip", but no public guarantee is made about specific values.
+#
+# `gitb clone` also lands here from outside any git repo so that clone_script
+# can reuse helpers like validate_git_url, so additionally bail when there is
+# no enclosing repo to query. `return 0` only works because this file is
+# `source`d in tests; in the built `gitb` binary all sources are inlined so a
+# bare top-level `return` would fail — the per-repo block below is therefore
+# also wrapped in an explicit guard.
+_gitb_init_run_queries="true"
 if [ -n "$GITBASHER_SKIP_INIT_QUERIES" ]; then
+    _gitb_init_run_queries=""
     return 0
 fi
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    _gitb_init_run_queries=""
+fi
 
+
+if [ -n "$_gitb_init_run_queries" ]; then
 
 ### Branches
 current_branch=$(git branch --show-current)
@@ -132,7 +149,7 @@ fi
 
 ### Remote
 origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')
-if [ "$origin_name" == "" ]; then 
+if [ "$origin_name" == "" ]; then
     # Skip interactive prompt if in test mode or stdin is not a TTY (e.g., in tests or scripts)
     if [ -z "$GITBASHER_TEST_MODE" ] && [ -t 0 ]; then
         # Interactive mode: prompt user for remote setup
@@ -147,7 +164,7 @@ if [ "$origin_name" == "" ]; then
         fi
 
         echo
-        
+
         read_editable_input remote_url "Remote repo URL: "
 
         if [ "$remote_url" == "" ]; then
@@ -180,7 +197,7 @@ if [ "$origin_name" == "" ]; then
             echo -e "${YELLOW}⚠  Repository '$remote_url' appears to be empty.${ENDCOLOR}"
         fi
         echo
-        
+
         origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')
     else
         # Non-interactive mode: skip remote setup, leave origin_name empty
@@ -212,3 +229,6 @@ fi
 ### Is this is a first run of gitbasher in this project?
 is_first=$(get_config_value gitbasher.isfirst "true")
 git config --local gitbasher.isfirst "false"
+
+fi
+unset _gitb_init_run_queries

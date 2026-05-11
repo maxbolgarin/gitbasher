@@ -45,6 +45,7 @@ function print_help {
     echo
 
     printf "$hdr" "SETUP"
+    printf "$row" "$CMD" "clone (cl, clo)"        "Clone a remote repo and initialize gitbasher in it"
     printf "$row" "$CMD" "origin (or, o, remote)"  "Manage remotes"
     printf "$row" "$CMD" "hook (ho, hk)"           "Manage git hooks"
     printf "$row" "$CMD" "worktree (wt, tree)"     "Manage git worktrees"
@@ -155,6 +156,9 @@ case "$1" in
     ;;
     origin|or|o|remote)
         origin_script "$2" "$3"
+    ;;
+    clone|cl|clo)
+        clone_script "$2" "$3"
     ;;
     update|up|upd)
         update_script "$2"

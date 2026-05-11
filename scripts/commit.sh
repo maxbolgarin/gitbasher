@@ -1967,13 +1967,18 @@ function commit_script {
     if [ -n "${amend}" ]; then
         result=$(git commit --amend --no-edit 2>&1)
         check_code $? "$result" "amend"
-        
+
         # Clean up cached git add and commit message on successful amend
         git config --unset gitbasher.cached-git-add 2>/dev/null
         git config --unset gitbasher.cached-commit-message 2>/dev/null
 
         echo
         after_commit "amend"
+
+        if [ -n "${push}" ]; then
+            echo
+            push_script y
+        fi
         exit
     fi
 

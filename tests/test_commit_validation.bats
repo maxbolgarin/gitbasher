@@ -67,14 +67,21 @@ teardown() {
     revert="true"; llm="true"
     run validate_commit_flag_combo
     [ "$status" -eq 1 ]
-    [[ "$output" == *"'revert' takes no modifiers"* ]]
+    [[ "$output" == *"'revert' does not use"* ]]
+    [[ "$output" == *"ai"* ]]
 }
 
 @test "rejects revert + ticket" {
     revert="true"; ticket="true"
     run validate_commit_flag_combo
     [ "$status" -eq 1 ]
-    [[ "$output" == *"'revert' takes no modifiers"* ]]
+    [[ "$output" == *"'revert' does not use"* ]]
+}
+
+@test "accepts revert + push" {
+    revert="true"; push="true"
+    run validate_commit_flag_combo
+    [ "$status" -eq 0 ]
 }
 
 @test "rejects amend + ai" {

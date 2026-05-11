@@ -1368,10 +1368,7 @@ function validate_commit_flag_combo {
         exit 1
     fi
 
-    local lone=""
-    [ -n "$last" ]   && lone="last"
-    [ -n "$revert" ] && lone="revert"
-    if [ -n "$lone" ]; then
+    if [ -n "$last" ]; then
         [ -n "$llm" ]      && invalid+=("ai")
         [ -n "$fast" ]     && invalid+=("fast")
         [ -n "$push" ]     && invalid+=("push")
@@ -1381,7 +1378,22 @@ function validate_commit_flag_combo {
         [ -n "$staged" ]   && invalid+=("staged")
         [ -n "$no_split" ] && invalid+=("no-split")
         if [ ${#invalid[@]} -gt 0 ]; then
-            echo -e "${RED}✗ '${lone}' takes no modifiers (got: ${invalid[*]})${ENDCOLOR}"
+            echo -e "${RED}✗ 'last' takes no modifiers (got: ${invalid[*]})${ENDCOLOR}"
+            exit 1
+        fi
+    fi
+
+    if [ -n "$revert" ]; then
+        [ -n "$llm" ]      && invalid+=("ai")
+        [ -n "$fast" ]     && invalid+=("fast")
+        [ -n "$scope" ]    && invalid+=("scope")
+        [ -n "$msg" ]      && invalid+=("msg")
+        [ -n "$ticket" ]   && invalid+=("ticket")
+        [ -n "$staged" ]   && invalid+=("staged")
+        [ -n "$no_split" ] && invalid+=("no-split")
+        if [ ${#invalid[@]} -gt 0 ]; then
+            echo -e "${RED}✗ 'revert' does not use: ${invalid[*]}${ENDCOLOR}"
+            echo -e "Only push applies (the revert commit message is auto-generated)."
             exit 1
         fi
     fi
@@ -1501,6 +1513,7 @@ function commit_script {
         amendf|amf|af|fa)   amend="true"; fast="true";;
         last|l)             last="true";;
         revert|rev)         revert="true";;
+        revertp|revp|rp)    revert="true"; push="true";;
         llm|ai|i)           llm="true";;
         llmf|aif|if)        llm="true"; fast="true";;
         llmp|aip|ip)        llm="true"; push="true";;
@@ -1622,7 +1635,7 @@ function commit_script {
         echo -e "  ${BLUE}•${ENDCOLOR} Word order doesn't matter: ${GREEN}ai fast push${ENDCOLOR} == ${GREEN}push fast ai${ENDCOLOR} == ${GREEN}aifp${ENDCOLOR}"
         echo -e "  ${BLUE}•${ENDCOLOR} Modifiers stack on actions: ${GREEN}ai+fixup${ENDCOLOR}, ${GREEN}fast+amend${ENDCOLOR}, ${GREEN}split+push${ENDCOLOR}, ${GREEN}ai+staged${ENDCOLOR}, ..."
         echo -e "  ${BLUE}•${ENDCOLOR} ${BOLD}fast${NORMAL} and ${BOLD}staged${NORMAL} are mutually exclusive (one stages all, the other uses what's staged)"
-        echo -e "  ${BLUE}•${ENDCOLOR} ${BOLD}last${NORMAL} and ${BOLD}revert${NORMAL} take no modifiers; ${BOLD}ff${NORMAL} only accepts ${BOLD}push${NORMAL} (as ${BOLD}ffp${NORMAL})"
+        echo -e "  ${BLUE}•${ENDCOLOR} ${BOLD}last${NORMAL} takes no modifiers; ${BOLD}revert${NORMAL} and ${BOLD}ff${NORMAL} only accept ${BOLD}push${NORMAL} (as ${BOLD}revp${NORMAL}/${BOLD}ffp${NORMAL})"
         # Clean up cached git add on help exit
         git config --unset gitbasher.cached-git-add 2>/dev/null || true
         exit 0
@@ -1703,6 +1716,11 @@ function commit_script {
         check_code $? "$result" "revert"
 
         after_commit "revert"
+
+        if [ -n "${push}" ]; then
+            echo
+            push_script y
+        fi
         exit
     fi
 

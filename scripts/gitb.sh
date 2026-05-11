@@ -16,23 +16,31 @@ if [ "$1" == "init" ] || [ "$1" == "i" ]; then
     git init
 fi
 
-# `clone` is the only other command that runs from outside a git repo: it
-# creates the repo it then operates on. Skip the "not a git repository" guard
-# below so the clone handler can run; init.sh has its own guard for the same
-# situation.
-_gitb_outside_repo_ok=""
-case "$1" in
-    clone|cl|clo) _gitb_outside_repo_ok="true" ;;
-esac
-
+### Some subcommands work without a git repository — they only touch the
+### user's global gitbasher config, the installed binary, or print help, or
+### (clone) create the repo they then operate on. Allow gitb to run from
+### anywhere in those cases instead of bailing out; everything else still
+### fails fast with a clear message.
+GITBASHER_NO_REPO=""
 git_check=$(git branch --show-current 2>&1)
 if [[ "$git_check" == *"fatal: not a git repository"* ]]; then
-    if [ -z "$_gitb_outside_repo_ok" ]; then
-        echo "You can use gitb only in a git repository"
-        exit
-    fi
+    case "${1:-}" in
+        ""|help|man|--help|-h|version|--version|-v|\
+        config|cf|cfg|conf|\
+        update|up|upd|\
+        uninstall|uns|uni|\
+        clone|cl|clo|\
+        init|i)
+            GITBASHER_NO_REPO="true"
+            export GITBASHER_NO_REPO
+            ;;
+        *)
+            echo "You can use 'gitb $1' only in a git repository."
+            echo "Run 'gitb help' to see commands that work anywhere (config, update, uninstall, clone)."
+            exit 1
+            ;;
+    esac
 fi
-unset _gitb_outside_repo_ok
 
 
 ### Cannot use bash version less than 4 because of many features that was added to language in that version
@@ -66,7 +74,11 @@ fi
 
 
 ### Detect a stale .git/index.lock from a previously interrupted git operation
-git_dir=$(git rev-parse --git-dir 2>/dev/null)
+if [ "$GITBASHER_NO_REPO" = "true" ]; then
+    git_dir=""
+else
+    git_dir=$(git rev-parse --git-dir 2>/dev/null)
+fi
 if [ -n "$git_dir" ] && [ -e "$git_dir/index.lock" ]; then
     printf "\033[33mDetected %s/index.lock from a possibly interrupted git operation.\033[0m\n" "$git_dir"
     printf "Another git process may be running. Remove the lock and continue?\n"

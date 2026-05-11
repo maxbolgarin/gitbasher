@@ -7,6 +7,12 @@ function print_help {
     echo
     echo -e "usage: ${YELLOW}gitb <command> [mode]${ENDCOLOR}"
     echo
+    if [ "$GITBASHER_NO_REPO" = "true" ]; then
+        echo -e "${YELLOW}⚠  Not inside a git repository.${ENDCOLOR}"
+        echo -e "Only ${BOLD}clone${NORMAL}, ${BOLD}init${NORMAL}, ${BOLD}config${NORMAL}, ${BOLD}update${NORMAL}, and ${BOLD}uninstall${NORMAL} are available here."
+        echo -e "Run ${GREEN}gitb clone <url>${ENDCOLOR} to clone a repo, ${GREEN}gitb init${ENDCOLOR} to start a new one, or ${GREEN}cd${ENDCOLOR} into an existing one."
+        echo
+    fi
 
     local CMD=26
     local hdr="${YELLOW}%s${ENDCOLOR}\n"
@@ -59,11 +65,18 @@ function print_help {
     exit
 }
 
-project_name="$(get_repo_name)"
-repo_url="$(get_repo)"
+if [ "$GITBASHER_NO_REPO" = "true" ]; then
+    # No repo to name. Use "global config" so success messages like
+    # "Set 'X' as the ticket prefix in 'global config'" still read naturally.
+    project_name="global config"
+    repo_url=""
+else
+    project_name="$(get_repo_name)"
+    repo_url="$(get_repo)"
+fi
 
 ### Print settings f this is first run
-if [[ $is_first == "true" ]]; then 
+if [[ $is_first == "true" ]]; then
     git config --local gitbasher.scopes ""
 
     echo -e "${GREEN}Thanks for using gitbasher in project '$project_name'${ENDCOLOR}"

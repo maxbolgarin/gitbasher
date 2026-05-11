@@ -21,9 +21,10 @@ NORMAL="\033[0m"
 # $2: default value
 # Returns: config value
 function get_config_value {
-    # Silence stderr: `git config --local --get` prints "fatal: --local can
-    # only be used inside a git repository" when called outside a repo, which
-    # leaks during the `gitb clone` flow that runs from a non-repo cwd.
+    # Outside a repo (gitb config / update / uninstall / clone, or the early
+    # phase of gitb clone before it has cd'd in) --local prints "fatal:
+    # --local can only be used inside a git repository" to stderr. Quiet both
+    # --local and --global so non-repo help / config prints aren't spammed.
     value=$(git config --local --get "$1" 2>/dev/null)
     if [ "$value" == "" ]; then
         value=$(git config --global --get "$1" 2>/dev/null)
@@ -40,8 +41,10 @@ function get_config_value {
 # $2: value
 # $3: global flag
 # Returns: value
+# When running outside a git repository (GITBASHER_NO_REPO=true) every write
+# is routed to --global, since --local would fail with no .git/config to write.
 function set_config_value {
-    if [ -z "$3" ]; then
+    if [ -z "$3" ] && [ "$GITBASHER_NO_REPO" != "true" ]; then
         git config --local "$1" "$2"
     else
         git config --global "$1" "$2"
@@ -54,6 +57,11 @@ function set_config_value {
 # $1: config name
 # Returns: value
 function unset_config_value {
+    if [ "$GITBASHER_NO_REPO" = "true" ]; then
+        git config --global --unset "$1" 2>/dev/null
+        return
+    fi
+
     git config --unset "$1"
 
     # Check if global config exists and ask user if they want to clear it too
@@ -230,5 +238,25 @@ fi
 is_first=$(get_config_value gitbasher.isfirst "true")
 git config --local gitbasher.isfirst "false"
 
+else
+    # No-repo mode (gitb config / update / uninstall / clone): downstream
+    # readers like print_configuration still consume these globals, so seed
+    # sensible defaults pulled from --global config. is_first stays false so
+    # the first-run welcome (which writes to .git/config) doesn't fire.
+    current_branch=""
+    main_branch=$(get_config_value gitbasher.branch "main")
+    origin_name=""
+    sep=$(get_config_value gitbasher.sep "-")
+    editor=$(get_config_value core.editor "vi")
+    ticket_name=$(get_config_value gitbasher.ticket "")
+    scopes=$(get_config_value gitbasher.scopes "")
+    if [ -n "$scopes" ]; then
+        if ! validate_scope_list "$scopes" >/dev/null 2>&1; then
+            scopes=""
+        else
+            scopes="$validated_scopes"
+        fi
+    fi
+    is_first="false"
 fi
 unset _gitb_init_run_queries

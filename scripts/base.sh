@@ -9,8 +9,8 @@ function print_help {
     echo
     if [ "$GITBASHER_NO_REPO" = "true" ]; then
         echo -e "${YELLOW}⚠  Not inside a git repository.${ENDCOLOR}"
-        echo -e "Only ${BOLD}config${NORMAL}, ${BOLD}update${NORMAL}, ${BOLD}uninstall${NORMAL}, and ${BOLD}init${NORMAL} are available here."
-        echo -e "Run ${GREEN}gitb init${ENDCOLOR} in this directory to start a new repo, or ${GREEN}cd${ENDCOLOR} into one."
+        echo -e "Only ${BOLD}clone${NORMAL}, ${BOLD}init${NORMAL}, ${BOLD}config${NORMAL}, ${BOLD}update${NORMAL}, and ${BOLD}uninstall${NORMAL} are available here."
+        echo -e "Run ${GREEN}gitb clone <url>${ENDCOLOR} to clone a repo, ${GREEN}gitb init${ENDCOLOR} to start a new one, or ${GREEN}cd${ENDCOLOR} into an existing one."
         echo
     fi
 
@@ -51,6 +51,7 @@ function print_help {
     echo
 
     printf "$hdr" "SETUP"
+    printf "$row" "$CMD" "clone (cl, clo)"        "Clone a remote repo and initialize gitbasher in it"
     printf "$row" "$CMD" "origin (or, o, remote)"  "Manage remotes"
     printf "$row" "$CMD" "hook (ho, hk)"           "Manage git hooks"
     printf "$row" "$CMD" "worktree (wt, tree)"     "Manage git worktrees"
@@ -168,6 +169,9 @@ case "$1" in
     ;;
     origin|or|o|remote)
         origin_script "$2" "$3"
+    ;;
+    clone|cl|clo)
+        clone_script "$2" "$3"
     ;;
     update|up|upd)
         update_script "$2"

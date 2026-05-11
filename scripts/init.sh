@@ -21,12 +21,13 @@ NORMAL="\033[0m"
 # $2: default value
 # Returns: config value
 function get_config_value {
-    # Outside a repo, --local prints "fatal: --local can only be used inside a
-    # git repository" to stderr; quiet it so non-repo help / config prints
-    # don't get spammed with errors.
+    # Outside a repo (gitb config / update / uninstall / clone, or the early
+    # phase of gitb clone before it has cd'd in) --local prints "fatal:
+    # --local can only be used inside a git repository" to stderr. Quiet both
+    # --local and --global so non-repo help / config prints aren't spammed.
     value=$(git config --local --get "$1" 2>/dev/null)
     if [ "$value" == "" ]; then
-        value=$(git config --global --get "$1")
+        value=$(git config --global --get "$1" 2>/dev/null)
         if [ "$value" == "" ]; then
             value=$2
         fi
@@ -120,41 +121,43 @@ function validate_git_url {
 # helper functions above without paying the ~150ms tax of probing git config
 # / remotes / branches. Not a user-facing knob; values other than empty are
 # treated as "skip", but no public guarantee is made about specific values.
+#
+# `gitb clone` also lands here from outside any git repo so that clone_script
+# can reuse helpers like validate_git_url, so additionally bail when there is
+# no enclosing repo to query. `return 0` only works because this file is
+# `source`d in tests; in the built `gitb` binary all sources are inlined so a
+# bare top-level `return` would fail — the per-repo block below is therefore
+# also wrapped in an explicit guard.
+_gitb_init_run_queries="true"
 if [ -n "$GITBASHER_SKIP_INIT_QUERIES" ]; then
+    _gitb_init_run_queries=""
     return 0
+fi
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    _gitb_init_run_queries=""
 fi
 
 
+if [ -n "$_gitb_init_run_queries" ]; then
+
 ### Branches
-# Outside a git repo we can't (and don't need to) discover the current/default
-# branch. The subcommands that are allowed in no-repo mode (config, update,
-# uninstall, help) never read these, so leave them empty/defaulted.
-if [ "$GITBASHER_NO_REPO" = "true" ]; then
-    current_branch=""
-    main_branch=$(get_config_value gitbasher.branch "main")
-else
-    current_branch=$(git branch --show-current)
+current_branch=$(git branch --show-current)
 
-    main_branch=$(get_config_value gitbasher.branch "main")
-    if [[ "$( git branch | grep -E "^[[:space:]*]*main[[:space:]]*$" )" == "" ]] && [[ "$( git branch | grep -E "^[[:space:]*]*master[[:space:]]*$" )" != "" ]]; then
-        main_branch="master"
-    elif [[ "$(git branch | cat)" == "" ]]; then
-        main_branch=$current_branch
-    fi
+main_branch=$(get_config_value gitbasher.branch "main")
+if [[ "$( git branch | grep -E "^[[:space:]*]*main[[:space:]]*$" )" == "" ]] && [[ "$( git branch | grep -E "^[[:space:]*]*master[[:space:]]*$" )" != "" ]]; then
+    main_branch="master"
+elif [[ "$(git branch | cat)" == "" ]]; then
+    main_branch=$current_branch
+fi
 
-    if [ "$(get_config_value gitbasher.branch "")" == "" ]; then
-        git config --local gitbasher.branch "$main_branch"
-    fi
+if [ "$(get_config_value gitbasher.branch "")" == "" ]; then
+    git config --local gitbasher.branch "$main_branch"
 fi
 
 
 ### Remote
-if [ "$GITBASHER_NO_REPO" = "true" ]; then
-    origin_name=""
-else
-    origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')
-fi
-if [ "$origin_name" == "" ] && [ "$GITBASHER_NO_REPO" != "true" ]; then
+origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')
+if [ "$origin_name" == "" ]; then
     # Skip interactive prompt if in test mode or stdin is not a TTY (e.g., in tests or scripts)
     if [ -z "$GITBASHER_TEST_MODE" ] && [ -t 0 ]; then
         # Interactive mode: prompt user for remote setup
@@ -169,7 +172,7 @@ if [ "$origin_name" == "" ] && [ "$GITBASHER_NO_REPO" != "true" ]; then
         fi
 
         echo
-        
+
         read_editable_input remote_url "Remote repo URL: "
 
         if [ "$remote_url" == "" ]; then
@@ -202,7 +205,7 @@ if [ "$origin_name" == "" ] && [ "$GITBASHER_NO_REPO" != "true" ]; then
             echo -e "${YELLOW}⚠  Repository '$remote_url' appears to be empty.${ENDCOLOR}"
         fi
         echo
-        
+
         origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')
     else
         # Non-interactive mode: skip remote setup, leave origin_name empty
@@ -232,12 +235,28 @@ fi
 
 
 ### Is this is a first run of gitbasher in this project?
-# The first-run welcome only makes sense for an actual project — skip it in
-# no-repo mode so we don't try to write gitbasher.isfirst into a missing
-# .git/config.
-if [ "$GITBASHER_NO_REPO" = "true" ]; then
-    is_first="false"
+is_first=$(get_config_value gitbasher.isfirst "true")
+git config --local gitbasher.isfirst "false"
+
 else
-    is_first=$(get_config_value gitbasher.isfirst "true")
-    git config --local gitbasher.isfirst "false"
+    # No-repo mode (gitb config / update / uninstall / clone): downstream
+    # readers like print_configuration still consume these globals, so seed
+    # sensible defaults pulled from --global config. is_first stays false so
+    # the first-run welcome (which writes to .git/config) doesn't fire.
+    current_branch=""
+    main_branch=$(get_config_value gitbasher.branch "main")
+    origin_name=""
+    sep=$(get_config_value gitbasher.sep "-")
+    editor=$(get_config_value core.editor "vi")
+    ticket_name=$(get_config_value gitbasher.ticket "")
+    scopes=$(get_config_value gitbasher.scopes "")
+    if [ -n "$scopes" ]; then
+        if ! validate_scope_list "$scopes" >/dev/null 2>&1; then
+            scopes=""
+        else
+            scopes="$validated_scopes"
+        fi
+    fi
+    is_first="false"
 fi
+unset _gitb_init_run_queries

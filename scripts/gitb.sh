@@ -17,8 +17,10 @@ if [ "$1" == "init" ] || [ "$1" == "i" ]; then
 fi
 
 ### Some subcommands work without a git repository — they only touch the
-### user's global gitbasher config, the installed binary, or print help.
-### Allow gitb to run from anywhere in those cases instead of bailing out.
+### user's global gitbasher config, the installed binary, or print help, or
+### (clone) create the repo they then operate on. Allow gitb to run from
+### anywhere in those cases instead of bailing out; everything else still
+### fails fast with a clear message.
 GITBASHER_NO_REPO=""
 git_check=$(git branch --show-current 2>&1)
 if [[ "$git_check" == *"fatal: not a git repository"* ]]; then
@@ -27,13 +29,14 @@ if [[ "$git_check" == *"fatal: not a git repository"* ]]; then
         config|cf|cfg|conf|\
         update|up|upd|\
         uninstall|uns|uni|\
+        clone|cl|clo|\
         init|i)
             GITBASHER_NO_REPO="true"
             export GITBASHER_NO_REPO
             ;;
         *)
             echo "You can use 'gitb $1' only in a git repository."
-            echo "Run 'gitb help' to see commands that work anywhere (config, update, uninstall)."
+            echo "Run 'gitb help' to see commands that work anywhere (config, update, uninstall, clone)."
             exit 1
             ;;
     esac
@@ -64,7 +67,7 @@ if ((BASH_VERSINFO[0] < 4)); then
 
     printf "Sorry, you need at least bash-4.0 to run gitbasher.\n\n"
     printf "Linux (Debian/Ubuntu):\n    sudo apt update && sudo apt install --only-upgrade bash\n\n"
-    printf "macOS:\n    1) Install Homebrew (if missing):\n       /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"\n    2) Install newer bash:\n       brew install bash\n    3) Optional: make it your default shell (then restart Terminal):\n       sudo sh -c 'echo /opt/homebrew/bin/bash >> /etc/shells' && chsh -s /opt/homebrew/bin/bash\n\n"
+    printf "macOS:\n    1) Install Homebrew (if missing):\n       /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"\n    2) Install newer bash:\n       brew install bash\n    3) Optional: make it your default shell (then restart Terminal):\n       sudo sh -c 'echo /opt/homebrew/bin/bash >> /etc/shells' && chsh -s /opt/homebrew/bin/bash\n\n"
     printf "Or run gitb explicitly with the newer bash when installed:\n    /opt/homebrew/bin/bash $0 \"\$@\"\n\n"
     exit 1; 
 fi
@@ -119,6 +122,7 @@ source scripts/gitlog.sh || { echo "gitbasher: failed to load scripts/gitlog.sh"
 source scripts/worktree.sh || { echo "gitbasher: failed to load scripts/worktree.sh" >&2; exit 1; }
 source scripts/hooks.sh || { echo "gitbasher: failed to load scripts/hooks.sh" >&2; exit 1; }
 source scripts/origin.sh || { echo "gitbasher: failed to load scripts/origin.sh" >&2; exit 1; }
+source scripts/clone.sh || { echo "gitbasher: failed to load scripts/clone.sh" >&2; exit 1; }
 source scripts/update.sh || { echo "gitbasher: failed to load scripts/update.sh" >&2; exit 1; }
 source scripts/uninstall.sh || { echo "gitbasher: failed to load scripts/uninstall.sh" >&2; exit 1; }
 source scripts/completion.sh || { echo "gitbasher: failed to load scripts/completion.sh" >&2; exit 1; }

@@ -62,7 +62,7 @@ _gitb_sub_origin="set add new a change update c u set-url rename mv ren remove d
 _gitb_sub_log="branch b compare comp c search s help h"
 _gitb_sub_hook="list create edit toggle test show remove select install help"
 _gitb_sub_log_branch="local l remote r all a help h"
-_gitb_sub_edit="help h"
+_gitb_sub_edit="pick p c choose help h"
 _gitb_sub_config_auto="up u on install enable down d off uninstall disable remove status st print cat p help h"
 _gitb_canonical() {
     case "$1" in
@@ -355,7 +355,7 @@ _gitb() {
                         'revert[revert a commit]' 'help[show help]'
                     ;;
                 edit|ed|ee)
-                    _values 'edit mode' 'help[show help]'
+                    _values 'edit mode' 'pick[reword any recent commit]' 'help[show help]'
                     ;;
                 push|p|ps|pus)
                     _values 'push mode' 'yes[skip confirmation]' 'force[force push]' 'list[show pending pushes]' 'help[show help]'
@@ -557,6 +557,8 @@ function __gitb_at_commit_extra
 end
 complete -c gitb -n __gitb_at_commit_pos2 -a "ai fast fasts ff ffp push fastp scope msg ticket staged no-split fixup amend split splitp aisplit aisplitp aip aif aifp revert revertp revp rp help"
 complete -c gitb -n __gitb_at_commit_extra -a "ai fast push scope msg ticket staged no-split fixup amend split revert help"
+set -l __gitb_edit "__gitb_using_cmd edit ed ee; and __gitb_at_position 2"
+complete -c gitb -n "$__gitb_edit" -a "pick help"
 set -l __gitb_push "__gitb_using_cmd push p ps pus; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_push" -a "yes force list help"
 set -l __gitb_pull "__gitb_using_cmd pull pu pl pul; and __gitb_at_position 2"

@@ -384,16 +384,29 @@ gitb commit <combined>       # compact form: ff, aifp, fastsp, ...
 
 ### `gitb edit`
 
-Rewrites the **last commit message** by opening `git commit --amend` in your editor. The working tree and staged files are untouched.
+Rewrites a **commit message** without touching the tree.
 
 ```bash
-gitb edit          # open editor on the last commit message
+gitb edit          # reword the LAST commit (git commit --amend)
+gitb edit pick     # choose any recent commit and reword it via rebase
 gitb edit help     # show inline help
 ```
 
+Modes:
+
+| Mode | Aliases | Description |
+|------|---------|-------------|
+| `<empty>` | | Reword the last commit (`git commit --amend`) |
+| `pick` | `p` `c` `choose` | Pick any recent commit, reword via non-interactive rebase |
+| `help` | `h` `--help` `-h` | Show inline help |
+
+Notes:
+
+- `pick` requires a clean working tree (the rebase replays subsequent commits).
+- Merge commits and the root commit cannot be reworded this way.
 - If the commit was already pushed, run `gitb push force` afterwards.
 - To add staged changes into the last commit, use `gitb commit amend` instead.
-- To undo the amend, use `gitb undo amend`.
+- To undo the change, use `gitb undo amend` (for plain edit) or `gitb undo rebase` (for `pick`).
 
 ### `gitb push`
 

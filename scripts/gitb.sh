@@ -110,6 +110,7 @@ source scripts/squash.sh || { echo "gitbasher: failed to load scripts/squash.sh"
 source scripts/pull.sh || { echo "gitbasher: failed to load scripts/pull.sh" >&2; exit 1; }
 source scripts/push.sh || { echo "gitbasher: failed to load scripts/push.sh" >&2; exit 1; }
 source scripts/commit.sh || { echo "gitbasher: failed to load scripts/commit.sh" >&2; exit 1; }
+source scripts/edit.sh || { echo "gitbasher: failed to load scripts/edit.sh" >&2; exit 1; }
 source scripts/branch.sh || { echo "gitbasher: failed to load scripts/branch.sh" >&2; exit 1; }
 source scripts/tag.sh || { echo "gitbasher: failed to load scripts/tag.sh" >&2; exit 1; }
 source scripts/reset.sh || { echo "gitbasher: failed to load scripts/reset.sh" >&2; exit 1; }

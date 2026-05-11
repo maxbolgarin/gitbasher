@@ -18,6 +18,7 @@ It targets contributors. If you only want to use gitbasher, the [README](./READM
 │   ├── config.sh           # `gitb config` — stores prefs in git config (gitbasher.*)
 │   ├── init.sh             # interactive remote setup on first run
 │   ├── commit.sh           # `gitb commit` — interactive, AI, split, amend, revert
+│   ├── edit.sh             # `gitb edit` — rewrite the last commit message (`git commit --amend`)
 │   ├── push.sh / pull.sh   # `gitb push`, `gitb pull`
 │   ├── branch.sh           # `gitb branch`, `gitb prev`
 │   ├── tag.sh / cherry.sh  # `gitb tag`, `gitb cherry`

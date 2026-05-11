@@ -11,6 +11,7 @@ function _gitb_bash_completion_content {
 cat <<'GITB_BASH_EOF'
 _gitb_commands="
 commit c co com
+edit ed ee
 push p ps pus
 pull pu pl pul
 merge m me
@@ -39,8 +40,8 @@ update up upd
 uninstall uns uni
 help man
 "
-_gitb_sub_commit="ai llm i fast f fasts fs sf ff ffp ffpush push pu p fastp fp pf fastsp fsp fps scope s msg m ticket jira j t staged st no-split nosplit nsp nsl fixup fix x fixupp fixp xp px fixupst xst stx fastfix fx xf fastfixp fxp xfp amend am a amendst ast sta amendf amf af fa split sp sl splitp spp slp aisplit isplit aispl ispl aisplitp isplitp aisplp isplp llmf aif if llmp aip ip llmst aist ist llmfp aifp ifp ipf llms ais is llmsf aisf isf llmsfp aisfp isfp llmm aim im llmmf aimf imf llmmfp aimfp imfp last l revert rev help h"
-_gitb_sub_commit_simple="ai llm i fast f push pu p scope s msg m ticket jira j t staged no-split nosplit nsp nsl fixup fix x amend am a split sp sl last l revert rev help h"
+_gitb_sub_commit="ai llm i fast f fasts fs sf ff ffp ffpush push pu p fastp fp pf fastsp fsp fps scope s msg m ticket jira j t staged st no-split nosplit nsp nsl fixup fix x fixupp fixp xp px fixupst xst stx fastfix fx xf fastfixp fxp xfp amend am a amendst ast sta amendf amf af fa split sp sl splitp spp slp aisplit isplit aispl ispl aisplitp isplitp aisplp isplp llmf aif if llmp aip ip llmst aist ist llmfp aifp ifp ipf llms ais is llmsf aisf isf llmsfp aisfp isfp llmm aim im llmmf aimf imf llmmfp aimfp imfp revert rev revertp revp rp help h"
+_gitb_sub_commit_simple="ai llm i fast f push pu p scope s msg m ticket jira j t staged no-split nosplit nsp nsl fixup fix x amend am a split sp sl revert rev help h"
 _gitb_sub_wip_backend="stash s branch b worktree w wt tree nopush np n"
 _gitb_sub_push="yes y force f list log l help h"
 _gitb_sub_pull="fetch fe all fa upd u ffonly ff merge m rebase r interactive ri rs dry d dr help h"
@@ -61,10 +62,12 @@ _gitb_sub_origin="set add new a change update c u set-url rename mv ren remove d
 _gitb_sub_log="branch b compare comp c search s help h"
 _gitb_sub_hook="list create edit toggle test show remove select install help"
 _gitb_sub_log_branch="local l remote r all a help h"
+_gitb_sub_edit="help h"
 _gitb_sub_config_auto="up u on install enable down d off uninstall disable remove status st print cat p help h"
 _gitb_canonical() {
     case "$1" in
         commit|c|co|com)              echo commit ;;
+        edit|ed|ee)                   echo edit ;;
         push|p|ps|pus)                echo push ;;
         pull|pu|pl|pul)               echo pull ;;
         merge|m|me)                   echo merge ;;
@@ -95,7 +98,6 @@ _gitb_commit_state_aware() {
     for ((i=2; i<COMP_CWORD; i++)); do
         tok="${COMP_WORDS[$i]}"
         case "$tok" in
-            last|l)                   has_action="last" ;;
             revert|rev)               has_action="revert" ;;
             fixup|fix|x)              has_action="fixup" ;;
             amend|am|a)               has_action="amend" ;;
@@ -112,8 +114,8 @@ _gitb_commit_state_aware() {
     done
     local candidates=()
     case "$has_action" in
-        last|revert)
-            :
+        revert)
+            [ -z "$has_push" ] && candidates+=("push")
             ;;
         amend|fixup)
             [ -z "${has_fast}${has_staged}" ] && candidates+=("fast" "staged")
@@ -125,7 +127,7 @@ _gitb_commit_state_aware() {
             if [ -z "$has_action" ]; then
                 candidates+=("split")
                 [ -z "$has_strict_mod" ] && candidates+=("amend" "fixup")
-                [ -z "$has_any_mod" ] && candidates+=("last" "revert")
+                [ -z "$has_any_mod" ] && candidates+=("revert")
             fi
             [ -z "$has_ai" ]                  && candidates+=("ai")
             [ -z "${has_fast}${has_staged}" ] && candidates+=("fast" "staged")
@@ -229,7 +231,7 @@ _gitb() {
                         'staged[only staged files]' 'no-split[disable split]'
                         'fixup[create fixup commit]' 'amend[amend last commit]'
                         'split[split into atomic commits]'
-                        'last[show last commit]' 'revert[revert a commit]' 'help[show help]'
+                        'revert[revert a commit]' 'help[show help]'
                     )
                     _values 'commit flag' $flags
                     return
@@ -241,7 +243,6 @@ _gitb() {
                 for ((i=3; i<CURRENT; i++)); do
                     tok="${words[$i]}"
                     case "$tok" in
-                        last|l)                   has_action="last" ;;
                         revert|rev)               has_action="revert" ;;
                         fixup|fix|x)              has_action="fixup" ;;
                         amend|am|a)               has_action="amend" ;;
@@ -258,7 +259,8 @@ _gitb() {
                 done
                 flags=()
                 case "$has_action" in
-                    last|revert)
+                    revert)
+                        [ -z "$has_push" ] && flags+=('push[commit and push]')
                         ;;
                     amend|fixup)
                         [ -z "${has_fast}${has_staged}" ] && flags+=('fast[fast commit (git add .)]' 'staged[only staged files]')
@@ -270,7 +272,7 @@ _gitb() {
                         if [ -z "$has_action" ]; then
                             flags+=('split[split into atomic commits]')
                             [ -z "$has_strict_mod" ] && flags+=('amend[amend last commit]' 'fixup[create fixup commit]')
-                            [ -z "$has_any_mod" ] && flags+=('last[reuse last message]' 'revert[revert a commit]')
+                            [ -z "$has_any_mod" ] && flags+=('revert[revert a commit]')
                         fi
                         [ -z "$has_ai" ]                  && flags+=('ai[AI-generated message]')
                         [ -z "${has_fast}${has_staged}" ] && flags+=('fast[fast commit (git add .)]' 'staged[only staged files]')
@@ -309,6 +311,7 @@ _gitb() {
             local -a cmds
             cmds=(
                 'commit:Interactive commit (alias: c, co, com)'
+                'edit:Rewrite the last commit message (alias: ed, ee)'
                 'push:Push current branch (alias: p, ps, pus)'
                 'pull:Pull updates (alias: pu, pl, pul)'
                 'merge:Merge a branch (alias: m, me)'
@@ -349,7 +352,10 @@ _gitb() {
                         'no-split[disable split]' 'fixup[create fixup commit]' \
                         'amend[amend last commit]' 'split[split into atomic commits]' \
                         'splitp[split and push]'  \
-                        'last[show last commit]' 'revert[revert a commit]' 'help[show help]'
+                        'revert[revert a commit]' 'help[show help]'
+                    ;;
+                edit|ed|ee)
+                    _values 'edit mode' 'help[show help]'
                     ;;
                 push|p|ps|pus)
                     _values 'push mode' 'yes[skip confirmation]' 'force[force push]' 'list[show pending pushes]' 'help[show help]'
@@ -486,6 +492,9 @@ complete -c gitb -n __gitb_no_subcmd -a commit       -d 'Interactive commit'
 complete -c gitb -n __gitb_no_subcmd -a c            -d 'Alias of commit'
 complete -c gitb -n __gitb_no_subcmd -a co           -d 'Alias of commit'
 complete -c gitb -n __gitb_no_subcmd -a com          -d 'Alias of commit'
+complete -c gitb -n __gitb_no_subcmd -a edit         -d 'Rewrite the last commit message'
+complete -c gitb -n __gitb_no_subcmd -a ed           -d 'Alias of edit'
+complete -c gitb -n __gitb_no_subcmd -a ee           -d 'Alias of edit'
 complete -c gitb -n __gitb_no_subcmd -a push         -d 'Push current branch'
 complete -c gitb -n __gitb_no_subcmd -a p            -d 'Alias of push'
 complete -c gitb -n __gitb_no_subcmd -a pull         -d 'Pull updates'
@@ -546,8 +555,8 @@ function __gitb_at_commit_extra
     test (count $tokens) -ge 3; or return 1
     contains -- $tokens[2] commit c co com
 end
-complete -c gitb -n __gitb_at_commit_pos2 -a "ai fast fasts ff ffp push fastp scope msg ticket staged no-split fixup amend split splitp aisplit aisplitp aip aif aifp last revert help"
-complete -c gitb -n __gitb_at_commit_extra -a "ai fast push scope msg ticket staged no-split fixup amend split last revert help"
+complete -c gitb -n __gitb_at_commit_pos2 -a "ai fast fasts ff ffp push fastp scope msg ticket staged no-split fixup amend split splitp aisplit aisplitp aip aif aifp revert revertp revp rp help"
+complete -c gitb -n __gitb_at_commit_extra -a "ai fast push scope msg ticket staged no-split fixup amend split revert help"
 set -l __gitb_push "__gitb_using_cmd push p ps pus; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_push" -a "yes force list help"
 set -l __gitb_pull "__gitb_using_cmd pull pu pl pul; and __gitb_at_position 2"

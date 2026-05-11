@@ -21,6 +21,7 @@ function print_help {
     printf "$hdr" "DAILY"
     printf "$row" "$CMD" "status (s)"              "Show repo state and changed files"
     printf "$row" "$CMD" "commit (c, co, com)"     "Create commits — interactive, AI, amend, revert"
+    printf "$row" "$CMD" "edit (ed, ee)"            "Rewrite the last commit message (${GREEN}git commit --amend${ENDCOLOR})"
     printf "$row" "$CMD" "push (p, ps, pus)"       "Push current branch safely"
     printf "$row" "$CMD" "pull (pu, pl, pul)"      "Pull from remote"
     printf "$row" "$CMD" "sync (sy)"               "Sync current branch with $main_branch"
@@ -118,6 +119,9 @@ fi
 case "$1" in
     commit|c|co|com)
         commit_script "${@:2}"
+    ;;
+    edit|ed|ee)
+        edit_script "$2"
     ;;
     push|p|ps|pus)         
         push_script $2

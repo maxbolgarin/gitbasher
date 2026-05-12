@@ -116,7 +116,7 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 
 | Group | Commands | What you get |
 |-------|----------|--------------|
-| **Commit** | `commit` (`c`), `edit` (`ed`) | Interactive conventional commits, fast-mode, AI messages, atomic split, fixup, amend, revert; `gitb edit` rewrites the last commit message |
+| **Commit** | `commit` (`c`), `edit` (`ed`) | Interactive conventional commits, fast-mode, AI messages, atomic split, fixup, amend, revert; `gitb edit` reworks the last commit message, picks any commit to reword, or renames the current branch |
 | **Sync remote** | `push` (`p`), `pull` (`pu`), `sync` (`sy`) | Safe push (with force/list), smart pull (rebase / merge / ff), one-shot rebase-on-main with optional force-push |
 | **Branches** | `branch` (`b`), `prev` (`-`) | List / switch / create-from-current / create-from-updated-main / delete (orphaned, merged, gone) / recent / previous / checkout-tag |
 | **Integration** | `merge` (`m`), `rebase` (`r`), `squash` (`sq`), `cherry` (`ch`) | Merge into current / into main / from remote · rebase onto main / interactive / autosquash / fastautosquash / pull-commits · AI-driven squash of branch commits into changelog-ready history · cherry-pick by hash, range, or interactive |
@@ -301,7 +301,7 @@ git config gitbasher.ai-base-url http://my-gateway:4000/v1/chat/completions
 | Command | Aliases | Description |
 |---------|---------|-------------|
 | [`commit`](#gitb-commit) | `c` `co` `com` | Create commits (interactive, fast, AI, split, fixup, amend, revert, …) |
-| [`edit`](#gitb-edit) | `ed` `ee` | Rewrite the last commit message (`git commit --amend`) |
+| [`edit`](#gitb-edit) | `ed` `ee` | Rewrite the last commit message, reword an older commit, or rename the current branch |
 | [`push`](#gitb-push) | `p` `ps` `pus` | Push with conflict handling, force, or list-only |
 | [`pull`](#gitb-pull) | `pu` `pl` `pul` | Smart pull: rebase / merge / ff / fetch-only / interactive / dry-run |
 | [`branch`](#gitb-branch) | `b` `br` `bran` | Switch / list / create / delete / recent / gone / checkout-tag |
@@ -384,12 +384,14 @@ gitb commit <combined>       # compact form: ff, aifp, fastsp, ...
 
 ### `gitb edit`
 
-Rewrites a **commit message** without touching the tree.
+Rewrites a **commit message** or the **current branch name** without touching the tree.
 
 ```bash
-gitb edit          # reword the LAST commit (git commit --amend)
-gitb edit pick     # choose any recent commit and reword it via rebase
-gitb edit help     # show inline help
+gitb edit                       # reword the LAST commit (git commit --amend)
+gitb edit pick                  # choose any recent commit and reword it via rebase
+gitb edit branch                # rename the current branch (interactive)
+gitb edit branch feat/new-name  # rename the current branch to feat/new-name
+gitb edit help                  # show inline help
 ```
 
 Modes:
@@ -398,6 +400,7 @@ Modes:
 |------|---------|-------------|
 | `<empty>` | | Reword the last commit (`git commit --amend`) |
 | `pick` | `p` `c` `choose` | Pick any recent commit, reword via non-interactive rebase |
+| `branch` | `b` `br` `rename` `ren` | Rename the current branch (`git branch -m`); optional remote sync |
 | `help` | `h` `--help` `-h` | Show inline help |
 
 Notes:
@@ -405,6 +408,7 @@ Notes:
 - `pick` requires a clean working tree (the rebase replays subsequent commits).
 - Merge commits and the root commit cannot be reworded this way.
 - If the commit was already pushed, run `gitb push force` afterwards.
+- `branch` offers to push the new name and delete the old one on the remote when an upstream exists.
 - To add staged changes into the last commit, use `gitb commit amend` instead.
 - To undo the change, use `gitb undo amend` (for plain edit) or `gitb undo rebase` (for `pick`).
 

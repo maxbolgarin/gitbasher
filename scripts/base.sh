@@ -121,7 +121,7 @@ case "$1" in
         commit_script "${@:2}"
     ;;
     edit|ed|ee)
-        edit_script "$2"
+        edit_script "${@:2}"
     ;;
     push|p|ps|pus)         
         push_script $2

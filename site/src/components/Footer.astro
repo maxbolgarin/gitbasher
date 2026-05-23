@@ -1,0 +1,173 @@
+---
+const year = new Date().getFullYear();
+---
+<footer class="site-footer">
+  <div class="container footer-inner">
+    <div class="footer-brand">
+      <span class="brand-mark" aria-hidden="true">
+        <span class="brand-prompt">$</span>
+        <span class="brand-cursor"></span>
+      </span>
+      <div>
+        <strong>gitbasher</strong>
+        <p>Open source · MIT · made by <a href="https://github.com/maxbolgarin" rel="noopener">@maxbolgarin</a></p>
+      </div>
+    </div>
+
+    <div class="footer-cols">
+      <div>
+        <h4>Project</h4>
+        <ul>
+          <li><a href="https://github.com/maxbolgarin/gitbasher" rel="noopener">GitHub repo</a></li>
+          <li><a href="https://github.com/maxbolgarin/gitbasher/releases" rel="noopener">Releases</a></li>
+          <li><a href="https://github.com/maxbolgarin/gitbasher/blob/main/CHANGELOG.md" rel="noopener">Changelog</a></li>
+          <li><a href="https://github.com/maxbolgarin/gitbasher/blob/main/LICENSE" rel="noopener">License</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Docs</h4>
+        <ul>
+          <li><a href="https://github.com/maxbolgarin/gitbasher#readme" rel="noopener">README</a></li>
+          <li><a href="https://github.com/maxbolgarin/gitbasher/blob/main/FAQ.md" rel="noopener">FAQ</a></li>
+          <li><a href="https://github.com/maxbolgarin/gitbasher/blob/main/ARCHITECTURE.md" rel="noopener">Architecture</a></li>
+          <li><a href="https://github.com/maxbolgarin/gitbasher/blob/main/CONTRIBUTING.md" rel="noopener">Contributing</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Community</h4>
+        <ul>
+          <li><a href="https://github.com/maxbolgarin/gitbasher/issues" rel="noopener">Issues</a></li>
+          <li><a href="https://github.com/maxbolgarin/gitbasher/discussions" rel="noopener">Discussions</a></li>
+          <li><a href="https://github.com/maxbolgarin/gitbasher/blob/main/SECURITY.md" rel="noopener">Security</a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="container footer-bottom">
+    <span>© {year} gitbasher contributors.</span>
+    <span class="dim">Built with Astro · Hosted on GitHub Pages.</span>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    border-top: 1px solid var(--border-soft);
+    margin-top: 2rem;
+    background: rgba(13, 17, 23, 0.6);
+    padding: 3rem 0 2rem;
+  }
+
+  .footer-inner {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 2rem;
+  }
+
+  .footer-brand {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+  }
+
+  .footer-brand strong {
+    font-family: var(--font-mono);
+    font-size: 1.1rem;
+  }
+
+  .footer-brand p {
+    margin: 0.2rem 0 0;
+    color: var(--fg-muted);
+    font-size: 0.88rem;
+  }
+
+  .brand-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    padding: 0 6px;
+  }
+
+  .brand-prompt {
+    color: var(--green);
+    font-weight: 700;
+    font-family: var(--font-mono);
+  }
+
+  .brand-cursor {
+    width: 7px;
+    height: 14px;
+    margin-left: 3px;
+    background: var(--cyan);
+    animation: blink-footer 1.1s steps(2, start) infinite;
+  }
+
+  @keyframes blink-footer {
+    to {
+      visibility: hidden;
+    }
+  }
+
+  .footer-cols {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+  }
+
+  .footer-cols h4 {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--fg-subtle);
+    margin: 0 0 0.7rem;
+  }
+
+  .footer-cols ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 0.35rem;
+  }
+
+  .footer-cols a {
+    color: var(--fg-muted);
+    font-size: 0.92rem;
+  }
+
+  .footer-cols a:hover {
+    color: var(--green);
+    text-decoration: none;
+  }
+
+  .footer-bottom {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: space-between;
+    margin-top: 2rem;
+    padding-top: 1.2rem;
+    border-top: 1px solid var(--border-soft);
+    color: var(--fg-subtle);
+    font-size: 0.85rem;
+  }
+
+  .footer-bottom .dim {
+    color: var(--fg-subtle);
+  }
+
+  @media (max-width: 760px) {
+    .footer-inner {
+      grid-template-columns: 1fr;
+    }
+
+    .footer-cols {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+</style>

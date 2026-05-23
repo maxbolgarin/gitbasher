@@ -1,0 +1,106 @@
+---
+import '../styles/global.css';
+
+export interface Props {
+  title?: string;
+  description?: string;
+  /** Path relative to base, e.g. "/" or "/faq" */
+  path?: string;
+  /** Additional JSON-LD objects to inject. Each is stringified into a <script> tag. */
+  jsonLd?: Record<string, unknown>[];
+}
+
+const {
+  title = 'Gitbasher — Friendly git wrapper with AI commits, conventional commits & safe workflows',
+  description = 'Gitbasher is a free, open-source bash wrapper for git. Conventional commits, AI commit messages (OpenAI, OpenRouter, or fully local Ollama), smart sync, undo-everything safety. MIT licensed, zero dependencies.',
+  path = '/',
+  jsonLd = [],
+} = Astro.props;
+
+const siteOrigin = Astro.site?.toString().replace(/\/$/, '') ?? 'https://maxbolgarin.github.io';
+const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+const canonical = `${siteOrigin}${base}${path === '/' ? '/' : path}`;
+const ogImage = `${siteOrigin}${base}/og-image.jpg`;
+
+const softwareJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'Gitbasher',
+  alternateName: 'gitb',
+  description,
+  applicationCategory: 'DeveloperApplication',
+  operatingSystem: 'Linux, macOS, Windows (WSL)',
+  url: `${siteOrigin}${base}/`,
+  downloadUrl: 'https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh',
+  softwareVersion: '4.0.0',
+  license: 'https://github.com/maxbolgarin/gitbasher/blob/main/LICENSE',
+  codeRepository: 'https://github.com/maxbolgarin/gitbasher',
+  programmingLanguage: 'Bash',
+  offers: {
+    '@type': 'Offer',
+    price: '0',
+    priceCurrency: 'USD',
+  },
+  author: {
+    '@type': 'Person',
+    name: 'Max Bolgarin',
+    url: 'https://github.com/maxbolgarin',
+  },
+  image: ogImage,
+};
+
+const allJsonLd = [softwareJsonLd, ...jsonLd];
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+
+    <meta name="theme-color" content="#0d1117" />
+    <meta name="color-scheme" content="dark" />
+
+    <link rel="icon" type="image/svg+xml" href={`${base}/favicon.svg`} />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Gitbasher" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:alt" content="Gitbasher — friendly git wrapper" />
+
+    <!-- Twitter card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+
+    <!-- Keywords (low SEO weight today, harmless to include) -->
+    <meta
+      name="keywords"
+      content="gitbasher, git wrapper, conventional commits, AI commit messages, ollama git, git CLI, bash git, open source git tool, MIT, git productivity"
+    />
+
+    <!-- Structured data -->
+    {allJsonLd.map((data) => (
+      <script type="application/ld+json" set:html={JSON.stringify(data)} />
+    ))}
+
+    <link rel="sitemap" href={`${base}/sitemap-index.xml`} />
+  </head>
+  <body>
+    <a href="#main" class="sr-only">Skip to main content</a>
+    <slot name="header" />
+    <main id="main">
+      <slot />
+    </main>
+    <slot name="footer" />
+  </body>
+</html>

@@ -3,3 +3,8 @@ dist/gitb
 .worktree/
 .claude
 CLAUDE.md
+
+# Marketing site (Astro) build artifacts
+site/node_modules/
+site/dist/
+site/.astro/

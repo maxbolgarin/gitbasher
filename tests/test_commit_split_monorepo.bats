@@ -338,6 +338,45 @@ stage() {
     [ -n "${split_groups[misc]:-}" ]
 }
 
+# --- Scope-name normalization (no leading/trailing . _ - in scopes) --------
+
+@test "normalize: helper strips leading and trailing separators" {
+    [ "$(normalize_scope_name '.superpowers')" = "superpowers" ]
+    [ "$(normalize_scope_name '_deploy-production')" = "deploy-production" ]
+    [ "$(normalize_scope_name '.github')" = "github" ]
+    [ "$(normalize_scope_name 'build-')" = "build" ]
+    [ "$(normalize_scope_name '__init__')" = "init" ]
+    [ "$(normalize_scope_name 'bff')" = "bff" ]
+    # all-separator name collapses to empty
+    [ -z "$(normalize_scope_name '._-')" ]
+}
+
+@test "normalize: dotfile directory scope drops the leading dot" {
+    stage ".superpowers/config.yml"
+    stage ".superpowers/rules.md"
+    stage "src/app.ts"   # second scope so the split is meaningful
+
+    detect_scopes_from_staged_files
+    [[ "$detected_scopes" == *"superpowers"* ]]
+    [[ "$detected_scopes" != *".superpowers"* ]]
+
+    build_split_groups_from_staged
+    [ -n "${split_groups[superpowers]:-}" ]
+    [ -z "${split_groups[.superpowers]:-}" ]
+}
+
+@test "normalize: underscore-prefixed filename stem drops the underscore" {
+    stage "scripts/_deploy-production.sh"
+    stage "scripts/_build-services.sh"
+    stage "tests/test_a.py"   # second scope
+
+    build_split_groups_from_staged
+    [ -n "${split_groups[deploy-production]:-}" ]
+    [ -n "${split_groups[build-services]:-}" ]
+    [ -z "${split_groups[_deploy-production]:-}" ]
+    [ -z "${split_groups[_build-services]:-}" ]
+}
+
 @test "consolidate: no-op when group count is within the cap" {
     declare -gA split_groups=()
     split_group_keys=()

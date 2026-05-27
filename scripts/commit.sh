@@ -258,21 +258,41 @@ function detect_scopes_from_staged_files {
             # Combine: filenames first, then directories
             detected_scopes_sorted=("${filename_sorted[@]}" "${directory_sorted[@]}")
             
-            # Extract just the token names for the final result (limit to 9 scopes)
+            # Extract just the token names for the final result (limit to 9 scopes).
+            # Strip leading/trailing separators (.github -> github) and drop
+            # duplicates that collapse to the same clean name.
             final_scopes=()
             count=0
+            declare -A seen_norm=()
             for entry in "${detected_scopes_sorted[@]}"; do
                 if [ $count -ge 9 ]; then
                     break
                 fi
                 token="${entry##*:}"  # Extract token after last colon
+                token=$(normalize_scope_name "$token")
+                [ -z "$token" ] && continue
+                [ -n "${seen_norm[$token]:-}" ] && continue
+                seen_norm["$token"]=1
                 final_scopes+=("$token")
                 count=$((count + 1))
             done
-            
+
             detected_scopes="${final_scopes[*]}"
         fi
     fi
+}
+
+### Strip leading/trailing separators from a scope name so it reads cleanly
+### as `type(scope):` — e.g. ".superpowers" -> "superpowers", "_deploy" ->
+### "deploy", "build-" -> "build". Dotfile dirs and underscore-prefixed
+### filenames are common and shouldn't leak their punctuation into commit
+### scopes. Returns the trimmed name (may be empty if it was all separators).
+# $1: raw scope name
+function normalize_scope_name {
+    local s="$1"
+    while [[ "$s" == [._-]* ]]; do s="${s#?}"; done
+    while [[ "$s" == *[._-] ]]; do s="${s%?}"; done
+    printf '%s' "$s"
 }
 
 ### Function to map staged files to detected scopes (for atomic-split commits)
@@ -325,6 +345,10 @@ function build_split_groups_from_staged {
             comp_lower="${comp,,}"
             comp_no_ext_lower="${comp_lower%.*}"
             [ -z "$comp_no_ext_lower" ] && comp_no_ext_lower="$comp_lower"
+            # detected scopes are normalized (.github -> github), so normalize
+            # the component too before comparing.
+            comp_lower=$(normalize_scope_name "$comp_lower")
+            comp_no_ext_lower=$(normalize_scope_name "$comp_no_ext_lower")
             for scope in "${scopes_arr[@]}"; do
                 if [ "$comp_lower" = "$scope" ] || [ "$comp_no_ext_lower" = "$scope" ]; then
                     assigned="$scope"
@@ -343,6 +367,10 @@ function build_split_groups_from_staged {
             local stem="${comps[$last_idx_inner]}"
             stem="${stem%.*}"          # drop the extension
             stem="${stem,,}"           # lowercase
+            # Strip leading/trailing separators (_deploy-production ->
+            # deploy-production) so they don't leak into the scope and so the
+            # generic-name check below sees the clean stem.
+            stem=$(normalize_scope_name "$stem")
             # Skip stems that are generic across many languages and rarely
             # carry semantic meaning (the per-feature scope is the parent
             # dir, which we've already filtered for being too generic).
@@ -420,7 +448,8 @@ function consolidate_split_groups {
                 if [[ "$comp_lower" =~ ^(src|lib|libs|scripts|bin|node_modules|vendor|tmp|temp|cache|logs|log|services|apps|packages|modules|components|cmd|internal)$ ]]; then
                     continue
                 fi
-                bucket="${comp_lower#.}"   # .github -> github
+                bucket=$(normalize_scope_name "$comp_lower")   # .github -> github
+                [ -z "$bucket" ] && continue
                 break
             done
             [ -z "$bucket" ] && bucket="misc"

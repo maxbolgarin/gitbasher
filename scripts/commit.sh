@@ -361,9 +361,125 @@ function build_split_groups_from_staged {
         fi
     done <<< "$staged_files"
 
+    # Keep the split between atomic and broad: a huge changeset (e.g. a dir
+    # full of one-off files, each producing its own stem scope) must not
+    # explode into dozens of micro-commits.
+    consolidate_split_groups "$(get_max_split_groups)"
+
     # A split is only meaningful with 2+ groups
     if [ ${#split_group_keys[@]} -lt 2 ]; then
         return 1
+    fi
+    return 0
+}
+
+### Resolve the maximum number of split groups (scopes) allowed in one run.
+# Configurable via gitbasher.commit-max-split-groups; defaults to 7. Clamped
+# to a sane range (2..20) so a typo can't disable or over-fragment splitting.
+function get_max_split_groups {
+    local v
+    v=$(get_config_value gitbasher.commit-max-split-groups "7")
+    case "$v" in
+        ''|*[!0-9]*) v=7 ;;
+    esac
+    [ "$v" -lt 2 ] && v=2
+    [ "$v" -gt 20 ] && v=20
+    printf '%s' "$v"
+}
+
+### Cap the number of split groups so a large changeset stays reviewable.
+# When the grouping exceeds the cap, collapse it in two stages:
+#   1. Re-bucket every file by its first meaningful (non-generic) path
+#      component, stripping a leading dot (.github -> github). This folds a
+#      sprawl of per-file stem scopes into a handful of location scopes.
+#   2. If still over the cap, keep the largest (cap-1) groups and fold the
+#      long tail into "misc".
+# Operates in place on the globals split_groups / split_group_keys.
+# $1: maximum number of groups to allow (>=2)
+function consolidate_split_groups {
+    local max="$1"
+    case "$max" in ''|*[!0-9]*) max=7 ;; esac
+    [ "$max" -lt 2 ] && max=2
+    [ ${#split_group_keys[@]} -le "$max" ] && return 0
+
+    # --- Stage 1: re-bucket by first non-generic path component ---
+    local -A rebucket=()
+    local -a rebucket_keys=()
+    local key file bucket comp_lower i last_idx
+    local -a comps
+    for key in "${split_group_keys[@]}"; do
+        while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            IFS='/' read -r -a comps <<< "$file"
+            last_idx=$((${#comps[@]} - 1))
+            bucket=""
+            for i in "${!comps[@]}"; do
+                [ "$i" -eq "$last_idx" ] && continue   # skip the filename
+                comp_lower="${comps[$i],,}"
+                [ -z "$comp_lower" ] && continue
+                if [[ "$comp_lower" =~ ^(src|lib|libs|scripts|bin|node_modules|vendor|tmp|temp|cache|logs|log|services|apps|packages|modules|components|cmd|internal)$ ]]; then
+                    continue
+                fi
+                bucket="${comp_lower#.}"   # .github -> github
+                break
+            done
+            [ -z "$bucket" ] && bucket="misc"
+            if [ -z "${rebucket[$bucket]:-}" ]; then
+                rebucket_keys+=("$bucket")
+                rebucket[$bucket]="$file"
+            else
+                rebucket[$bucket]+=$'\n'"$file"
+            fi
+        done <<< "${split_groups[$key]}"
+    done
+
+    unset split_groups split_group_keys
+    declare -gA split_groups=()
+    split_group_keys=()
+    for key in "${rebucket_keys[@]}"; do
+        split_groups[$key]="${rebucket[$key]}"
+        split_group_keys+=("$key")
+    done
+
+    [ ${#split_group_keys[@]} -le "$max" ] && return 0
+
+    # --- Stage 2: keep the largest (max-1) groups, fold the rest into misc ---
+    local -a sized=()
+    local n
+    for key in "${split_group_keys[@]}"; do
+        n=$(printf '%s\n' "${split_groups[$key]}" | grep -c .)
+        sized+=("${n}"$'\t'"${key}")
+    done
+    IFS=$'\n' sized=($(printf '%s\n' "${sized[@]}" | sort -t$'\t' -k1,1nr -k2,2))
+    unset IFS
+
+    local -A kept=()
+    local -a kept_keys=()
+    local keep_limit=$((max - 1))
+    local misc_files="" idx=0 entry
+    for entry in "${sized[@]}"; do
+        key="${entry#*$'\t'}"
+        if [ "$idx" -lt "$keep_limit" ] && [ "$key" != "misc" ]; then
+            kept_keys+=("$key")
+            kept[$key]="${split_groups[$key]}"
+            idx=$((idx + 1))
+        elif [ -z "$misc_files" ]; then
+            misc_files="${split_groups[$key]}"
+        else
+            misc_files+=$'\n'"${split_groups[$key]}"
+        fi
+    done
+
+    unset split_groups split_group_keys
+    declare -gA split_groups=()
+    split_group_keys=()
+    for key in "${kept_keys[@]}"; do
+        split_groups[$key]="${kept[$key]}"
+        split_group_keys+=("$key")
+    done
+    if [ -n "$misc_files" ]; then
+        split_group_keys+=("misc")
+        split_groups[misc]="$misc_files"
     fi
     return 0
 }
@@ -422,13 +538,16 @@ function refine_groups_with_ai {
         heuristic_hint="$detected_scopes"
     fi
 
-    local system_prompt='You group staged git files into logical scopes for atomic commits.
+    local max_groups
+    max_groups=$(get_max_split_groups)
+
+    local system_prompt="You group staged git files into logical scopes for atomic commits.
 
 Input arrives in XML tags: a list of staged files, a diff summary, recent commit messages (for codebase scope conventions), and heuristic-detected candidate scope tokens.
 
-Task: assign EVERY staged file to a single scope. Use 2-5 groups when there is meaningful separation; use exactly 1 group only if all files truly belong together. Use lowercase scope names that match the style of <recent_commits>. Prefer scope names from <heuristic_candidates> when they fit the file path or change; invent new ones only when none of the candidates apply. Use "misc" for files with no clear scope (e.g., README, top-level config).
+Task: assign EVERY staged file to a single scope. Use 2 to ${max_groups} groups when there is meaningful separation; use exactly 1 group only if all files truly belong together. Never exceed ${max_groups} groups — when many files share a theme, prefer a single broader scope over several tiny ones. Use lowercase scope names that match the style of <recent_commits>. Prefer scope names from <heuristic_candidates> when they fit the file path or change; invent new ones only when none of the candidates apply. Use \"misc\" for files with no clear scope (e.g., README, top-level config).
 
-Output format: TSV only. One line per staged file in the form <scope><TAB><file_path>. No header, no prose, no markdown fences, no surrounding quotes. Every file from <staged_files> MUST appear exactly once. The file paths must be byte-identical to those in <staged_files>.'
+Output format: TSV only. One line per staged file in the form <scope><TAB><file_path>. No header, no prose, no markdown fences, no surrounding quotes. Every file from <staged_files> MUST appear exactly once. The file paths must be byte-identical to those in <staged_files>."
 
     local user_prompt="<recent_commits>
 ${recent_commits}
@@ -1030,6 +1149,9 @@ function perform_commit_split {
 # spanning multiple subdirs), AI refinement is invoked to propose a better
 # scope→file mapping. Disable with gitbasher.commit-ai-grouping = "never";
 # force always-on with "always".
+# The number of groups is capped at gitbasher.commit-max-split-groups (default
+# 7) so a huge changeset stays a handful of reviewable commits instead of
+# dozens of micro-commits — see consolidate_split_groups.
 # Returns to the caller (no exit) when the user declines or the split isn't
 # applicable; perform_commit_split exits the script directly on success.
 # $1: "true" to force the split flow even when the config says "ask"/"never"
@@ -1076,6 +1198,9 @@ function try_offer_commit_split {
             # AI failed; keep heuristic groups (may be empty)
             echo -e "${YELLOW}AI grouping failed, falling back to heuristic.${ENDCOLOR}"
         fi
+        # Safety net: cap AI's grouping too (the heuristic path is already
+        # capped inside build_split_groups_from_staged).
+        consolidate_split_groups "$(get_max_split_groups)"
     fi
 
     # After refinement we may finally have ≥2 groups even if heuristic returned 1

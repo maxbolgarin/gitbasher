@@ -21,6 +21,7 @@ load setup_suite
 
 setup() {
     setup_test_repo
+    GITBASHER_SKIP_INIT_QUERIES=1 source "${GITBASHER_ROOT}/scripts/init.sh"
     source "${GITBASHER_ROOT}/scripts/common.sh"
     source "${GITBASHER_ROOT}/scripts/commit.sh"
     cd "$TEST_REPO"
@@ -247,4 +248,106 @@ stage() {
         echo "services should not exist as a scope" >&2
         return 1
     fi
+}
+
+# --- Group-count cap (atomic vs broad balance) -----------------------------
+#
+# A huge changeset must not explode into dozens of micro-commits. When the
+# grouping exceeds the configured cap (gitbasher.commit-max-split-groups,
+# default 7), consolidate_split_groups collapses it: first by re-bucketing
+# files under their top-level directory, then by folding the long tail into
+# misc.
+
+@test "cap: build never produces more groups than the configured max" {
+    # 10 distinct top-level dirs would naively yield ~10 scopes.
+    for d in alpha bravo charlie delta echo foxtrot golf hotel india juliet; do
+        stage "$d/file.txt"
+    done
+
+    build_split_groups_from_staged
+    [ "${#split_group_keys[@]}" -le 7 ]
+}
+
+@test "cap: gitbasher.commit-max-split-groups is honored" {
+    git config --local gitbasher.commit-max-split-groups 3
+    for d in alpha bravo charlie delta echo foxtrot; do
+        stage "$d/file.txt"
+    done
+
+    build_split_groups_from_staged
+    [ "${#split_group_keys[@]}" -le 3 ]
+}
+
+@test "cap: get_max_split_groups defaults to 7 and clamps bad values" {
+    [ "$(get_max_split_groups)" -eq 7 ]
+
+    git config --local gitbasher.commit-max-split-groups 4
+    [ "$(get_max_split_groups)" -eq 4 ]
+
+    git config --local gitbasher.commit-max-split-groups notanumber
+    [ "$(get_max_split_groups)" -eq 7 ]
+
+    git config --local gitbasher.commit-max-split-groups 1
+    [ "$(get_max_split_groups)" -eq 2 ]
+
+    git config --local gitbasher.commit-max-split-groups 999
+    [ "$(get_max_split_groups)" -eq 20 ]
+}
+
+@test "consolidate: stem-fallback explosion collapses by top-level dir" {
+    declare -gA split_groups=()
+    split_group_keys=()
+    # Simulate the real repro: 6 workflow files + 6 node UI files, each
+    # currently sitting in its own filename-stem scope.
+    local i
+    for i in 1 2 3 4 5 6; do
+        split_groups[wf$i]=".github/workflows/job$i.yml"
+        split_group_keys+=("wf$i")
+    done
+    for i in 1 2 3 4 5 6; do
+        split_groups[ui$i]="node/apps/user-web/src/comp$i.tsx"
+        split_group_keys+=("ui$i")
+    done
+
+    consolidate_split_groups 7
+    # 12 stem scopes collapse to 2 location scopes (leading dot stripped).
+    [ "${#split_group_keys[@]}" -eq 2 ]
+    [ -n "${split_groups[github]:-}" ]
+    [ -n "${split_groups[node]:-}" ]
+    [ "$(printf '%s\n' "${split_groups[github]}" | grep -c .)" -eq 6 ]
+    [ "$(printf '%s\n' "${split_groups[node]}" | grep -c .)" -eq 6 ]
+}
+
+@test "consolidate: stage-2 keeps largest groups and folds tail into misc" {
+    declare -gA split_groups=()
+    split_group_keys=()
+    # 'a' is the biggest dir; b..i have a single file each.
+    split_groups[a]=$'a/1\na/2\na/3\na/4'
+    split_group_keys+=("a")
+    local d
+    for d in b c dd ee ff gg hh ii; do
+        split_groups[$d]="$d/1"
+        split_group_keys+=("$d")
+    done
+
+    consolidate_split_groups 4
+    [ "${#split_group_keys[@]}" -le 4 ]
+    # Largest group survives intact; the long tail is bundled into misc.
+    [ -n "${split_groups[a]:-}" ]
+    [ "$(printf '%s\n' "${split_groups[a]}" | grep -c .)" -eq 4 ]
+    [ -n "${split_groups[misc]:-}" ]
+}
+
+@test "consolidate: no-op when group count is within the cap" {
+    declare -gA split_groups=()
+    split_group_keys=()
+    split_groups[bff]="services/bff/main.go"
+    split_group_keys+=("bff")
+    split_groups[api]="services/api/main.go"
+    split_group_keys+=("api")
+
+    consolidate_split_groups 7
+    [ "${#split_group_keys[@]}" -eq 2 ]
+    [ -n "${split_groups[bff]:-}" ]
+    [ -n "${split_groups[api]:-}" ]
 }

@@ -192,3 +192,45 @@ teardown() {
 
     [ -n "$to_exit" ]
 }
+
+# ===== is_network_error tests =====
+
+@test "is_network_error: detects SSH connect timeout" {
+    run is_network_error "ssh: connect to host gitlab.example.net port 22: Operation timed out"
+    [ "$status" -eq 0 ]
+}
+
+@test "is_network_error: detects could not read from remote" {
+    run is_network_error "fatal: Could not read from remote repository."
+    [ "$status" -eq 0 ]
+}
+
+@test "is_network_error: detects could not resolve host" {
+    run is_network_error "ssh: Could not resolve hostname github.com: Name or service not known"
+    [ "$status" -eq 0 ]
+}
+
+@test "is_network_error: detects connection refused" {
+    run is_network_error "fatal: unable to access 'https://...': Failed to connect to host: Connection refused"
+    [ "$status" -eq 0 ]
+}
+
+@test "is_network_error: detects kex_exchange_identification" {
+    run is_network_error "kex_exchange_identification: Connection closed by remote host"
+    [ "$status" -eq 0 ]
+}
+
+@test "is_network_error: does NOT match rejected (unpulled changes)" {
+    run is_network_error "! [rejected]        main -> main (fetch first)"
+    [ "$status" -ne 0 ]
+}
+
+@test "is_network_error: does NOT match permission denied" {
+    run is_network_error "remote: Permission to user/repo.git denied to someone."
+    [ "$status" -ne 0 ]
+}
+
+@test "is_network_error: does NOT match generic push failure" {
+    run is_network_error "error: failed to push some refs to 'origin'"
+    [ "$status" -ne 0 ]
+}

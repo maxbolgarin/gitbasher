@@ -4,33 +4,33 @@ const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
 <header class="site-nav">
   <div class="container nav-inner">
     <a href={`${base}/`} class="brand" aria-label="Gitbasher home">
-      <span class="brand-mark" aria-hidden="true">
-        <span class="brand-prompt">$</span>
-        <span class="brand-cursor"></span>
-      </span>
-      <span class="brand-text">gitbasher</span>
+      <span class="brand-prompt" aria-hidden="true">$</span>
+      <span>gitbasher</span>
     </a>
 
     <nav class="nav-links" aria-label="Primary">
-      <a href="#features">Features</a>
+      <a href="#recipes">Recipes</a>
       <a href="#ai">AI commits</a>
       <a href="#install">Install</a>
       <a href="#faq">FAQ</a>
+      <a
+        href="https://github.com/maxbolgarin/gitbasher#readme"
+        rel="noopener"
+        class="external"
+      >Docs ↗</a>
     </nav>
 
-    <div class="nav-actions">
-      <a
-        class="github-link"
-        href="https://github.com/maxbolgarin/gitbasher"
-        rel="noopener"
-        aria-label="Gitbasher on GitHub"
-      >
-        <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
-        </svg>
-        <span>GitHub</span>
-      </a>
-    </div>
+    <a
+      class="github-link"
+      href="https://github.com/maxbolgarin/gitbasher"
+      rel="noopener"
+      aria-label="Gitbasher on GitHub"
+    >
+      <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
+      </svg>
+      <span>GitHub</span>
+    </a>
   </div>
 </header>
 
@@ -40,27 +40,26 @@ const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
     top: 0;
     z-index: 50;
     backdrop-filter: saturate(180%) blur(10px);
-    background: rgba(13, 17, 23, 0.75);
+    background: rgba(13, 17, 23, 0.78);
     border-bottom: 1px solid var(--border-soft);
   }
 
   .nav-inner {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 1.5rem;
-    padding-top: 0.8rem;
-    padding-bottom: 0.8rem;
+    padding-top: 0.65rem;
+    padding-bottom: 0.65rem;
   }
 
   .brand {
     display: inline-flex;
-    align-items: center;
-    gap: 0.55rem;
+    align-items: baseline;
+    gap: 0.4rem;
     color: var(--fg);
     font-weight: 700;
     font-family: var(--font-mono);
-    font-size: 1.1rem;
+    font-size: 1.02rem;
     letter-spacing: -0.01em;
   }
 
@@ -69,46 +68,20 @@ const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
     text-decoration: none;
   }
 
-  .brand-mark {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: 6px;
-    background: var(--bg-elev);
-    border: 1px solid var(--border);
-    position: relative;
-    padding: 0 6px;
-  }
-
   .brand-prompt {
     color: var(--green);
-    font-weight: 700;
-  }
-
-  .brand-cursor {
-    width: 7px;
-    height: 14px;
-    margin-left: 3px;
-    background: var(--cyan);
-    animation: blink 1.1s steps(2, start) infinite;
-  }
-
-  @keyframes blink {
-    to {
-      visibility: hidden;
-    }
   }
 
   .nav-links {
     display: flex;
-    gap: 1.4rem;
+    gap: 1.2rem;
+    margin-left: auto;
+    margin-right: 0.5rem;
   }
 
   .nav-links a {
     color: var(--fg-muted);
-    font-size: 0.95rem;
+    font-size: 0.92rem;
     font-weight: 500;
   }
 
@@ -117,28 +90,24 @@ const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
     text-decoration: none;
   }
 
-  .nav-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
+  .nav-links a.external {
+    color: var(--fg-subtle);
   }
 
   .github-link {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    padding: 0.45rem 0.8rem;
-    border-radius: 6px;
-    background: var(--bg-elev);
+    padding: 0.4rem 0.75rem;
+    border-radius: var(--radius);
     border: 1px solid var(--border);
     color: var(--fg);
-    font-size: 0.9rem;
+    font-size: 0.88rem;
     font-weight: 600;
   }
 
   .github-link:hover {
-    border-color: var(--accent);
-    color: var(--fg);
+    border-color: var(--fg-muted);
     text-decoration: none;
   }
 

@@ -3,7 +3,7 @@ const methods = [
   {
     id: 'curl',
     label: 'curl',
-    note: 'Recommended. Drops gitb into ~/.local/bin — no sudo. Verifies SHA-256.',
+    note: 'Recommended. Drops gitb in ~/.local/bin, no sudo. Verifies SHA-256.',
     cmd: 'curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash',
   },
   {
@@ -15,7 +15,7 @@ const methods = [
   {
     id: 'sudo',
     label: 'system-wide',
-    note: 'Install to /usr/local/bin for all users.',
+    note: 'Installs to /usr/local/bin for all users.',
     cmd: 'curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash -s -- --sudo',
   },
   {
@@ -26,22 +26,22 @@ const methods = [
   },
   {
     id: 'custom',
-    label: 'custom directory',
+    label: 'custom dir',
     note: 'Drop gitb in any directory on $PATH.',
     cmd: 'GITB_DIR=/opt/bin curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash',
   },
 ];
 ---
-<section id="install" class="section install">
+<section id="install" class="section">
   <div class="container">
-    <header class="section-title">
-      <small>Install</small>
-      <h2>Install in 10 seconds.</h2>
-      <p>
-        Pick the method that fits. Once installed, run <code>gitb update</code>
-        any time to self-update from the latest GitHub release.
-      </p>
-    </header>
+    <h2>
+      Install
+      <a class="anchor" href="#install" aria-label="Link to Install">#</a>
+    </h2>
+    <p class="lead">
+      Pick whichever fits. After install, <code>gitb update</code> upgrades
+      in place from the latest GitHub release.
+    </p>
 
     <div class="install-tabs" data-tabs>
       <div class="tab-buttons" role="tablist" aria-label="Install methods">
@@ -71,23 +71,19 @@ const methods = [
           hidden={i !== 0}
         >
           <p class="method-note">{m.note}</p>
-          <div class="cmd-row">
-            <pre><code>{m.cmd}</code></pre>
-            <button type="button" class="btn copy-btn" data-copy={m.cmd}>
-              <span class="copy-label">Copy</span>
-              <span class="copied-label" aria-hidden="true">Copied!</span>
-            </button>
+          <div class="copy-block" aria-label={`Install via ${m.label}`}>
+            <code>{m.cmd}</code>
+            <button type="button" class="copy-btn" data-copy={m.cmd}>Copy</button>
           </div>
         </div>
       ))}
     </div>
 
     <p class="install-foot">
-      Need to upgrade? <code>gitb update</code>.
-      Need to remove it? <code>gitb uninstall</code>.
-      See the
+      Upgrade with <code>gitb update</code>. Remove with <code>gitb uninstall</code>.
+      Full guide:
       <a href="https://github.com/maxbolgarin/gitbasher#install-in-10-seconds" rel="noopener">
-        full install guide on GitHub
+        install docs on GitHub
       </a>.
     </p>
   </div>
@@ -132,9 +128,10 @@ const methods = [
     });
   });
 
-  // Copy buttons (scoped here too so this section is self-contained if reused)
-  const copyButtons = document.querySelectorAll<HTMLButtonElement>('.install .copy-btn');
+  const copyButtons = document.querySelectorAll<HTMLButtonElement>('#install .copy-btn');
   copyButtons.forEach((btn) => {
+    if (btn.dataset.wired === '1') return;
+    btn.dataset.wired = '1';
     btn.addEventListener('click', async () => {
       const text = btn.dataset.copy ?? '';
       try {
@@ -147,26 +144,29 @@ const methods = [
         document.execCommand('copy');
         ta.remove();
       }
+      const original = btn.textContent;
+      btn.textContent = 'Copied';
       btn.classList.add('is-copied');
-      setTimeout(() => btn.classList.remove('is-copied'), 1500);
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('is-copied');
+      }, 1400);
     });
   });
 </script>
 
 <style>
   .install-tabs {
-    background: var(--bg-elev);
     border: 1px solid var(--border-soft);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius);
     overflow: hidden;
-    max-width: 880px;
-    margin: 0 auto;
+    margin-top: 1.4rem;
   }
 
   .tab-buttons {
     display: flex;
     overflow-x: auto;
-    background: var(--bg-elev-2);
+    background: var(--bg-elev);
     border-bottom: 1px solid var(--border-soft);
   }
 
@@ -174,12 +174,13 @@ const methods = [
     background: transparent;
     border: 0;
     color: var(--fg-muted);
-    padding: 0.85rem 1.1rem;
-    font-size: 0.9rem;
+    padding: 0.7rem 1rem;
+    font-size: 0.88rem;
     font-weight: 600;
     cursor: pointer;
     border-bottom: 2px solid transparent;
     white-space: nowrap;
+    font-family: var(--font-sans);
   }
 
   .tab-btn:hover {
@@ -192,59 +193,22 @@ const methods = [
   }
 
   .tab-panel {
-    padding: 1.4rem;
+    padding: 1.1rem 1.2rem 1.3rem;
   }
 
   .method-note {
     color: var(--fg-muted);
-    font-size: 0.95rem;
-    margin: 0 0 0.9rem;
+    font-size: 0.9rem;
+    margin: 0 0 0.8rem;
   }
 
-  .cmd-row {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 0.6rem;
-    align-items: center;
-  }
-
-  .cmd-row pre {
+  .install-tabs .copy-block {
     margin: 0;
-    font-size: 0.85rem;
-  }
-
-  .cmd-row .copy-btn {
-    align-self: stretch;
-    position: relative;
-  }
-
-  .copy-btn .copied-label {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--green);
-    opacity: 0;
-  }
-
-  .copy-btn.is-copied .copy-label {
-    opacity: 0;
-  }
-  .copy-btn.is-copied .copied-label {
-    opacity: 1;
   }
 
   .install-foot {
-    text-align: center;
+    margin-top: 1.3rem;
     color: var(--fg-muted);
-    margin-top: 1.4rem;
     font-size: 0.92rem;
-  }
-
-  @media (max-width: 580px) {
-    .cmd-row {
-      grid-template-columns: 1fr;
-    }
   }
 </style>

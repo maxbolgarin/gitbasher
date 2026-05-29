@@ -1,68 +1,73 @@
 ---
-import TerminalDemo from './TerminalDemo.astro';
-
 const installCmd = 'curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash';
 ---
 <section class="hero">
-  <div class="container hero-inner">
-    <div class="hero-copy">
-      <span class="eyebrow">Open source · MIT · Bash · v4.0</span>
+  <div class="container">
+    <h1>
+      <code>git</code>, made fluent.
+    </h1>
 
-      <h1>
-        The friendly <code>git</code> wrapper that types
-        <span class="accent">the boring parts</span> for you.
-      </h1>
+    <p class="lead">
+      <strong>gitbasher</strong> is a single-file bash CLI that wraps <code>git</code>.
+      One short command per workflow — conventional commits, smart sync,
+      AI commit messages (optionally fully local), safe rollback. Pure bash,
+      no dependencies, MIT licensed.
+    </p>
 
-      <p class="lead">
-        A single-binary bash CLI that replaces long flag chains with short interactive
-        commands. Conventional commits, AI-generated messages (OpenAI, OpenRouter, or
-        fully local via <strong>Ollama</strong>), safe push/pull, undo-everything
-        rollback. One file, zero dependencies.
-      </p>
-
-      <div class="install-strip" aria-label="Quick install">
-        <label for="install-cmd" class="sr-only">Install command</label>
-        <input
-          id="install-cmd"
-          type="text"
-          readonly
-          value={installCmd}
-          aria-readonly="true"
-        />
-        <button
-          type="button"
-          class="btn copy-btn"
-          data-copy={installCmd}
-          aria-label="Copy install command to clipboard"
-        >
-          <span class="copy-label">Copy</span>
-          <span class="copied-label" aria-hidden="true">Copied!</span>
-        </button>
-      </div>
-
-      <div class="hero-ctas">
-        <a class="btn btn-primary" href="#install">Get started</a>
-        <a
-          class="btn"
-          href="https://github.com/maxbolgarin/gitbasher"
-          rel="noopener"
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
-          </svg>
-          Star on GitHub
-        </a>
-      </div>
-
-      <ul class="hero-bullets" aria-label="Key facts">
-        <li><span class="ok">✓</span> 24 commands, 60+ aliases, 100+ modes</li>
-        <li><span class="ok">✓</span> 115+ BATS tests — safety-first</li>
-        <li><span class="ok">✓</span> Works on Linux, macOS, WSL</li>
-      </ul>
+    <div class="copy-block" aria-label="Install gitbasher">
+      <code id="install-cmd">{installCmd}</code>
+      <button type="button" class="copy-btn" data-copy={installCmd} aria-label="Copy install command">
+        Copy
+      </button>
     </div>
 
-    <div class="hero-demo">
-      <TerminalDemo />
+    <p class="hero-meta">
+      Linux · macOS · WSL · requires bash 4+ ·
+      <a href="#install">other install methods</a>
+    </p>
+
+    <div class="real-output" aria-label="Running gitb in a terminal">
+      <pre><code><span class="tok-prompt">$</span> <span class="tok-cmd">gitb</span>
+<strong>gitbasher</strong> v4.0.0 <span class="tok-dim">— git, made fluent</span>
+
+usage: <span class="tok-flag">gitb &lt;command&gt; [mode]</span>
+
+<span class="tok-cat">DAILY</span>
+  status (s)                  Show repo state and changed files
+  commit (c, co, com)         Create commits — interactive, AI, amend, revert
+  push (p, ps, pus)           Push current branch safely
+  pull (pu, pl, pul)          Pull from remote
+  sync (sy)                   Sync current branch with main
+
+<span class="tok-cat">BRANCHES</span>
+  branch (b, br, bran)        Switch, create, clean up branches
+  merge (m, me)               Merge branches
+  rebase (r, re, base)        Rebase, autosquash, pull commits
+  squash (sq, tidy)           AI-group commits into clean history
+  cherry (ch, cp)             Cherry-pick commits from other branches
+  prev (-)                    Switch to previous branch (like cd -)
+
+<span class="tok-cat">HISTORY</span>
+  log (l, lg)                 Pretty git log with branch comparison
+  reflog (rl, rlg)            Pretty git reflog
+  tag (t, tg)                 Create, list, push, fetch, delete tags
+
+<span class="tok-cat">RECOVERY</span>
+  undo (un)                   Undo commit, amend, merge, rebase, stash
+  reset (res)                 Preview and apply git reset flows
+  stash (st, sta)             Manage git stashes
+  wip (w)                     Stash WIP, optionally back up to remote
+
+<span class="tok-cat">SETUP</span>
+  clone (cl, clo)             Clone a remote repo and initialize gitbasher
+  origin (or, o, remote)      Manage remotes
+  hook (ho, hk)               Manage git hooks
+  worktree (wt, tree)         Manage git worktrees
+  config (cf, cfg, conf)      Configure gitbasher
+  update (up, upd)            Check for and install updates
+  uninstall (uns, uni)        Remove gitbasher config and binary
+
+Run <span class="tok-flag">gitb &lt;command&gt; help</span> for modes and examples</code></pre>
     </div>
   </div>
 </section>
@@ -75,140 +80,62 @@ const installCmd = 'curl -fsSL https://raw.githubusercontent.com/maxbolgarin/git
       try {
         await navigator.clipboard.writeText(text);
       } catch {
-        const input = document.getElementById('install-cmd') as HTMLInputElement | null;
-        if (input) {
-          input.select();
-          document.execCommand('copy');
-          input.blur();
-        }
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
       }
+      const original = btn.textContent;
+      btn.textContent = 'Copied';
       btn.classList.add('is-copied');
-      setTimeout(() => btn.classList.remove('is-copied'), 1500);
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('is-copied');
+      }, 1400);
     });
   });
 </script>
 
 <style>
   .hero {
-    padding: clamp(2.5rem, 6vw, 4.5rem) 0 clamp(3rem, 8vw, 5rem);
+    padding: clamp(2.5rem, 6vw, 4rem) 0 1.5rem;
   }
 
-  .hero-inner {
-    display: grid;
-    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
-    gap: clamp(2rem, 5vw, 3.5rem);
-    align-items: center;
+  .hero h1 code {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    color: var(--green);
+    font-size: 0.92em;
+    font-family: var(--font-mono);
   }
 
-  .hero-copy h1 {
-    margin-top: 1rem;
+  .hero .lead {
+    max-width: 640px;
+    margin-bottom: 1.6rem;
   }
 
-  .hero-copy h1 .accent {
-    color: var(--accent);
-    white-space: nowrap;
+  .hero .lead code {
+    color: var(--green);
   }
 
-  .hero-copy h1 code {
+  .hero-meta {
+    color: var(--fg-subtle);
+    font-size: 0.88rem;
+    margin: 0.4rem 0 1.6rem;
+  }
+
+  .real-output {
+    margin-top: 2rem;
+  }
+
+  .real-output pre {
     background: var(--bg-elev);
     border: 1px solid var(--border-soft);
-    color: var(--cyan);
-    font-size: 0.85em;
-    padding: 0.1em 0.35em;
-    border-radius: 6px;
-  }
-
-  .lead {
-    font-size: 1.1rem;
-    color: var(--fg-muted);
-    max-width: 560px;
-  }
-
-  .install-strip {
-    display: flex;
-    align-items: stretch;
-    gap: 0;
-    background: var(--bg-elev);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 0.3rem 0.3rem 0.3rem 0.85rem;
-    margin: 1.4rem 0 0.6rem;
-    box-shadow: var(--shadow);
-    max-width: 600px;
-  }
-
-  .install-strip input {
-    flex: 1;
-    min-width: 0;
-    background: transparent;
-    color: var(--fg);
-    border: 0;
-    outline: 0;
-    font-family: var(--font-mono);
-    font-size: 0.83rem;
-    padding: 0.5rem 0.5rem 0.5rem 0;
-  }
-
-  .copy-btn {
-    position: relative;
-    padding: 0.45rem 0.95rem;
-    font-size: 0.85rem;
-    border-radius: 6px;
-    background: var(--bg-elev-2);
-    border-color: var(--border);
-  }
-
-  .copy-btn .copied-label {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--green);
-    opacity: 0;
-    transform: translateY(4px);
-    transition: opacity 0.15s ease, transform 0.15s ease;
-  }
-
-  .copy-btn.is-copied .copy-label {
-    opacity: 0;
-  }
-
-  .copy-btn.is-copied .copied-label {
-    opacity: 1;
-    transform: translateY(0);
-  }
-
-  .hero-ctas {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.7rem;
-    margin: 0.6rem 0 1.5rem;
-  }
-
-  .hero-bullets {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: grid;
-    gap: 0.3rem;
-    color: var(--fg-muted);
-    font-size: 0.95rem;
-  }
-
-  .hero-bullets .ok {
-    color: var(--green);
-    margin-right: 0.4rem;
-    font-weight: 700;
-  }
-
-  @media (max-width: 900px) {
-    .hero-inner {
-      grid-template-columns: 1fr;
-    }
-
-    .hero-demo {
-      order: -1;
-    }
+    padding: 1.1rem 1.3rem;
+    line-height: 1.55;
+    font-size: 0.82rem;
   }
 </style>

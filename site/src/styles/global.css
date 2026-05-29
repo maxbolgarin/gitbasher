@@ -1,4 +1,4 @@
-/* Design tokens — terminal-dark theme inspired by gitbasher's ANSI palette */
+/* Design tokens — terminal-dark, editorial */
 :root {
   --bg: #0d1117;
   --bg-elev: #161b22;
@@ -9,7 +9,6 @@
   --fg-muted: #8b949e;
   --fg-subtle: #6e7681;
 
-  /* ANSI-inspired accents */
   --red: #ff7b72;
   --green: #7ee787;
   --yellow: #f0c674;
@@ -18,18 +17,17 @@
   --orange: #ffa657;
 
   --accent: var(--green);
-  --accent-2: var(--cyan);
 
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
     Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;
 
-  --radius: 8px;
-  --radius-lg: 12px;
-  --shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.7);
+  --radius: 6px;
+  --radius-lg: 10px;
 
-  --container: 1120px;
+  --container: 880px;
+  --container-wide: 1080px;
 }
 
 *,
@@ -42,20 +40,17 @@ html {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font-sans);
-  line-height: 1.6;
+  line-height: 1.65;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   scroll-behavior: smooth;
+  scroll-padding-top: 70px;
 }
 
 body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
-  background:
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(126, 231, 135, 0.08), transparent 70%),
-    radial-gradient(ellipse 60% 50% at 100% 30%, rgba(121, 192, 255, 0.06), transparent 70%),
-    var(--bg);
 }
 
 main {
@@ -65,12 +60,13 @@ main {
 a {
   color: var(--cyan);
   text-decoration: none;
-  transition: color 0.15s ease;
+  transition: color 0.12s ease;
 }
 
 a:hover {
   color: var(--green);
   text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 h1,
@@ -78,26 +74,43 @@ h2,
 h3,
 h4 {
   font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
   margin: 0 0 0.5em;
 }
 
 h1 {
-  font-size: clamp(2.2rem, 5.5vw, 3.6rem);
+  font-size: clamp(2rem, 5vw, 3rem);
+  letter-spacing: -0.025em;
 }
 
 h2 {
-  font-size: clamp(1.6rem, 3.5vw, 2.2rem);
+  font-size: clamp(1.4rem, 2.8vw, 1.75rem);
+  margin-top: 2.5rem;
+}
+
+h2 a.anchor,
+h3 a.anchor {
+  color: var(--fg-subtle);
+  margin-left: 0.4rem;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  text-decoration: none;
+  font-weight: 400;
+}
+
+h2:hover a.anchor,
+h3:hover a.anchor {
+  opacity: 1;
 }
 
 h3 {
-  font-size: 1.15rem;
+  font-size: 1.1rem;
+  margin-top: 1.6rem;
 }
 
 p {
   margin: 0 0 1em;
-  color: var(--fg);
 }
 
 code,
@@ -112,17 +125,18 @@ samp {
   background: var(--bg-elev);
   border: 1px solid var(--border-soft);
   border-radius: 4px;
-  padding: 0.12em 0.4em;
+  padding: 0.1em 0.4em;
   color: var(--green);
+  font-size: 0.88em;
 }
 
 pre {
   background: var(--bg-elev);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-soft);
   border-radius: var(--radius);
-  padding: 1rem 1.1rem;
+  padding: 0.95rem 1.05rem;
   overflow-x: auto;
-  margin: 0 0 1em;
+  margin: 0 0 1.2em;
   line-height: 1.55;
 }
 
@@ -131,11 +145,17 @@ pre code {
   border: 0;
   padding: 0;
   color: var(--fg);
-  font-size: 0.88rem;
+  font-size: 0.86rem;
 }
 
 ul {
   padding-left: 1.2rem;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--border-soft);
+  margin: 3rem 0;
 }
 
 .container {
@@ -145,66 +165,41 @@ ul {
   padding: 0 1.25rem;
 }
 
+.container-wide {
+  width: 100%;
+  max-width: var(--container-wide);
+  margin: 0 auto;
+  padding: 0 1.25rem;
+}
+
 .section {
-  padding: clamp(3rem, 7vw, 5.5rem) 0;
+  padding: 3rem 0 0;
 }
 
-.section-title {
-  text-align: center;
-  margin-bottom: 2.5rem;
-}
-
-.section-title small {
-  display: block;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  font-size: 0.75rem;
-  color: var(--accent);
-  margin-bottom: 0.6rem;
-  font-weight: 600;
-}
-
-.section-title p {
-  color: var(--fg-muted);
-  max-width: 640px;
-  margin: 0.5rem auto 0;
-  font-size: 1.05rem;
-}
-
-.eyebrow {
-  display: inline-block;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  font-size: 0.75rem;
-  color: var(--accent);
-  font-weight: 600;
-  background: rgba(126, 231, 135, 0.08);
-  border: 1px solid rgba(126, 231, 135, 0.2);
-  padding: 0.3rem 0.7rem;
-  border-radius: 999px;
+.section + .section {
+  padding-top: 3rem;
 }
 
 .btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.7rem 1.2rem;
+  gap: 0.45rem;
+  padding: 0.55rem 1rem;
   border-radius: var(--radius);
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   border: 1px solid var(--border);
   background: var(--bg-elev);
   color: var(--fg);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.12s ease;
   text-decoration: none;
 }
 
 .btn:hover {
-  border-color: var(--accent);
+  border-color: var(--fg-muted);
   text-decoration: none;
   color: var(--fg);
-  transform: translateY(-1px);
 }
 
 .btn-primary {
@@ -215,94 +210,81 @@ ul {
 
 .btn-primary:hover {
   background: #95eea0;
-  color: #062a0e;
   border-color: #95eea0;
+  color: #062a0e;
 }
 
-/* Terminal window aesthetics shared across components */
-.terminal {
-  background: var(--bg-elev);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  box-shadow: var(--shadow);
+.lead {
+  font-size: 1.15rem;
+  color: var(--fg-muted);
 }
 
-.terminal-header {
+/* Inline code block that user can copy */
+.copy-block {
+  position: relative;
   display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.65rem 0.9rem;
-  background: var(--bg-elev-2);
-  border-bottom: 1px solid var(--border-soft);
-}
-
-.terminal-header .dot {
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  display: inline-block;
-}
-
-.terminal-header .dot.red {
-  background: #ff5f57;
-}
-.terminal-header .dot.yellow {
-  background: #febc2e;
-}
-.terminal-header .dot.green {
-  background: #28c840;
-}
-
-.terminal-header .title {
-  margin-left: auto;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  color: var(--fg-subtle);
-}
-
-.terminal-body {
-  padding: 1.1rem 1.2rem;
-  font-family: var(--font-mono);
-  font-size: 0.9rem;
-  line-height: 1.65;
-  color: var(--fg);
   background: var(--bg-elev);
-  min-height: 0;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  margin: 1rem 0 1.2rem;
 }
 
-.prompt {
-  color: var(--purple);
-}
-.prompt-arrow {
-  color: var(--green);
-}
-.cmd {
+.copy-block code {
+  flex: 1;
+  min-width: 0;
+  padding: 0.8rem 1rem;
+  font-size: 0.85rem;
+  font-family: var(--font-mono);
   color: var(--fg);
-}
-.flag {
-  color: var(--yellow);
-}
-.ok {
-  color: var(--green);
-}
-.warn {
-  color: var(--yellow);
-}
-.err {
-  color: var(--red);
-}
-.tip {
-  color: var(--cyan);
-}
-.info {
-  color: var(--purple);
-}
-.dim {
-  color: var(--fg-subtle);
+  background: transparent;
+  border: 0;
+  overflow-x: auto;
+  white-space: nowrap;
 }
 
-/* Visually hidden but available to screen readers */
+.copy-block code::before {
+  content: '$ ';
+  color: var(--fg-subtle);
+  user-select: none;
+}
+
+.copy-block .copy-btn {
+  flex-shrink: 0;
+  align-self: stretch;
+  border: 0;
+  border-left: 1px solid var(--border-soft);
+  background: transparent;
+  color: var(--fg-muted);
+  padding: 0 1rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-sans);
+}
+
+.copy-block .copy-btn:hover {
+  background: var(--bg-elev-2);
+  color: var(--green);
+}
+
+.copy-block .copy-btn.is-copied {
+  color: var(--green);
+}
+
+/* Token coloring for static terminal samples */
+.tok-prompt { color: var(--green); user-select: none; }
+.tok-cmd    { color: var(--fg); }
+.tok-flag   { color: var(--yellow); }
+.tok-cat    { color: var(--yellow); font-weight: 700; }
+.tok-arg    { color: var(--cyan); }
+.tok-ok     { color: var(--green); }
+.tok-warn   { color: var(--yellow); }
+.tok-err    { color: var(--red); }
+.tok-info   { color: var(--purple); }
+.tok-tip    { color: var(--cyan); }
+.tok-dim    { color: var(--fg-subtle); }
+.tok-str    { color: var(--cyan); }
+
 .sr-only {
   position: absolute;
   width: 1px;

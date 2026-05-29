@@ -1,36 +1,28 @@
 ---
 const faqs = [
   {
-    q: 'Is gitbasher free and open source?',
-    a: 'Yes. Gitbasher is MIT-licensed. The source lives on GitHub and the binary is just a single bash file you can read, audit, and modify.',
-  },
-  {
     q: 'Does it send my code anywhere?',
-    a: 'Only if you opt in. `gitb commit ai` with OpenAI or OpenRouter sends the staged diff to that provider. Pick the Ollama provider to keep everything on localhost — no network calls.',
+    a: 'Only when you opt in. <code>gitb commit ai</code> with a hosted provider sends the staged diff to that provider — their data-retention policy then applies. Pick Ollama to keep everything on localhost. Nothing else in gitbasher makes outbound calls except the self-update check.',
   },
   {
     q: 'What platforms does it run on?',
-    a: 'Linux, macOS, and Windows under WSL. It requires bash 4+ (because of mapfile, associative arrays, and case-folding). On macOS, gitbasher detects the default bash 3.2 and re-executes under a newer bash from Homebrew.',
+    a: 'Linux, macOS, and Windows under WSL. Requires bash 4+ (uses mapfile, associative arrays, case-folding). On macOS gitbasher detects the default bash 3.2 and re-execs under a newer bash from Homebrew automatically.',
   },
   {
     q: 'Does it interfere with my existing git workflow?',
-    a: 'No. Gitbasher just calls `git` under the hood. You can use plain `git` whenever you want; `gitb` is a separate binary you reach for when it saves time.',
+    a: 'No. gitbasher just calls <code>git</code> under the hood. <code>gitb</code> is a separate binary — keep using plain <code>git</code> whenever you want.',
   },
   {
-    q: 'Where are my settings stored?',
-    a: 'In `git config` under the `gitbasher.*` namespace — per-repo by default, or global with `gitb cfg g`. API keys can be set via environment variables (`GITB_AI_API_KEY_OPENAI`, etc.) for shared machines.',
-  },
-  {
-    q: 'How do I update or uninstall?',
-    a: 'Run `gitb update` to self-update from the latest GitHub release (SHA-256 verified). Run `gitb uninstall` to remove the binary and config keys cleanly.',
+    q: 'Where are my settings (and API keys) stored?',
+    a: 'In <code>git config</code> under the <code>gitbasher.*</code> namespace — per-repo by default, or global with <code>gitb cfg g</code>. For shared machines, set API keys via env vars like <code>GITB_AI_API_KEY_OPENAI</code>; gitbasher checks env first.',
   },
   {
     q: 'Does it work in CI?',
-    a: 'Yes, for non-interactive subcommands. Anything that prompts will block on stdin — use explicit modes like `gitb commit fast` or `gitb push -y` in CI scripts.',
+    a: 'Non-interactive subcommands, yes. Anything that prompts will block on stdin — use explicit modes (<code>gitb commit fast</code>, <code>gitb push -y</code>) for CI scripts.',
   },
   {
-    q: 'How is this different from lazygit, gitui, or oh-my-git?',
-    a: 'Gitbasher is not a TUI — it stays in your shell and emits a single line of output per step. It focuses on whole workflows (sync, wip, branch newd, squash) and conventional commits with optional AI, rather than visualizing the repo.',
+    q: 'How do I update or uninstall?',
+    a: '<code>gitb update</code> self-updates from the latest GitHub release (SHA-256 verified). <code>gitb uninstall</code> removes the binary and config keys.',
   },
 ];
 
@@ -42,39 +34,32 @@ const faqJsonLd = {
     name: f.q,
     acceptedAnswer: {
       '@type': 'Answer',
-      text: f.a,
+      text: f.a.replace(/<\/?[^>]+>/g, ''),
     },
   })),
 };
 ---
-<section id="faq" class="section faq">
+<section id="faq" class="section">
   <div class="container">
-    <header class="section-title">
-      <small>FAQ</small>
-      <h2>Quick answers.</h2>
-      <p>
-        For the long version, see the
-        <a href="https://github.com/maxbolgarin/gitbasher/blob/main/FAQ.md" rel="noopener">
-          FAQ on GitHub
-        </a>.
-      </p>
-    </header>
+    <h2>
+      FAQ
+      <a class="anchor" href="#faq" aria-label="Link to FAQ">#</a>
+    </h2>
+    <p class="lead">
+      Long-form answers and more questions in the
+      <a href="https://github.com/maxbolgarin/gitbasher/blob/main/FAQ.md" rel="noopener">
+        FAQ on GitHub
+      </a>.
+    </p>
 
-    <ul class="faq-list">
-      {faqs.map((f, i) => (
-        <li>
-          <details open={i === 0}>
-            <summary>
-              <span>{f.q}</span>
-              <span class="chev" aria-hidden="true">▾</span>
-            </summary>
-            <div class="answer">
-              <p>{f.a}</p>
-            </div>
-          </details>
-        </li>
+    <dl class="faq-list">
+      {faqs.map((f) => (
+        <>
+          <dt>{f.q}</dt>
+          <dd set:html={f.a} />
+        </>
       ))}
-    </ul>
+    </dl>
   </div>
 </section>
 
@@ -82,63 +67,24 @@ const faqJsonLd = {
 
 <style>
   .faq-list {
-    list-style: none;
+    margin: 1.4rem 0 0;
     padding: 0;
-    margin: 0;
-    max-width: 820px;
-    margin-inline: auto;
-    display: grid;
-    gap: 0.55rem;
   }
 
-  details {
-    background: var(--bg-elev);
-    border: 1px solid var(--border-soft);
-    border-radius: var(--radius);
-    overflow: hidden;
-    transition: border-color 0.15s ease;
-  }
-
-  details[open] {
-    border-color: var(--border);
-  }
-
-  summary {
-    cursor: pointer;
-    padding: 1rem 1.15rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    font-weight: 600;
+  .faq-list dt {
+    font-weight: 700;
     color: var(--fg);
-    list-style: none;
+    margin-top: 1.6rem;
+    margin-bottom: 0.35rem;
   }
 
-  summary::-webkit-details-marker {
-    display: none;
+  .faq-list dt:first-of-type {
+    margin-top: 0;
   }
 
-  summary:hover {
-    background: var(--bg-elev-2);
-  }
-
-  .chev {
-    color: var(--fg-subtle);
-    transition: transform 0.15s ease;
-  }
-
-  details[open] .chev {
-    transform: rotate(180deg);
-    color: var(--green);
-  }
-
-  .answer {
-    padding: 0 1.15rem 1.05rem;
-    color: var(--fg-muted);
-  }
-
-  .answer p {
+  .faq-list dd {
     margin: 0;
+    color: var(--fg-muted);
+    max-width: 64ch;
   }
 </style>

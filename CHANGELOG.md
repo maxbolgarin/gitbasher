@@ -2,6 +2,27 @@
 
 All notable changes to gitbasher are generated automatically by [semantic-release](https://github.com/semantic-release/semantic-release) from [Conventional Commits](https://www.conventionalcommits.org/) on `main`. The project follows [Semantic Versioning](https://semver.org/).
 
+## [4.1.0](https://github.com/maxbolgarin/gitbasher/compare/v4.0.0...v4.1.0) (2026-05-29)
+
+### 🚀 Features
+
+* **edit:** add `branch` mode to rename the current branch ([30cfd07](https://github.com/maxbolgarin/gitbasher/commit/30cfd071d49e73761f7853b8ca9643d0db50d9b4))
+* **edit:** add `gitb edit` and retire the commit `last` action ([51d3ca2](https://github.com/maxbolgarin/gitbasher/commit/51d3ca2c6d1e41a7dac506d05723cb7469b7ce41))
+* **edit:** add `pick` mode to reword any recent commit ([175cbd7](https://github.com/maxbolgarin/gitbasher/commit/175cbd73d29cb14c3f436b543b150b4e7cd6fd2d))
+* **site:** add Astro marketing site for GitHub Pages ([df1c1eb](https://github.com/maxbolgarin/gitbasher/commit/df1c1eb3925bd73156abd87150638ac74d73f9df))
+* **clone:** add gitb clone command ([ac377b2](https://github.com/maxbolgarin/gitbasher/commit/ac377b2e76378742289b632e117eca07bb3b09da))
+* **commit:** allow push modifier on revert ([cdb86b4](https://github.com/maxbolgarin/gitbasher/commit/cdb86b4c643db3d4fc2c2a68f2e931670729d04c))
+* **gitb:** allow running outside a git repository for global commands ([8eeeefe](https://github.com/maxbolgarin/gitbasher/commit/8eeeefef3839a43fd009cfa3f57f8ed6628fb259))
+* **commit:** cap atomic split at a configurable number of scopes ([15103d8](https://github.com/maxbolgarin/gitbasher/commit/15103d8234a54d6b329b921b1d412cfa8b4598e3))
+* **push:** retry transient network failures with exponential backoff ([80f8d32](https://github.com/maxbolgarin/gitbasher/commit/80f8d32709aaf5759689f48be6f75979cdf40fe0))
+* **pull:** stream git fetch progress live during gitb pull ([92ed00d](https://github.com/maxbolgarin/gitbasher/commit/92ed00de9b8c4cc9ed954ad0d59a92c83361569c))
+
+### 🐛 Bug Fixes
+
+* **gitb:** escape command substitution in macOS upgrade instructions ([f61db10](https://github.com/maxbolgarin/gitbasher/commit/f61db101c97527d101d6787e4b0aca625c8f55e5))
+* **commit:** honor push modifier when amending ([f5d2664](https://github.com/maxbolgarin/gitbasher/commit/f5d26640ab4ded146fcf1231200e99a1ddb91e9a))
+* **commit:** strip leading/trailing separators from auto scopes ([3fee1c8](https://github.com/maxbolgarin/gitbasher/commit/3fee1c8456ae6a171618efbbba87d81dfc5a9c6a))
+
 ## [4.0.0](https://github.com/maxbolgarin/gitbasher/compare/v3.10.2...v4.0.0) (2026-05-04)
 
 ### ⚠ BREAKING CHANGES

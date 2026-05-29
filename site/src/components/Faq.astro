@@ -1,0 +1,90 @@
+---
+const faqs = [
+  {
+    q: 'Does it send my code anywhere?',
+    a: 'Only when you opt in. <code>gitb commit ai</code> with a hosted provider sends the staged diff to that provider — their data-retention policy then applies. Pick Ollama to keep everything on localhost. Nothing else in gitbasher makes outbound calls except the self-update check.',
+  },
+  {
+    q: 'What platforms does it run on?',
+    a: 'Linux, macOS, and Windows under WSL. Requires bash 4+ (uses mapfile, associative arrays, case-folding). On macOS gitbasher detects the default bash 3.2 and re-execs under a newer bash from Homebrew automatically.',
+  },
+  {
+    q: 'Does it interfere with my existing git workflow?',
+    a: 'No. gitbasher just calls <code>git</code> under the hood. <code>gitb</code> is a separate binary — keep using plain <code>git</code> whenever you want.',
+  },
+  {
+    q: 'Where are my settings (and API keys) stored?',
+    a: 'In <code>git config</code> under the <code>gitbasher.*</code> namespace — per-repo by default, or global with <code>gitb cfg g</code>. For shared machines, set API keys via env vars like <code>GITB_AI_API_KEY_OPENAI</code>; gitbasher checks env first.',
+  },
+  {
+    q: 'Does it work in CI?',
+    a: 'Non-interactive subcommands, yes. Anything that prompts will block on stdin — use explicit modes (<code>gitb commit fast</code>, <code>gitb push -y</code>) for CI scripts.',
+  },
+  {
+    q: 'How do I update or uninstall?',
+    a: '<code>gitb update</code> self-updates from the latest GitHub release (SHA-256 verified). <code>gitb uninstall</code> removes the binary and config keys.',
+  },
+];
+
+const faqJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqs.map((f) => ({
+    '@type': 'Question',
+    name: f.q,
+    acceptedAnswer: {
+      '@type': 'Answer',
+      text: f.a.replace(/<\/?[^>]+>/g, ''),
+    },
+  })),
+};
+---
+<section id="faq" class="section">
+  <div class="container">
+    <h2>
+      FAQ
+      <a class="anchor" href="#faq" aria-label="Link to FAQ">#</a>
+    </h2>
+    <p class="lead">
+      Long-form answers and more questions in the
+      <a href="https://github.com/maxbolgarin/gitbasher/blob/main/FAQ.md" rel="noopener">
+        FAQ on GitHub
+      </a>.
+    </p>
+
+    <dl class="faq-list">
+      {faqs.map((f) => (
+        <>
+          <dt>{f.q}</dt>
+          <dd set:html={f.a} />
+        </>
+      ))}
+    </dl>
+  </div>
+</section>
+
+<script type="application/ld+json" set:html={JSON.stringify(faqJsonLd)} />
+
+<style>
+  .faq-list {
+    margin: 1.4rem 0 0;
+    padding: 0;
+  }
+
+  .faq-list dt {
+    font-weight: 700;
+    color: var(--fg);
+    margin-top: 1.6rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .faq-list dt:first-of-type {
+    margin-top: 0;
+  }
+
+  .faq-list dd {
+    margin: 0;
+    color: var(--fg-muted);
+    max-width: 64ch;
+  }
+</style>

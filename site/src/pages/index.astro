@@ -1,0 +1,25 @@
+---
+import Base from '../layouts/Base.astro';
+import Nav from '../components/Nav.astro';
+import Hero from '../components/Hero.astro';
+import Recipes from '../components/Recipes.astro';
+import AiCommits from '../components/AiCommits.astro';
+import Install from '../components/Install.astro';
+import Faq from '../components/Faq.astro';
+import Footer from '../components/Footer.astro';
+---
+<Base
+  title="Gitbasher: git CLI wrapper for AI commit messages, conventional commits, and safe undo"
+  description="Install Gitbasher, an open-source git CLI wrapper for AI commit messages, conventional commits, local Ollama workflows, smart sync, WIP backup, branch cleanup, and safe undo commands."
+  path="/"
+>
+  <Nav slot="header" />
+
+  <Hero />
+  <Recipes />
+  <AiCommits />
+  <Install />
+  <Faq />
+
+  <Footer slot="footer" />
+</Base>

@@ -1,0 +1,309 @@
+/* Design tokens — terminal-dark, editorial */
+:root {
+  --bg: #0d1117;
+  --bg-elev: #161b22;
+  --bg-elev-2: #1c2128;
+  --border: #30363d;
+  --border-soft: #21262d;
+  --fg: #e6edf3;
+  --fg-muted: #8b949e;
+  --fg-subtle: #6e7681;
+
+  --red: #ff7b72;
+  --green: #7ee787;
+  --yellow: #f0c674;
+  --cyan: #79c0ff;
+  --purple: #d2a8ff;
+  --orange: #ffa657;
+
+  --accent: var(--green);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+    Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+
+  --radius: 6px;
+  --radius-lg: 10px;
+
+  --container: 880px;
+  --container-wide: 1080px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  scroll-behavior: smooth;
+  scroll-padding-top: 70px;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+main {
+  display: block;
+}
+
+a {
+  color: var(--cyan);
+  text-decoration: none;
+  transition: color 0.12s ease;
+}
+
+a:hover {
+  color: var(--green);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  margin: 0 0 0.5em;
+}
+
+h1 {
+  font-size: clamp(2rem, 5vw, 3rem);
+  letter-spacing: -0.025em;
+}
+
+h2 {
+  font-size: clamp(1.4rem, 2.8vw, 1.75rem);
+  margin-top: 2.5rem;
+}
+
+h2 a.anchor,
+h3 a.anchor {
+  color: var(--fg-subtle);
+  margin-left: 0.4rem;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  text-decoration: none;
+  font-weight: 400;
+}
+
+h2:hover a.anchor,
+h3:hover a.anchor {
+  opacity: 1;
+}
+
+h3 {
+  font-size: 1.1rem;
+  margin-top: 1.6rem;
+}
+
+p {
+  margin: 0 0 1em;
+}
+
+code,
+kbd,
+pre,
+samp {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+:not(pre) > code {
+  background: var(--bg-elev);
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  padding: 0.1em 0.4em;
+  color: var(--green);
+  font-size: 0.88em;
+}
+
+pre {
+  background: var(--bg-elev);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  padding: 0.95rem 1.05rem;
+  overflow-x: auto;
+  margin: 0 0 1.2em;
+  line-height: 1.55;
+}
+
+pre code {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--fg);
+  font-size: 0.86rem;
+}
+
+ul {
+  padding-left: 1.2rem;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--border-soft);
+  margin: 3rem 0;
+}
+
+.container {
+  width: 100%;
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: 0 1.25rem;
+}
+
+.container-wide {
+  width: 100%;
+  max-width: var(--container-wide);
+  margin: 0 auto;
+  padding: 0 1.25rem;
+}
+
+.section {
+  padding: 3rem 0 0;
+}
+
+.section + .section {
+  padding-top: 3rem;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 1rem;
+  border-radius: var(--radius);
+  font-weight: 600;
+  font-size: 0.9rem;
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--fg);
+  cursor: pointer;
+  transition: all 0.12s ease;
+  text-decoration: none;
+}
+
+.btn:hover {
+  border-color: var(--fg-muted);
+  text-decoration: none;
+  color: var(--fg);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #062a0e;
+  border-color: var(--accent);
+}
+
+.btn-primary:hover {
+  background: #95eea0;
+  border-color: #95eea0;
+  color: #062a0e;
+}
+
+.lead {
+  font-size: 1.15rem;
+  color: var(--fg-muted);
+}
+
+/* Inline code block that user can copy */
+.copy-block {
+  position: relative;
+  display: flex;
+  background: var(--bg-elev);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  margin: 1rem 0 1.2rem;
+}
+
+.copy-block code {
+  flex: 1;
+  min-width: 0;
+  padding: 0.8rem 1rem;
+  font-size: 0.85rem;
+  font-family: var(--font-mono);
+  color: var(--fg);
+  background: transparent;
+  border: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.copy-block code::before {
+  content: '$ ';
+  color: var(--fg-subtle);
+  user-select: none;
+}
+
+.copy-block .copy-btn {
+  flex-shrink: 0;
+  align-self: stretch;
+  border: 0;
+  border-left: 1px solid var(--border-soft);
+  background: transparent;
+  color: var(--fg-muted);
+  padding: 0 1rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-sans);
+}
+
+.copy-block .copy-btn:hover {
+  background: var(--bg-elev-2);
+  color: var(--green);
+}
+
+.copy-block .copy-btn.is-copied {
+  color: var(--green);
+}
+
+/* Token coloring for static terminal samples */
+.tok-prompt { color: var(--green); user-select: none; }
+.tok-cmd    { color: var(--fg); }
+.tok-flag   { color: var(--yellow); }
+.tok-cat    { color: var(--yellow); font-weight: 700; }
+.tok-arg    { color: var(--cyan); }
+.tok-ok     { color: var(--green); }
+.tok-warn   { color: var(--yellow); }
+.tok-err    { color: var(--red); }
+.tok-info   { color: var(--purple); }
+.tok-tip    { color: var(--cyan); }
+.tok-dim    { color: var(--fg-subtle); }
+.tok-str    { color: var(--cyan); }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

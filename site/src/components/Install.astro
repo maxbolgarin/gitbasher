@@ -1,0 +1,214 @@
+---
+const methods = [
+  {
+    id: 'curl',
+    label: 'curl',
+    note: 'Recommended. Drops gitb in ~/.local/bin, no sudo. Verifies SHA-256.',
+    cmd: 'curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash',
+  },
+  {
+    id: 'npm',
+    label: 'npm',
+    note: 'Easy to remember if Node is already on your machine.',
+    cmd: 'npm install -g gitbasher',
+  },
+  {
+    id: 'sudo',
+    label: 'system-wide',
+    note: 'Installs to /usr/local/bin for all users.',
+    cmd: 'curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash -s -- --sudo',
+  },
+  {
+    id: 'pin',
+    label: 'pin a version',
+    note: 'Useful for CI or locked environments.',
+    cmd: 'GITB_VERSION=v4.0.0 curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash',
+  },
+  {
+    id: 'custom',
+    label: 'custom dir',
+    note: 'Drop gitb in any directory on $PATH.',
+    cmd: 'GITB_DIR=/opt/bin curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash',
+  },
+];
+---
+<section id="install" class="section">
+  <div class="container">
+    <h2>
+      Install
+      <a class="anchor" href="#install" aria-label="Link to Install">#</a>
+    </h2>
+    <p class="lead">
+      Pick whichever fits. After install, <code>gitb update</code> upgrades
+      in place from the latest GitHub release.
+    </p>
+
+    <div class="install-tabs" data-tabs>
+      <div class="tab-buttons" role="tablist" aria-label="Install methods">
+        {methods.map((m, i) => (
+          <button
+            type="button"
+            role="tab"
+            id={`tab-${m.id}`}
+            aria-controls={`panel-${m.id}`}
+            aria-selected={i === 0 ? 'true' : 'false'}
+            tabindex={i === 0 ? 0 : -1}
+            data-tab-btn={m.id}
+            class:list={['tab-btn', i === 0 && 'is-active']}
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
+
+      {methods.map((m, i) => (
+        <div
+          role="tabpanel"
+          id={`panel-${m.id}`}
+          aria-labelledby={`tab-${m.id}`}
+          data-tab-panel={m.id}
+          class:list={['tab-panel', i === 0 && 'is-active']}
+          hidden={i !== 0}
+        >
+          <p class="method-note">{m.note}</p>
+          <div class="copy-block" aria-label={`Install via ${m.label}`}>
+            <code>{m.cmd}</code>
+            <button type="button" class="copy-btn" data-copy={m.cmd}>Copy</button>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    <p class="install-foot">
+      Upgrade with <code>gitb update</code>. Remove with <code>gitb uninstall</code>.
+      Full guide:
+      <a href="https://github.com/maxbolgarin/gitbasher#install-in-10-seconds" rel="noopener">
+        install docs on GitHub
+      </a>.
+    </p>
+  </div>
+</section>
+
+<script>
+  const tabs = document.querySelectorAll<HTMLElement>('[data-tabs]');
+  tabs.forEach((root) => {
+    const buttons = root.querySelectorAll<HTMLButtonElement>('[data-tab-btn]');
+    const panels = root.querySelectorAll<HTMLElement>('[data-tab-panel]');
+
+    const activate = (id: string) => {
+      buttons.forEach((b) => {
+        const active = b.dataset.tabBtn === id;
+        b.classList.toggle('is-active', active);
+        b.setAttribute('aria-selected', active ? 'true' : 'false');
+        b.tabIndex = active ? 0 : -1;
+      });
+      panels.forEach((p) => {
+        const active = p.dataset.tabPanel === id;
+        p.classList.toggle('is-active', active);
+        p.hidden = !active;
+      });
+    };
+
+    buttons.forEach((btn, idx) => {
+      btn.addEventListener('click', () => activate(btn.dataset.tabBtn ?? ''));
+      btn.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+          e.preventDefault();
+          const next =
+            e.key === 'ArrowRight'
+              ? (idx + 1) % buttons.length
+              : (idx - 1 + buttons.length) % buttons.length;
+          const target = buttons[next];
+          if (target) {
+            target.focus();
+            activate(target.dataset.tabBtn ?? '');
+          }
+        }
+      });
+    });
+  });
+
+  const copyButtons = document.querySelectorAll<HTMLButtonElement>('#install .copy-btn');
+  copyButtons.forEach((btn) => {
+    if (btn.dataset.wired === '1') return;
+    btn.dataset.wired = '1';
+    btn.addEventListener('click', async () => {
+      const text = btn.dataset.copy ?? '';
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      }
+      const original = btn.textContent;
+      btn.textContent = 'Copied';
+      btn.classList.add('is-copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('is-copied');
+      }, 1400);
+    });
+  });
+</script>
+
+<style>
+  .install-tabs {
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-top: 1.4rem;
+  }
+
+  .tab-buttons {
+    display: flex;
+    overflow-x: auto;
+    background: var(--bg-elev);
+    border-bottom: 1px solid var(--border-soft);
+  }
+
+  .tab-btn {
+    background: transparent;
+    border: 0;
+    color: var(--fg-muted);
+    padding: 0.7rem 1rem;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    font-family: var(--font-sans);
+  }
+
+  .tab-btn:hover {
+    color: var(--fg);
+  }
+
+  .tab-btn.is-active {
+    color: var(--green);
+    border-bottom-color: var(--green);
+  }
+
+  .tab-panel {
+    padding: 1.1rem 1.2rem 1.3rem;
+  }
+
+  .method-note {
+    color: var(--fg-muted);
+    font-size: 0.9rem;
+    margin: 0 0 0.8rem;
+  }
+
+  .install-tabs .copy-block {
+    margin: 0;
+  }
+
+  .install-foot {
+    margin-top: 1.3rem;
+    color: var(--fg-muted);
+    font-size: 0.92rem;
+  }
+</style>

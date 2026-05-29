@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://maxbolgarin.github.io/gitbasher/sitemap-index.xml

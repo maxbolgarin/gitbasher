@@ -1,0 +1,108 @@
+---
+const ollamaSetup = `# one-time
+brew install ollama          # or follow ollama.com for your OS
+ollama serve &               # daemon, leave running
+ollama pull qwen3:8b         # or any model you like
+gitb cfg ai                  # pick "ollama" + the pulled model
+
+# from now on
+gitb commit ai               # diff → localhost:11434 → message`;
+
+const hostedSetup = `# pick OpenAI or OpenRouter
+gitb cfg ai
+
+# keep keys out of git config (resolved first):
+export GITB_AI_API_KEY_OPENAI=sk-...
+export GITB_AI_API_KEY_OPENROUTER=sk-or-...`;
+---
+<section id="ai" class="section">
+  <div class="container">
+    <h2>
+      AI commit messages
+      <a class="anchor" href="#ai" aria-label="Link to AI commit messages">#</a>
+    </h2>
+
+    <p class="lead">
+      <code>gitb commit ai</code> reads your staged diff, asks an LLM to
+      write a Conventional Commit message, and lets you confirm before
+      committing. Pick a hosted provider — OpenAI or OpenRouter
+      (Gemini, Claude, GPT, DeepSeek, …) — or pick Ollama and keep the
+      entire flow on <code>localhost</code>. Switch providers any time
+      with one command.
+    </p>
+
+    <h3>Fully local with Ollama</h3>
+    <p>No key, no network, your diff doesn't leave the machine.</p>
+    <div class="copy-block multiline" aria-label="Ollama setup">
+      <code>{ollamaSetup}</code>
+      <button type="button" class="copy-btn" data-copy={ollamaSetup} aria-label="Copy Ollama setup">
+        Copy
+      </button>
+    </div>
+
+    <h3>Hosted provider (OpenAI or OpenRouter)</h3>
+    <p>
+      Keys are checked in order: environment variable → per-repo config →
+      global config. Prefer env vars on shared machines.
+    </p>
+    <div class="copy-block multiline" aria-label="Hosted provider setup">
+      <code>{hostedSetup}</code>
+      <button type="button" class="copy-btn" data-copy={hostedSetup} aria-label="Copy hosted setup">
+        Copy
+      </button>
+    </div>
+
+    <p class="caveat">
+      The hosted provider's data-retention policy applies when you use it.
+      Pick Ollama if that matters for your team.
+    </p>
+  </div>
+</section>
+
+<script>
+  const buttons = document.querySelectorAll<HTMLButtonElement>('#ai .copy-btn');
+  buttons.forEach((btn) => {
+    if (btn.dataset.wired === '1') return;
+    btn.dataset.wired = '1';
+    btn.addEventListener('click', async () => {
+      const text = btn.dataset.copy ?? '';
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      }
+      const original = btn.textContent;
+      btn.textContent = 'Copied';
+      btn.classList.add('is-copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('is-copied');
+      }, 1400);
+    });
+  });
+</script>
+
+<style>
+  .copy-block.multiline code {
+    white-space: pre;
+    padding: 1rem 1.1rem;
+    line-height: 1.6;
+  }
+
+  .copy-block.multiline code::before {
+    content: '';
+  }
+
+  .caveat {
+    color: var(--fg-subtle);
+    font-size: 0.88rem;
+    border-left: 2px solid var(--border);
+    padding-left: 0.8rem;
+    margin-top: 1.4rem;
+  }
+</style>

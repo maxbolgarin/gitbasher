@@ -1,0 +1,66 @@
+---
+const year = new Date().getFullYear();
+---
+<footer class="site-footer">
+  <div class="container footer-inner">
+    <p class="lhs">
+      <strong>gitbasher</strong> — MIT-licensed, made by
+      <a href="https://github.com/maxbolgarin" rel="noopener">@maxbolgarin</a>.
+      © {year} contributors.
+    </p>
+    <ul class="rhs">
+      <li><a href="https://github.com/maxbolgarin/gitbasher" rel="noopener">Repo</a></li>
+      <li><a href="https://github.com/maxbolgarin/gitbasher/releases" rel="noopener">Releases</a></li>
+      <li><a href="https://github.com/maxbolgarin/gitbasher/blob/main/CHANGELOG.md" rel="noopener">Changelog</a></li>
+      <li><a href="https://github.com/maxbolgarin/gitbasher/blob/main/FAQ.md" rel="noopener">FAQ</a></li>
+      <li><a href="https://github.com/maxbolgarin/gitbasher/blob/main/ARCHITECTURE.md" rel="noopener">Architecture</a></li>
+      <li><a href="https://github.com/maxbolgarin/gitbasher/blob/main/SECURITY.md" rel="noopener">Security</a></li>
+    </ul>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    border-top: 1px solid var(--border-soft);
+    margin-top: 4rem;
+    padding: 1.6rem 0 2.4rem;
+  }
+
+  .footer-inner {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 1.6rem;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .footer-inner .lhs {
+    margin: 0;
+    color: var(--fg-muted);
+    font-size: 0.88rem;
+  }
+
+  .footer-inner .lhs strong {
+    color: var(--fg);
+    font-family: var(--font-mono);
+  }
+
+  .rhs {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.2rem;
+    font-size: 0.88rem;
+  }
+
+  .rhs a {
+    color: var(--fg-muted);
+  }
+
+  .rhs a:hover {
+    color: var(--green);
+    text-decoration: none;
+  }
+</style>

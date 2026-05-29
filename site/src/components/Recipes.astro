@@ -1,0 +1,183 @@
+---
+const recipes = [
+  {
+    title: 'Start a feature off the latest main',
+    body: 'Fetches main, fast-forwards it, then creates a conventionally-named branch from the updated tip — without leaving your current directory.',
+    cmd: 'gitb branch newd',
+    expands: [
+      'git fetch origin main',
+      'git checkout main',
+      'git pull --ff-only',
+      'git checkout -b feat/<your-name>',
+    ],
+  },
+  {
+    title: 'Commit + push in one flow (with an AI message)',
+    body: 'Stages everything, drafts a conventional message from your diff, lets you confirm, commits, then pushes. Use a hosted provider or run Ollama locally — your call.',
+    cmd: 'gitb commit ai fast push',
+    expands: [
+      'git add -A',
+      'git diff --cached  →  llm  →  "feat(scope): subject"',
+      'git commit -m "..."',
+      'git push -u origin HEAD',
+    ],
+  },
+  {
+    title: 'Catch your branch up to main mid-feature',
+    body: 'Fetches main, rebases your branch on top, then force-pushes with --force-with-lease if you ask. No more "git fetch && git rebase origin/main && git push --force-with-lease" muscle memory.',
+    cmd: 'gitb sync push',
+    expands: [
+      'git fetch origin main',
+      'git rebase origin/main',
+      'git push --force-with-lease',
+    ],
+  },
+  {
+    title: 'Save WIP and pick it up on another machine',
+    body: 'Stashes everything, pushes a backup branch to origin/wip/<branch>, and leaves you with a clean tree. On the other machine, gitb pull fetches it and gitb wip down restores and cleans up.',
+    cmd: 'gitb wip up   # save\ngitb wip down # restore',
+    expands: [
+      'git stash push -u',
+      'git push origin "HEAD:wip/$(git symbolic-ref --short HEAD)"',
+      '# … later …',
+      'git stash pop',
+      'git push origin :wip/<branch>',
+    ],
+  },
+  {
+    title: 'Undo a mistake — anything, really',
+    body: 'One command for commit / amend / merge / rebase / stash. It picks the right reflog reference, previews the change, and waits for your confirmation. Recoverable by design.',
+    cmd: 'gitb undo            # last commit\ngitb undo amend      # restore pre-amend state\ngitb undo rebase     # abort or revert the rebase',
+    expands: [
+      'git reset --soft HEAD~1',
+      'git reset --hard ORIG_HEAD',
+      'git rebase --abort',
+    ],
+  },
+  {
+    title: 'Clean up a messy feature branch into changelog-ready commits',
+    body: 'gitb proposes a squash plan (groups, messages, order) and applies it once you confirm.',
+    cmd: 'gitb squash',
+    expands: [
+      'git rebase -i origin/main',
+      '# fold, reorder, rewrite messages — by hand',
+    ],
+  },
+];
+---
+<section id="recipes" class="section">
+  <div class="container">
+    <h2>
+      Recipes
+      <a class="anchor" href="#recipes" aria-label="Link to Recipes">#</a>
+    </h2>
+    <p class="lead">
+      Real flows people run every day. Copy the gitbasher line and paste it
+      into your terminal.
+    </p>
+
+    {recipes.map((r) => (
+      <article class="recipe">
+        <h3>{r.title}</h3>
+        <p>{r.body}</p>
+        <div class="copy-block" aria-label={r.title}>
+          <code>{r.cmd}</code>
+          <button type="button" class="copy-btn" data-copy={r.cmd} aria-label={`Copy: ${r.title}`}>
+            Copy
+          </button>
+        </div>
+        <details>
+          <summary>What this expands to in plain git</summary>
+          <pre><code>{r.expands.join('\n')}</code></pre>
+        </details>
+      </article>
+    ))}
+  </div>
+</section>
+
+<script>
+  // Recipes-scoped copy buttons (Hero also wires .copy-btn globally;
+  // both being attached is harmless because the handler is idempotent).
+  const buttons = document.querySelectorAll<HTMLButtonElement>('#recipes .copy-btn');
+  buttons.forEach((btn) => {
+    if (btn.dataset.wired === '1') return;
+    btn.dataset.wired = '1';
+    btn.addEventListener('click', async () => {
+      const text = btn.dataset.copy ?? '';
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      }
+      const original = btn.textContent;
+      btn.textContent = 'Copied';
+      btn.classList.add('is-copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('is-copied');
+      }, 1400);
+    });
+  });
+</script>
+
+<style>
+  .recipe {
+    margin: 2rem 0 2.4rem;
+  }
+
+  .recipe h3 {
+    margin-top: 0;
+    color: var(--fg);
+  }
+
+  .recipe p {
+    color: var(--fg-muted);
+    max-width: 64ch;
+  }
+
+  .recipe .copy-block code {
+    white-space: pre;
+  }
+
+  .recipe details {
+    margin-top: 0.4rem;
+  }
+
+  .recipe summary {
+    cursor: pointer;
+    color: var(--fg-subtle);
+    font-size: 0.85rem;
+    user-select: none;
+    list-style: none;
+    padding: 0.2rem 0;
+  }
+
+  .recipe summary:hover {
+    color: var(--fg-muted);
+  }
+
+  .recipe summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .recipe summary::before {
+    content: '▸ ';
+    display: inline-block;
+    transition: transform 0.12s ease;
+  }
+
+  .recipe details[open] summary::before {
+    transform: rotate(90deg);
+  }
+
+  .recipe details pre {
+    margin-top: 0.5rem;
+    font-size: 0.78rem;
+    background: var(--bg);
+  }
+</style>

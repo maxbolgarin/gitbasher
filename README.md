@@ -11,6 +11,13 @@
 </p>
 
 <p align="center">
+  <a href="https://maxbolgarin.github.io/gitbasher/"><strong>Website</strong></a> ·
+  <a href="#install-in-10-seconds">Install</a> ·
+  <a href="#all-features-at-a-glance">Features</a> ·
+  <a href="./FAQ.md">FAQ</a>
+</p>
+
+<p align="center">
   <img src=".github/commit.gif" width="640" alt="gitb commit demo" />
 </p>
 

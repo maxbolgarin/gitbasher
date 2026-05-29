@@ -1,0 +1,47 @@
+---
+import Base from '../layouts/Base.astro';
+import Nav from '../components/Nav.astro';
+import Footer from '../components/Footer.astro';
+
+const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+---
+<Base
+  title="404 — Page not found · Gitbasher"
+  description="Page not found. Head back to the gitbasher home page."
+  path="/404"
+  noindex
+>
+  <Nav slot="header" />
+
+  <section class="not-found">
+    <div class="container">
+      <pre><code><span class="tok-prompt">$</span> <span class="tok-cmd">gitb find</span> <span class="tok-str">"this-page"</span>
+<span class="tok-err">✗ Not found.</span>
+<span class="tok-tip">💡</span> Try the home page, or open an issue if you expected something here.</code></pre>
+
+      <p>
+        <a class="btn btn-primary" href={`${base}/`}>← Back to home</a>
+        <a class="btn" href="https://github.com/maxbolgarin/gitbasher/issues" rel="noopener">Open an issue</a>
+      </p>
+    </div>
+  </section>
+
+  <Footer slot="footer" />
+</Base>
+
+<style>
+  .not-found {
+    padding: clamp(2.5rem, 8vw, 4rem) 0;
+  }
+
+  .not-found pre {
+    max-width: 560px;
+  }
+
+  .not-found p {
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    margin-top: 1.4rem;
+  }
+</style>

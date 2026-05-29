@@ -598,6 +598,19 @@ function wrong_mode {
 }
 
 
+### Detect transient network/connectivity failures in git output that are worth
+### retrying (VPN flapping, DNS hiccups, SSH timeouts, dropped connections).
+### Authentication, permission and "[rejected]" errors are NOT network errors and
+### must never be retried here.
+# $1: combined stdout+stderr of a failed git network command
+# Returns: 0 (true) if the output looks like a transient network failure
+function is_network_error {
+    local output="$1"
+    echo "$output" | grep -qiE \
+        "Could not read from remote repository|Could not resolve host|Connection timed out|Operation timed out|connect to host|Connection refused|Connection reset|Network is unreachable|kex_exchange_identification|remote end hung up unexpectedly|unable to access|Failed to connect|early EOF|RPC failed|timed out|ssh: connect|Temporary failure in name resolution|[Bb]roken pipe|[Rr]ecv failure|[Ss]end failure|TLS connection|SSL connection|no route to host"
+}
+
+
 ### Function echoes (true return) url to current user's repo (remote)
 # Return: url to repo
 function get_repo {

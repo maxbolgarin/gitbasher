@@ -19,78 +19,107 @@
 #     * push_output
 #     * push_code
 function push {
-    push_output=$(git push "$@" "${origin_name}" "${current_branch}" 2>&1)
-    push_code=$?
+    # Transient connectivity failures (VPN flapping, DNS hiccups, SSH timeouts)
+    # are retried with exponential backoff (2s, 4s, 8s, 16s) so a brief network
+    # blip no longer forces the user to ctrl+c and re-run the whole command —
+    # e.g. enabling a VPN mid-failure now recovers on the next attempt.
+    local push_max_retries=4
+    local push_retry_delay=2
+    local push_attempt=0
 
-    if [ $push_code -eq 0 ] ; then
-        echo -e "${GREEN}✓ Pushed to ${origin_name}/${current_branch}${ENDCOLOR}"
+    while true; do
+        push_output=$(git push "$@" "${origin_name}" "${current_branch}" 2>&1)
+        push_code=$?
 
-        repo=$(get_repo)
-        host=$(get_repo_host "$repo")
-        head_hash=$(git rev-parse HEAD 2>/dev/null)
+        if [ $push_code -eq 0 ] ; then
+            echo -e "${GREEN}✓ Pushed to ${origin_name}/${current_branch}${ENDCOLOR}"
 
-        print_link "Repo" "$repo"
+            repo=$(get_repo)
+            host=$(get_repo_host "$repo")
+            head_hash=$(git rev-parse HEAD 2>/dev/null)
 
-        # Direct link to the just-pushed commit
-        if [ -n "$head_hash" ]; then
-            commit_url=$(get_commit_url "$head_hash" "$repo")
-            if [ -n "$commit_url" ]; then
-                print_link "Commit" "$commit_url"
-            fi
-        fi
+            print_link "Repo" "$repo"
 
-        if [[ ${current_branch} != ${main_branch} ]]; then
-            branch_url=$(get_branch_url "${current_branch}" "$repo")
-            if [ -n "$branch_url" ]; then
-                print_link "Branch" "$branch_url"
-            fi
-
-            # Some hosts include a PR/MR link in the push output (first push, etc.)
-            link=$(echo "$push_output" | grep -Eo "https?://[^[:space:]]+" | head -n 1 | sed 's|^remote:[[:space:]]*||')
-
-            if [ "$host" = "github" ]; then
-                if [ -n "$link" ]; then
-                    print_link "New PR" "$link"
-                else
-                    new_pr_url=$(get_new_pr_url "${main_branch}" "${current_branch}" "$repo")
-                    print_link "New PR" "$new_pr_url"
+            # Direct link to the just-pushed commit
+            if [ -n "$head_hash" ]; then
+                commit_url=$(get_commit_url "$head_hash" "$repo")
+                if [ -n "$commit_url" ]; then
+                    print_link "Commit" "$commit_url"
                 fi
-            elif [ "$host" = "gitlab" ]; then
-                if [ -n "$link" ]; then
-                    is_new=$(echo "$push_output" | grep -i "create a merge request")
-                    if [ -n "$is_new" ]; then
-                        print_link "New MR" "$link"
+            fi
+
+            if [[ ${current_branch} != ${main_branch} ]]; then
+                branch_url=$(get_branch_url "${current_branch}" "$repo")
+                if [ -n "$branch_url" ]; then
+                    print_link "Branch" "$branch_url"
+                fi
+
+                # Some hosts include a PR/MR link in the push output (first push, etc.)
+                link=$(echo "$push_output" | grep -Eo "https?://[^[:space:]]+" | head -n 1 | sed 's|^remote:[[:space:]]*||')
+
+                if [ "$host" = "github" ]; then
+                    if [ -n "$link" ]; then
+                        print_link "New PR" "$link"
                     else
-                        print_link "MR" "$link"
+                        new_pr_url=$(get_new_pr_url "${main_branch}" "${current_branch}" "$repo")
+                        print_link "New PR" "$new_pr_url"
                     fi
-                else
-                    new_mr_url=$(get_new_pr_url "${main_branch}" "${current_branch}" "$repo")
-                    print_link "New MR" "$new_mr_url"
-                fi
-            elif [ "$host" = "bitbucket" ]; then
-                if [ -n "$link" ]; then
-                    print_link "New PR" "$link"
-                else
-                    new_pr_url=$(get_new_pr_url "${main_branch}" "${current_branch}" "$repo")
-                    print_link "New PR" "$new_pr_url"
+                elif [ "$host" = "gitlab" ]; then
+                    if [ -n "$link" ]; then
+                        is_new=$(echo "$push_output" | grep -i "create a merge request")
+                        if [ -n "$is_new" ]; then
+                            print_link "New MR" "$link"
+                        else
+                            print_link "MR" "$link"
+                        fi
+                    else
+                        new_mr_url=$(get_new_pr_url "${main_branch}" "${current_branch}" "$repo")
+                        print_link "New MR" "$new_mr_url"
+                    fi
+                elif [ "$host" = "bitbucket" ]; then
+                    if [ -n "$link" ]; then
+                        print_link "New PR" "$link"
+                    else
+                        new_pr_url=$(get_new_pr_url "${main_branch}" "${current_branch}" "$repo")
+                        print_link "New PR" "$new_pr_url"
+                    fi
                 fi
             fi
+
+            # Link to CI runs for this branch
+            ci_url=$(get_ci_url "${current_branch}" "$repo")
+            if [ -n "$ci_url" ]; then
+                print_link "$(get_ci_label "$repo")" "$ci_url"
+            fi
+
+            exit
         fi
 
-        # Link to CI runs for this branch
-        ci_url=$(get_ci_url "${current_branch}" "$repo")
-        if [ -n "$ci_url" ]; then
-            print_link "$(get_ci_label "$repo")" "$ci_url"
+        ### Unpulled remote changes — caller pulls then retries; not a network issue.
+        if [[ $push_output == *"[rejected]"* ]]; then
+            return
         fi
 
-        exit
-    fi
+        ### Retry transient network failures with exponential backoff.
+        if is_network_error "$push_output" && [ $push_attempt -lt $push_max_retries ]; then
+            push_attempt=$((push_attempt + 1))
+            echo -e "${YELLOW}⚠  Network error while pushing — retrying in ${push_retry_delay}s (attempt ${push_attempt}/${push_max_retries})...${ENDCOLOR}"
+            echo "$push_output" | head -n 2
+            echo
+            sleep $push_retry_delay
+            push_retry_delay=$((push_retry_delay * 2))
+            continue
+        fi
 
-    if [[ $push_output != *"[rejected]"* ]]; then
+        ### Non-retryable error, or retries exhausted.
         echo -e "${RED}✗ Cannot push.${ENDCOLOR}"
         echo "$push_output"
+        if [ $push_attempt -gt 0 ]; then
+            echo
+            echo -e "${YELLOW}⚠  Still failing after ${push_attempt} retries — check your network/VPN, then run ${GREEN}gitb push${YELLOW} again.${ENDCOLOR}"
+        fi
         exit $push_code
-    fi
+    done
 }
 
 

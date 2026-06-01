@@ -77,8 +77,8 @@ function stage_fast_changes {
 ### (feat, fix, refactor, test, docs, chore, build, ci, perf, style, revert)
 ### with its singular/plural/synonym forms.
 function is_redundant_scope {
-    local type_lower="${1,,}"
-    local scope_lower="${2,,}"
+    local type_lower; type_lower=$(to_lower "$1")
+    local scope_lower; scope_lower=$(to_lower "$2")
     [ -z "$scope_lower" ] && return 1
     case "$type_lower" in
         feat)     [[ "$scope_lower" =~ ^(feat|feats|feature|features)$ ]] && return 0 ;;
@@ -178,9 +178,9 @@ function detect_scopes_from_staged_files {
 
     if [ -n "$staged_files" ]; then
         # Count occurrences of each path token with depth tracking
-        local -A scope_counts
-        local -A scope_depths
-        
+        gmap_clear scope_counts
+        gmap_clear scope_depths
+
         # Only directory components contribute to scope candidates — filenames
         # are skipped so single root-level files (README.md, package.json, etc.)
         # don't generate noisy one-off scopes. Root files end up in the "misc"
@@ -195,7 +195,7 @@ function detect_scopes_from_staged_files {
                     component="${path_components[$i]}"
                     [ -z "$component" ] && continue
 
-                    component_lower="${component,,}"
+                    component_lower=$(to_lower "$component")
                     # Filter out generic containers and dependency/output dirs
                     # that are rarely meaningful as a per-commit scope. In a
                     # monorepo, the container dir (`services/`, `apps/`,
@@ -213,10 +213,11 @@ function detect_scopes_from_staged_files {
                         continue
                     fi
 
-                    scope_counts["$component_lower"]=$((${scope_counts["$component_lower"]:-0} + 1))
+                    gmap_inc scope_counts "$component_lower"
                     current_depth=$((i + 1))
-                    if [ -z "${scope_depths["$component_lower"]}" ] || [ $current_depth -lt ${scope_depths["$component_lower"]} ]; then
-                        scope_depths["$component_lower"]=$current_depth
+                    existing_depth=$(gmap_get scope_depths "$component_lower")
+                    if [ -z "$existing_depth" ] || [ $current_depth -lt "$existing_depth" ]; then
+                        gmap_set scope_depths "$component_lower" "$current_depth"
                     fi
                 done
             fi
@@ -224,21 +225,24 @@ function detect_scopes_from_staged_files {
         
         # Find maximum count to determine if we should filter out count=1 tokens
         max_count=0
-        for token in "${!scope_counts[@]}"; do
-            if [ ${scope_counts["$token"]} -gt $max_count ]; then
-                max_count=${scope_counts["$token"]}
+        while IFS= read -r token; do
+            [ -z "$token" ] && continue
+            token_count=$(gmap_get scope_counts "$token")
+            if [ "$token_count" -gt $max_count ]; then
+                max_count=$token_count
             fi
-        done
-        
+        done < <(gmap_keys scope_counts)
+
         # Count total unique tokens
-        total_unique_tokens=${#scope_counts[@]}
-        
+        total_unique_tokens=$(gmap_size scope_counts)
+
         # Collect and sort scopes
         detected_scopes_array=()
-        for token in "${!scope_counts[@]}"; do
-            count=${scope_counts["$token"]}
-            depth=${scope_depths["$token"]}
-            
+        while IFS= read -r token; do
+            [ -z "$token" ] && continue
+            count=$(gmap_get scope_counts "$token")
+            depth=$(gmap_get scope_depths "$token")
+
             # Apply count filter
             # If we have few unique tokens (≤ 7), include all regardless of count
             # If we have many tokens and max_count > 1, only include tokens with count > 1
@@ -254,8 +258,8 @@ function detect_scopes_from_staged_files {
                 # If all tokens have count=1, include all
                 detected_scopes_array+=("$count:$depth:$token")
             fi
-        done
-        
+        done < <(gmap_keys scope_counts)
+
         # Sort by count (descending), then by depth (ascending), then by token name
         if [ ${#detected_scopes_array[@]} -gt 0 ]; then
             # Separate filename tokens from directory tokens for better sorting
@@ -293,7 +297,7 @@ function detect_scopes_from_staged_files {
             # duplicates that collapse to the same clean name.
             final_scopes=()
             count=0
-            declare -A seen_norm=()
+            gmap_clear seen_norm
             for entry in "${detected_scopes_sorted[@]}"; do
                 if [ $count -ge 9 ]; then
                     break
@@ -301,8 +305,8 @@ function detect_scopes_from_staged_files {
                 token="${entry##*:}"  # Extract token after last colon
                 token=$(normalize_scope_name "$token")
                 [ -z "$token" ] && continue
-                [ -n "${seen_norm[$token]:-}" ] && continue
-                seen_norm["$token"]=1
+                gset_has seen_norm "$token" && continue
+                gset_add seen_norm "$token"
                 final_scopes+=("$token")
                 count=$((count + 1))
             done
@@ -337,8 +341,7 @@ function build_split_groups_from_staged {
     detect_scopes_from_staged_files
 
     # Re-declare globals fresh on each call
-    unset split_groups split_group_keys
-    declare -gA split_groups=()
+    gmap_clear split_groups
     split_group_keys=()
 
     if [ -z "$detected_scopes" ]; then
@@ -372,7 +375,7 @@ function build_split_groups_from_staged {
             [ "$i_inner" -eq "$last_idx_inner" ] && continue
             comp="${comps[$i_inner]}"
             [ -z "$comp" ] && continue
-            comp_lower="${comp,,}"
+            comp_lower=$(to_lower "$comp")
             comp_no_ext_lower="${comp_lower%.*}"
             [ -z "$comp_no_ext_lower" ] && comp_no_ext_lower="$comp_lower"
             # detected scopes are normalized (.github -> github), so normalize
@@ -396,7 +399,7 @@ function build_split_groups_from_staged {
         if [ -z "$assigned" ] && [ "$last_idx_inner" -gt 0 ]; then
             local stem="${comps[$last_idx_inner]}"
             stem="${stem%.*}"          # drop the extension
-            stem="${stem,,}"           # lowercase
+            stem=$(to_lower "$stem")   # lowercase
             # Strip leading/trailing separators (_deploy-production ->
             # deploy-production) so they don't leak into the scope and so the
             # generic-name check below sees the clean stem.
@@ -411,11 +414,11 @@ function build_split_groups_from_staged {
 
         [ -z "$assigned" ] && assigned="misc"
 
-        if [ -z "${split_groups[$assigned]:-}" ]; then
+        if ! gmap_has split_groups "$assigned"; then
             split_group_keys+=("$assigned")
-            split_groups[$assigned]="$file"
+            gmap_set split_groups "$assigned" "$file"
         else
-            split_groups[$assigned]+=$'\n'"$file"
+            gmap_set split_groups "$assigned" "$(gmap_get split_groups "$assigned")"$'\n'"$file"
         fi
     done <<< "$staged_files"
 
@@ -540,7 +543,7 @@ function consolidate_split_groups {
     [ ${#split_group_keys[@]} -le "$max" ] && return 0
 
     # --- Stage 1: re-bucket by first non-generic path component ---
-    local -A rebucket=()
+    gmap_clear rebucket
     local -a rebucket_keys=()
     local key file bucket comp_lower i last_idx
     local -a comps
@@ -552,7 +555,7 @@ function consolidate_split_groups {
             bucket=""
             for i in "${!comps[@]}"; do
                 [ "$i" -eq "$last_idx" ] && continue   # skip the filename
-                comp_lower="${comps[$i],,}"
+                comp_lower=$(to_lower "${comps[$i]}")
                 [ -z "$comp_lower" ] && continue
                 if [[ "$comp_lower" =~ ^(src|lib|libs|scripts|bin|node_modules|vendor|tmp|temp|cache|logs|log|services|apps|packages|modules|components|cmd|internal)$ ]]; then
                     continue
@@ -562,20 +565,19 @@ function consolidate_split_groups {
                 break
             done
             [ -z "$bucket" ] && bucket="misc"
-            if [ -z "${rebucket[$bucket]:-}" ]; then
+            if ! gmap_has rebucket "$bucket"; then
                 rebucket_keys+=("$bucket")
-                rebucket[$bucket]="$file"
+                gmap_set rebucket "$bucket" "$file"
             else
-                rebucket[$bucket]+=$'\n'"$file"
+                gmap_set rebucket "$bucket" "$(gmap_get rebucket "$bucket")"$'\n'"$file"
             fi
-        done <<< "${split_groups[$key]}"
+        done <<< "$(gmap_get split_groups "$key")"
     done
 
-    unset split_groups split_group_keys
-    declare -gA split_groups=()
+    gmap_clear split_groups
     split_group_keys=()
     for key in "${rebucket_keys[@]}"; do
-        split_groups[$key]="${rebucket[$key]}"
+        gmap_set split_groups "$key" "$(gmap_get rebucket "$key")"
         split_group_keys+=("$key")
     done
 
@@ -585,13 +587,13 @@ function consolidate_split_groups {
     local -a sized=()
     local n
     for key in "${split_group_keys[@]}"; do
-        n=$(printf '%s\n' "${split_groups[$key]}" | grep -c .)
+        n=$(printf '%s\n' "$(gmap_get split_groups "$key")" | grep -c .)
         sized+=("${n}"$'\t'"${key}")
     done
     IFS=$'\n' sized=($(printf '%s\n' "${sized[@]}" | sort -t$'\t' -k1,1nr -k2,2))
     unset IFS
 
-    local -A kept=()
+    gmap_clear kept
     local -a kept_keys=()
     local keep_limit=$((max - 1))
     local misc_files="" idx=0 entry
@@ -599,25 +601,24 @@ function consolidate_split_groups {
         key="${entry#*$'\t'}"
         if [ "$idx" -lt "$keep_limit" ] && [ "$key" != "misc" ]; then
             kept_keys+=("$key")
-            kept[$key]="${split_groups[$key]}"
+            gmap_set kept "$key" "$(gmap_get split_groups "$key")"
             idx=$((idx + 1))
         elif [ -z "$misc_files" ]; then
-            misc_files="${split_groups[$key]}"
+            misc_files="$(gmap_get split_groups "$key")"
         else
-            misc_files+=$'\n'"${split_groups[$key]}"
+            misc_files+=$'\n'"$(gmap_get split_groups "$key")"
         fi
     done
 
-    unset split_groups split_group_keys
-    declare -gA split_groups=()
+    gmap_clear split_groups
     split_group_keys=()
     for key in "${kept_keys[@]}"; do
-        split_groups[$key]="${kept[$key]}"
+        gmap_set split_groups "$key" "$(gmap_get kept "$key")"
         split_group_keys+=("$key")
     done
     if [ -n "$misc_files" ]; then
         split_group_keys+=("misc")
-        split_groups[misc]="$misc_files"
+        gmap_set split_groups "misc" "$misc_files"
     fi
     return 0
 }
@@ -647,7 +648,7 @@ function is_heuristic_weak {
     local max_size=0 n
     local s
     for s in "${split_group_keys[@]}"; do
-        n=$(printf '%s\n' "${split_groups[$s]}" | grep -c .)
+        n=$(printf '%s\n' "$(gmap_get split_groups "$s")" | grep -c .)
         [ "$n" -gt "$max_size" ] && max_size="$n"
     done
     local pct=$((max_size * 100 / total))
@@ -715,12 +716,12 @@ Output TSV (scope<TAB>file) for every staged file. No prose."
     ai_response=$(printf '%s' "$ai_response" | LC_ALL=C sed -e 's/^```[a-zA-Z]*$//' -e 's/^```$//')
 
     # Build a set of expected staged files for validation
-    local -A staged_set=()
+    gmap_clear staged_set
     while IFS= read -r f; do
-        [ -n "$f" ] && staged_set["$f"]=1
+        [ -n "$f" ] && gset_add staged_set "$f"
     done <<< "$staged_files"
 
-    local -A new_groups=()
+    gmap_clear new_groups
     local -a new_keys=()
     local line scope file tab_count
     local tab=$'\t'
@@ -744,13 +745,13 @@ Output TSV (scope<TAB>file) for every staged file. No prose."
         scope=$(printf '%s' "$scope" | LC_ALL=C tr '[:upper:]' '[:lower:]')
 
         # Reject files the model invented or paraphrased
-        [ -z "${staged_set[$file]:-}" ] && continue
+        gset_has staged_set "$file" || continue
 
-        if [ -z "${new_groups[$scope]:-}" ]; then
+        if ! gmap_has new_groups "$scope"; then
             new_keys+=("$scope")
-            new_groups[$scope]="$file"
+            gmap_set new_groups "$scope" "$file"
         else
-            new_groups[$scope]+=$'\n'"$file"
+            gmap_set new_groups "$scope" "$(gmap_get new_groups "$scope")"$'\n'"$file"
         fi
     done <<< "$ai_response"
 
@@ -758,7 +759,7 @@ Output TSV (scope<TAB>file) for every staged file. No prose."
     local total_assigned=0 total_staged
     local key
     for key in "${new_keys[@]}"; do
-        total_assigned=$((total_assigned + $(printf '%s\n' "${new_groups[$key]}" | grep -c .)))
+        total_assigned=$((total_assigned + $(printf '%s\n' "$(gmap_get new_groups "$key")" | grep -c .)))
     done
     total_staged=$(printf '%s\n' "$staged_files" | grep -c .)
     if [ "$total_assigned" -ne "$total_staged" ] || [ ${#new_keys[@]} -lt 1 ]; then
@@ -766,11 +767,10 @@ Output TSV (scope<TAB>file) for every staged file. No prose."
     fi
 
     # Replace globals with AI grouping
-    unset split_groups split_group_keys
-    declare -gA split_groups
+    gmap_clear split_groups
     split_group_keys=()
     for key in "${new_keys[@]}"; do
-        split_groups[$key]="${new_groups[$key]}"
+        gmap_set split_groups "$key" "$(gmap_get new_groups "$key")"
         split_group_keys+=("$key")
     done
 
@@ -806,18 +806,17 @@ function _stage_file_by_status {
 # key the map by that new path and treat it as an add. The old path is
 # recorded as a deletion so it gets removed from the index when restaged.
 function _capture_split_statuses {
-    unset _split_status_by_file
-    declare -gA _split_status_by_file=()
+    gmap_clear _split_status_by_file
     local line status old new
     while IFS=$'\t' read -r status old new; do
         [ -z "$status" ] && continue
         case "$status" in
             R*|C*)
-                _split_status_by_file[$old]="D"
-                _split_status_by_file[$new]="M"
+                gmap_set _split_status_by_file "$old" "D"
+                gmap_set _split_status_by_file "$new" "M"
                 ;;
             *)
-                _split_status_by_file[$old]="${status:0:1}"
+                gmap_set _split_status_by_file "$old" "${status:0:1}"
                 ;;
         esac
     done < <(git -c core.quotePath=false diff --name-status --cached)
@@ -899,7 +898,7 @@ function print_commit_type_menu {
 }
 
 function print_split_groups_preview {
-    local -A staged_status_by_file=()
+    gmap_clear staged_status_by_file
     local staged_diff status file new_file
     staged_diff=$(git -c core.quotePath=false diff --name-status --cached)
     while IFS=$'\t' read -r status file new_file; do
@@ -907,17 +906,17 @@ function print_split_groups_preview {
         if [[ "$status" == R* || "$status" == C* ]]; then
             [ -n "$new_file" ] && file="$new_file"
         fi
-        staged_status_by_file["$file"]="${status:0:1}"
+        gmap_set staged_status_by_file "$file" "${status:0:1}"
     done <<< "$staged_diff"
 
     echo -e "${YELLOW}Detected changes across ${#split_group_keys[@]} scopes:${ENDCOLOR}"
     local scope file_count file_color staged_status
     for scope in "${split_group_keys[@]}"; do
-        file_count=$(printf '%s\n' "${split_groups[$scope]}" | grep -c .)
+        file_count=$(printf '%s\n' "$(gmap_get split_groups "$scope")" | grep -c .)
         echo -e "  ${BLUE}${BOLD}${scope}${ENDCOLOR} ${GRAY}(${file_count} file(s))${ENDCOLOR}:"
         while IFS= read -r file; do
             [ -z "$file" ] && continue
-            staged_status="${staged_status_by_file[$file]}"
+            staged_status=$(gmap_get staged_status_by_file "$file")
             case "$staged_status" in
                 A) file_color="$GREEN" ;;
                 M) file_color="$YELLOW" ;;
@@ -925,7 +924,7 @@ function print_split_groups_preview {
                 *) file_color="$GRAY" ;;
             esac
             echo -e "    ${file_color}${file}${ENDCOLOR}"
-        done <<< "${split_groups[$scope]}"
+        done <<< "$(gmap_get split_groups "$scope")"
     done
 }
 
@@ -1032,9 +1031,11 @@ function perform_commit_split {
     # Snapshot stores STATUS<TAB>FILE per line so abort-restore can also
     # replay deletions correctly.
     : > "$snapshot_file"
+    local _snap_status
     while IFS= read -r f; do
         [ -z "$f" ] && continue
-        printf '%s\t%s\n' "${_split_status_by_file[$f]:-M}" "$f" >> "$snapshot_file"
+        _snap_status=$(gmap_get _split_status_by_file "$f"); [ -z "$_snap_status" ] && _snap_status="M"
+        printf '%s\t%s\n' "$_snap_status" "$f" >> "$snapshot_file"
     done <<< "$original_staged"
     # Restore staging if the user kills the process mid-split
     trap "_restore_split_snapshot '$snapshot_file'" INT TERM
@@ -1066,7 +1067,7 @@ function perform_commit_split {
             done <<< "$currently_staged"
         fi
 
-        files_str="${split_groups[$scope]}"
+        files_str="$(gmap_get split_groups "$scope")"
         files_array=()
         while IFS= read -r f; do
             [ -n "$f" ] && files_array+=("$f")
@@ -1081,8 +1082,10 @@ function perform_commit_split {
         # deletions (otherwise `git add` would re-add the worktree copy and
         # the index ends up empty for that scope, breaking AI generation).
         local stage_failed=0
+        local _stage_status
         for f in "${files_array[@]}"; do
-            if ! _stage_file_by_status "$f" "${_split_status_by_file[$f]:-M}"; then
+            _stage_status=$(gmap_get _split_status_by_file "$f"); [ -z "$_stage_status" ] && _stage_status="M"
+            if ! _stage_file_by_status "$f" "$_stage_status"; then
                 stage_failed=1
                 break
             fi
@@ -2264,16 +2267,9 @@ function commit_script {
     fi
     print_commit_type_menu "$step" "$_ai_available_for_menu"
 
-    declare -A types=(
-        [1]="feat"
-        [2]="fix"
-        [3]="refactor"
-        [4]="test"
-        [5]="build"
-        [6]="ci"
-        [7]="chore"
-        [8]="docs"
-    )
+    # Index 0 is an unused placeholder so the menu numbers (1-8) map directly
+    # to array indices; a plain indexed array keeps this bash 3.2 compatible.
+    local -a types=("" "feat" "fix" "refactor" "test" "build" "ci" "chore" "docs")
 
     while [ true ]; do
         read -n 1 -s choice

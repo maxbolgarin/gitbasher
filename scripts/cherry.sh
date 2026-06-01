@@ -287,7 +287,11 @@ function choose_commits_interactive {
     local show_all=false
     
     # Get list of commits from source branch that are not in current branch
-    mapfile -t all_commits < <(git rev-list "${current_branch}..${source_branch}" --reverse)
+    # (portable read-loop instead of bash 4's mapfile)
+    all_commits=()
+    while IFS= read -r _commit; do
+        all_commits+=("$_commit")
+    done < <(git rev-list "${current_branch}..${source_branch}" --reverse)
     
     if [ ${#all_commits[@]} -eq 0 ]; then
         echo -e "${YELLOW}No commits to cherry-pick from '${source_branch}'.${ENDCOLOR}"

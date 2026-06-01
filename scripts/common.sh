@@ -12,6 +12,155 @@ GRAY_ES="\x1b[37m"
 ENDCOLOR_ES="\x1b[0m"
 
 
+### ===== PORTABLE ASSOCIATIVE-ARRAY SHIM (bash 3.2+) =====
+### Bash 3.2 — the system bash on macOS — has no associative arrays, no
+### ${var,,} case-folding, and no mapfile. These helpers emulate a string-keyed
+### map/set on top of plain scalar variables so gitbasher runs everywhere
+### without a bash 4 dependency.
+###
+### Keys may contain any bytes; they are hex-encoded into safe variable-name
+### suffixes (_gmap_enc). Values are stored verbatim with `printf -v`, never
+### through `eval`, so arbitrary value content — newlines, quotes, $(...) — is
+### stored as inert data and never executed. Insertion order is preserved in a
+### newline-delimited key list, so keys must not contain literal newlines (true
+### at every call site, which reads keys with `read -r`).
+###
+### API:
+###   gmap_clear NAME            reset map (call before first use to drop stale state)
+###   gmap_set   NAME KEY VALUE  set / overwrite
+###   gmap_get   NAME KEY        print value ("" when absent)
+###   gmap_has   NAME KEY        return 0 when key present, 1 otherwise
+###   gmap_inc   NAME KEY        value := (value or 0) + 1
+###   gmap_keys  NAME            print keys, one per line, in insertion order
+###   gmap_size  NAME            print number of keys
+###   gset_add / gset_has        set wrappers (value is always 1)
+
+### Hex-encode a string into [0-9a-f]* for use inside a variable name.
+### Byte-exact and locale-independent: `local LC_ALL=C` forces byte semantics
+### for the slice/length operators, and `& 0xff` masks any sign extension so
+### every byte yields exactly two hex digits (self-delimiting, collision-free).
+### Result is returned in _gmap_enc_out (no subshell, for speed in tight loops).
+# $1: string to encode
+function _gmap_enc {
+    local LC_ALL=C
+    local _s="$1" _out="" _i _n
+    for (( _i = 0; _i < ${#_s}; _i++ )); do
+        printf -v _n '%d' "'${_s:_i:1}"
+        printf -v _n '%02x' "$(( _n & 0xff ))"
+        _out="$_out$_n"
+    done
+    _gmap_enc_out="$_out"
+}
+
+### Remove every entry of a map and its key list (also used to initialize a
+### map and drop any stale state left by an earlier call with the same name).
+# $1: map name
+function gmap_clear {
+    local _hm _k _hk
+    _gmap_enc "$1"; _hm="$_gmap_enc_out"
+    while IFS= read -r _k; do
+        [ -z "$_k" ] && continue
+        _gmap_enc "$_k"; _hk="$_gmap_enc_out"
+        unset "_gmapH_${_hm}_${_hk}"
+    done < <(gmap_keys "$1")
+    unset "_gmapKL_${_hm}"
+}
+
+### Set (or overwrite) the value for a key.
+# $1: map name  $2: key  $3: value
+function gmap_set {
+    local _hm _hk _vn _kln _exists _cur
+    _gmap_enc "$1"; _hm="$_gmap_enc_out"
+    _gmap_enc "$2"; _hk="$_gmap_enc_out"
+    _vn="_gmapH_${_hm}_${_hk}"
+    _kln="_gmapKL_${_hm}"
+    eval "_exists=\${${_vn}+x}"
+    if [ -z "$_exists" ]; then
+        eval "_cur=\${${_kln}-}"
+        printf -v "$_kln" '%s%s\n' "$_cur" "$2"
+    fi
+    printf -v "$_vn" '%s' "$3"
+}
+
+### Print the value stored for a key, or nothing when the key is absent.
+# $1: map name  $2: key
+function gmap_get {
+    local _hm _hk _vn
+    _gmap_enc "$1"; _hm="$_gmap_enc_out"
+    _gmap_enc "$2"; _hk="$_gmap_enc_out"
+    _vn="_gmapH_${_hm}_${_hk}"
+    eval "printf '%s' \"\${${_vn}-}\""
+}
+
+### Return 0 when the key exists in the map (even with an empty value).
+# $1: map name  $2: key
+function gmap_has {
+    local _hm _hk _vn _exists
+    _gmap_enc "$1"; _hm="$_gmap_enc_out"
+    _gmap_enc "$2"; _hk="$_gmap_enc_out"
+    _vn="_gmapH_${_hm}_${_hk}"
+    eval "_exists=\${${_vn}+x}"
+    [ -n "$_exists" ]
+}
+
+### Increment the integer value of a key (absent key counts as 0). Done without
+### a subshell so it stays cheap inside per-file loops.
+# $1: map name  $2: key
+function gmap_inc {
+    local _hm _hk _vn _kln _exists _cur
+    _gmap_enc "$1"; _hm="$_gmap_enc_out"
+    _gmap_enc "$2"; _hk="$_gmap_enc_out"
+    _vn="_gmapH_${_hm}_${_hk}"
+    _kln="_gmapKL_${_hm}"
+    eval "_exists=\${${_vn}+x}"
+    if [ -z "$_exists" ]; then
+        eval "_cur=\${${_kln}-}"
+        printf -v "$_kln" '%s%s\n' "$_cur" "$2"
+        _cur=0
+    else
+        eval "_cur=\${${_vn}}"
+    fi
+    printf -v "$_vn" '%s' "$(( _cur + 1 ))"
+}
+
+### Print the map's keys, one per line, in insertion order.
+# $1: map name
+function gmap_keys {
+    local _hm
+    _gmap_enc "$1"; _hm="$_gmap_enc_out"
+    eval "printf '%s' \"\${_gmapKL_${_hm}-}\""
+}
+
+### Print the number of keys in the map. Always exits 0 (grep -c returns 1 on
+### an empty map, which would trip `set -e` at the call site).
+# $1: map name
+function gmap_size {
+    local _n
+    _n=$(gmap_keys "$1" | grep -c .)
+    printf '%s' "$_n"
+}
+
+### Set membership helpers (a set is just a map whose values are all 1).
+function gset_add { gmap_set "$1" "$2" 1; }
+function gset_has { gmap_has "$1" "$2"; }
+
+
+### ===== CASE-FOLDING HELPERS (bash 3.2+) =====
+### Replacements for bash 4's ${var,,} / ${var^^} expansions.
+
+### Print the argument lowercased.
+# $1: string
+function to_lower {
+    printf '%s' "$1" | LC_ALL=C tr '[:upper:]' '[:lower:]'
+}
+
+### Print the argument uppercased.
+# $1: string
+function to_upper {
+    printf '%s' "$1" | LC_ALL=C tr '[:lower:]' '[:upper:]'
+}
+
+
 ### ===== UX STYLE GUIDE =====
 ### All user-facing text in gitbasher follows these rules. Reviewers and future
 ### contributors: please keep new strings consistent with this guide.
@@ -538,7 +687,22 @@ function read_editable_input {
     bind '"\e": "\C-a\C-k\C-m"' 2>/dev/null || true
 
     if [ $# -ge 3 ]; then
-        IFS= read -r -e -p "$_prompt" -i "$3" "$_var"
+        if ((BASH_VERSINFO[0] >= 4)); then
+            # bash 4+: preload the editable buffer so the user edits in place.
+            IFS= read -r -e -p "$_prompt" -i "$3" "$_var"
+        else
+            # bash 3.2 has no `read -i` to preload readline. Degrade gracefully:
+            # show the current value and keep it when the user submits an empty
+            # line (retype the line to change it).
+            local _reply _hint=""
+            [ -n "$3" ] && _hint="[$3] "
+            IFS= read -r -e -p "${_prompt}${_hint}" _reply
+            if [ -z "$_reply" ]; then
+                printf -v "$_var" '%s' "$3"
+            else
+                printf -v "$_var" '%s' "$_reply"
+            fi
+        fi
     else
         IFS= read -r -e -p "$_prompt" "$_var"
     fi
@@ -1006,7 +1170,7 @@ function print_configuration {
         # legacy env > legacy config) is encoded in get_ai_api_key_source.
         local ai_key_tag
         case "$(get_ai_api_key_source)" in
-            env-provider)    ai_key_tag="${CYAN}(env: GITB_AI_API_KEY_${ai_provider^^})${ENDCOLOR}" ;;
+            env-provider)    ai_key_tag="${CYAN}(env: GITB_AI_API_KEY_$(to_upper "$ai_provider"))${ENDCOLOR}" ;;
             env-legacy)      ai_key_tag="${CYAN}(env: GITB_AI_API_KEY, legacy)${ENDCOLOR}" ;;
             local-provider)  ai_key_tag="${BLUE}(project)${ENDCOLOR}" ;;
             global-provider) ai_key_tag="${PURPLE}(global)${ENDCOLOR}" ;;

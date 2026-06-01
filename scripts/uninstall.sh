@@ -106,7 +106,7 @@ function uninstall_script {
     # Trim leading/trailing whitespace; case-insensitive match against "delete"
     confirm_input="${confirm_input#"${confirm_input%%[![:space:]]*}"}"
     confirm_input="${confirm_input%"${confirm_input##*[![:space:]]}"}"
-    if [ "${confirm_input,,}" != "delete" ]; then
+    if [ "$(to_lower "$confirm_input")" != "delete" ]; then
         echo
         echo -e "${YELLOW}Cancelled — nothing was changed.${ENDCOLOR}"
         exit 0

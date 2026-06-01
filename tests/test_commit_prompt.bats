@@ -69,7 +69,8 @@ teardown() {
 @test "declining split AI suggestion leaves blank line before type menu" {
     create_test_file "gitb" "changed"
     git add gitb
-    declare -gA split_groups=([gitb]="gitb")
+    gmap_clear split_groups
+    gmap_set split_groups "gitb" "gitb"
     split_group_keys=(gitb)
     current_branch="main"
     push=""
@@ -209,11 +210,10 @@ teardown() {
     git rm old.txt >/dev/null
     git add docs/new.md scripts/change.sh
 
-    declare -gA split_groups=(
-        [docs]="docs/new.md"
-        [scripts]="scripts/change.sh"
-        [misc]="old.txt"
-    )
+    gmap_clear split_groups
+    gmap_set split_groups "docs" "docs/new.md"
+    gmap_set split_groups "scripts" "scripts/change.sh"
+    gmap_set split_groups "misc" "old.txt"
     split_group_keys=(docs scripts misc)
 
     run print_split_groups_preview
@@ -247,7 +247,7 @@ teardown() {
         while IFS= read -r file; do
             [ -z "$file" ] && continue
             git add -- "$file"
-        done <<< "${split_groups[$scope]}"
+        done <<< "$(gmap_get split_groups "$scope")"
     done
 }
 
@@ -257,10 +257,9 @@ teardown() {
     create_test_file "scripts/change.sh"
     git add docs scripts
 
-    declare -gA split_groups=(
-        [docs]="docs/guide.md"
-        [scripts]="scripts/change.sh"
-    )
+    gmap_clear split_groups
+    gmap_set split_groups "docs" "docs/guide.md"
+    gmap_set split_groups "scripts" "scripts/change.sh"
     split_group_keys=(docs scripts)
     current_branch="main"
     push=""

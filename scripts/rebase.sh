@@ -620,7 +620,8 @@ function rebase_conflicts {
                     elif [ "$choice_resolve" == "2" ]; then
                         echo -e "${YELLOW}Force accepting incoming changes...${ENDCOLOR}"
                         # Force remove files that don't exist in theirs (portable across GNU/BSD)
-                        mapfile -t _deleted < <(git ls-files --deleted)
+                        _deleted=()
+                        while IFS= read -r _df; do [ -n "$_df" ] && _deleted+=("$_df"); done < <(git ls-files --deleted)
                         [ ${#_deleted[@]} -gt 0 ] && git rm -- "${_deleted[@]}" 2>/dev/null
                         unset _deleted
                         git checkout --theirs . 2>/dev/null

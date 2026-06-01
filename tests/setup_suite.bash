@@ -17,9 +17,9 @@ setup_suite() {
         exit 1
     fi
     
-    # Verify bash version (4.0+)
-    if ((BASH_VERSINFO[0] < 4)); then
-        echo "Error: Bash 4.0+ required. Current version: $BASH_VERSION"
+    # Verify bash version (3.2+)
+    if ((BASH_VERSINFO[0] < 3 || (BASH_VERSINFO[0] == 3 && BASH_VERSINFO[1] < 2))); then
+        echo "Error: Bash 3.2+ required. Current version: $BASH_VERSION"
         exit 1
     fi
 }

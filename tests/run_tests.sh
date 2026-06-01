@@ -57,8 +57,8 @@ echo
 
 # Check bash version
 echo "Bash version: $BASH_VERSION"
-if ((BASH_VERSINFO[0] < 4)); then
-    echo -e "${RED}Error: Bash 4.0+ required. Current version: $BASH_VERSION${NC}"
+if ((BASH_VERSINFO[0] < 3 || (BASH_VERSINFO[0] == 3 && BASH_VERSINFO[1] < 2))); then
+    echo -e "${RED}Error: Bash 3.2+ required. Current version: $BASH_VERSION${NC}"
     exit 1
 fi
 echo -e "${GREEN}Bash version OK${NC}"

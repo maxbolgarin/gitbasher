@@ -56,16 +56,9 @@ function set_sep {
     echo -e "8. type${YELLOW}@${ENDCOLOR}name"
     echo "0. Exit"
     
-    declare -A seps=(
-            [1]="/"
-            [2]="_"
-            [3]="-"
-            [4]="."
-            [5]=","
-            [6]="+"
-            [7]="="
-            [8]="@"
-        )
+    # Index 0 is an unused placeholder so menu numbers (1-8) map directly to
+    # array indices; a plain indexed array keeps this bash 3.2 compatible.
+    local -a seps=("" "/" "_" "-" "." "," "+" "=" "@")
 
     while [ true ]; do
         read -n 1 -s choice

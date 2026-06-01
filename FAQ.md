@@ -36,11 +36,13 @@ The active provider has no key in any of the slots gitbasher checks (env var →
 
 ## Bash and platform support
 
-### Why does gitbasher require Bash 4+?
+### What bash version does gitbasher need?
 
-It uses `mapfile`, associative arrays, `${var,,}` (case-folding), and other features that landed in bash 4.0 (2009). macOS still ships bash 3.2 by default for license reasons. Gitbasher detects this at startup and tries to re-exec under a newer bash from `command -v bash`, `brew --prefix bash`, or known Homebrew paths before falling back to a manual install hint.
+Bash 3.2 or newer. That's the version macOS still ships as `/bin/bash` (frozen at 3.2 for license reasons), so gitbasher runs out of the box on a stock Mac — no `brew install bash` required.
 
-If you can't install bash 4+, gitbasher won't run — there is no bash 3 fallback codepath.
+Bash 4-only features (`mapfile`, associative arrays, `${var,,}` case-folding, `read -i`) were removed in favor of bash 3.2-compatible equivalents: a small portable map/set shim in `scripts/common.sh`, `tr`-based case folding, and a graceful `read` fallback. Installing a newer bash is still nice-to-have — on bash 4+, prompts that come pre-filled with a value (editing an AI-suggested commit message, renaming a branch) let you edit the text in place; on bash 3.2 you retype the line or press Enter to keep the current value.
+
+Only genuinely ancient shells (bash < 3.2) are unsupported; for those, gitbasher tries to re-exec under a newer bash before printing an install hint.
 
 ### Does gitbasher work on Windows?
 

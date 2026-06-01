@@ -64,9 +64,16 @@ Aliases are colocated with the canonical name in the case pattern (`commit|c|co|
 
 `scripts/base.sh:86-93` rewrites every occurrence of `--help` / `-h` in `$@` to the literal token `help` before dispatch. This means each subcommand handler only has to look for `help`, not three spellings. `gitb commit --help`, `gitb commit -h`, and `gitb commit help` all hit the same branch.
 
-### Re-exec to Bash 4+
+### Bash 3.2 compatibility
 
-If `gitb` runs under Bash 3 (the macOS system bash), `scripts/gitb.sh:18-46` tries to `exec` a newer bash — first via `command -v bash`, then `brew --prefix bash`, then hardcoded Homebrew prefixes. Only when none works does it print the install hint. The bundle inherits this logic; the bash 3 path only ever produces the upgrade message, never tries to run the rest of the script.
+gitbasher targets Bash 3.2 — the version macOS ships as `/bin/bash` — so it runs on a stock Mac with no `brew install bash`. The features bash 4 added and we used are emulated for 3.2:
+
+- **Associative arrays** → a portable string-keyed map/set shim in `scripts/common.sh` (`gmap_set` / `gmap_get` / `gmap_has` / `gmap_inc` / `gmap_keys` / `gset_add`). Keys are hex-encoded into variable-name suffixes; values are stored verbatim via `printf -v` (never `eval`). Integer-keyed maps (menu tables, per-group accumulators) use plain indexed arrays instead.
+- **`${var,,}` / `${var^^}`** → `to_lower` / `to_upper` helpers (`tr`-based).
+- **`mapfile -t`** → `while IFS= read -r` loops.
+- **`read -i` (preloaded readline buffer)** → used on bash 4+, with a 3.2 fallback that shows the current value and keeps it on an empty submit.
+
+Only Bash < 3.2 is unsupported: `scripts/gitb.sh` then tries to `exec` a newer bash — first via `command -v bash`, then `brew --prefix bash`, then hardcoded Homebrew prefixes — and prints an install hint only when none works. The `bash32` CI job runs the whole test suite under macOS's real `/bin/bash` 3.2 to keep this guarantee honest.
 
 ### Stale lock detection
 
@@ -105,7 +112,7 @@ chmod +x ./dist/gitb
 End-to-end, `gitb wip up worktree` does this:
 
 1. Shell finds `gitb` on `PATH` (installed by npm or the install script). It is the bundled `dist/gitb`.
-2. The bash 4+ check passes (or re-execs).
+2. The bash 3.2+ check passes (or re-execs an older shell).
 3. The stale-lock check passes.
 4. `case "$1"` in the dispatch matches `wip|w` → calls `wip_script "${@:2}"` (`base.sh:124-126`).
 5. `wip_script` is the entry function defined in `scripts/wip.sh`. It parses subcommand args (`up`, `down`, …) and dispatches to `wip_up` / `wip_down`.

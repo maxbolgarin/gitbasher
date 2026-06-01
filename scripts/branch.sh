@@ -639,8 +639,10 @@ function branch_script {
     detected_prefixes=""
     all_branches=$(git branch -a --format='%(refname:short)' 2>/dev/null | sed 's|origin/||g' | sort -u)
     if [ -n "$all_branches" ]; then
-        declare -A prefix_candidates
-        
+        # Collect prefix candidates into a plain array; `sort -u` dedupes them
+        # afterwards (no associative array needed — bash 3.2 compatible).
+        prefix_candidates=()
+
         while IFS= read -r branch; do
             if [ -n "$branch" ] && [[ "$branch" != "$main_branch" ]] && [[ "$branch" != "HEAD" ]]; then
                 # Extract prefix from branch name using common separators
@@ -648,21 +650,15 @@ function branch_script {
                     prefix="${BASH_REMATCH[1]}"
                     # Filter out very short or common prefixes
                     if [[ ${#prefix} -ge 2 ]] && [[ ! "$prefix" =~ ^(dev|tmp|old|new|test)$ ]]; then
-                        prefix_candidates["$prefix"]=1
+                        prefix_candidates+=("$prefix")
                     fi
                 fi
             fi
         done <<< "$all_branches"
-        
-        # Convert to sorted array
-        detected_prefixes_array=()
-        for prefix in "${!prefix_candidates[@]}"; do
-            detected_prefixes_array+=("$prefix")
-        done
-        
-        # Sort the array
-        if [ ${#detected_prefixes_array[@]} -gt 0 ]; then
-            IFS=$'\n' detected_prefixes_sorted=($(sort <<<"${detected_prefixes_array[*]}"))
+
+        # Sort and dedupe the collected prefixes
+        if [ ${#prefix_candidates[@]} -gt 0 ]; then
+            IFS=$'\n' detected_prefixes_sorted=($(printf '%s\n' "${prefix_candidates[@]}" | sort -u))
             unset IFS
             detected_prefixes="${detected_prefixes_sorted[*]}"
         fi
@@ -713,19 +709,20 @@ function branch_script {
         
         # Build the display array
         IFS=' ' read -r -a prefixes_array <<< "$all_prefixes"
-        declare -A prefixes_map
-        
+        # Keyed by 1-based option number, so a plain indexed array suffices.
+        prefixes_map=()
+
         res=""
         for i in "${!prefixes_array[@]}"; do
             option=$((i+1))
-            prefixes_map["$option"]="${prefixes_array[$i]}"
-            
+            prefixes_map[$option]="${prefixes_array[$i]}"
+
             res="$res$option. ${BOLD}${prefixes_array[$i]}${ENDCOLOR}|"
         done
-        
+
         # Add no prefix option
         no_prefix_option=$((${#prefixes_array[@]}+1))
-        prefixes_map["$no_prefix_option"]=""
+        prefixes_map[$no_prefix_option]=""
         
         echo -e "You can select one of the ${YELLOW}detected prefixes${ENDCOLOR}: $(echo $res | column -ts'|')"
 

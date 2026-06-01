@@ -234,11 +234,12 @@ function squash_parse_ai_plan {
     local response="$1"
     local expected_hashes_str="$2"
 
-    # Reset globals
+    # Reset globals. These are keyed by 1-based group number, so plain indexed
+    # arrays (bash 3.2 compatible) work in place of associative arrays.
     unset squash_group_commits squash_group_message squash_group_body
-    declare -gA squash_group_commits
-    declare -gA squash_group_message
-    declare -gA squash_group_body
+    declare -ga squash_group_commits=()
+    declare -ga squash_group_message=()
+    declare -ga squash_group_body=()
     squash_group_count=0
     squash_parse_error=""
 
@@ -285,16 +286,16 @@ function squash_parse_ai_plan {
     fi
 
     # Build expected-hash sets
-    local -A expected_set=()
+    gmap_clear expected_set
     local -a expected_order=()
     local h
     for h in $expected_hashes_str; do
-        expected_set["$h"]=1
+        gset_add expected_set "$h"
         expected_order+=("$h")
     done
 
     local seen=()
-    declare -A seen_set=()
+    gmap_clear seen_set
     local current_group=0
     local g
     for ((g = 0; g < groups_count; g++)); do
@@ -327,15 +328,15 @@ function squash_parse_ai_plan {
         local validated="" c
         while IFS= read -r c; do
             [ -z "$c" ] && continue
-            if [ -z "${expected_set[$c]:-}" ]; then
+            if ! gset_has expected_set "$c"; then
                 squash_parse_error="group $one_idx references unknown commit '$c' (not in input range)"
                 return 1
             fi
-            if [ -n "${seen_set[$c]:-}" ]; then
+            if gset_has seen_set "$c"; then
                 squash_parse_error="group $one_idx reuses commit '$c' already assigned to an earlier group"
                 return 1
             fi
-            seen_set["$c"]=1
+            gset_add seen_set "$c"
             seen+=("$c")
             validated+="${validated:+ }$c"
         done <<< "$commits_arr"
@@ -494,11 +495,11 @@ function squash_run_ai_grouping {
         chunk_idx=$((chunk_idx + 1))
     done
 
-    # Copy accumulators back into the per-group globals.
+    # Copy accumulators back into the per-group globals (1-based indexed arrays).
     unset squash_group_commits squash_group_message squash_group_body
-    declare -gA squash_group_commits
-    declare -gA squash_group_message
-    declare -gA squash_group_body
+    declare -ga squash_group_commits=()
+    declare -ga squash_group_message=()
+    declare -ga squash_group_body=()
     squash_group_count=${#final_commits[@]}
 
     local g_idx

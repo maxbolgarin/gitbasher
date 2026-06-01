@@ -131,6 +131,35 @@ jobs:
       - name: Smoke Test
         run: ./dist/gitb
 
+  bash32-syntax:
+    # Fast, deterministic bash 3.2 gate on Linux using the official bash:3.2
+    # Docker image: syntax-check every script and run the shim self-test under a
+    # genuine 3.2 interpreter. Complements the macOS job below (which runs the
+    # full functional suite under macOS's system bash 3.2 + BSD userland).
+    needs: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build bundle
+        run: |
+          version=$(git describe --tags --always 2>/dev/null | sed 's/^v//' || echo 'dev')
+          ./dist/build.sh ./scripts/gitb.sh ./dist/gitb "$version"
+          chmod +x ./dist/gitb
+
+      - name: Syntax + shim self-test under bash 3.2 (Docker)
+        run: |
+          docker run --rm -v "$PWD:/work" -w /work bash:3.2 bash -c '
+            major=${BASH_VERSINFO[0]}; minor=${BASH_VERSINFO[1]}
+            echo "container bash: $major.$minor"
+            if [ "$major" -ne 3 ] || [ "$minor" -ne 2 ]; then
+              echo "Expected bash 3.2 in the bash:3.2 image"; exit 1
+            fi
+            bash tests/bash32_compat_check.sh
+          '
+
   bash32:
     # The real bash 3.2 gate. macOS ships /bin/bash 3.2.57 (the oldest bash we
     # support), so run the whole suite under it — WITHOUT prepending Homebrew's

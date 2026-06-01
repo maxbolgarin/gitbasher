@@ -43,15 +43,19 @@ if [[ "$git_check" == *"fatal: not a git repository"* ]]; then
 fi
 
 
-### Cannot use bash version less than 4 because of many features that was added to language in that version
-if ((BASH_VERSINFO[0] < 4)); then
+### gitbasher targets bash 3.2+ — the version that ships as /bin/bash on macOS.
+### Only genuinely ancient shells (bash < 3.2) lack the features we rely on
+### (printf -v, array += append, [[ =~ ]] / BASH_REMATCH, C-style for). For
+### those, try to re-exec under a newer bash before giving up.
+if ((BASH_VERSINFO[0] < 3 || (BASH_VERSINFO[0] == 3 && BASH_VERSINFO[1] < 2))); then
     # Try to re-exec with a newer bash. Order:
-    #   1. PATH-resolved bash that reports >= 4 (covers MacPorts, nix, custom prefixes, Linux upgrades)
+    #   1. PATH-resolved bash that reports >= 3.2 (covers MacPorts, nix, custom prefixes, Linux upgrades)
     #   2. Homebrew-managed bash (handles Apple Silicon vs Intel and custom HOMEBREW_PREFIX)
     #   3. Hardcoded common paths as a final fallback
+    _gitb_min='((BASH_VERSINFO[0] > 3 || (BASH_VERSINFO[0] == 3 && BASH_VERSINFO[1] >= 2)))'
     _gitb_candidate=$(command -v bash 2>/dev/null)
     if [ -n "$_gitb_candidate" ] && [ -x "$_gitb_candidate" ] \
-       && "$_gitb_candidate" -c '((BASH_VERSINFO[0] >= 4))' >/dev/null 2>&1; then
+       && "$_gitb_candidate" -c "$_gitb_min" >/dev/null 2>&1; then
         exec "$_gitb_candidate" "$0" "$@"
     fi
     if command -v brew >/dev/null 2>&1; then
@@ -63,13 +67,13 @@ if ((BASH_VERSINFO[0] < 4)); then
     for _gitb_candidate in /opt/homebrew/bin/bash /usr/local/bin/bash; do
         [ -x "$_gitb_candidate" ] && exec "$_gitb_candidate" "$0" "$@"
     done
-    unset _gitb_candidate
+    unset _gitb_candidate _gitb_min
 
-    printf "Sorry, you need at least bash-4.0 to run gitbasher.\n\n"
+    printf "Sorry, you need at least bash-3.2 to run gitbasher.\n\n"
     printf "Linux (Debian/Ubuntu):\n    sudo apt update && sudo apt install --only-upgrade bash\n\n"
-    printf "macOS:\n    1) Install Homebrew (if missing):\n       /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"\n    2) Install newer bash:\n       brew install bash\n    3) Optional: make it your default shell (then restart Terminal):\n       sudo sh -c 'echo /opt/homebrew/bin/bash >> /etc/shells' && chsh -s /opt/homebrew/bin/bash\n\n"
-    printf "Or run gitb explicitly with the newer bash when installed:\n    /opt/homebrew/bin/bash $0 \"\$@\"\n\n"
-    exit 1; 
+    printf "macOS already ships bash 3.2 as /bin/bash, so this should be rare.\n"
+    printf "If you are on an older system, install a newer bash via Homebrew:\n    brew install bash\n\n"
+    exit 1;
 fi
 
 

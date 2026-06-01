@@ -7,7 +7,7 @@ Thanks for taking the time to contribute! This document describes how to set up 
 ```bash
 git clone https://github.com/maxbolgarin/gitbasher.git
 cd gitbasher
-# Run the dev version directly (Bash 4+ required)
+# Run the dev version directly (Bash 3.2+ required)
 bash scripts/gitb.sh --version
 ```
 
@@ -47,7 +47,7 @@ Aim for **no new** warnings. The CI bar is `severity: error`; widening to `sever
 
 ## Coding conventions
 
-- **Bash 4+ features are allowed** (`mapfile`, associative arrays, `${var,,}` etc.). The bundled binary re-execs to a newer Bash on macOS, so older Bash 3 paths only need to display the upgrade hint.
+- **Target Bash 3.2** (the version macOS ships as `/bin/bash`). Do **not** use bash 4-only features — no associative arrays (`declare -A`), `mapfile`/`readarray`, `${var,,}`/`${var^^}` case-folding, or `read -i`. Use the helpers in `scripts/common.sh` instead: the `gmap_*` / `gset_*` map/set shim, `to_lower` / `to_upper`, and `while IFS= read -r` loops. Plain indexed arrays are fine for integer-keyed data. The `bash32` CI job runs the full suite under macOS's real bash 3.2.
 - **Quote variables** in `git` invocations and any path/branch/ref handling, except where word-splitting is intentional (and document why with a comment).
 - **Prefer portable constructs** over GNU-only extensions. Tested examples:
   - `mapfile -t arr < <(cmd) ; [ ${#arr[@]} -gt 0 ] && cmd2 "${arr[@]}"` instead of `cmd | xargs -r cmd2`

@@ -42,9 +42,9 @@ teardown() {
 
 @test "_capture_split_statuses: maps each staged file to its change type" {
     _capture_split_statuses
-    [ "${_split_status_by_file[mod/a.txt]}" = "M" ]
-    [ "${_split_status_by_file[del/b.txt]}" = "D" ]
-    [ "${_split_status_by_file[.github/d.txt]}" = "A" ]
+    [ "$(gmap_get _split_status_by_file "mod/a.txt")" = "M" ]
+    [ "$(gmap_get _split_status_by_file "del/b.txt")" = "D" ]
+    [ "$(gmap_get _split_status_by_file ".github/d.txt")" = "A" ]
 }
 
 @test "_stage_file_by_status D: re-stages the deletion via git rm --cached" {
@@ -109,7 +109,8 @@ teardown() {
     # Build a snapshot file in the new STATUS<TAB>FILE format.
     snap=$(mktemp)
     while IFS= read -r f; do
-        printf '%s\t%s\n' "${_split_status_by_file[$f]:-M}" "$f"
+        _st=$(gmap_get _split_status_by_file "$f"); [ -z "$_st" ] && _st="M"
+        printf '%s\t%s\n' "$_st" "$f"
     done < <(git diff --name-only --cached) > "$snap"
 
     # Tear staging down and ask the helper to restore it from the snapshot.

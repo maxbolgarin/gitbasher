@@ -85,8 +85,8 @@ stage() {
     build_split_groups_from_staged
     # Every bff-prefixed file lands in the bff group (or a parent that takes
     # precedence — services is filtered, so bff is the next match).
-    [ -n "${split_groups[bff]:-}" ]
-    bff_files=$(printf '%s' "${split_groups[bff]}" | grep -c '^services/bff/')
+    gmap_has split_groups "bff"
+    bff_files=$(printf '%s' "$(gmap_get split_groups "bff")" | grep -c '^services/bff/')
     [ "$bff_files" -eq 4 ]
 }
 
@@ -102,14 +102,14 @@ stage() {
     stage "services/vip-bot/rubrics/vip_signal.py"
 
     build_split_groups_from_staged
-    [ -n "${split_groups[main-bot]:-}" ]
-    [ -n "${split_groups[vip-bot]:-}" ]
-    main_count=$(printf '%s' "${split_groups[main-bot]}" | grep -c '^services/main-bot/')
-    vip_count=$(printf '%s' "${split_groups[vip-bot]}" | grep -c '^services/vip-bot/')
+    gmap_has split_groups "main-bot"
+    gmap_has split_groups "vip-bot"
+    main_count=$(printf '%s' "$(gmap_get split_groups "main-bot")" | grep -c '^services/main-bot/')
+    vip_count=$(printf '%s' "$(gmap_get split_groups "vip-bot")" | grep -c '^services/vip-bot/')
     [ "$main_count" -eq 3 ]
     [ "$vip_count" -eq 3 ]
     # And no `rubrics` scope at all.
-    [ -z "${split_groups[rubrics]:-}" ]
+    ! gmap_has split_groups "rubrics"
 }
 
 @test "monorepo: filename-shaped dirs at depth 4+ no longer beat top-level scopes" {
@@ -125,13 +125,13 @@ stage() {
 
     build_split_groups_from_staged
     # All four bff-prefixed files belong to bff, not external or handler.
-    [ -n "${split_groups[bff]:-}" ]
-    bff_files=$(printf '%s' "${split_groups[bff]}" | grep -c '^services/bff/')
+    gmap_has split_groups "bff"
+    bff_files=$(printf '%s' "$(gmap_get split_groups "bff")" | grep -c '^services/bff/')
     [ "$bff_files" -eq 4 ]
     # And no external/handler scope was created for files that have a
     # shallower match available.
-    [ -z "${split_groups[external]:-}" ]
-    [ -z "${split_groups[handler]:-}" ]
+    ! gmap_has split_groups "external"
+    ! gmap_has split_groups "handler"
 }
 
 @test "monorepo: 'scripts' is filtered; sub-tool dir or filename stem wins" {
@@ -147,12 +147,12 @@ stage() {
 
     build_split_groups_from_staged
     # `scripts` itself must not be a scope (it's filtered).
-    [ -z "${split_groups[scripts]:-}" ]
+    ! gmap_has split_groups "scripts"
     # llm_comparison takes the two sub-dir files.
-    [ -n "${split_groups[llm_comparison]:-}" ]
-    [ "$(printf '%s' "${split_groups[llm_comparison]}" | grep -c .)" -eq 2 ]
+    gmap_has split_groups "llm_comparison"
+    [ "$(printf '%s' "$(gmap_get split_groups "llm_comparison")" | grep -c .)" -eq 2 ]
     # build_release.sh becomes scope `build_release` via stem fallback.
-    [ -n "${split_groups[build_release]:-}" ]
+    gmap_has split_groups "build_release"
 }
 
 @test "stem fallback: scripts/commit.sh produces 'commit' scope" {
@@ -162,9 +162,9 @@ stage() {
     stage "tests/test_commit.bats"
 
     build_split_groups_from_staged
-    [ -z "${split_groups[scripts]:-}" ]
-    [ -n "${split_groups[commit]:-}" ]
-    [ -n "${split_groups[tests]:-}" ]
+    ! gmap_has split_groups "scripts"
+    gmap_has split_groups "commit"
+    gmap_has split_groups "tests"
 }
 
 @test "stem fallback: skipped dirs at depth 1 trigger filename stem" {
@@ -177,12 +177,12 @@ stage() {
     stage "tests/test_a.py"
 
     build_split_groups_from_staged
-    [ -z "${split_groups[lib]:-}" ]
-    [ -z "${split_groups[src]:-}" ]
-    [ -z "${split_groups[bin]:-}" ]
-    [ -n "${split_groups[auth]:-}" ]
-    [ -n "${split_groups[router]:-}" ]
-    [ -n "${split_groups[serve]:-}" ]
+    ! gmap_has split_groups "lib"
+    ! gmap_has split_groups "src"
+    ! gmap_has split_groups "bin"
+    gmap_has split_groups "auth"
+    gmap_has split_groups "router"
+    gmap_has split_groups "serve"
 }
 
 @test "stem fallback: generic stems (main, index, init) still go to misc" {
@@ -197,11 +197,11 @@ stage() {
     build_split_groups_from_staged
     # All three generic-stem files should land in misc, not as their own
     # scope (we don't want main/index/utils as commit scopes).
-    [ -z "${split_groups[main]:-}" ]
-    [ -z "${split_groups[index]:-}" ]
-    [ -z "${split_groups[utils]:-}" ]
-    [ -n "${split_groups[misc]:-}" ]
-    misc_count=$(printf '%s' "${split_groups[misc]}" | grep -c .)
+    ! gmap_has split_groups "main"
+    ! gmap_has split_groups "index"
+    ! gmap_has split_groups "utils"
+    gmap_has split_groups "misc"
+    misc_count=$(printf '%s' "$(gmap_get split_groups "misc")" | grep -c .)
     [ "$misc_count" -ge 3 ]
 }
 
@@ -215,10 +215,10 @@ stage() {
     stage "tests/test_a.py"
 
     build_split_groups_from_staged
-    [ -z "${split_groups[makefile]:-}" ]
-    [ -z "${split_groups[readme]:-}" ]
-    [ -z "${split_groups[package]:-}" ]
-    [ -n "${split_groups[misc]:-}" ]
+    ! gmap_has split_groups "makefile"
+    ! gmap_has split_groups "readme"
+    ! gmap_has split_groups "package"
+    gmap_has split_groups "misc"
 }
 
 @test "monorepo: lib/<package> still surfaces the package name as scope" {
@@ -244,7 +244,7 @@ stage() {
     # whale and help only have 1 file each; if scopes_arr cuts them out,
     # they fall back to misc. Either way they must NOT land under
     # `services` (which is filtered).
-    if [ -n "${split_groups[services]:-}" ]; then
+    if gmap_has split_groups "services"; then
         echo "services should not exist as a scope" >&2
         return 1
     fi
@@ -295,47 +295,47 @@ stage() {
 }
 
 @test "consolidate: stem-fallback explosion collapses by top-level dir" {
-    declare -gA split_groups=()
+    gmap_clear split_groups
     split_group_keys=()
     # Simulate the real repro: 6 workflow files + 6 node UI files, each
     # currently sitting in its own filename-stem scope.
     local i
     for i in 1 2 3 4 5 6; do
-        split_groups[wf$i]=".github/workflows/job$i.yml"
+        gmap_set split_groups "wf$i" ".github/workflows/job$i.yml"
         split_group_keys+=("wf$i")
     done
     for i in 1 2 3 4 5 6; do
-        split_groups[ui$i]="node/apps/user-web/src/comp$i.tsx"
+        gmap_set split_groups "ui$i" "node/apps/user-web/src/comp$i.tsx"
         split_group_keys+=("ui$i")
     done
 
     consolidate_split_groups 7
     # 12 stem scopes collapse to 2 location scopes (leading dot stripped).
     [ "${#split_group_keys[@]}" -eq 2 ]
-    [ -n "${split_groups[github]:-}" ]
-    [ -n "${split_groups[node]:-}" ]
-    [ "$(printf '%s\n' "${split_groups[github]}" | grep -c .)" -eq 6 ]
-    [ "$(printf '%s\n' "${split_groups[node]}" | grep -c .)" -eq 6 ]
+    gmap_has split_groups "github"
+    gmap_has split_groups "node"
+    [ "$(printf '%s\n' "$(gmap_get split_groups "github")" | grep -c .)" -eq 6 ]
+    [ "$(printf '%s\n' "$(gmap_get split_groups "node")" | grep -c .)" -eq 6 ]
 }
 
 @test "consolidate: stage-2 keeps largest groups and folds tail into misc" {
-    declare -gA split_groups=()
+    gmap_clear split_groups
     split_group_keys=()
     # 'a' is the biggest dir; b..i have a single file each.
-    split_groups[a]=$'a/1\na/2\na/3\na/4'
+    gmap_set split_groups "a" $'a/1\na/2\na/3\na/4'
     split_group_keys+=("a")
     local d
     for d in b c dd ee ff gg hh ii; do
-        split_groups[$d]="$d/1"
+        gmap_set split_groups "$d" "$d/1"
         split_group_keys+=("$d")
     done
 
     consolidate_split_groups 4
     [ "${#split_group_keys[@]}" -le 4 ]
     # Largest group survives intact; the long tail is bundled into misc.
-    [ -n "${split_groups[a]:-}" ]
-    [ "$(printf '%s\n' "${split_groups[a]}" | grep -c .)" -eq 4 ]
-    [ -n "${split_groups[misc]:-}" ]
+    gmap_has split_groups "a"
+    [ "$(printf '%s\n' "$(gmap_get split_groups "a")" | grep -c .)" -eq 4 ]
+    gmap_has split_groups "misc"
 }
 
 # --- Scope-name normalization (no leading/trailing . _ - in scopes) --------
@@ -361,8 +361,8 @@ stage() {
     [[ "$detected_scopes" != *".superpowers"* ]]
 
     build_split_groups_from_staged
-    [ -n "${split_groups[superpowers]:-}" ]
-    [ -z "${split_groups[.superpowers]:-}" ]
+    gmap_has split_groups "superpowers"
+    ! gmap_has split_groups ".superpowers"
 }
 
 @test "normalize: underscore-prefixed filename stem drops the underscore" {
@@ -371,22 +371,22 @@ stage() {
     stage "tests/test_a.py"   # second scope
 
     build_split_groups_from_staged
-    [ -n "${split_groups[deploy-production]:-}" ]
-    [ -n "${split_groups[build-services]:-}" ]
-    [ -z "${split_groups[_deploy-production]:-}" ]
-    [ -z "${split_groups[_build-services]:-}" ]
+    gmap_has split_groups "deploy-production"
+    gmap_has split_groups "build-services"
+    ! gmap_has split_groups "_deploy-production"
+    ! gmap_has split_groups "_build-services"
 }
 
 @test "consolidate: no-op when group count is within the cap" {
-    declare -gA split_groups=()
+    gmap_clear split_groups
     split_group_keys=()
-    split_groups[bff]="services/bff/main.go"
+    gmap_set split_groups "bff" "services/bff/main.go"
     split_group_keys+=("bff")
-    split_groups[api]="services/api/main.go"
+    gmap_set split_groups "api" "services/api/main.go"
     split_group_keys+=("api")
 
     consolidate_split_groups 7
     [ "${#split_group_keys[@]}" -eq 2 ]
-    [ -n "${split_groups[bff]:-}" ]
-    [ -n "${split_groups[api]:-}" ]
+    gmap_has split_groups "bff"
+    gmap_has split_groups "api"
 }

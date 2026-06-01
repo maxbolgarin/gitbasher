@@ -949,9 +949,9 @@ Per-repo settings live in `.git/config` and need write access to that file (`chm
 <details>
 <summary><b>"Bad substitution" or bash errors</b></summary>
 
-`bash --version` must be 4.0+.
+`bash --version` must be 3.2+ — the version macOS ships as `/bin/bash` — so this is rare.
 
-- macOS: `brew install bash` (and optionally make it default: `sudo sh -c 'echo /opt/homebrew/bin/bash >> /etc/shells' && chsh -s /opt/homebrew/bin/bash`)
+- macOS: already ships bash 3.2; gitbasher runs on it natively (a newer bash via `brew install bash` only improves in-place line editing of prefilled prompts)
 - Ubuntu/Debian: `sudo apt update && sudo apt install --only-upgrade bash`
 </details>
 
@@ -960,8 +960,8 @@ Per-repo settings live in `.git/config` and need write access to that file (`chm
 
 | OS | Bash | Git | Install |
 |----|------|-----|---------|
-| Linux | 4.0+ | 2.23+ | `apt install bash git` |
-| macOS | 4.0+ | 2.23+ | `brew install bash git` |
+| Linux | 3.2+ | 2.23+ | `apt install bash git` |
+| macOS | 3.2+ (system) | 2.23+ | `brew install git` |
 | Windows | WSL | WSL | `wsl --install` then Linux steps |
 </details>
 

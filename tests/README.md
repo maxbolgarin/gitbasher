@@ -95,7 +95,7 @@ bats test_sanitization.bats --filter "sanitize_git_name: accepts valid branch na
 
 ### Prerequisites
 
-- Bash 4.0 or higher
+- Bash 3.2 or higher
 - Git 2.23 or higher
 - BATS (will be installed automatically by run_tests.sh)
 
@@ -249,7 +249,7 @@ bats test_sanitization.bats --filter "test name"
 1. **Test repo not cleaned up**: Make sure `teardown()` runs
 2. **Git config missing**: Check `setup_test_repo()` sets user.name/email
 3. **Working directory wrong**: Use `cd "$TEST_REPO"` in setup
-4. **Bash version**: Requires Bash 4.0+
+4. **Bash version**: Requires Bash 3.2+
 
 ## Coverage Goals
 

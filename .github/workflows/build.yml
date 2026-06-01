@@ -130,3 +130,50 @@ jobs:
 
       - name: Smoke Test
         run: ./dist/gitb
+
+  bash32:
+    # The real bash 3.2 gate. macOS ships /bin/bash 3.2.57 (the oldest bash we
+    # support), so run the whole suite under it — WITHOUT prepending Homebrew's
+    # bash to PATH — to prove gitbasher works without any bash 4+ feature.
+    needs: shellcheck
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify we are on system bash 3.2
+        run: |
+          /bin/bash --version | head -1
+          /bin/bash -c 'major=${BASH_VERSINFO[0]}; minor=${BASH_VERSINFO[1]}; \
+            echo "system bash: $major.$minor"; \
+            if [ "$major" -ne 3 ] || [ "$minor" -ne 2 ]; then \
+              echo "Expected /bin/bash to be 3.2 on the macOS runner"; exit 1; fi'
+
+      - name: Build (under bash 3.2)
+        run: |
+          version=$(git describe --tags --always 2>/dev/null | sed 's/^v//' || echo 'dev')
+          /bin/bash ./dist/build.sh ./scripts/gitb.sh ./dist/gitb "$version"
+          chmod +x ./dist/gitb
+
+      - name: Install BATS
+        run: brew install bats-core
+
+      - name: Run BATS suite under system bash 3.2
+        # Force every `#!/usr/bin/env bash` (bats itself and its helpers) to
+        # resolve to the system bash 3.2 by putting a symlink first on PATH.
+        # The macOS image may already carry a Homebrew bash 5 on PATH, so this
+        # guarantees the suite genuinely exercises 3.2.
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin32"
+          ln -sf /bin/bash "$RUNNER_TEMP/bin32/bash"
+          export PATH="$RUNNER_TEMP/bin32:$PATH"
+          bash --version | head -1
+          bash -c '[ "${BASH_VERSINFO[0]}" -eq 3 ] || { echo "not bash 3.x"; exit 1; }'
+          cd tests
+          bats ./*.bats
+
+      - name: Smoke test bundled gitb under bash 3.2
+        run: |
+          /bin/bash ./dist/gitb version
+          /bin/bash ./dist/gitb help

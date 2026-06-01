@@ -73,10 +73,11 @@ if [ "${git_major:-0}" -lt 2 ] || { [ "${git_major:-0}" -eq 2 ] && [ "${git_mino
 fi
 
 bash_major=${BASH_VERSINFO[0]:-0}
-if [ "$bash_major" -lt 4 ]; then
-    warn "bash ${BASH_VERSION} detected; gitbasher requires bash 4.0+."
+bash_minor=${BASH_VERSINFO[1]:-0}
+if [ "$bash_major" -lt 3 ] || { [ "$bash_major" -eq 3 ] && [ "$bash_minor" -lt 2 ]; }; then
+    warn "bash ${BASH_VERSION} detected; gitbasher requires bash 3.2+."
     case "$(uname -s)" in
-        Darwin) warn "On macOS run: brew install bash" ;;
+        Darwin) warn "macOS ships bash 3.2 as /bin/bash; if this triggers, install a newer bash: brew install bash" ;;
         Linux)  warn "Update via your package manager (e.g. apt install --only-upgrade bash)" ;;
     esac
 fi

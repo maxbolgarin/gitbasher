@@ -40,7 +40,7 @@ Thanks for contributing! A few quick notes:
 
 - [ ] Works on macOS (BSD userland)
 - [ ] Works on Linux (GNU userland)
-- [ ] Bash 4+ syntax used; no Bash 3 path was broken
+- [ ] Bash 3.2 compatible — no `declare -A`, `mapfile`, `${var,,}`/`${var^^}`, or `read -i` (use the `gmap_*`/`to_lower`/`to_upper` helpers)
 
 ## Checklist
 

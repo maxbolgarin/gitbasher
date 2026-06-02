@@ -1282,7 +1282,9 @@ function try_offer_commit_split {
         echo
     fi
 
-    if ! is_yes "$choice"; then
+    # The prompt defaults to No (y/N), so Enter/empty input must decline. is_yes
+    # treats Enter as "yes" (for (Y/n) prompts), so guard against empty here.
+    if [ -z "$choice" ] || ! is_yes "$choice"; then
         return 1
     fi
 

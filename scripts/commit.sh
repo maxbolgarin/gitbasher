@@ -415,6 +415,85 @@ function get_max_split_groups {
     printf '%s' "$v"
 }
 
+### Reorder split_group_keys so foundational scopes commit first.
+#
+# Git hands files back alphabetically by path, so the split commits would
+# otherwise run in alphabetical order — which often inverts the real
+# dependency order. In the motivating case `network/` defines the types that
+# `grpcconn/`, `grpcsrv/` and `httpsrv/` all consume, yet `network` sorts last
+# and lands in the final commit, leaving every earlier commit referencing code
+# that doesn't exist yet in history.
+#
+# Heuristic: a scope that OTHER scopes reference is probably a dependency, so
+# it should be committed first. For each scope S we count how many *sibling*
+# groups mention S's name as a whole word in their staged additions (e.g.
+# `network.GRPCOptions`, `import ".../network"`). Scopes referenced by more
+# siblings sort earlier. The `misc` grab-bag always sinks last, and ties keep
+# the original (alphabetical) order so the result stays deterministic. When no
+# cross-references exist the order is unchanged.
+#
+# Controlled by gitbasher.commit-split-order:
+#   auto  (default) - apply this dependency heuristic
+#   alpha           - keep git's alphabetical-by-path order (legacy behaviour)
+#
+# Operates in place on split_group_keys. Safe to call with the index already
+# staged; it only reads diffs.
+function order_split_groups_by_dependency {
+    local mode
+    mode=$(get_config_value gitbasher.commit-split-order "auto")
+    [ "$mode" = "alpha" ] && return 0
+    [ ${#split_group_keys[@]} -lt 2 ] && return 0
+
+    # Precompute each group's staged additions once (added lines only, minus
+    # the +++ file header). Used as the haystack for whole-word name matches.
+    local -A added_text=()
+    local scope f
+    local -a farr
+    for scope in "${split_group_keys[@]}"; do
+        farr=()
+        while IFS= read -r f; do [ -n "$f" ] && farr+=("$f"); done <<< "${split_groups[$scope]}"
+        [ ${#farr[@]} -eq 0 ] && { added_text[$scope]=""; continue; }
+        added_text[$scope]=$(git -c core.quotePath=false diff --cached -- "${farr[@]}" 2>/dev/null \
+            | grep '^+' | grep -v '^+++' || true)
+    done
+
+    # dep_score[S] = number of OTHER groups that reference S by name.
+    local -A dep_score=()
+    local s o
+    for s in "${split_group_keys[@]}"; do
+        dep_score[$s]=0
+        [ "$s" = "misc" ] && continue
+        for o in "${split_group_keys[@]}"; do
+            [ "$o" = "$s" ] && continue
+            # -F: scope names can contain regex-special chars (dots, dashes).
+            # -w: match the whole token so `net` doesn't match `network`.
+            if printf '%s' "${added_text[$o]}" | grep -qwF -- "$s"; then
+                dep_score[$s]=$(( ${dep_score[$s]} + 1 ))
+            fi
+        done
+    done
+
+    # Stable sort: score descending, original index ascending. `misc` is
+    # forced below every real scope so the catch-all never leads.
+    local -a decorated=()
+    local i=0 key sc
+    for key in "${split_group_keys[@]}"; do
+        sc="${dep_score[$key]}"
+        [ "$key" = "misc" ] && sc=-1
+        decorated+=("$(printf '%d\t%05d\t%s' "$sc" "$i" "$key")")
+        i=$((i + 1))
+    done
+    local entry
+    IFS=$'\n' decorated=($(printf '%s\n' "${decorated[@]}" | sort -t$'\t' -k1,1nr -k2,2n))
+    unset IFS
+
+    local -a reordered=()
+    for entry in "${decorated[@]}"; do
+        reordered+=("${entry##*$'\t'}")
+    done
+    split_group_keys=("${reordered[@]}")
+}
+
 ### Cap the number of split groups so a large changeset stays reviewable.
 # When the grouping exceeds the cap, collapse it in two stages:
 #   1. Re-bucket every file by its first meaningful (non-generic) path
@@ -1181,6 +1260,9 @@ function perform_commit_split {
 # The number of groups is capped at gitbasher.commit-max-split-groups (default
 # 7) so a huge changeset stays a handful of reviewable commits instead of
 # dozens of micro-commits — see consolidate_split_groups.
+# The resulting commits are ordered so foundational scopes (those other scopes
+# reference) commit first — see order_split_groups_by_dependency. Disable with
+# gitbasher.commit-split-order = "alpha".
 # Returns to the caller (no exit) when the user declines or the split isn't
 # applicable; perform_commit_split exits the script directly on success.
 # $1: "true" to force the split flow even when the config says "ask"/"never"
@@ -1239,6 +1321,10 @@ function try_offer_commit_split {
         fi
         return 1
     fi
+
+    # Commit foundational scopes (those other scopes reference) first, so the
+    # split commits don't reference code that history hasn't introduced yet.
+    order_split_groups_by_dependency
 
     echo
     print_split_groups_preview

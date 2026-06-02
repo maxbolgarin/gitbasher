@@ -833,6 +833,9 @@ gitb origin remove                               # delete the remote
 | `gitbasher.ai-model[-task]` | `gitb cfg model` | AI model overrides (per provider) |
 | `gitbasher.proxy` | `gitb cfg proxy` | HTTP proxy for AI calls |
 | `gitbasher.worktreebase` | `git config gitbasher.worktreebase <dir>` | Parent directory for new worktrees (defaults to `..`) |
+| `gitbasher.commit-auto-split` | `git config gitbasher.commit-auto-split <ask\|always\|never>` | Offer to split a commit per scope (default `ask`) |
+| `gitbasher.commit-max-split-groups` | `git config gitbasher.commit-max-split-groups <2..20>` | Cap on split commits per run (default `7`) |
+| `gitbasher.commit-split-order` | `git config gitbasher.commit-split-order <auto\|alpha>` | Order split commits by dependency (`auto`, default) or alphabetically (`alpha`) |
 
 **Clear gitbasher config** (per-repo settings live with the repo and disappear with it):
 ```bash

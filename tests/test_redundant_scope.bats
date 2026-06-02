@@ -193,3 +193,40 @@ setup() {
     result=$(clean_ai_commit_message "feat(auth): add login")
     [ "$result" = "feat(auth): add login" ]
 }
+
+# ===== strip_ai_reasoning_preamble: drop chatty model output =====
+
+@test "strip_ai_reasoning_preamble: drops analysis preamble before header" {
+    input=$'Looking at the staged files and diff, I can identify the following distinct changes:\n\n1. **New network abstraction layer**: Added network/provider.go\n2. **New bufconn test utilities**: Added bufconn.go\n\nThis is a cohesive feature. The dominant type is `feat`.\n\nfeat(network): add provider abstraction and bufconn test utilities for in-memory networking'
+    result=$(strip_ai_reasoning_preamble "$input")
+    [ "$result" = "feat(network): add provider abstraction and bufconn test utilities for in-memory networking" ]
+}
+
+@test "strip_ai_reasoning_preamble: keeps body after the extracted header" {
+    input=$'Here is the commit message:\n\nfix(api): treat null user as not found\n\nThe upstream service started returning null for deleted users.'
+    expected=$'fix(api): treat null user as not found\n\nThe upstream service started returning null for deleted users.'
+    result=$(strip_ai_reasoning_preamble "$input")
+    [ "$result" = "$expected" ]
+}
+
+@test "strip_ai_reasoning_preamble: strips surrounding markdown fences" {
+    input=$'```\nfeat(auth): add login\n```'
+    result=$(strip_ai_reasoning_preamble "$input")
+    [ "$result" = "feat(auth): add login" ]
+}
+
+@test "strip_ai_reasoning_preamble: leaves clean header untouched" {
+    result=$(strip_ai_reasoning_preamble "feat(auth): add login")
+    [ "$result" = "feat(auth): add login" ]
+}
+
+@test "strip_ai_reasoning_preamble: returns input unchanged when no header found" {
+    result=$(strip_ai_reasoning_preamble "just some prose with no conventional header")
+    [ "$result" = "just some prose with no conventional header" ]
+}
+
+@test "clean_ai_commit_message: extracts header from chatty multi-line output" {
+    input=$'Looking at the staged files and diff, I can identify the following distinct changes:\n\n1. New network abstraction layer\n\nfeat(network): add provider abstraction and bufconn test utilities for in-memory networking'
+    result=$(clean_ai_commit_message "$input")
+    [ "$result" = "feat(network): add provider abstraction and bufconn test utilities for in-memory networking" ]
+}

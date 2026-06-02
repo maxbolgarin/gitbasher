@@ -96,6 +96,35 @@ function is_redundant_scope {
     return 1
 }
 
+### Drop any reasoning preamble a model emits before the actual commit
+### message. Some providers/models ignore the "output ONLY the commit
+### message" instruction and prepend an analysis ("Looking at the staged
+### files I can identify the following changes: 1. ... feat(x): ...");
+### without this, the whole analysis becomes the commit subject and the real
+### `type(scope): subject` header is buried in the body. We locate the first
+### line that is a Conventional Commit header (lowercase type, optional scope,
+### optional breaking-change `!`) and discard everything before it, keeping the
+### header plus any following body. If no header is found we return the input
+### unchanged so non-conventional output is left for the caller to handle.
+### LC_ALL=C avoids "illegal byte sequence" errors from BSD awk/sed on
+### non-ASCII AI responses.
+function strip_ai_reasoning_preamble {
+    local input="$1"
+    local stripped
+    # Drop standalone markdown fence lines, then keep from the first
+    # Conventional Commit header onward.
+    stripped=$(printf '%s' "$input" | LC_ALL=C awk '
+        /^[[:space:]]*```[a-zA-Z]*[[:space:]]*$/ { next }
+        found { print; next }
+        /^[[:space:]]*(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(\([^)]+\))?!?:[[:space:]].+/ { found=1; print }
+    ')
+    if [ -n "$stripped" ]; then
+        printf '%s' "$stripped"
+    else
+        printf '%s' "$input"
+    fi
+}
+
 ### Trim quoting/whitespace and drop a redundant scope from an AI-generated
 ### commit message. Use this at every site that captures AI output so a new
 ### call site can't forget the strip step (the bug that produced
@@ -104,7 +133,8 @@ function is_redundant_scope {
 ### response contains non-ASCII characters.
 function clean_ai_commit_message {
     local cleaned
-    cleaned=$(echo "$1" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    cleaned=$(strip_ai_reasoning_preamble "$1")
+    cleaned=$(echo "$cleaned" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
     strip_redundant_scope "$cleaned"
 }
 

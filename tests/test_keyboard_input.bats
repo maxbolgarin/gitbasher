@@ -65,16 +65,17 @@ setup() {
 }
 
 @test "normalize_key: maps all Russian alphabet keys" {
-    # Spot-check a representative subset of mappings (lowercase)
-    declare -A expected=(
-        [ц]=w [у]=e [к]=r [е]=t [г]=u [ш]=i [щ]=o [з]=p
-        [ы]=s [в]=d [а]=f [п]=g [р]=h [о]=j [л]=k [д]=l
-        [я]=z [ч]=x [с]=c [м]=v [и]=b [ь]=m
-    )
-    for ru in "${!expected[@]}"; do
+    # Spot-check a representative subset of mappings (lowercase). Pairs are
+    # "<ru> <latin>" walked two at a time — no associative array, so the test
+    # itself stays bash 3.2 compatible.
+    local pairs="ц w у e к r е t г u ш i щ o з p ы s в d а f п g р h о j л k д l я z ч x с c м v и b ь m"
+    set -- $pairs
+    while [ "$#" -ge 2 ]; do
+        local ru="$1" latin="$2"
+        shift 2
         normalize_key "$ru"
-        [ "$normalized_key" = "${expected[$ru]}" ] || \
-            { echo "Failed: '$ru' -> '$normalized_key', expected '${expected[$ru]}'"; return 1; }
+        [ "$normalized_key" = "$latin" ] || \
+            { echo "Failed: '$ru' -> '$normalized_key', expected '$latin'"; return 1; }
     done
 }
 

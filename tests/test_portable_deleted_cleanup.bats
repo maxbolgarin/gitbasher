@@ -27,9 +27,11 @@ teardown() {
     cleanup_test_repo
 }
 
-# Run the portable cleanup snippet — copied verbatim from merge.sh / rebase.sh.
+# Run the portable cleanup snippet — copied verbatim from merge.sh / rebase.sh
+# (read-loop instead of bash 4's mapfile, so the snippet runs on bash 3.2).
 run_portable_cleanup() {
-    mapfile -t _deleted < <(git ls-files --deleted)
+    _deleted=()
+    while IFS= read -r _df; do [ -n "$_df" ] && _deleted+=("$_df"); done < <(git ls-files --deleted)
     [ ${#_deleted[@]} -gt 0 ] && git rm -- "${_deleted[@]}" 2>/dev/null
     return 0
 }
@@ -58,7 +60,7 @@ run_portable_cleanup() {
     [ -z "$(git status --porcelain c)" ]
 }
 
-@test "portable: filenames with spaces survive mapfile word boundaries" {
+@test "portable: filenames with spaces survive read-loop word boundaries" {
     : > "with space.txt"
     git add "with space.txt"
     git commit -q -m "add spaced"

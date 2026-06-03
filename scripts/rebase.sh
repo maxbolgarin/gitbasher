@@ -86,27 +86,11 @@ function rebase_script {
             read -n 1 -s choice
             if is_yes "$choice"; then
                 echo
-                echo -e "${YELLOW}Pulling ${origin_name}/${current_branch}...${ENDCOLOR}"
-                
-                pull_output=$(git pull $origin_name $current_branch 2>&1)
-                pull_code=$?
-                
-                if [ $pull_code -eq 0 ]; then
-                    echo -e "${GREEN}✓ Pulled ${origin_name}/${current_branch}${ENDCOLOR}"
-                    if [[ $pull_output == *"file changed"* ]] || [[ $pull_output == *"files changed"* ]]; then
-                        # Extract only the file statistics (lines starting with space and containing |)
-                        # and the summary line (contains "file changed" or "files changed")
-                        changes=$(echo "$pull_output" | grep -E "^ .+\|.+|[0-9]+ files? changed")
-                        if [ -n "$changes" ]; then
-                            echo
-                            print_changes_stat "$changes"
-                        fi
-                    fi
-                else
-                    echo -e "${RED}✗ Cannot pull current branch.${ENDCOLOR}"
-                    echo "$pull_output"
-                    exit $pull_code
-                fi
+                ### Reuse the canonical pull flow: fast-forward when possible,
+                ### otherwise prompt to merge or rebase divergent branches.
+                ### A bare "git pull" aborts on divergence ("Need to specify how
+                ### to reconcile divergent branches") because no strategy is set.
+                pull $current_branch $origin_name $editor
             fi
         else
             echo -e "${GREEN}✓ Current branch is up to date with remote${ENDCOLOR}"

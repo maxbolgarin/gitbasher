@@ -35,6 +35,17 @@ if [ -f "$here/dist/gitb" ]; then
     fi
 fi
 
+# 1b. Guard against non-ASCII bytes in @test descriptions. bats mangles them
+# into broken function names under bash 3.2 and silently drops those tests
+# ("executed N instead of expected M"). Keep descriptions ASCII; put any
+# non-ASCII fixtures in the test body instead.
+nonascii=$(LC_ALL=C grep -n '^@test .*[^ -~]' "$here"/tests/*.bats 2>/dev/null || true)
+if [ -n "$nonascii" ]; then
+    echo "NON-ASCII @test descriptions (break bats under bash 3.2):"
+    printf '%s\n' "$nonascii"
+    fail=1
+fi
+
 # 2. Load the helpers and exercise them.
 # shellcheck disable=SC1091
 source "$here/scripts/common.sh"

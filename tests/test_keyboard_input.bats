@@ -100,11 +100,11 @@ setup() {
     is_yes ""
 }
 
-@test "is_yes: accepts Russian н (Y position lowercase)" {
+@test "is_yes: accepts Russian-layout Y key, lowercase" {
     is_yes "н"
 }
 
-@test "is_yes: accepts Russian Н (Y position uppercase)" {
+@test "is_yes: accepts Russian-layout Y key, uppercase" {
     is_yes "Н"
 }
 
@@ -131,11 +131,11 @@ setup() {
     is_no "N"
 }
 
-@test "is_no: accepts Russian т (N position lowercase)" {
+@test "is_no: accepts Russian-layout N key, lowercase" {
     is_no "т"
 }
 
-@test "is_no: accepts Russian Т (N position uppercase)" {
+@test "is_no: accepts Russian-layout N key, uppercase" {
     is_no "Т"
 }
 
@@ -178,7 +178,7 @@ setup() {
     [ "$sanitized_choice" = "=" ]
 }
 
-@test "sanitize_choice_input: accepts Russian н as y" {
+@test "sanitize_choice_input: accepts Russian-layout Y key as y" {
     sanitize_choice_input "н"
     [ "$sanitized_choice" = "y" ]
 }

@@ -782,7 +782,7 @@ function worktree_manage {
 
     local choice
     read -n 1 -s choice
-    read -t 0.01 -s _wt_drain 2>/dev/null
+    drain_pending_input
 
     case "$choice" in
         1) _do_worktree_move ;;
@@ -966,7 +966,7 @@ function worktree_script {
 
         local choice
         read -n 1 -s choice
-        read -t 0.01 -s _wt_drain 2>/dev/null
+        drain_pending_input
 
         case "$choice" in
             1) add_mode="true";;
@@ -989,7 +989,7 @@ function worktree_script {
 
             local source_choice
             read -n 1 -s source_choice
-            read -t 0.01 -s _wt_drain 2>/dev/null
+            drain_pending_input
 
             case "$source_choice" in
                 1) add_source="current";;

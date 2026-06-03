@@ -4,14 +4,17 @@
 # Run it before using gitbasher
 
 ### Consts for colors
-RED="\e[31m"
-GREEN="\e[32m"
-YELLOW="\e[33m"
-BLUE="\e[34m"
-PURPLE="\e[35m"
-CYAN="\e[36m"
-GRAY="\e[37m"
-ENDCOLOR="\e[0m"
+# Use octal \033 (not \e): both `echo -e` and `printf '%b'` interpret \033 on
+# every bash, whereas \e is a bash extension that bash 3.2's `printf %b` leaves
+# literal — which would emit raw "\e[31m" to the terminal there.
+RED="\033[31m"
+GREEN="\033[32m"
+YELLOW="\033[33m"
+BLUE="\033[34m"
+PURPLE="\033[35m"
+CYAN="\033[36m"
+GRAY="\033[37m"
+ENDCOLOR="\033[0m"
 BOLD="\033[1m"
 NORMAL="\033[0m"
 

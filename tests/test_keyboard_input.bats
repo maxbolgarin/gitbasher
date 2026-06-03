@@ -216,6 +216,14 @@ setup() {
 }
 
 @test "read_editable_input: Esc submits empty input" {
+    # read_editable_input uses readline (`read -e`) and a `bind` macro to make a
+    # lone Esc clear-and-submit. bash 3.2 ships readline 5.x, which has no
+    # keyseq-timeout, so a lone Esc is treated as an escape-sequence prefix and
+    # the macro never fires (the prompt waits for more bytes). The Esc nicety is
+    # therefore a bash 4+ feature; skip the check on 3.2.
+    if ((BASH_VERSINFO[0] < 4)); then
+        skip "lone-Esc readline binding requires bash 4+ (keyseq-timeout)"
+    fi
     run python3 - <<'PY'
 import os
 import pty

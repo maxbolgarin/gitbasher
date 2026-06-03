@@ -510,6 +510,21 @@ function print_help_row {
 ### ===== KEYBOARD INPUT HELPERS =====
 ### Handle case-insensitive input and alternative keyboard layouts (e.g. Russian)
 
+### bash 3.2's `read -t` rejects fractional timeouts (sub-second timeouts are
+### bash 4+). Poll at 0.01s on bash 4+, and at 1s on bash 3.2 for the
+### escape-sequence drain in read_key — that loop breaks as soon as the
+### sequence terminator arrives, so only a lone Esc waits the full second.
+if ((BASH_VERSINFO[0] >= 4)); then GITB_READ_POLL="0.01"; else GITB_READ_POLL="1"; fi
+
+### Best-effort: discard any buffered terminal input without blocking. bash 3.2
+### has no non-blocking sub-second read, so it skips draining there rather than
+### stalling the UI for a full second after each keystroke.
+function drain_pending_input {
+    ((BASH_VERSINFO[0] < 4)) && return 0
+    local _d
+    while IFS= read -r -s -n 1 -t 0.01 _d 2>/dev/null; do :; done
+}
+
 ### Map of Russian keyboard layout to Latin equivalents (same physical keys)
 # Russian: й ц у к е н г ш щ з х ъ ф ы в а п р о л д ж э я ч с м и т ь б ю
 # Latin:   q w e r t y u i o p [ ] a s d f g h j k l ; ' z x c v b n m , .
@@ -634,7 +649,7 @@ function read_key {
 
             # Arrow keys and similar controls arrive as escape sequences. Drain the
             # remaining bytes now so they are not echoed as invalid input later.
-            while IFS= read -r -s -n 1 -t 0.01 _esc_part; do
+            while IFS= read -r -s -n 1 -t "$GITB_READ_POLL" _esc_part; do
                 _esc_rest="${_esc_rest}${_esc_part}"
                 if [[ "$_esc_rest" =~ ^(\[|O).*[@-~]$ ]] || [ ${#_esc_rest} -ge 8 ]; then
                     break
@@ -731,8 +746,7 @@ function read_silent_input {
         # ESC: drain any follow-on bytes (arrow keys etc.) and cancel
         if [ "$_char" = $'\e' ]; then
             _input=""
-            local _drain
-            while IFS= read -r -s -n 1 -t 0.01 _drain; do :; done
+            drain_pending_input
             break
         fi
         # Backspace / DEL
@@ -1309,7 +1323,7 @@ function choose {
             read -p "$read_prefix" -n 1 -s choice
             # Drain trailing newline so users who press "1<Enter>" don't leak
             # the newline into the next read (e.g. worktree move's path prompt).
-            read -t 0.01 -s _choose_drain 2>/dev/null
+            drain_pending_input
         fi
 
         if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then

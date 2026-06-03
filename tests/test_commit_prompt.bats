@@ -153,6 +153,51 @@ teardown() {
     [[ "$modifiers_section" == *"scope"* ]]
 }
 
+@test "split offer defaults to No when Enter is pressed at the (y/N) prompt" {
+    mkdir -p docs scripts
+    create_test_file "docs/new.md" "doc"
+    create_test_file "scripts/change.sh" "script"
+    git add docs/new.md scripts/change.sh
+
+    git config gitbasher.commit-auto-split "ask"
+    git config gitbasher.commit-ai-grouping "never"
+    llm=""
+
+    # perform_commit_split exits the script on success; stub it so we can detect
+    # whether Enter (the default-No answer) wrongly triggered a split.
+    perform_commit_split() {
+        echo "split-performed"
+        return 0
+    }
+
+    # Empty input == Enter pressed at the prompt.
+    run try_offer_commit_split "" "" <<< ""
+
+    [ "$status" -eq 1 ]
+    [[ "$output" != *"split-performed"* ]]
+}
+
+@test "split offer proceeds when y is pressed at the (y/N) prompt" {
+    mkdir -p docs scripts
+    create_test_file "docs/new.md" "doc"
+    create_test_file "scripts/change.sh" "script"
+    git add docs/new.md scripts/change.sh
+
+    git config gitbasher.commit-auto-split "ask"
+    git config gitbasher.commit-ai-grouping "never"
+    llm=""
+
+    perform_commit_split() {
+        echo "split-performed"
+        return 0
+    }
+
+    run try_offer_commit_split "" "" <<< "y"
+
+    assert_success
+    [[ "$output" == *"split-performed"* ]]
+}
+
 @test "split group preview colors scopes and files by staged status" {
     mkdir -p docs scripts
     create_test_file "scripts/change.sh" "old"

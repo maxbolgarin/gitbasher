@@ -479,29 +479,29 @@ function order_split_groups_by_dependency {
 
     # Precompute each group's staged additions once (added lines only, minus
     # the +++ file header). Used as the haystack for whole-word name matches.
-    local -A added_text=()
+    gmap_clear added_text
     local scope f
     local -a farr
     for scope in "${split_group_keys[@]}"; do
         farr=()
-        while IFS= read -r f; do [ -n "$f" ] && farr+=("$f"); done <<< "${split_groups[$scope]}"
-        [ ${#farr[@]} -eq 0 ] && { added_text[$scope]=""; continue; }
-        added_text[$scope]=$(git -c core.quotePath=false diff --cached -- "${farr[@]}" 2>/dev/null \
-            | grep '^+' | grep -v '^+++' || true)
+        while IFS= read -r f; do [ -n "$f" ] && farr+=("$f"); done <<< "$(gmap_get split_groups "$scope")"
+        [ ${#farr[@]} -eq 0 ] && { gmap_set added_text "$scope" ""; continue; }
+        gmap_set added_text "$scope" "$(git -c core.quotePath=false diff --cached -- "${farr[@]}" 2>/dev/null \
+            | grep '^+' | grep -v '^+++' || true)"
     done
 
     # dep_score[S] = number of OTHER groups that reference S by name.
-    local -A dep_score=()
+    gmap_clear dep_score
     local s o
     for s in "${split_group_keys[@]}"; do
-        dep_score[$s]=0
+        gmap_set dep_score "$s" 0
         [ "$s" = "misc" ] && continue
         for o in "${split_group_keys[@]}"; do
             [ "$o" = "$s" ] && continue
             # -F: scope names can contain regex-special chars (dots, dashes).
             # -w: match the whole token so `net` doesn't match `network`.
-            if printf '%s' "${added_text[$o]}" | grep -qwF -- "$s"; then
-                dep_score[$s]=$(( ${dep_score[$s]} + 1 ))
+            if printf '%s' "$(gmap_get added_text "$o")" | grep -qwF -- "$s"; then
+                gmap_inc dep_score "$s"
             fi
         done
     done
@@ -511,7 +511,7 @@ function order_split_groups_by_dependency {
     local -a decorated=()
     local i=0 key sc
     for key in "${split_group_keys[@]}"; do
-        sc="${dep_score[$key]}"
+        sc="$(gmap_get dep_score "$key")"
         [ "$key" = "misc" ] && sc=-1
         decorated+=("$(printf '%d\t%05d\t%s' "$sc" "$i" "$key")")
         i=$((i + 1))

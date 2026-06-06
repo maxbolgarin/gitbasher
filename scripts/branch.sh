@@ -827,6 +827,19 @@ function branch_script {
             echo -e "${YELLOW}Moved changes:${ENDCOLOR}"
             echo -e "${changes}"
         fi
+
+        ### Offer to push the freshly created branch so it exists on the remote.
+        # The branch points at the same commit as its base for now, but pushing
+        # registers it on ${origin_name} (and sets up tracking with -u).
+        if [ -n "$origin_name" ]; then
+            echo
+            echo -e "Do you want to push the new branch to ${YELLOW}${origin_name}/${branch_name}${ENDCOLOR} (y/n)?"
+            yes_no_choice "Pushing..."
+
+            # push uses the current_branch global; we just switched onto branch_name.
+            current_branch="$branch_name"
+            push -u
+        fi
         exit
     fi
 

@@ -161,7 +161,7 @@ function push_script {
         echo
         local PAD=16
         print_help_header $PAD
-        print_help_row $PAD "<empty>"  ""       "Show unpushed commits and push the current branch (pulls first if needed)"
+        print_help_row $PAD "<empty>"  ""       "Show unpushed commits and push the current branch (pulls first if needed); offers to create the branch on the remote if it isn't there yet"
         print_help_row $PAD "yes"      "y"      "Push without confirmation"
         print_help_row $PAD "force"    "f"      "Push with ${RED}--force-with-lease${ENDCOLOR} (overwrites remote unless someone else has pushed first)"
         print_help_row $PAD "list"     "log, l" "Show unpushed commits without pushing"
@@ -184,6 +184,24 @@ function push_script {
     get_push_list ${current_branch} ${main_branch} ${origin_name}
 
     if [ -z "$push_list" ]; then
+        ### A new branch with no commits ahead of its base still has nothing to
+        # "push" in the commit sense, but it doesn't exist on the remote yet.
+        # Offer to push it so the branch is created on ${origin_name}.
+        branch_on_remote=$(git rev-parse --verify --quiet "${origin_name}/${current_branch}" 2>/dev/null)
+        if [ -n "$origin_name" ] && [ -z "$branch_on_remote" ] && [ "${current_branch}" != "${main_branch}" ]; then
+            echo -e "${BLUE}Branch ${YELLOW}${current_branch}${BLUE} does not exist on ${YELLOW}${origin_name}${BLUE} yet.${ENDCOLOR}"
+            echo
+            if [ -z "${fast}" ]; then
+                echo -e "Do you want to push the new branch to ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} (y/n)?"
+                yes_no_choice "Pushing..."
+            else
+                echo -e "${YELLOW}Pushing...${ENDCOLOR}"
+                echo
+            fi
+            push -u
+            exit
+        fi
+
         echo -e "${GREEN}✓ Nothing to push${ENDCOLOR}"
         exit
     fi

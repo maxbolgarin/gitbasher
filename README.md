@@ -464,8 +464,8 @@ Notes:
 | `remote` | `re` `r` | Fetch and switch to a remote branch |
 | `main` | `def` `m` | Quick-switch to default branch |
 | `tag` | `t` | Checkout to a specific tag |
-| `new` | `n` `c` | Create branch from current |
-| `newd` | `nd` `cd` | Switch to main, pull, branch off |
+| `new` | `n` `c` | Create branch from current (offers to push it to the remote) |
+| `newd` | `nd` `cd` | Switch to main, pull, branch off (offers to push it to the remote) |
 | `delete` | `del` `d` | Delete branches (orphaned, merged, or selected) |
 | `prev` | `p` `-` | Switch to previous branch (`cd -`) |
 | `recent` | `rc` | Pick from recently checked-out branches |

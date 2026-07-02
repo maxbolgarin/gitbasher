@@ -11,14 +11,19 @@
     # main: merge default branch to the current one (ask to fetch before merge)
     # to-main: merge current branch to default
 function merge_script {
-    case "$1" in
-        main|master|m)          main="true";;
-        to-main|to-master|tm)   to_main="true";;
-        remote|r)               remote="true";;
-        help|h)                 help="true";;
-        *)
-            wrong_mode "merge" $1
-    esac
+    ### Parse all tokens so a trailing "push" modifier is honored (e.g. gitb merge tm push).
+    ### Order-independent, mirroring commit.sh's token parsing.
+    for arg in "$@"; do
+        case "$arg" in
+            main|master|m)          main="true";;
+            to-main|to-master|tm)   to_main="true";;
+            remote|r)               remote="true";;
+            push|p)                 push="true";;
+            help|h)                 help="true";;
+            *)
+                wrong_mode "merge" "$arg"
+        esac
+    done
 
 
     ### Merge mode - print header
@@ -29,6 +34,9 @@ function merge_script {
         header="$header TO MAIN"
     elif [ -n "${remote}" ]; then
         header="$header REMOTE"
+    fi
+    if [ -n "${push}" ]; then
+        header="$header & PUSH"
     fi
 
     echo -e "${YELLOW}${header}${ENDCOLOR}"
@@ -44,6 +52,7 @@ function merge_script {
         print_help_row $PAD "main"    "master, m"      "Merge $main_branch into the current branch"
         print_help_row $PAD "to-main" "to-master, tm"  "Switch to $main_branch, then merge the current branch into it"
         print_help_row $PAD "remote"  "r"              "Fetch $origin_name and pick a remote branch to merge in"
+        print_help_row $PAD "push"    "p"              "Push the branch after a successful merge (combine with any mode)"
         print_help_row $PAD "help"    "h"              "Show this help"
         echo
         echo -e "${YELLOW}Conflict resolution${ENDCOLOR} ${BLUE}(during a merge conflict)${ENDCOLOR}"
@@ -54,6 +63,7 @@ function merge_script {
         echo -e "  ${GREEN}gitb merge${ENDCOLOR}        Pick a branch and merge it into ${YELLOW}${current_branch:-current}${ENDCOLOR}"
         echo -e "  ${GREEN}gitb merge main${ENDCOLOR}   Merge ${YELLOW}$main_branch${ENDCOLOR} into the current branch"
         echo -e "  ${GREEN}gitb merge tm${ENDCOLOR}     Switch to ${YELLOW}$main_branch${ENDCOLOR} and merge the current branch into it"
+        echo -e "  ${GREEN}gitb merge tm push${ENDCOLOR}  Merge the current branch into ${YELLOW}$main_branch${ENDCOLOR}, then push it"
         exit
     fi
 
@@ -208,6 +218,13 @@ function merge_script {
     if [ -n "$changes" ]; then
         echo
         print_changes_stat "$changes"
+    fi
+
+
+    ### Push if requested (gitb merge <mode> push). push_script exits on success.
+    if [ -n "$push" ]; then
+        echo
+        push_script y
     fi
 }
 

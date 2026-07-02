@@ -18,6 +18,7 @@
 # Returns:
 #     * push_output
 #     * push_code
+#     * push_progress_shown - "true" when git's progress was streamed live
 function push {
     # Transient connectivity failures (VPN flapping, DNS hiccups, SSH timeouts)
     # are retried with exponential backoff (2s, 4s, 8s, 16s) so a brief network
@@ -28,8 +29,11 @@ function push {
     local push_attempt=0
 
     while true; do
-        push_output=$(git push "$@" "${origin_name}" "${current_branch}" 2>&1)
-        push_code=$?
+        # Stream git's native progress to the terminal when interactive so large
+        # pushes show live feedback, while still capturing output+code for the
+        # link/rejection/network parsing below.
+        stream_or_capture_git push_output push_code push_progress_shown \
+            git push --progress "$@" "${origin_name}" "${current_branch}"
 
         if [ $push_code -eq 0 ] ; then
             echo -e "${GREEN}✓ Pushed to ${origin_name}/${current_branch}${ENDCOLOR}"
@@ -104,7 +108,7 @@ function push {
         if is_network_error "$push_output" && [ $push_attempt -lt $push_max_retries ]; then
             push_attempt=$((push_attempt + 1))
             echo -e "${YELLOW}⚠  Network error while pushing — retrying in ${push_retry_delay}s (attempt ${push_attempt}/${push_max_retries})...${ENDCOLOR}"
-            echo "$push_output" | head -n 2
+            if [ -z "$push_progress_shown" ]; then echo "$push_output" | head -n 2; fi
             echo
             sleep $push_retry_delay
             push_retry_delay=$((push_retry_delay * 2))
@@ -113,12 +117,24 @@ function push {
 
         ### Non-retryable error, or retries exhausted.
         echo -e "${RED}✗ Cannot push.${ENDCOLOR}"
-        echo "$push_output"
+        if [ -z "$push_progress_shown" ]; then echo "$push_output"; fi
         if [ $push_attempt -gt 0 ]; then
             echo
             echo -e "${YELLOW}⚠  Still failing after ${push_attempt} retries — check your network/VPN, then run ${GREEN}gitb push${YELLOW} again.${ENDCOLOR}"
         fi
         exit $push_code
+    done
+}
+
+
+### Prints "<human size>  <path>" for each oversized blob, largest first.
+# $1: newline-separated "<bytes>\t<path>" lines (from get_push_size_report)
+function print_large_blob_lines {
+    local blobs="$1"
+    [ -z "$blobs" ] && return
+    printf '%s\n' "$blobs" | sort -t"$(printf '\t')" -k1,1 -rn | while IFS="$(printf '\t')" read -r bytes path; do
+        [ -z "$bytes" ] && continue
+        echo -e "\t${YELLOW}$(human_size "$bytes")${ENDCOLOR}  ${path}"
     done
 }
 
@@ -214,6 +230,42 @@ function push_script {
     count=$(echo -e "$push_list" | wc -l | sed 's/^ *//;s/ *$//')
     echo -e "Your branch is ahead ${YELLOW}${history_from}${ENDCOLOR} by ${BOLD}$count${ENDCOLOR} commits"
     echo -e "$push_list"
+
+
+    ### Estimate how much this push will transfer and flag oversized blobs, so a
+    ### stray non-code artifact ("did I commit a 500MB dump?") is caught before
+    ### pushing. Disabled when the threshold is 0 or no remote is configured.
+    local push_warn_mb push_warn_bytes push_range size_report push_total push_blobs
+    push_warn_mb=$(get_push_warn_size)
+    if [ "$push_warn_mb" != "0" ] && [ -n "$origin_name" ]; then
+        if [ -n "$(git rev-parse --verify --quiet "${origin_name}/${current_branch}" 2>/dev/null)" ]; then
+            push_range="${origin_name}/${current_branch}..HEAD"
+        else
+            push_range="HEAD --not --remotes"
+        fi
+        push_warn_bytes=$(( push_warn_mb * 1048576 ))
+        # push_range may hold several rev-list selectors — intentional splitting.
+        # shellcheck disable=SC2086
+        size_report=$(get_push_size_report "$push_warn_bytes" $push_range)
+        push_total=$(echo "$size_report" | head -1)
+        push_blobs=$(echo "$size_report" | tail -n +2)
+
+        if [ -n "$list" ]; then
+            echo
+            echo -e "Estimated push size: ${YELLOW}$(human_size "$push_total")${ENDCOLOR}"
+            if [ -n "$push_blobs" ]; then
+                echo -e "${YELLOW}⚠  Large files:${ENDCOLOR}"
+                print_large_blob_lines "$push_blobs"
+            fi
+        elif [ "${push_total:-0}" -gt "$push_warn_bytes" ] || [ -n "$push_blobs" ]; then
+            echo
+            echo -e "${YELLOW}⚠  This push is large: ${BOLD}$(human_size "$push_total")${ENDCOLOR}${YELLOW} to ${origin_name}/${current_branch}.${ENDCOLOR}"
+            if [ -n "$push_blobs" ]; then
+                print_large_blob_lines "$push_blobs"
+            fi
+            echo -e "${GRAY}Did you mean to include these? Tune the limit with ${GREEN}gitb cfg push-size${ENDCOLOR}${GRAY} (0 disables).${ENDCOLOR}"
+        fi
+    fi
 
 
     ### List mode - print only unpushed commits

@@ -789,6 +789,47 @@ function is_network_error {
 }
 
 
+### Run a git (or any) command, streaming its native --progress output live to
+### the terminal when interactive, while still capturing combined stdout+stderr
+### and the exit code for downstream parsing. Falls back to silent capture when
+### there is no TTY (tests/CI) or mktemp fails; in that fallback --progress is
+### stripped from the args so it can't pollute the captured output (matches the
+### fetch() helper's existing behavior).
+# $1: name of the variable to receive captured output
+# $2: name of the variable to receive the exit code
+# $3: name of the variable to receive "true" when progress was streamed live
+# $4..: the command and its args (pass --progress; honored only when streaming)
+# Results are written to the CALLER-named vars; those names must not start with
+# "__" (they would collide with this function's locals).
+function stream_or_capture_git {
+    local __out_var="$1" __code_var="$2" __shown_var="$3"; shift 3
+    local __output="" __code=0 __shown=""
+    if [ -t 1 ] && [ -t 2 ]; then
+        local __tmp
+        __tmp=$(mktemp 2>/dev/null)
+        if [ -n "$__tmp" ]; then
+            # `if pipeline` keeps errexit from aborting on a failed push/fetch,
+            # while PIPESTATUS still reflects git's (not tee's) exit code.
+            if "$@" 2>&1 | tee "$__tmp"; then __code=0; else __code=${PIPESTATUS[0]}; fi
+            __output=$(cat "$__tmp")
+            rm -f "$__tmp"
+            __shown="true"
+        fi
+    fi
+    if [ -z "$__shown" ]; then
+        local __arg __args=()
+        for __arg in "$@"; do
+            [ "$__arg" = "--progress" ] || __args+=("$__arg")
+        done
+        # Capture without letting a non-zero exit trip errexit before we read it.
+        if __output=$("${__args[@]}" 2>&1); then __code=0; else __code=$?; fi
+    fi
+    printf -v "$__out_var" '%s' "$__output"
+    printf -v "$__code_var" '%s' "$__code"
+    printf -v "$__shown_var" '%s' "$__shown"
+}
+
+
 ### Function echoes (true return) url to current user's repo (remote)
 # Return: url to repo
 function get_repo {
@@ -1245,6 +1286,13 @@ function print_configuration {
     esac
     echo -e "\tAI diff:\t${GREEN}${ai_diff_lines} lines / ${ai_diff_chars} chars max${ENDCOLOR} $diff_tag"
 
+    local push_warn=$(get_push_warn_size)
+    if [ "$push_warn" = "0" ]; then
+        echo -e "\tPush warn:\t${YELLOW}disabled${ENDCOLOR} $(config_source_tag gitbasher.push-warn-size)"
+    else
+        echo -e "\tPush warn:\t${GREEN}${push_warn} MB${ENDCOLOR} $(config_source_tag gitbasher.push-warn-size)"
+    fi
+
     echo
     echo -e "${GRAY}Source:${ENDCOLOR} ${BLUE}(project)${ENDCOLOR}${GRAY} this repo,${ENDCOLOR} ${PURPLE}(global)${ENDCOLOR}${GRAY} ~/.gitconfig,${ENDCOLOR} ${GRAY}(default) built-in fallback${ENDCOLOR}"
 }
@@ -1519,6 +1567,63 @@ function print_changes_stat {
     done
     echo -e "$(echo -e "${result_stat}" | column -ts'|')"
     echo -e "$bottom_line"
+}
+
+
+### Threshold, in MB, above which a push warns about its total size or a single
+### large blob. 0 disables the check entirely (also a performance opt-out).
+function get_push_warn_size {
+    get_config_value gitbasher.push-warn-size "50"
+}
+function set_push_warn_size {
+    set_config_value gitbasher.push-warn-size "$1"
+}
+
+
+### Format an integer byte count as "N B" / "N.d KB|MB|GB" (base 1024, one
+### decimal via integer math — no numfmt, bash-3.2 safe).
+# $1: bytes
+function human_size {
+    local bytes="${1:-0}"
+    case "$bytes" in ''|*[!0-9]*) bytes=0;; esac
+    if [ "$bytes" -lt 1024 ]; then
+        echo "${bytes} B"
+        return
+    fi
+    local div=1024 label="KB"
+    if [ "$bytes" -ge 1073741824 ]; then
+        div=1073741824; label="GB"
+    elif [ "$bytes" -ge 1048576 ]; then
+        div=1048576; label="MB"
+    fi
+    echo "$((bytes / div)).$(( (bytes % div) * 10 / div )) ${label}"
+}
+
+
+### Report the size of the objects a push would transfer, and list oversized
+### blobs. Sizes use %(objectsize) (uncompressed content size) — matches how
+### users think about file size and safely over-estimates the wire transfer
+### (git compresses objects on the wire).
+# $1: blob-size threshold in BYTES (a blob strictly above this is reported)
+# $2..: git rev-list selectors, e.g. "origin/br..HEAD" or "HEAD --not --remotes"
+# Echoes: line 1 = total bytes (integer); then one "<bytes>\t<path>" line per
+#         oversized blob (unsorted; caller sorts for display).
+function get_push_size_report {
+    local threshold="$1"; shift
+    local revlist
+    revlist=$(git rev-list --objects "$@" 2>/dev/null)
+    if [ -z "$revlist" ]; then
+        echo 0
+        return
+    fi
+    awk -v th="$threshold" '
+        NR==FNR { sha=$1; $1=""; sub(/^ +/,""); path[sha]=$0; next }
+        { type=$1; size=$2+0; sha=$3; total+=size
+          if (type=="blob" && size>th && path[sha]!="") blob[++n]=size "\t" path[sha] }
+        END { print total+0; for (i=1;i<=n;i++) print blob[i] }
+    ' <(printf '%s\n' "$revlist") \
+      <(printf '%s\n' "$revlist" | awk '{print $1}' \
+          | git cat-file --batch-check='%(objecttype) %(objectsize) %(objectname)' 2>/dev/null)
 }
 
 

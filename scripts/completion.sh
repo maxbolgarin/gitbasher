@@ -56,7 +56,7 @@ _gitb_sub_sync="push p merge m mergep mp pm dry d dr help h"
 _gitb_sub_wip="up u down d help h"
 _gitb_sub_branch="list l remote r re main def m delete del d prev p - recent rc gone g tag t help h"
 _gitb_sub_tag="annotated a an commit c co cm all al push ps ph p push-all pa delete del d delete-all da list log l remote re r fetch help h"
-_gitb_sub_config="default def d b main separator sep editor ed e ticket jira ti t scopes scope sc s ai llm key provider prov model m proxy prx p history hist diff payload delete unset del user name email u auto completion comp help h"
+_gitb_sub_config="default def d b main separator sep editor ed e ticket jira ti t scopes scope sc s ai llm key provider prov model m proxy prx p history hist diff payload push-size pushsize ps delete unset del user name email u auto completion comp help h"
 _gitb_sub_undo="commit c amend a merge m rebase r stash s help h"
 _gitb_sub_reset="soft s undo u interactive i help h"
 _gitb_sub_stash="select sel all list l pop p show s drop d apply a help h"
@@ -405,7 +405,7 @@ _gitb() {
                     _values 'tag mode' 'annotated[create annotated tag]' 'commit[tag a commit]' 'all[tag everything]' 'push[push tag]' 'push-all[push all tags]' 'delete[delete tag]' 'delete-all[delete all]' 'list[list tags]' 'remote[remote tags]' 'help[show help]'
                     ;;
                 config|cf|cfg|conf)
-                    _values 'config key' 'default[default branch]' 'separator[separator char]' 'editor[editor]' 'ticket[ticket prefix]' 'scopes[scope list]' 'ai[AI key]' 'provider[AI provider]' 'model[AI model]' 'proxy[AI proxy]' 'history[AI history]' 'diff[AI diff payload]' 'delete[unset a key]' 'user[user name/email]' 'auto[manage tab completion]' 'help[show help]'
+                    _values 'config key' 'default[default branch]' 'separator[separator char]' 'editor[editor]' 'ticket[ticket prefix]' 'scopes[scope list]' 'ai[AI key]' 'provider[AI provider]' 'model[AI model]' 'proxy[AI proxy]' 'history[AI history]' 'diff[AI diff payload]' 'push-size[warn on large pushes]' 'delete[unset a key]' 'user[user name/email]' 'auto[manage tab completion]' 'help[show help]'
                     ;;
                 undo|un)
                     _values 'undo target' 'commit[undo last commit]' 'amend[undo amend]' 'merge[undo merge]' 'rebase[undo rebase]' 'stash[undo stash]' 'help[show help]'
@@ -604,7 +604,7 @@ complete -c gitb -n "$__gitb_branch" -a "(__gitb_local_branches)" -d branch
 set -l __gitb_tag "__gitb_using_cmd tag t tg; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_tag" -a "annotated commit all push push-all delete delete-all list remote help"
 set -l __gitb_config "__gitb_using_cmd config cf cfg conf; and __gitb_at_position 2"
-complete -c gitb -n "$__gitb_config" -a "default separator editor ticket scopes ai provider model proxy history diff delete user auto help"
+complete -c gitb -n "$__gitb_config" -a "default separator editor ticket scopes ai provider model proxy history diff push-size delete user auto help"
 set -l __gitb_undo "__gitb_using_cmd undo un; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_undo" -a "commit amend merge rebase stash help"
 set -l __gitb_reset "__gitb_using_cmd reset res; and __gitb_at_position 2"

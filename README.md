@@ -433,9 +433,11 @@ Notes:
 | `<empty>` | | Show commits, push with conflict handling |
 | `yes` | `y` | Push without confirmation |
 | `force` | `f` | Force push (use after rebase/amend) |
-| `list` | `log` `l` | List unpushed commits only |
+| `list` | `log` `l` | List unpushed commits + estimated push size and large-file warnings |
 
 </details>
+
+Large pushes stream git's live progress bar (like `clone`/`fetch`), and gitbasher estimates the transfer size first — warning you before you push a stray non-code object (e.g. a build artifact or dataset). Tune the threshold with `gitb cfg push-size` (default 50 MB, `0` disables).
 
 ### `gitb pull`
 
@@ -802,6 +804,7 @@ gitb origin remove                               # delete the remote
 | `provider` | `prov` | AI provider (openrouter, openai, ollama) |
 | `model` | `m` | Default AI model |
 | `proxy` | `prx` `p` | HTTP proxy for AI calls |
+| `push-size` | `ps` `pushsize` | Warn before pushing more than N MB (0 disables) |
 | `completion` | `comp` | Install / uninstall bash & zsh tab completion |
 | `delete` | `unset` `del` | Remove global config |
 

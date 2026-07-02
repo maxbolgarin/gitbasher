@@ -666,6 +666,54 @@ function configure_ai_history {
 }
 
 
+### Function asks user to configure the push size warning threshold
+function configure_push_warn_size {
+    echo -e "${YELLOW}Configure Push Size Warning${ENDCOLOR}"
+    echo
+
+    current_limit=$(get_push_warn_size)
+    if [ "$current_limit" = "0" ]; then
+        echo -e "Current threshold: ${YELLOW}disabled${ENDCOLOR}"
+    else
+        echo -e "Current threshold: ${GREEN}$current_limit MB${ENDCOLOR}"
+    fi
+    echo
+    echo -e "Before pushing, gitbasher estimates how much data will be transferred"
+    echo -e "and warns you when a push exceeds this size or includes a large file —"
+    echo -e "handy for catching a stray non-code object (a build artifact, dataset, etc.)."
+    echo
+    echo -e "Enter a size in ${BLUE}MB${ENDCOLOR}, or ${BLUE}0${ENDCOLOR} to disable the check."
+    echo -e "Press Enter to exit without changes"
+
+    read_editable_input limit_input "Warn above (MB): "
+
+    if [ "$limit_input" == "" ]; then
+        exit
+    fi
+
+    echo
+
+    if ! validate_numeric_input "$limit_input" 0 1000000; then
+        show_sanitization_error "push size threshold" "Please enter a number of MB (0 disables)."
+        exit 1
+    fi
+    limit_input="$validated_number"
+
+    set_push_warn_size "$limit_input"
+    if [ "$limit_input" = "0" ]; then
+        echo -e "${GREEN}✓ Disabled the push size warning for '${project_name}'${ENDCOLOR}"
+    else
+        echo -e "${GREEN}✓ Set the push size warning to ${limit_input} MB for '${project_name}'${ENDCOLOR}"
+    fi
+    echo
+
+    [ "$GITBASHER_NO_REPO" = "true" ] && exit
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+    yes_no_choice "\nSet push size warning globally" "true"
+    git config --global gitbasher.push-warn-size "$limit_input"
+}
+
+
 ### Function asks user to configure AI diff payload size
 # Controls how much of the staged diff is sent to the model. Two knobs:
 #   - lines: head -n N applied to the diff (primary cap, intuitive for users)
@@ -860,6 +908,9 @@ function delete_global {
     local global_ai_history=$(git config --global --get gitbasher.ai-commit-history-limit)
     _delete_global_add "gitbasher.ai-commit-history-limit" "AI commit history limit" "${GREEN}${global_ai_history}${ENDCOLOR}"
 
+    local global_push_warn=$(git config --global --get gitbasher.push-warn-size)
+    _delete_global_add "gitbasher.push-warn-size" "Push size warning" "${GREEN}${global_push_warn} MB${ENDCOLOR}"
+
     local global_ai_diff_lines=$(git config --global --get gitbasher.ai-diff-limit)
     local global_ai_diff_chars=$(git config --global --get gitbasher.ai-diff-max-chars)
     if [ -n "$global_ai_diff_lines" ] || [ -n "$global_ai_diff_chars" ]; then
@@ -985,6 +1036,7 @@ function config_script {
         proxy|prx|p)          set_proxy_cfg="true";;
         history|hist)         set_ai_history_cfg="true";;
         diff|payload)         set_ai_diff_cfg="true";;
+        push-size|pushsize|ps) set_push_warn_cfg="true";;
         delete|unset|del)     delete_cfg="true";;
         user|name|email|u)    set_user_cfg="true";;
         auto|completion|comp) auto_cfg="true";;
@@ -1016,6 +1068,8 @@ function config_script {
         header="$header AI COMMIT HISTORY"
     elif [ -n "${set_ai_diff_cfg}" ]; then
         header="$header AI DIFF PAYLOAD"
+    elif [ -n "${set_push_warn_cfg}" ]; then
+        header="$header PUSH SIZE WARNING"
     elif [ -n "${delete_cfg}" ]; then
         header="$header UNSET GLOBAL CONFIG"
     elif [ -n "${set_user_cfg}" ]; then
@@ -1097,6 +1151,11 @@ function config_script {
         exit
     fi
 
+    if [ "$set_push_warn_cfg" == "true" ]; then
+        configure_push_warn_size
+        exit
+    fi
+
     if [ "$delete_cfg" == "true" ]; then
         delete_global
         exit
@@ -1125,6 +1184,7 @@ function config_script {
         print_help_row $PAD "proxy"     "prx, p"            "Set an HTTP/SOCKS proxy for AI requests"
         print_help_row $PAD "history"   "hist"              "Set how many recent commits to include in AI prompts"
         print_help_row $PAD "diff"      "payload"           "Set the diff payload size (lines and char cap) sent to AI"
+        print_help_row $PAD "push-size" "ps, pushsize"      "Warn before pushing more than N MB (0 disables)"
         print_help_row $PAD "auto"      "completion, comp"  "Install/remove tab completion for bash, zsh, or fish"
         print_help_row $PAD "delete"    "unset, del"        "Unset a global gitbasher configuration value"
         print_help_row $PAD "help"      "h"                 "Show this help"

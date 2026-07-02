@@ -124,7 +124,7 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 | Group | Commands | What you get |
 |-------|----------|--------------|
 | **Commit** | `commit` (`c`), `edit` (`ed`) | Interactive conventional commits, fast-mode, AI messages, atomic split, fixup, amend, revert; `gitb edit` reworks the last commit message, picks any commit to reword, or renames the current branch |
-| **Sync remote** | `push` (`p`), `pull` (`pu`), `sync` (`sy`) | Safe push (with force/list), smart pull (rebase / merge / ff), one-shot rebase-on-main with optional force-push |
+| **Sync remote** | `push` (`p`), `pull` (`pu`), `fetch` (`fe`), `sync` (`sy`) | Safe push (with force/list), smart pull (rebase / merge / ff), fetch-only with prune, one-shot rebase-on-main with optional force-push |
 | **Branches** | `branch` (`b`), `prev` (`-`) | List / switch / create-from-current / create-from-updated-main / delete (orphaned, merged, gone) / recent / previous / checkout-tag |
 | **Integration** | `merge` (`m`), `rebase` (`r`), `squash` (`sq`), `cherry` (`ch`) | Merge into current / into main / from remote · rebase onto main / interactive / autosquash / fastautosquash / pull-commits · AI-driven squash of branch commits into changelog-ready history · cherry-pick by hash, range, or interactive |
 | **Tags & releases** | `tag` (`t`) | Lightweight, annotated, from-commit, push, push-all, delete, delete-all, list, fetch-remote |
@@ -136,7 +136,7 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 | **Config** | `config` (`cfg`) | User, default branch, separator, editor, ticket prefix, scopes, AI provider/key/model, proxy, completion |
 | **Lifecycle** | `update` (`up`), `uninstall` (`uns`) | Self-update from latest GitHub release · one-shot uninstall (config + binary) |
 
-Total: **25 top-level commands**, **60+ aliases**, **100+ modes**.
+Total: **26 top-level commands**, **60+ aliases**, **100+ modes**.
 
 ---
 
@@ -311,6 +311,7 @@ git config gitbasher.ai-base-url http://my-gateway:4000/v1/chat/completions
 | [`edit`](#gitb-edit) | `ed` `ee` | Rewrite the last commit message, reword an older commit, or rename the current branch |
 | [`push`](#gitb-push) | `p` `ps` `pus` | Push with conflict handling, force, or list-only |
 | [`pull`](#gitb-pull) | `pu` `pl` `pul` | Smart pull: rebase / merge / ff / fetch-only / interactive / dry-run |
+| [`fetch`](#gitb-fetch) | `fe` | Fetch without merging: current branch, all remotes, or prune |
 | [`branch`](#gitb-branch) | `b` `br` `bran` | Switch / list / create / delete / recent / gone / checkout-tag |
 | [`tag`](#gitb-tag) | `t` `tg` | Create, push, list, delete tags (lightweight & annotated) |
 | [`merge`](#gitb-merge) | `m` `me` | Merge into current, into main, or from remote |
@@ -452,6 +453,19 @@ Notes:
 | `rebase` | `r` | Rebase current onto remote |
 | `interactive` | `ri` `rs` | Interactive rebase + autosquash |
 | `dry` | `d` `dr` | Preview incoming commits without modifying local refs |
+
+</details>
+
+### `gitb fetch`
+
+<details>
+<summary>All fetch modes</summary>
+
+| Mode | Aliases | Description |
+|------|---------|-------------|
+| `<empty>` | | Fetch the current branch without merging |
+| `all` | `a` `fa` | Fetch every remote branch without merging |
+| `prune` | `p` `pr` | Fetch and drop branches deleted on the remote |
 
 </details>
 

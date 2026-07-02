@@ -25,6 +25,7 @@ function print_help {
     printf "$row" "$CMD" "edit (ed, ee)"            "Rewrite the last commit message (${GREEN}git commit --amend${ENDCOLOR})"
     printf "$row" "$CMD" "push (p, ps, pus)"       "Push current branch safely"
     printf "$row" "$CMD" "pull (pu, pl, pul)"      "Pull from remote"
+    printf "$row" "$CMD" "fetch (fe)"              "Fetch from remote without merging"
     printf "$row" "$CMD" "sync (sy)"               "Sync current branch with $main_branch"
     echo
 
@@ -127,8 +128,11 @@ case "$1" in
     push|p|ps|pus)         
         push_script $2
     ;;
-    pull|pu|pl|pul)         
+    pull|pu|pl|pul)
         pull_script $2
+    ;;
+    fetch|fe)
+        fetch_script $2
     ;;
     merge|m|me)
         merge_script "${@:2}"

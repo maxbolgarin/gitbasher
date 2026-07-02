@@ -14,6 +14,7 @@ commit c co com
 edit ed ee
 push p ps pus
 pull pu pl pul
+fetch fe
 merge m me
 rebase r re base
 squash sq tidy
@@ -46,6 +47,7 @@ _gitb_sub_commit_simple="ai llm i fast f push pu p scope s msg m ticket jira j t
 _gitb_sub_wip_backend="stash s branch b worktree w wt tree nopush np n"
 _gitb_sub_push="yes y force f list log l help h"
 _gitb_sub_pull="fetch fe all fa upd u ffonly ff merge m rebase r interactive ri rs dry d dr help h"
+_gitb_sub_fetch="all a fa prune p pr help h"
 _gitb_sub_merge="main master m to-main to-master tm remote r push p help h"
 _gitb_sub_rebase="main master m interactive i autosquash a s ia fastautosquash fast sf f pull p push help h"
 _gitb_sub_squash="preview p dry show yes y fast push ps help h"
@@ -72,6 +74,7 @@ _gitb_canonical() {
         edit|ed|ee)                   echo edit ;;
         push|p|ps|pus)                echo push ;;
         pull|pu|pl|pul)               echo pull ;;
+        fetch|fe)                     echo fetch ;;
         merge|m|me)                   echo merge ;;
         rebase|r|re|base)             echo rebase ;;
         squash|sq|tidy)               echo squash ;;
@@ -317,6 +320,7 @@ _gitb() {
                 'edit:Rewrite the last commit message (alias: ed, ee)'
                 'push:Push current branch (alias: p, ps, pus)'
                 'pull:Pull updates (alias: pu, pl, pul)'
+                'fetch:Fetch without merging (alias: fe)'
                 'merge:Merge a branch (alias: m, me)'
                 'rebase:Rebase a branch (alias: r, re, base)'
                 'squash:AI-group branch commits (alias: sq, tidy)'
@@ -366,6 +370,9 @@ _gitb() {
                     ;;
                 pull|pu|pl|pul)
                     _values 'pull mode' 'fetch[fetch only]' 'all[fetch all]' 'upd[update]' 'ffonly[fast-forward only]' 'merge[merge]' 'rebase[rebase]' 'interactive[interactive rebase]' 'dry[dry run]' 'help[show help]'
+                    ;;
+                fetch|fe)
+                    _values 'fetch mode' 'all[fetch all remotes]' 'prune[fetch and prune deleted branches]' 'help[show help]'
                     ;;
                 merge|m|me)
                     local -a branches
@@ -506,6 +513,8 @@ complete -c gitb -n __gitb_no_subcmd -a push         -d 'Push current branch'
 complete -c gitb -n __gitb_no_subcmd -a p            -d 'Alias of push'
 complete -c gitb -n __gitb_no_subcmd -a pull         -d 'Pull updates'
 complete -c gitb -n __gitb_no_subcmd -a pu           -d 'Alias of pull'
+complete -c gitb -n __gitb_no_subcmd -a fetch        -d 'Fetch without merging'
+complete -c gitb -n __gitb_no_subcmd -a fe           -d 'Alias of fetch'
 complete -c gitb -n __gitb_no_subcmd -a merge        -d 'Merge a branch'
 complete -c gitb -n __gitb_no_subcmd -a m            -d 'Alias of merge'
 complete -c gitb -n __gitb_no_subcmd -a rebase       -d 'Rebase'
@@ -573,6 +582,8 @@ set -l __gitb_push "__gitb_using_cmd push p ps pus; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_push" -a "yes force list help"
 set -l __gitb_pull "__gitb_using_cmd pull pu pl pul; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_pull" -a "fetch all upd ffonly merge rebase interactive dry help"
+set -l __gitb_fetch "__gitb_using_cmd fetch fe; and __gitb_at_position 2"
+complete -c gitb -n "$__gitb_fetch" -a "all prune help"
 set -l __gitb_merge "__gitb_using_cmd merge m me; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_merge" -a "main to-main remote push help"
 complete -c gitb -n "$__gitb_merge" -a "(__gitb_local_branches)" -d branch

@@ -112,6 +112,7 @@ source scripts/merge.sh || { echo "gitbasher: failed to load scripts/merge.sh" >
 source scripts/rebase.sh || { echo "gitbasher: failed to load scripts/rebase.sh" >&2; exit 1; }
 source scripts/squash.sh || { echo "gitbasher: failed to load scripts/squash.sh" >&2; exit 1; }
 source scripts/pull.sh || { echo "gitbasher: failed to load scripts/pull.sh" >&2; exit 1; }
+source scripts/fetch.sh || { echo "gitbasher: failed to load scripts/fetch.sh" >&2; exit 1; }
 source scripts/push.sh || { echo "gitbasher: failed to load scripts/push.sh" >&2; exit 1; }
 source scripts/commit.sh || { echo "gitbasher: failed to load scripts/commit.sh" >&2; exit 1; }
 source scripts/edit.sh || { echo "gitbasher: failed to load scripts/edit.sh" >&2; exit 1; }

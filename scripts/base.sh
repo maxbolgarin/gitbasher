@@ -129,11 +129,11 @@ case "$1" in
     pull|pu|pl|pul)         
         pull_script $2
     ;;
-    merge|m|me)         
-        merge_script $2
+    merge|m|me)
+        merge_script "${@:2}"
     ;;
     rebase|r|re|base)
-        rebase_script $2
+        rebase_script "${@:2}"
     ;;
     squash|sq|tidy)
         squash_script "$2"

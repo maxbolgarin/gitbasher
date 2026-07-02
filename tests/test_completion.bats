@@ -80,6 +80,20 @@ teardown() {
     done
 }
 
+@test "completion: merge sub list includes the push modifier" {
+    out=$(_gitb_bash_completion_content)
+    line=$(printf '%s\n' "$out" | grep '^_gitb_sub_merge=')
+    [[ "$line" == *"push"* ]] \
+        || { echo "push missing from _gitb_sub_merge: $line" >&2; return 1; }
+}
+
+@test "completion: rebase sub list includes the push modifier" {
+    out=$(_gitb_bash_completion_content)
+    line=$(printf '%s\n' "$out" | grep '^_gitb_sub_rebase=')
+    [[ "$line" == *"push"* ]] \
+        || { echo "push missing from _gitb_sub_rebase: $line" >&2; return 1; }
+}
+
 @test "completion: hook subcommand list is present" {
     out=$(_gitb_bash_completion_content)
     # base.sh dispatches `hook|ho|hk` to hooks_script. The sub list lives

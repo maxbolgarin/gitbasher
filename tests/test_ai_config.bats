@@ -235,9 +235,9 @@ teardown() {
     [ "$(get_ai_api_url)" = "$OPENAI_API_URL" ]
 }
 
-@test "get_ai_api_url: ollama provider returns Ollama URL" {
+@test "get_ai_api_url: ollama provider builds URL from default host" {
     set_ai_provider "ollama" >/dev/null
-    [ "$(get_ai_api_url)" = "$OLLAMA_API_URL" ]
+    [ "$(get_ai_api_url)" = "${AI_DEFAULT_OLLAMA_HOST}/v1/chat/completions" ]
 }
 
 @test "get_ai_api_url: defaults to OpenRouter when provider unset" {

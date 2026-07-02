@@ -23,6 +23,18 @@ teardown() {
 }
 
 
+# ===== set_commit_flag_from_token: no-split aliases =====
+
+@test "set_commit_flag_from_token: no-split aliases (nos, nosplit, nsp, nsl) all set no_split" {
+    local a
+    for a in no-split nosplit nos nsp nsl; do
+        no_split=""
+        set_commit_flag_from_token "$a"
+        [ "$no_split" = "true" ] || { echo "alias '$a' did not set no_split"; return 1; }
+    done
+}
+
+
 # ===== validate_commit_flag_combo: rejections =====
 
 @test "rejects two action flags: fixup + amend" {
@@ -155,6 +167,12 @@ teardown() {
     [ "$status" -eq 0 ]
 }
 
+@test "accepts sffp (auto_accept + staged + ai + push)" {
+    auto_accept="true"; staged="true"; llm="true"; push="true"
+    run validate_commit_flag_combo
+    [ "$status" -eq 0 ]
+}
+
 @test "accepts revert alone" {
     revert="true"
     run validate_commit_flag_combo
@@ -207,6 +225,18 @@ teardown() {
     # ai/fast not duplicated as modifiers when auto_accept is set
     [[ "$output" != *"modifiers: ai"* ]]
     [[ "$output" != *"modifiers: fast"* ]]
+}
+
+@test "summary: sffp (ultrafast on staged files)" {
+    auto_accept="true"; staged="true"; llm="true"; push="true"
+    run summarize_commit_intent
+    [[ "$output" == *"ultrafast"* ]]
+    # describes the staging source as staged, not fast ("ultrafast" itself is fine)
+    [[ "$output" == *"ai + staged + auto-accept"* ]]
+    [[ "$output" != *"+ fast"* ]]
+    # staged not duplicated as a modifier under auto_accept; push still shown
+    [[ "$output" != *"modifiers: staged"* ]]
+    [[ "$output" == *"push"* ]]
 }
 
 @test "summary: ffp (ultrafast + push)" {

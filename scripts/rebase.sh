@@ -13,16 +13,21 @@
     # autosquash: rebase on current branch in an interactive mode with --autosquash
     # pull: take all commits from selected branch and apply them to current branch
 function rebase_script {
-    case "$1" in
-        main|master|m)           main="true";;
-        interactive|i)           interactive="true";;
-        autosquash|a|s|ia)        autosquash="true";;
-        fastautosquash|fast|sf|f) fastautosquash="true";;
-        pull|p)                  pull_commits="true";;
-        help|h)                  help="true";;
-        *)
-            wrong_mode "rebase" $1
-    esac
+    ### Parse all tokens so a trailing "push" modifier is honored (e.g. gitb rebase main push).
+    ### Order-independent. Note: "p" already means "pull" here, so push has no short alias.
+    for arg in "$@"; do
+        case "$arg" in
+            main|master|m)           main="true";;
+            interactive|i)           interactive="true";;
+            autosquash|a|s|ia)        autosquash="true";;
+            fastautosquash|fast|sf|f) fastautosquash="true";;
+            pull|p)                  pull_commits="true";;
+            push)                    push="true";;
+            help|h)                  help="true";;
+            *)
+                wrong_mode "rebase" "$arg"
+        esac
+    done
 
     ### Merge mode - print header
     header="GIT REBASE"
@@ -36,6 +41,9 @@ function rebase_script {
         header="$header MAIN"
     elif [ -n "${pull_commits}" ]; then
         header="$header PULL COMMITS"
+    fi
+    if [ -n "${push}" ]; then
+        header="$header & PUSH"
     fi
     echo -e "${YELLOW}${header}${ENDCOLOR}"
     echo
@@ -52,6 +60,7 @@ function rebase_script {
         print_help_row $PAD "autosquash"      "a, s, ia"     "Interactive rebase on local commits with ${BLUE}--autosquash${ENDCOLOR}"
         print_help_row $PAD "fastautosquash"  "fast, sf, f"  "Apply fixup commits non-interactively"
         print_help_row $PAD "pull"            "p"            "Take all commits from a chosen branch and apply them here"
+        print_help_row $PAD "push"            ""             "Force-push the branch after a successful rebase (combine with any mode)"
         print_help_row $PAD "help"            "h"            "Show this help"
         echo
         echo -e "${YELLOW}Conflict resolution${ENDCOLOR} ${BLUE}(during a rebase conflict)${ENDCOLOR}"
@@ -63,6 +72,7 @@ function rebase_script {
         echo -e "  ${GREEN}gitb rebase main${ENDCOLOR}   Rebase current branch onto ${YELLOW}$main_branch${ENDCOLOR}"
         echo -e "  ${GREEN}gitb rebase a${ENDCOLOR}      Interactive autosquash on the current branch"
         echo -e "  ${GREEN}gitb rebase f${ENDCOLOR}      Auto-apply fixup commits without prompts"
+        echo -e "  ${GREEN}gitb rebase main push${ENDCOLOR}  Rebase onto ${YELLOW}$main_branch${ENDCOLOR}, then force-push the branch"
         exit
     fi
 
@@ -236,6 +246,12 @@ function rebase_script {
     if [ $rebase_code == 0 ] ; then
         echo -e "${GREEN}✓ Rebased${ENDCOLOR}"
         echo -e "${BLUE}[${new_base_branch}${ENDCOLOR} -> ${BLUE}${current_branch}]${ENDCOLOR}"
+
+        ### Force-push if requested (rebase rewrites history). push_script exits on success.
+        if [ -n "$push" ]; then
+            echo
+            push_script f
+        fi
     else
         echo -e "${RED}✗ Cannot rebase.${ENDCOLOR}"
         echo -e "$rebase_output"

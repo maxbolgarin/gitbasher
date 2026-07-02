@@ -35,13 +35,14 @@ reflog rl rlg
 last-commit lc lastc
 last-ref lr lastr
 status s
+diff d di
 prev -
 update up upd
 uninstall uns uni
 help man
 "
-_gitb_sub_commit="ai llm i fast f fasts fs sf ff ffp ffpush push pu p fastp fp pf fastsp fsp fps scope s msg m ticket jira j t staged st no-split nosplit nsp nsl fixup fix x fixupp fixp xp px fixupst xst stx fastfix fx xf fastfixp fxp xfp amend am a amendst ast sta amendf amf af fa split sp sl splitp spp slp aisplit isplit aispl ispl aisplitp isplitp aisplp isplp llmf aif if llmp aip ip llmst aist ist llmfp aifp ifp ipf llms ais is llmsf aisf isf llmsfp aisfp isfp llmm aim im llmmf aimf imf llmmfp aimfp imfp revert rev revertp revp rp help h"
-_gitb_sub_commit_simple="ai llm i fast f push pu p scope s msg m ticket jira j t staged no-split nosplit nsp nsl fixup fix x amend am a split sp sl revert rev help h"
+_gitb_sub_commit="ai llm i fast f fasts fs sf ff ffp ffpush sff sffp ffst ffstp push pu p fastp fp pf fastsp fsp fps scope s msg m ticket jira j t staged st no-split nosplit nos nsp nsl fixup fix x fixupp fixp xp px fixupst xst stx fastfix fx xf fastfixp fxp xfp amend am a amendst ast sta amendf amf af fa split sp sl splitp spp slp aisplit isplit aispl ispl aisplitp isplitp aisplp isplp llmf aif if llmp aip ip llmst aist ist llmfp aifp ifp ipf llms ais is llmsf aisf isf llmsfp aisfp isfp llmm aim im llmmf aimf imf llmmfp aimfp imfp revert rev revertp revp rp help h"
+_gitb_sub_commit_simple="ai llm i fast f push pu p scope s msg m ticket jira j t staged no-split nosplit nos nsp nsl fixup fix x amend am a split sp sl revert rev help h"
 _gitb_sub_wip_backend="stash s branch b worktree w wt tree nopush np n"
 _gitb_sub_push="yes y force f list log l help h"
 _gitb_sub_pull="fetch fe all fa upd u ffonly ff merge m rebase r interactive ri rs dry d dr help h"
@@ -60,6 +61,7 @@ _gitb_sub_stash="select sel all list l pop p show s drop d apply a help h"
 _gitb_sub_worktree="list l ls add a new n c addd ad nd cd addb ab from b addr ar remote r remove rm del d prune pr p lock unlock ul move mv path cd switch sw help h"
 _gitb_sub_origin="set add new a change update c u set-url rename mv ren remove delete rm del d help h"
 _gitb_sub_log="branch b compare comp c search s help h"
+_gitb_sub_diff="staged s cached all a branch b commit c ai help h"
 _gitb_sub_hook="list create edit toggle test show remove select install help"
 _gitb_sub_log_branch="local l remote r all a help h"
 _gitb_sub_edit="pick p c choose branch b br rename ren help h"
@@ -86,6 +88,7 @@ _gitb_canonical() {
         hook|ho|hk)                   echo hook ;;
         origin|or|o|remote)           echo origin ;;
         log|l|lg)                     echo log ;;
+        diff|d|di)                    echo diff ;;
         *)                            echo "" ;;
     esac
 }
@@ -331,6 +334,7 @@ _gitb() {
                 'origin:Manage remote (alias: or, o, remote)'
                 'init:Initialize repo (alias: i)'
                 'log:Git log utilities (alias: l, lg)'
+                'diff:Show working-tree, staged, branch & AI diffs (alias: d, di)'
                 'reflog:Show reflog (alias: rl, rlg)'
                 'last-commit:Show last commit'
                 'last-ref:Show last ref'
@@ -413,6 +417,9 @@ _gitb() {
                     ;;
                 log|l|lg)
                     _values 'log mode' 'branch[log per branch]' 'compare[compare branches]' 'search[search log]' 'help[show help]'
+                    ;;
+                diff|d|di)
+                    _values 'diff mode' 'staged[staged changes]' 'all[all uncommitted changes]' 'branch[compare with a branch]' 'commit[show a commit diff]' 'ai[AI summary]' 'help[show help]'
                     ;;
                 hook|ho|hk)
                     _values 'hook action' 'list[list hooks]' 'create[create a hook]' 'edit[edit a hook]' 'toggle[toggle hook]' 'test[test a hook]' 'show[show hook]' 'remove[remove a hook]' 'select[select a hook]' 'install[install hooks]' 'help[show help]'
@@ -535,6 +542,9 @@ complete -c gitb -n __gitb_no_subcmd -a init         -d 'Initialize repo'
 complete -c gitb -n __gitb_no_subcmd -a i            -d 'Alias of init'
 complete -c gitb -n __gitb_no_subcmd -a log          -d 'Git log utilities'
 complete -c gitb -n __gitb_no_subcmd -a l            -d 'Alias of log'
+complete -c gitb -n __gitb_no_subcmd -a diff         -d 'Show working-tree, staged, branch & AI diffs'
+complete -c gitb -n __gitb_no_subcmd -a d            -d 'Alias of diff'
+complete -c gitb -n __gitb_no_subcmd -a di           -d 'Alias of diff'
 complete -c gitb -n __gitb_no_subcmd -a reflog       -d 'Show reflog'
 complete -c gitb -n __gitb_no_subcmd -a last-commit  -d 'Show last commit'
 complete -c gitb -n __gitb_no_subcmd -a last-ref     -d 'Show last ref'
@@ -555,7 +565,7 @@ function __gitb_at_commit_extra
     test (count $tokens) -ge 3; or return 1
     contains -- $tokens[2] commit c co com
 end
-complete -c gitb -n __gitb_at_commit_pos2 -a "ai fast fasts ff ffp push fastp scope msg ticket staged no-split fixup amend split splitp aisplit aisplitp aip aif aifp revert revertp revp rp help"
+complete -c gitb -n __gitb_at_commit_pos2 -a "ai fast fasts ff ffp sff sffp push fastp scope msg ticket staged no-split fixup amend split splitp aisplit aisplitp aip aif aifp revert revertp revp rp help"
 complete -c gitb -n __gitb_at_commit_extra -a "ai fast push scope msg ticket staged no-split fixup amend split revert help"
 set -l __gitb_edit "__gitb_using_cmd edit ed ee; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_edit" -a "pick branch help"
@@ -596,6 +606,8 @@ set -l __gitb_origin "__gitb_using_cmd origin or o remote; and __gitb_at_positio
 complete -c gitb -n "$__gitb_origin" -a "set change rename remove help"
 set -l __gitb_log "__gitb_using_cmd log l lg; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_log" -a "branch compare search help"
+set -l __gitb_diff "__gitb_using_cmd diff d di; and __gitb_at_position 2"
+complete -c gitb -n "$__gitb_diff" -a "staged all branch commit ai help"
 set -l __gitb_hook "__gitb_using_cmd hook ho hk; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_hook" -a "list create edit toggle test show remove select install help"
 function __gitb_at_log_branch

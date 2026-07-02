@@ -130,13 +130,13 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 | **Tags & releases** | `tag` (`t`) | Lightweight, annotated, from-commit, push, push-all, delete, delete-all, list, fetch-remote |
 | **Save & rollback** | `wip` (`up`/`down`), `undo` (`un`), `reset` (`res`), `stash` (`st`) | Save WIP via stash / branch / worktree (auto-detected on restore) · undo last commit/amend/merge/rebase/stash · interactive reset · full stash menu |
 | **Worktrees** | `worktree` (`wt`) | Add / list / remove / move / lock / prune git worktrees, with new branch from current/main or from existing/remote branches |
-| **Inspect** | `status` (`s`), `log` (`l`), `reflog` (`rl`), `last-commit` (`lc`), `last-ref` (`lr`) | Pretty repo status, multi-mode log + search, reflog viewer, quick last-commit / last-ref summary |
+| **Inspect** | `status` (`s`), `diff` (`d`), `log` (`l`), `reflog` (`rl`), `last-commit` (`lc`), `last-ref` (`lr`) | Pretty repo status, overview-first diffs with a file picker + AI summary, multi-mode log + search, reflog viewer, quick last-commit / last-ref summary |
 | **Hooks** | `hook` (`ho`) | List / create from templates / edit / toggle / remove / test / show — for every git hook |
 | **Repo setup** | `init` (`i`), `origin` (`or`, `o`, `remote`) | `git init` from gitbasher · add/change/rename/remove the remote origin |
 | **Config** | `config` (`cfg`) | User, default branch, separator, editor, ticket prefix, scopes, AI provider/key/model, proxy, completion |
 | **Lifecycle** | `update` (`up`), `uninstall` (`uns`) | Self-update from latest GitHub release · one-shot uninstall (config + binary) |
 
-Total: **24 top-level commands**, **60+ aliases**, **100+ modes**.
+Total: **25 top-level commands**, **60+ aliases**, **100+ modes**.
 
 ---
 
@@ -329,6 +329,7 @@ git config gitbasher.ai-base-url http://my-gateway:4000/v1/chat/completions
 | [`config`](#gitb-config) | `cf` `cfg` `conf` | Configure user, branch, AI, scopes, ticket prefix, etc. |
 | [`log`](#gitb-log) | `l` `lg` | Pretty log: current, branch, compare, search |
 | [`status`](#info-commands) | `s` | Repo status and changed files |
+| [`diff`](#gitb-diff) | `d` `di` | Overview-first diffs: staged, all, branch, commit, AI summary |
 | [`reflog`](#info-commands) | `rl` `rlg` | Pretty reflog |
 | [`last-commit`](#info-commands) | `lc` `lastc` | Show the last commit |
 | [`last-ref`](#info-commands) | `lr` `lastr` | Show the last reference |
@@ -355,6 +356,7 @@ gitb commit <combined>       # compact form: ff, aifp, fastsp, ...
 | `amend` | `a` `am` | Add changes into the last commit (no message edit) |
 | `revert` | `rev` | Revert a commit (`git revert --no-edit`) |
 | `ff` | | Ultrafast: `ai + split + fast` with no prompts (use `ffp` to also push) |
+| `sff` | `ffst` | Like `ff` but on already-staged files (no `git add .`); use `sffp` to also push |
 | `help` | `h` `--help` `-h` | Show inline help |
 
 **Modifiers** — stack with an action, any order.
@@ -378,10 +380,11 @@ gitb commit <combined>       # compact form: ff, aifp, fastsp, ...
 | `gitb commit fast` | `git add .` then enter a message |
 | `gitb commit ai fast push` | AI message + add all + commit + push |
 | `gitb commit aifp` | Same as above (compact form) |
-| `gitb commit ai split push` | AI groups staged files into commits, then push |
+| `gitb commit ai split push` | AI groups staged files into commits by feature, then push |
 | `gitb commit fixup push` | Pick an older commit, fixup it, then push |
 | `gitb commit amend fast` | Add all current changes into the last commit |
 | `gitb commit ff` | Full auto: AI splits and writes everything |
+| `gitb commit sffp` | Full auto on already-staged files: AI splits, writes, pushes |
 
 **How modes combine**
 - Word order doesn't matter: `ai fast push` == `push fast ai` == `aifp`.
@@ -805,6 +808,20 @@ gitb origin remove                               # delete the remote
 **Search sub-modes:** `message`/`msg`/`m`, `author`/`a`, `file`/`f`, `content`/`pickaxe`/`p`, `date`/`d`, `hash`/`commit`/`h`.
 
 </details>
+
+### `gitb diff`
+
+Overview-first diffs built for the gitbasher workflow — no flag memorization. Bare `gitb diff` shows a colorized stat of your uncommitted changes, then lets you pick a file to view its full patch.
+
+| Mode | Aliases | Description |
+|------|---------|-------------|
+| _(none)_ | | Stat overview of uncommitted changes, then pick a file to view its full patch |
+| `staged` | `s` `cached` | Show staged changes (`git diff --cached`) |
+| `all` | `a` | Show all uncommitted changes — staged **and** unstaged (`git diff HEAD`) |
+| `branch` | `b` | Compare the current branch against another, chosen interactively |
+| `commit` | `c` | Show a chosen commit's diff, chosen interactively |
+| `ai` | | Summarize uncommitted changes in plain English (needs `gitb cfg ai`) |
+| `help` | `h` | Show inline help |
 
 ### Info commands
 

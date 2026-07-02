@@ -20,6 +20,7 @@ function print_help {
 
     printf "$hdr" "DAILY"
     printf "$row" "$CMD" "status (s)"              "Show repo state and changed files"
+    printf "$row" "$CMD" "diff (d, di)"            "Overview, pick-a-file, branch & AI diffs"
     printf "$row" "$CMD" "commit (c, co, com)"     "Create commits — interactive, AI, amend, revert"
     printf "$row" "$CMD" "edit (ed, ee)"            "Rewrite the last commit message (${GREEN}git commit --amend${ENDCOLOR})"
     printf "$row" "$CMD" "push (p, ps, pus)"       "Push current branch safely"
@@ -199,6 +200,9 @@ case "$1" in
     ;;
     last-ref|lr|lastr)
         last_ref
+    ;;
+    diff|d|di)
+        diff_script "${@:2}"
     ;;
     status|s)
         project_status

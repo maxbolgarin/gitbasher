@@ -623,53 +623,24 @@ function consolidate_split_groups {
     return 0
 }
 
-### Check if the heuristic grouping looks unreliable enough to warrant AI refinement.
-# Triggers when:
-#   - 1 group but staged files span 2+ second-level subdirs (e.g. service/auth, service/api)
-#     — the top-level dir won as scope, masking the real per-feature subdivisions
-#   - one group dominates with >70% of files (and there are 4+ files total) —
-#     suggests the dominant scope is a generic container rather than a real feature
-# Returns 0 (true) if weak, 1 (false) if heuristic looks fine.
-function is_heuristic_weak {
-    local total
-    total=$(git -c core.quotePath=false diff --name-only --cached | grep -c .)
-    [ "$total" -lt 4 ] && return 1
-
-    if [ ${#split_group_keys[@]} -le 1 ]; then
-        # Only consider files at depth ≥ 3 (e.g. service/auth/login.go) — shallow
-        # files like auth/file1.go don't have a sub-scope to discover, so
-        # counting them would produce false weakness signals.
-        local subdir_count
-        subdir_count=$(git -c core.quotePath=false diff --name-only --cached | LC_ALL=C awk -F/ 'NF>=3 {print $1"/"$2}' | sort -u | grep -c .)
-        [ "$subdir_count" -ge 2 ] && return 0
-        return 1
-    fi
-
-    local max_size=0 n
-    local s
-    for s in "${split_group_keys[@]}"; do
-        n=$(printf '%s\n' "$(gmap_get split_groups "$s")" | grep -c .)
-        [ "$n" -gt "$max_size" ] && max_size="$n"
-    done
-    local pct=$((max_size * 100 / total))
-    [ "$pct" -gt 70 ] && return 0
-    return 1
-}
-
-### Use AI to refine the file→scope grouping when the heuristic looks weak.
-# Sends the staged file list, diff summary, recent commit messages (for codebase
-# scope conventions), and the heuristic's candidate scopes to the model. Expects
-# back a TSV "<scope>\t<file>" — one line per staged file. Validates the output:
-# every staged file must be assigned exactly once and scope names must be safe.
-# On success, overwrites split_groups / split_group_keys with the AI grouping.
-# Returns 0 on success, 1 on AI failure or unparseable output (caller falls back).
-function refine_groups_with_ai {
+### Use AI to group staged files by FEATURE — the primary path for AI splits.
+# A feature is a logical unit of work (a capability, a fix, a refactor) that may
+# span multiple folders; it is decided from the actual code in the diff, not from
+# file paths. Sends the staged file list, the real (truncated) diff, a diff
+# summary, recent commit messages (for scope-naming conventions), and the folder
+# heuristic's candidate scopes as hints. Expects back a TSV "<scope>\t<file>" —
+# one line per staged file. Validates the output: every staged file must be
+# assigned exactly once and scope names must be safe. On success, overwrites
+# split_groups / split_group_keys with the feature grouping. Returns 0 on success,
+# 1 on AI failure or unparseable output (caller falls back to the folder heuristic).
+function group_files_by_feature_with_ai {
     local staged_files
     staged_files=$(git -c core.quotePath=false diff --name-only --cached)
     [ -z "$staged_files" ] && return 1
 
-    local diff_stat recent_commits
+    local diff_stat diff_details recent_commits
     diff_stat=$(get_limited_diff_stat_for_ai)
+    diff_details=$(get_limited_diff_for_ai)
     recent_commits=$(get_recent_commit_messages_for_ai)
 
     local heuristic_hint=""
@@ -680,11 +651,13 @@ function refine_groups_with_ai {
     local max_groups
     max_groups=$(get_max_split_groups)
 
-    local system_prompt="You group staged git files into logical scopes for atomic commits.
+    local system_prompt="You group staged git files into commits by FEATURE — a single logical unit of work (a new capability, a bug fix, a refactor).
 
-Input arrives in XML tags: a list of staged files, a diff summary, recent commit messages (for codebase scope conventions), and heuristic-detected candidate scope tokens.
+A feature is defined by WHAT the change accomplishes, read from the actual code in <diff> — NOT by which directory the files live in. Files in DIFFERENT folders that implement the same feature belong in the SAME group; files in the SAME folder that implement unrelated changes belong in DIFFERENT groups.
 
-Task: assign EVERY staged file to a single scope. Use 2 to ${max_groups} groups when there is meaningful separation; use exactly 1 group only if all files truly belong together. Never exceed ${max_groups} groups — when many files share a theme, prefer a single broader scope over several tiny ones. Use lowercase scope names that match the style of <recent_commits>. Prefer scope names from <heuristic_candidates> when they fit the file path or change; invent new ones only when none of the candidates apply. Use \"misc\" for files with no clear scope (e.g., README, top-level config).
+Input arrives in XML tags: a list of staged files, the actual diff, a diff summary, recent commit messages (for scope-naming conventions), and folder-derived candidate scope tokens.
+
+Task: assign EVERY staged file to exactly one feature group. Use 1 group only if all changes truly form a single feature; otherwise use 2 to ${max_groups} groups. Never exceed ${max_groups} groups — prefer a broader feature over several tiny ones. Name each group with a short lowercase conventional-commit scope describing the FEATURE, matching the style of <recent_commits>. <heuristic_candidates> are folder-derived hints — use one only if it happens to match a feature's purpose. Use \"misc\" only for unrelated incidental files with no feature (e.g., README, top-level config).
 
 Output format: TSV only. One line per staged file in the form <scope><TAB><file_path>. No header, no prose, no markdown fences, no surrounding quotes. Every file from <staged_files> MUST appear exactly once. The file paths must be byte-identical to those in <staged_files>."
 
@@ -700,11 +673,15 @@ ${staged_files}
 ${diff_stat}
 </diff_summary>
 
+<diff>
+${diff_details}
+</diff>
+
 <heuristic_candidates>
 ${heuristic_hint}
 </heuristic_candidates>
 
-Output TSV (scope<TAB>file) for every staged file. No prose."
+Read <diff> to decide which files implement the same feature. Output TSV (scope<TAB>file) for every staged file. No prose."
 
     local ai_response
     ai_response=$(call_ai_api "$system_prompt" "$user_prompt" "$AI_MAX_TOKENS_FULL" "$(get_ai_model_for grouping)" 2>/dev/null)
@@ -1286,10 +1263,12 @@ function perform_commit_split {
 #   - gitbasher.commit-auto-split = "always"
 #   - $1 is non-empty (split mode forced via CLI)
 #   - $2 is non-empty (caller is fast/auto-accept and doesn't want to ask)
-# When the heuristic grouping looks weak (one dominant group, or a single group
-# spanning multiple subdirs), AI refinement is invoked to propose a better
-# scope→file mapping. Disable with gitbasher.commit-ai-grouping = "never";
-# force always-on with "always".
+# When the user asks for an AI split (the llm flag, set by ai/aisplit/ff/etc) and
+# a provider is available, AI feature-grouping is the PRIMARY path: it reads the
+# real diff and groups files by feature (which may span folders). The folder
+# heuristic is the FALLBACK, used when AI is unavailable, errors, or returns
+# unparseable output. Disable the AI path with gitbasher.commit-ai-grouping =
+# "never" (folder heuristic only); "auto" (default) and "always" both attempt AI.
 # The number of groups is capped at gitbasher.commit-max-split-groups (default
 # 7) so a huge changeset stays a handful of reviewable commits instead of
 # dozens of micro-commits — see consolidate_split_groups.
@@ -1310,47 +1289,45 @@ function try_offer_commit_split {
         return 1
     fi
 
-    # Always run heuristic first — fast and free
+    # Always run the folder heuristic first — fast and free. It provides the
+    # fallback grouping and the detected_scopes used as naming hints for the AI.
     build_split_groups_from_staged
-    local heuristic_result=$?
 
-    # Maybe escalate to AI refinement
+    # Decide whether to attempt AI feature-grouping. It is the primary path
+    # whenever the user asked for an AI split; the folder heuristic above stays
+    # as the fallback if AI is off, unavailable, or fails.
     local ai_grouping
     ai_grouping=$(get_config_value gitbasher.commit-ai-grouping "auto")
-    local should_refine="false"
+    local should_use_ai="false"
     case "$ai_grouping" in
-        always) should_refine="true" ;;
-        never)  should_refine="false" ;;
-        *)      # auto: refine only when heuristic is suspect
-                if is_heuristic_weak; then
-                    should_refine="true"
-                fi
-                ;;
+        never)  should_use_ai="false" ;;
+        *)      should_use_ai="true" ;;   # auto + always: attempt AI
     esac
 
     # AI usage is gated on the user's explicit AI intent (llm flag set by
     # ai/aisplit/aif/ff/etc). Non-AI modes (regular commit, fast, split) never
-    # call the model — they keep the heuristic grouping as-is.
+    # call the model — they keep the folder heuristic grouping as-is.
     if [ -z "$llm" ]; then
-        should_refine="false"
+        should_use_ai="false"
     fi
 
-    if [ "$should_refine" = "true" ] && check_ai_available 2>/dev/null; then
+    if [ "$should_use_ai" = "true" ] && check_ai_available 2>/dev/null; then
         echo
-        echo -e "${YELLOW}Refining scope grouping with AI...${ENDCOLOR}"
-        if ! refine_groups_with_ai; then
-            # AI failed; keep heuristic groups (may be empty)
-            echo -e "${YELLOW}AI grouping failed, falling back to heuristic.${ENDCOLOR}"
+        echo -e "${YELLOW}Grouping changes by feature with AI...${ENDCOLOR}"
+        if ! group_files_by_feature_with_ai; then
+            # AI failed; keep the folder heuristic groups (may be empty)
+            echo -e "${YELLOW}AI feature grouping failed, falling back to folder-based grouping.${ENDCOLOR}"
         fi
         # Safety net: cap AI's grouping too (the heuristic path is already
         # capped inside build_split_groups_from_staged).
         consolidate_split_groups "$(get_max_split_groups)"
     fi
 
-    # After refinement we may finally have ≥2 groups even if heuristic returned 1
+    # A single group means the AI judged everything to be one feature (or the
+    # folder heuristic found one scope) — nothing to split.
     if [ ${#split_group_keys[@]} -lt 2 ]; then
         if [ -n "$force_split" ]; then
-            echo -e "${YELLOW}Cannot split: could not identify multiple distinct scopes.${ENDCOLOR}"
+            echo -e "${YELLOW}Cannot split: all changes look like a single feature.${ENDCOLOR}"
         fi
         return 1
     fi
@@ -1612,7 +1589,7 @@ function set_commit_flag_from_token {
         msg|m)               msg="true";;
         ticket|jira|j|t)     ticket="true";;
         staged)              staged="true";;
-        no-split|nosplit|nsp|nsl) no_split="true";;
+        no-split|nosplit|nos|nsp|nsl) no_split="true";;
         fixup|fix|x)         fixup="true";;
         amend|am|a)          amend="true";;
         split|sp|sl)         split="true";;
@@ -1688,7 +1665,11 @@ function summarize_commit_intent {
     local action="commit" mods=()
 
     if [ -n "$auto_accept" ]; then
-        action="ultrafast commit (ai + fast + auto-accept)"
+        if [ -n "$staged" ]; then
+            action="ultrafast commit (ai + staged + auto-accept)"
+        else
+            action="ultrafast commit (ai + fast + auto-accept)"
+        fi
     elif [ -n "$revert" ]; then
         action="revert a commit"
     elif [ -n "$amend" ]; then
@@ -1701,7 +1682,7 @@ function summarize_commit_intent {
 
     [ -n "$llm" ] && [ -z "$auto_accept" ] && mods+=("ai message")
     [ -n "$fast" ]     && [ -z "$auto_accept" ] && mods+=("fast")
-    [ -n "$staged" ]   && mods+=("staged")
+    [ -n "$staged" ]   && [ -z "$auto_accept" ] && mods+=("staged")
     [ -n "$scope" ]    && mods+=("scope")
     [ -n "$msg" ]      && mods+=("msg")
     [ -n "$ticket" ]   && mods+=("ticket")
@@ -1746,15 +1727,17 @@ function commit_script {
         scope|s)            ;; # general commit with scope
         split|sp|sl)        split="true";; # force atomic-split flow (heuristic + manual messages)
         splitp|spp|slp)     split="true"; push="true";;
-        aisplit|isplit|aispl|ispl)        split="true"; llm="true";; # AI-refined grouping + AI messages
+        aisplit|isplit|aispl|ispl)        split="true"; llm="true";; # AI feature grouping + AI messages
         aisplitp|isplitp|aisplp|isplp)    split="true"; llm="true"; push="true";;
-        no-split|nosplit|nsp|nsl) no_split="true";;
+        no-split|nosplit|nos|nsp|nsl) no_split="true";;
         msg|m)              msg="true";;
         ticket|jira|j|t)    ticket="true";;
         fast|f)             fast="true";;
         fasts|fs|sf)        fast="true"; scope="true";;
         ff)                 fast="true"; llm="true"; auto_accept="true";; # ultrafast: no prompts at all
         ffp|ffpush)         fast="true"; llm="true"; auto_accept="true"; push="true";;
+        sff|ffst)           staged="true"; llm="true"; auto_accept="true";; # like ff but on already-staged files (no git add .)
+        sffp|ffstp)         staged="true"; llm="true"; auto_accept="true"; push="true";;
         staged|st)          staged="true";;
         push|pu|p)          push="true";;
         fastp|fp|pf)        fast="true"; push="true";;
@@ -1869,6 +1852,7 @@ function commit_script {
         print_help_row $PAD "amend"   "a, am"          "Add changes into the last commit (no message edit)"
         print_help_row $PAD "revert"  "rev"            "Revert a commit (${GREEN}git revert --no-edit${ENDCOLOR})"
         print_help_row $PAD "ff"      ""               "Ultrafast: ${BOLD}ai + split + fast${NORMAL} with no prompts (use ${BOLD}ffp${NORMAL} to also push)"
+        print_help_row $PAD "sff"     "ffst"           "Like ${BOLD}ff${NORMAL} but on already-staged files (no ${GREEN}git add .${ENDCOLOR}); use ${BOLD}sffp${NORMAL} to also push"
         print_help_row $PAD "help"    "h, --help, -h"  "Show this help"
         echo
         echo -e "${YELLOW}Modifiers${ENDCOLOR} ${BLUE}(stack with an action, any order)${ENDCOLOR}"
@@ -1878,7 +1862,7 @@ function commit_script {
         print_help_row $FPAD "staged"   "st"          "Use already-staged files (skip the add step)"
         print_help_row $FPAD "push"     "p, pu"       "Push after the commit succeeds"
         print_help_row $FPAD "scope"    "s"           "Force a scope: 'type(scope): message' (useful with fast mode)"
-        print_help_row $FPAD "no-split" "nsp, nsl"    "Disable automatic split detection for this commit"
+        print_help_row $FPAD "no-split" "nos, nsp, nsl" "Disable automatic split detection for this commit"
         print_help_row $FPAD "ai"       "i, llm"      "Generate the commit message with AI"
         print_help_row $FPAD "msg"      "m"           "Open \$EDITOR for a multiline message body"
         print_help_row $FPAD "ticket"   "t, j, jira"  "Append ticket info to the header"

@@ -353,7 +353,10 @@ function squash_parse_ai_plan {
         return 1
     fi
     for h in "${expected_order[@]}"; do
-        if [ -z "${seen_set[$h]:-}" ]; then
+        # seen_set is a gset shim (see gset_add above), not a bash array.
+        # `${seen_set[$h]}` would evaluate the hash as an arithmetic subscript
+        # and abort on digit-leading hashes ("value too great for base").
+        if ! gset_has seen_set "$h"; then
             squash_parse_error="coverage: commit '$h' is missing from the AI plan"
             return 1
         fi

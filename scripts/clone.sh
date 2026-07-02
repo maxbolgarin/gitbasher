@@ -2,9 +2,11 @@
 
 ### Script for cloning a remote repository
 # Clones with progress, cds into the new directory inside the script
-# process, and initializes gitbasher local config so the cloned repo is
-# ready to use. The user's shell cwd cannot be changed from a child
-# process, so the final message prints the `cd` command for the user.
+# process, and fully initializes gitbasher local config so the cloned repo is
+# ready to use (isfirst=false — no first-time setup on the first command).
+# The user's shell cwd cannot be changed from a child process, so we either
+# offer to spawn a subshell rooted in the clone (interactive) or print the
+# `cd` command for the user (non-interactive / test mode).
 
 
 ### Function to derive a default destination directory from a git URL
@@ -114,9 +116,12 @@ function clone_script {
         exit 1
     fi
 
-    # Initialize gitbasher's per-repo config. Mirrors the local config writes
-    # in init.sh so the first interactive `gitb` invocation inside the clone
-    # treats it as a fresh repo and shows the welcome banner once.
+    # Fully initialize gitbasher's per-repo config here, mirroring the local
+    # config writes in init.sh. isfirst is set to "false" so the first real
+    # `gitb` command inside the clone treats it as already-initialized and does
+    # NOT re-run the first-time setup (which would otherwise reprint the whole
+    # config banner and re-seed scopes — the behaviour that made this "✓
+    # Initialized" message look like a lie).
     local cloned_branch
     cloned_branch=$(git branch --show-current 2>/dev/null)
     if [ -z "$cloned_branch" ]; then
@@ -124,10 +129,27 @@ function clone_script {
     fi
     git config --local gitbasher.branch "$cloned_branch" 2>/dev/null
     git config --local gitbasher.scopes "" 2>/dev/null
-    git config --local gitbasher.isfirst "true" 2>/dev/null
+    git config --local gitbasher.isfirst "false" 2>/dev/null
 
     echo -e "${GREEN}✓ Initialized gitbasher in '$dest'${ENDCOLOR}"
     echo
+
+    # `gitb` runs as a subprocess, so it cannot change the caller's shell cwd.
+    # When we have an interactive TTY, offer to drop the user into a subshell
+    # rooted in the clone (they `exit` to return). Otherwise — and in test mode
+    # / when stdin is not a TTY — just print the `cd` command to copy. We are
+    # already inside "$target_abs" at this point (cd'd in above).
+    if [ -z "$GITBASHER_TEST_MODE" ] && [ -t 0 ]; then
+        local clone_cd_choice
+        echo -e "${YELLOW}Enter the new repo now (y/n)?${ENDCOLOR}"
+        read -n 1 -s clone_cd_choice
+        echo
+        if is_yes "$clone_cd_choice"; then
+            echo -e "${CYAN}💡 Opening a new shell in '$dest' — type ${GREEN}exit${CYAN} to come back.${ENDCOLOR}"
+            exec "${SHELL:-/bin/sh}"
+        fi
+    fi
+
     echo -e "${CYAN}💡 Enter the new repo with:${ENDCOLOR}"
     echo -e "  ${GREEN}cd $target_abs${ENDCOLOR}"
 }

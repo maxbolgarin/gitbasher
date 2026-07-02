@@ -115,6 +115,23 @@ function push_tag {
 }
 
 
+### Returns 0 when a non-zero `git fetch --tags` failed only because local tags
+### diverge from the remote ("would clobber existing tag"). Git reached the
+### remote and refused to move immutable local tags — recoverable, so the tag
+### list can still be shown. Genuine failures (fatal: ...) return non-zero.
+# $1: git fetch output
+function is_tag_clobber_only {
+    grep -q "would clobber existing tag" <<< "$1"
+}
+
+
+### Prints the names of the tags the remote refused to clobber, one per line.
+# $1: git fetch output
+function clobbered_tag_names {
+    grep "would clobber existing tag" <<< "$1" | sed -e 's#.*-> \([^ ]*\).*#\1#'
+}
+
+
 ### Main function
 # $1: mode
     # <empty>: create a new tag from a current branch and commit it
@@ -200,17 +217,35 @@ function tag_script {
     if [ -n "${remote}" ]; then
         echo -e "${YELLOW}Fetching tags from the remote...${ENDCOLOR}"
         fetch_output=$(git fetch $origin_name --tags 2>&1)
-        check_code $? "$fetch_output" "fetch tags"
+        fetch_code=$?
+        # A non-zero exit caused only by tag-clobber protection is a warning,
+        # not a fatal error — still show the tag list. Anything else aborts.
+        if [ "$fetch_code" != 0 ] && ! is_tag_clobber_only "$fetch_output"; then
+            check_code "$fetch_code" "$fetch_output" "fetch tags"
+        fi
 
         echo
 
-        if [ "$fetch_output" != "" ]; then
+        new_tags=$(sed -n '/\[new tag\]/p' <<< "$fetch_output")
+        if [ -n "$new_tags" ]; then
             echo -e "${YELLOW}New tags:${ENDCOLOR}"
-            IFS=$'\n' read -rd '' -a lines_with_tags <<< "$(sed -n '/\[new tag\]/p' <<< "$fetch_output")"
+            IFS=$'\n' read -rd '' -a lines_with_tags <<< "$new_tags"
             for index in "${!lines_with_tags[@]}"
             do
                 echo -e "\t$(sed -e 's#.*\-> \(\)#\1#' <<< "${lines_with_tags[index]}" )"
             done
+            echo
+        fi
+
+        clobbered_tags=$(clobbered_tag_names "$fetch_output")
+        if [ -n "$clobbered_tags" ]; then
+            echo -e "${YELLOW}These remote tags differ from your local ones and were kept as-is:${ENDCOLOR}"
+            IFS=$'\n' read -rd '' -a clobber_lines <<< "$clobbered_tags"
+            for index in "${!clobber_lines[@]}"
+            do
+                echo -e "\t${YELLOW}${clobber_lines[index]}${ENDCOLOR}"
+            done
+            echo -e "${GRAY}Run ${GREEN}git fetch --tags --force${ENDCOLOR}${GRAY} to overwrite them with the remote version.${ENDCOLOR}"
             echo
         fi
     fi

@@ -45,8 +45,8 @@ _gitb_sub_commit_simple="ai llm i fast f push pu p scope s msg m ticket jira j t
 _gitb_sub_wip_backend="stash s branch b worktree w wt tree nopush np n"
 _gitb_sub_push="yes y force f list log l help h"
 _gitb_sub_pull="fetch fe all fa upd u ffonly ff merge m rebase r interactive ri rs dry d dr help h"
-_gitb_sub_merge="main master m to-main to-master tm remote r help h"
-_gitb_sub_rebase="main master m interactive i autosquash a s ia fastautosquash fast sf f pull p help h"
+_gitb_sub_merge="main master m to-main to-master tm remote r push p help h"
+_gitb_sub_rebase="main master m interactive i autosquash a s ia fastautosquash fast sf f pull p push help h"
 _gitb_sub_squash="preview p dry show yes y fast push ps help h"
 _gitb_sub_cherry="hash hs range r abort a continue cont c help h"
 _gitb_sub_sync="push p merge m mergep mp pm dry d dr help h"
@@ -366,12 +366,12 @@ _gitb() {
                 merge|m|me)
                     local -a branches
                     branches=( ${(f)"$(git for-each-ref --format='%(refname:short)' refs/heads 2>/dev/null)"} )
-                    _values 'merge target' 'main[merge main into current]' 'to-main[merge current into main]' 'remote[merge a remote branch]' 'help[show help]' $branches
+                    _values 'merge target' 'main[merge main into current]' 'to-main[merge current into main]' 'remote[merge a remote branch]' 'push[merge and push]' 'help[show help]' $branches
                     ;;
                 rebase|r|re|base)
                     local -a branches
                     branches=( ${(f)"$(git for-each-ref --format='%(refname:short)' refs/heads 2>/dev/null)"} )
-                    _values 'rebase mode' 'main[rebase onto main]' 'interactive[interactive]' 'autosquash[autosquash]' 'fastautosquash[fast autosquash]' 'pull[pull commits]' 'help[show help]' $branches
+                    _values 'rebase mode' 'main[rebase onto main]' 'interactive[interactive]' 'autosquash[autosquash]' 'fastautosquash[fast autosquash]' 'pull[pull commits]' 'push[rebase and force-push]' 'help[show help]' $branches
                     ;;
                 squash|sq|tidy)
                     _values 'squash mode' 'preview[show plan only]' 'yes[skip confirmation]' 'push[force-push after squash]' 'help[show help]'
@@ -564,10 +564,10 @@ complete -c gitb -n "$__gitb_push" -a "yes force list help"
 set -l __gitb_pull "__gitb_using_cmd pull pu pl pul; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_pull" -a "fetch all upd ffonly merge rebase interactive dry help"
 set -l __gitb_merge "__gitb_using_cmd merge m me; and __gitb_at_position 2"
-complete -c gitb -n "$__gitb_merge" -a "main to-main remote help"
+complete -c gitb -n "$__gitb_merge" -a "main to-main remote push help"
 complete -c gitb -n "$__gitb_merge" -a "(__gitb_local_branches)" -d branch
 set -l __gitb_rebase "__gitb_using_cmd rebase r re base; and __gitb_at_position 2"
-complete -c gitb -n "$__gitb_rebase" -a "main interactive autosquash fastautosquash pull help"
+complete -c gitb -n "$__gitb_rebase" -a "main interactive autosquash fastautosquash pull push help"
 complete -c gitb -n "$__gitb_rebase" -a "(__gitb_local_branches)" -d branch
 set -l __gitb_squash "__gitb_using_cmd squash sq tidy; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_squash" -a "preview yes push help"

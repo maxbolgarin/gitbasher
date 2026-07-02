@@ -287,6 +287,11 @@ function configure_ai_key {
     echo -e "${GREEN}✓ Configured AI API key for '${provider}' in '${project_name}':${ENDCOLOR} ${BLUE}$(mask_api_key "$ai_api_key")${ENDCOLOR}"
     echo
 
+    # Validate the freshly stored key against the provider so a typo surfaces
+    # now instead of on the first AI commit.
+    ai_smoke_check || true
+    echo
+
     [ "$GITBASHER_NO_REPO" = "true" ] && exit
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     echo -e "${RED}⚠  Global API keys are stored in plaintext in ~/.gitconfig.${ENDCOLOR}"
@@ -316,7 +321,7 @@ function configure_ai_provider {
     echo -e "Options:"
     echo -e "  1. ${BLUE}openrouter${ENDCOLOR}  Aggregator with hundreds of models — needs an API key"
     echo -e "  2. ${BLUE}openai${ENDCOLOR}      OpenAI direct (GPT-5 family) — needs an API key"
-    echo -e "  3. ${BLUE}ollama${ENDCOLOR}      Local models via http://localhost:11434 — no API key required"
+    echo -e "  3. ${BLUE}ollama${ENDCOLOR}      Local or remote models (you'll set the host) — no API key required"
     echo
     echo -e "Press Enter to keep the current provider, or enter 0 to reset to default (${AI_DEFAULT_PROVIDER})"
 
@@ -335,6 +340,7 @@ function configure_ai_provider {
     fi
 
     local new_provider
+    local host_input=""
     case "$choice" in
         1) new_provider="openrouter" ;;
         2) new_provider="openai" ;;
@@ -353,11 +359,39 @@ function configure_ai_provider {
     set_ai_provider "$new_provider"
     echo -e "${GREEN}✓ Set AI provider to '${new_provider}' for '${project_name}'${ENDCOLOR}"
 
-    # Provider-specific follow-up hints so users aren't left guessing.
+    # Provider-specific follow-up. Ollama asks where the server lives and probes
+    # it; a cloud provider that already has a key gets its key validated. Both
+    # run before the "set globally?" prompt because that prompt exits on "no".
     case "$new_provider" in
         ollama)
+            local current_host
+            current_host=$(get_ai_ollama_host)
+            echo
+            echo -e "${YELLOW}Where is your Ollama server?${ENDCOLOR}"
+            echo -e "Enter a host URL, or press Enter to keep ${GREEN}${current_host}${ENDCOLOR}."
+            read_editable_input host_input "Ollama host: " "$current_host"
+            if [ -n "$host_input" ]; then
+                # Accept a bare host:port by defaulting the scheme to http://.
+                case "$host_input" in
+                    http://*|https://*) : ;;
+                    *) host_input="http://${host_input}" ;;
+                esac
+                host_input="${host_input%/}"
+                set_ai_ollama_host "$host_input" >/dev/null
+                echo -e "${GREEN}✓ Ollama host set to ${host_input}${ENDCOLOR}"
+            fi
+            echo
             echo -e "${CYAN}💡 Make sure the Ollama daemon is running (${BLUE}ollama serve${CYAN}) and a model is pulled (${BLUE}ollama pull qwen3:8b${CYAN}).${ENDCOLOR}"
-            echo -e "${CYAN}💡 Pick a different model with ${GREEN}gitb cfg model${CYAN} if you have one installed already.${ENDCOLOR}"
+            echo -e "${CYAN}💡 Pick a model with ${GREEN}gitb cfg model${CYAN}.${ENDCOLOR}"
+            echo
+            ai_smoke_check || true
+            ;;
+        *)
+            # Cloud provider: if a key is already configured for it, validate now.
+            if [ -n "$(get_ai_api_key)" ]; then
+                echo
+                ai_smoke_check || true
+            fi
             ;;
     esac
     echo
@@ -366,6 +400,10 @@ function configure_ai_provider {
         echo -e "Do you want to set this provider ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
         yes_no_choice "\nSet AI provider globally" "true"
         set_config_value gitbasher.ai-provider "$new_provider" "true"
+        # Keep the Ollama host at the same scope as the provider it belongs to.
+        if [ "$new_provider" = "ollama" ] && [ -n "$host_input" ]; then
+            set_config_value gitbasher.ai-ollama-host "$host_input" "true" >/dev/null
+        fi
     fi
 
     # If the new provider needs an API key but none is configured for it,
@@ -430,6 +468,35 @@ function configure_ai_model {
             ;;
     esac
     echo
+
+    # For Ollama, list the models actually installed on the host as a numbered
+    # menu so the user picks a valid id (and never hits the colon-rejection bug).
+    # Falls back to free-text entry when the host is unreachable or has none.
+    local -a ollama_model_list=()
+    if [ "$(get_ai_provider)" = "ollama" ]; then
+        local _m _i
+        while IFS= read -r _m; do
+            [ -n "$_m" ] && ollama_model_list+=("$_m")
+        done < <(ollama_list_models)
+        if [ ${#ollama_model_list[@]} -gt 0 ]; then
+            echo -e "Installed models on ${BLUE}$(ollama_api_base)${ENDCOLOR}:"
+            _i=1
+            for _m in "${ollama_model_list[@]}"; do
+                if [ "$_m" = "$current_model" ]; then
+                    echo -e "  ${GREEN}${_i}. ${_m}${ENDCOLOR}  (current)"
+                else
+                    echo -e "  ${BLUE}${_i}.${ENDCOLOR} ${_m}"
+                fi
+                _i=$((_i + 1))
+            done
+            echo -e "Enter a number to select, or type a model id."
+        else
+            echo -e "${YELLOW}No models found on $(ollama_api_base) — is the daemon running?${ENDCOLOR}"
+            echo -e "Pull one with ${BLUE}ollama pull qwen3:8b${ENDCOLOR}, or type a model id below."
+        fi
+        echo
+    fi
+
     echo -e "Press Enter to exit without changes, or 0 to clear the override (use per-task defaults)"
 
     read_editable_input model_input "Model ID: "
@@ -449,10 +516,21 @@ function configure_ai_model {
 
     echo
 
-    # Basic validation - check for reasonable model ID format
-    if [[ ! "$model_input" =~ ^[a-zA-Z0-9._/-]+$ ]]; then
+    # A bare number picks from the Ollama menu shown above.
+    if [ ${#ollama_model_list[@]} -gt 0 ] && [[ "$model_input" =~ ^[0-9]+$ ]]; then
+        if [ "$model_input" -ge 1 ] && [ "$model_input" -le ${#ollama_model_list[@]} ]; then
+            model_input="${ollama_model_list[$((model_input - 1))]}"
+        else
+            echo -e "${RED}✗ Invalid selection: ${model_input}${ENDCOLOR}" >&2
+            exit 1
+        fi
+    fi
+
+    # Basic validation - check for a reasonable model ID format. Allows the ':'
+    # in Ollama tags (qwen3:8b) that the old inline check wrongly rejected.
+    if ! is_valid_model_id "$model_input"; then
         echo -e "${RED}✗ Invalid model ID format.${ENDCOLOR}" >&2
-        echo -e "${YELLOW}Use only letters, numbers, dots, dashes, underscores, and slashes.${ENDCOLOR}" >&2
+        echo -e "${YELLOW}Use only letters, numbers, dots, dashes, underscores, colons, and slashes.${ENDCOLOR}" >&2
         exit 1
     fi
 

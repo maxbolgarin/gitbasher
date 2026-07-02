@@ -129,6 +129,7 @@ User-visible settings live in `git config` under the `gitbasher.*` namespace, se
 
 - `gitbasher.scopes` — comma-separated commit scopes for the picker
 - `gitbasher.ai-provider`, `gitbasher.ai-api-key`, `gitbasher.ai-model` — AI client
+- `gitbasher.ai-ollama-host` — Ollama server location (default `http://localhost:11434`)
 - `gitbasher.ai-proxy` — optional HTTPS proxy for restricted regions
 - `gitbasher.worktreebase` — base path for `gitb worktree add` and `wip up worktree`
 - a handful of feature toggles (`gitbasher.confirm-push`, `gitbasher.color`, …)

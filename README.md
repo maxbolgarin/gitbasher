@@ -504,6 +504,7 @@ Notes:
 | `main` | `master` `m` | Merge default branch into current |
 | `to-main` | `to-master` `tm` | Switch to main, merge current branch in |
 | `remote` | `r` | Fetch + select a remote branch to merge |
+| `push` | `p` | Push the branch after a successful merge (combine with any mode) |
 
 </details>
 
@@ -520,6 +521,7 @@ Notes:
 | `autosquash` | `a` `s` `ia` | Interactive rebase with `--autosquash` |
 | `fastautosquash` | `fast` `sf` `f` | Autosquash without interaction |
 | `pull` | `p` | Take commits from selected branch into current |
+| `push` | | Force-push the branch after a successful rebase (combine with any mode) |
 
 </details>
 

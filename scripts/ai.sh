@@ -7,7 +7,10 @@
 # gitbasher.ai-base-url.
 readonly OPENROUTER_API_URL="https://openrouter.ai/api/v1/chat/completions"
 readonly OPENAI_API_URL="https://api.openai.com/v1/chat/completions"
-readonly OLLAMA_API_URL="http://localhost:11434/v1/chat/completions"
+# Default Ollama host (scheme+host+port, no path). Overridable per repo/globally
+# via gitbasher.ai-ollama-host so remote or non-default daemons work. The
+# chat-completions URL is built from it (or the configured host) in get_ai_api_url.
+readonly AI_DEFAULT_OLLAMA_HOST="http://localhost:11434"
 
 # Default provider when gitbasher.ai-provider is unset — keeps existing setups working.
 readonly AI_DEFAULT_PROVIDER="openrouter"
@@ -182,6 +185,25 @@ function set_ai_base_url {
     set_config_value gitbasher.ai-base-url "$1"
 }
 
+### Function to get/set the Ollama server location (scheme+host+port, no path).
+# Lets users point gitbasher at a remote or non-default Ollama daemon. Falls
+# back to AI_DEFAULT_OLLAMA_HOST (http://localhost:11434) when unset.
+function get_ai_ollama_host {
+    get_config_value gitbasher.ai-ollama-host "$AI_DEFAULT_OLLAMA_HOST"
+}
+
+function set_ai_ollama_host {
+    set_config_value gitbasher.ai-ollama-host "$1"
+}
+
+### Ollama host with any trailing slash stripped, so URL building never doubles
+### the separator (e.g. ".../"+"/v1/..." -> "...//v1/...").
+function ollama_api_base {
+    local host
+    host=$(get_ai_ollama_host)
+    echo "${host%/}"
+}
+
 ### Resolve the chat-completions URL for the active provider.
 # Custom base URL wins; otherwise pick the built-in for the provider.
 function get_ai_api_url {
@@ -194,9 +216,16 @@ function get_ai_api_url {
 
     case "$(get_ai_provider)" in
         openai)  echo "$OPENAI_API_URL" ;;
-        ollama)  echo "$OLLAMA_API_URL" ;;
+        ollama)  echo "$(ollama_api_base)/v1/chat/completions" ;;
         *)       echo "$OPENROUTER_API_URL" ;;
     esac
+}
+
+### Validate a manually-entered model id. Allows the characters real model ids
+### use across providers — including the ':' in Ollama tags (qwen3:8b), which
+### the previous validator omitted and so rejected every Ollama model.
+function is_valid_model_id {
+    [[ "$1" =~ ^[a-zA-Z0-9._:/-]+$ ]]
 }
 
 ### Whether the active provider needs an API key.
@@ -620,6 +649,134 @@ EOF
             "${curl_cmd[@]}" 2>&1
         fi
     )
+}
+
+### Authenticated GET that prints ONLY the HTTP status code (e.g. "200"/"401").
+# Mirrors secure_curl_with_api_key's `--config -` technique so the bearer token
+# stays out of argv. Used by the smoke check to validate a cloud key against the
+# provider's /models endpoint without spending tokens.
+# $1: proxy_url (may be empty)   $2: api_key (may be empty)   $3: url
+# Prints the status code, or "000" when the request could not be made.
+function secure_curl_status {
+    local proxy_url="$1"
+    local api_key="$2"
+    local url="$3"
+
+    (
+        { set +x; } 2>/dev/null
+        unset HISTFILE
+
+        local curl_cmd=(
+            curl -s -o /dev/null -w '%{http_code}'
+            --connect-timeout 10
+            --max-time 20
+        )
+        [ -n "$proxy_url" ] && curl_cmd+=(--proxy "$proxy_url")
+        curl_cmd+=("$url")
+
+        if [ -n "$api_key" ]; then
+            local escaped_key="${api_key//\\/\\\\}"
+            escaped_key="${escaped_key//\"/\\\"}"
+            "${curl_cmd[@]}" --config - <<EOF 2>/dev/null
+header = "Authorization: Bearer ${escaped_key}"
+EOF
+        else
+            "${curl_cmd[@]}" 2>/dev/null
+        fi
+    )
+}
+
+### Extract Ollama model names from a GET {host}/api/tags JSON body on stdin.
+# Prefers jq; falls back to a grep/sed pass that pulls each "name":"…" value.
+# Prints one name per line (may be empty when there are no models).
+function _parse_ollama_model_names {
+    if command -v jq &>/dev/null; then
+        jq -r '.models[]?.name // empty' 2>/dev/null
+    else
+        LC_ALL=C grep -o '"name"[[:space:]]*:[[:space:]]*"[^"]*"' \
+            | LC_ALL=C sed 's/.*"\([^"]*\)"$/\1/'
+    fi
+}
+
+### List the models installed on the configured Ollama host.
+# Queries GET {host}/api/tags and prints each model name on its own line.
+# Returns 1 (printing nothing) when the host is unreachable or has no models.
+function ollama_list_models {
+    local base resp names
+    base=$(ollama_api_base)
+    resp=$(curl -s --max-time 5 "${base}/api/tags" 2>/dev/null)
+    [ -z "$resp" ] && return 1
+    names=$(printf '%s' "$resp" | _parse_ollama_model_names)
+    [ -z "$names" ] && return 1
+    printf '%s\n' "$names"
+}
+
+### Quick connectivity/auth probe for the active provider, run right after setup
+### so a wrong host or bad key surfaces immediately instead of on first commit.
+#   ollama: GET {host}/api/tags — reports reachable (+ whether models exist).
+#   cloud:  authenticated GET {base}/models — 200 = key valid, 401/403 = bad key.
+#           No tokens are billed. Honors gitbasher.ai-proxy.
+# Returns 0 on success, 1 on any failure; prints a human-readable result.
+function ai_smoke_check {
+    local provider
+    provider=$(get_ai_provider)
+
+    if [ "$provider" = "ollama" ]; then
+        local base resp names
+        base=$(ollama_api_base)
+        resp=$(curl -s --max-time 5 "${base}/api/tags" 2>/dev/null)
+        if [ -z "$resp" ]; then
+            echo -e "${RED}✗ Ollama not reachable at ${base}${ENDCOLOR}" >&2
+            echo -e "${CYAN}💡 Start it with ${BOLD}ollama serve${ENDCOLOR}${CYAN}, or fix the host via ${GREEN}gitb cfg provider${ENDCOLOR}${CYAN}.${ENDCOLOR}" >&2
+            return 1
+        fi
+        names=$(printf '%s' "$resp" | _parse_ollama_model_names)
+        if [ -z "$names" ]; then
+            echo -e "${GREEN}✓ Ollama reachable at ${base}${ENDCOLOR}, but no models are pulled."
+            echo -e "${CYAN}💡 Pull one with ${BLUE}ollama pull qwen3:8b${ENDCOLOR}${CYAN}.${ENDCOLOR}"
+            return 0
+        fi
+        local count
+        count=$(printf '%s\n' "$names" | grep -c .)
+        echo -e "${GREEN}✓ Ollama reachable at ${base} (${count} model(s))${ENDCOLOR}"
+        return 0
+    fi
+
+    # Cloud providers: validate the key against the /models endpoint.
+    local api_key
+    api_key=$(get_ai_api_key)
+    if [ -z "$api_key" ]; then
+        echo -e "${YELLOW}⚠ No API key set for '${provider}' — skipping key check.${ENDCOLOR}" >&2
+        return 1
+    fi
+
+    local api_url models_url proxy code
+    api_url=$(get_ai_api_url)
+    # /chat/completions -> /models on the same base.
+    models_url="${api_url/chat\/completions/models}"
+    proxy=$(get_ai_proxy)
+
+    code=$(secure_curl_status "$proxy" "$api_key" "$models_url")
+    case "$code" in
+        200)
+            echo -e "${GREEN}✓ ${provider} key valid (200 from ${models_url})${ENDCOLOR}"
+            return 0
+            ;;
+        401|403)
+            echo -e "${RED}✗ ${provider} rejected the key (HTTP ${code}).${ENDCOLOR}" >&2
+            echo -e "${CYAN}💡 Re-enter it with ${GREEN}gitb cfg ai${ENDCOLOR}${CYAN}.${ENDCOLOR}" >&2
+            return 1
+            ;;
+        000|"")
+            echo -e "${RED}✗ Could not reach ${provider} at ${models_url}.${ENDCOLOR}" >&2
+            echo -e "${CYAN}💡 Check your connection${ENDCOLOR}${CYAN}, or configure a proxy with ${GREEN}gitb cfg proxy${ENDCOLOR}${CYAN}.${ENDCOLOR}" >&2
+            return 1
+            ;;
+        *)
+            echo -e "${YELLOW}⚠ ${provider} returned HTTP ${code} (reachable, but not the expected 200).${ENDCOLOR}" >&2
+            return 1
+            ;;
+    esac
 }
 
 ### Escape a string for embedding inside JSON double quotes (fallback when jq is unavailable).

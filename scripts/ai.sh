@@ -257,31 +257,29 @@ function set_ai_model {
 }
 
 ### Per-task default model IDs (OpenRouter).
-# Picked July 2026 for the speed / cost / quality balance that fits each task:
-#   - simple/subject (short structured output, runs interactively): the cheapest
-#     fast tier with strong format compliance — gemini-3.1-flash-lite went GA
-#     at the preview's price ($0.25/$1.50 per M).
-#   - full (header + body): the current flash generation — body prose quality
-#     matters more, and per-commit output is tiny so the higher rate is noise.
-#   - grouping (TSV scope→file mapping, validated downstream): strict instruction
-#     following matters; this only fires when the heuristic is weak so the higher
-#     per-call cost is bounded. haiku-4.5 is still the newest haiku.
+# Picked July 2026, priorities: speed first, quality second, cost third
+# (per-commit spend is fractions of a cent either way). Latencies below are
+# medians measured against the live API with a commit-sized prompt:
+#   - simple/subject (interactive one-liners): gemini-3.1-flash-lite is the
+#     fastest model measured (~0.6s) and the cheapest ($0.25/$1.50 per M).
+#   - full (header + body): gemini-3.5-flash (~0.8s) — current flash
+#     generation, noticeably better prose than lite at the same speed class.
+#   - grouping (TSV scope→file mapping, validated downstream): also
+#     gemini-3.5-flash — claude-haiku-4.5 measured ~1.4s median (2x slower)
+#     for no quality gain the validator would notice.
 # Update these when newer GA models supersede the current slugs.
 readonly AI_DEFAULT_MODEL_SIMPLE="google/gemini-3.1-flash-lite"
 readonly AI_DEFAULT_MODEL_SUBJECT="google/gemini-3.1-flash-lite"
 readonly AI_DEFAULT_MODEL_FULL="google/gemini-3.5-flash"
-readonly AI_DEFAULT_MODEL_GROUPING="anthropic/claude-haiku-4.5"
+readonly AI_DEFAULT_MODEL_GROUPING="google/gemini-3.5-flash"
 
-# OpenAI per-task defaults (May 2026, GPT-5.4 family).
-#   - nano ($0.20 / $1.25 per M tokens): tuned for classification, data
-#     extraction, ranking, and short well-defined interactions — exactly
-#     matches the simple/subject one-line output. Use here.
-#   - mini ($0.75 / $4.50 per M): handles multi-condition instructions and
-#     formatting requirements applied simultaneously — right tier for full-mode
-#     prose and the validated TSV grouping output, both far cheaper than the
-#     gpt-5.4 flagship without losing format compliance.
-readonly AI_DEFAULT_MODEL_SIMPLE_OPENAI="gpt-5.4-nano"
-readonly AI_DEFAULT_MODEL_SUBJECT_OPENAI="gpt-5.4-nano"
+# OpenAI per-task defaults (July 2026, GPT-5.4 family — no 5.5 small tier
+# exists). mini ($0.75/$4.50 per M) measured the same latency as nano
+# (~0.8s median on a commit-sized prompt) with strictly better quality, so
+# with speed>quality>cost priorities every task uses mini; nano remains a
+# budget override for high-volume users (~$0.20/$1.25 per M).
+readonly AI_DEFAULT_MODEL_SIMPLE_OPENAI="gpt-5.4-mini"
+readonly AI_DEFAULT_MODEL_SUBJECT_OPENAI="gpt-5.4-mini"
 readonly AI_DEFAULT_MODEL_FULL_OPENAI="gpt-5.4-mini"
 readonly AI_DEFAULT_MODEL_GROUPING_OPENAI="gpt-5.4-mini"
 

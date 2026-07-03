@@ -259,18 +259,18 @@ Each task uses a model tuned for speed/cost/quality, picked per provider. Defaul
 
 | Task | Default model | Why |
 |------|---------------|-----|
-| `simple` (one-line message) | `google/gemini-3.1-flash-lite` | Cheapest fast tier |
-| `subject` (after manual type/scope) | `google/gemini-3.1-flash-lite` | Short structured output |
-| `full` (header + body) | `google/gemini-3.5-flash` | Better prose |
-| `grouping` (atomic-split mapping) | `anthropic/claude-haiku-4.5` | Strict instruction following |
+| `simple` (one-line message) | `google/gemini-3.1-flash-lite` | Fastest model measured (~0.6s), cheapest |
+| `subject` (after manual type/scope) | `google/gemini-3.1-flash-lite` | Short structured output, instant |
+| `full` (header + body) | `google/gemini-3.5-flash` | Same speed class, better prose |
+| `grouping` (atomic-split mapping) | `google/gemini-3.5-flash` | Fast + strict structured output |
 
 **OpenAI** — GPT-5.4 family (released March 2026)
 
 | Task | Default model | Why |
 |------|---------------|-----|
-| `simple` / `subject` | `gpt-5.4-nano` | Built for classification/short well-defined output, ~$0.20 / $1.25 per M tokens |
-| `full` | `gpt-5.4-mini` | Stronger multi-condition instruction following for header + body, ~$0.75 / $4.50 per M |
-| `grouping` | `gpt-5.4-mini` | Holds the strict TSV format under validation, far cheaper than the flagship |
+| All tasks | `gpt-5.4-mini` | Measured as fast as nano (~0.8s) with strictly better quality, ~$0.75 / $4.50 per M |
+
+`gpt-5.4-nano` (~$0.20 / $1.25 per M) remains a good budget override for high-volume use.
 
 **Ollama** — fully local
 

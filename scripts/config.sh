@@ -545,8 +545,8 @@ function configure_ai_model {
     echo -e "Popular models for provider '${GREEN}$(get_ai_provider)${ENDCOLOR}':"
     case "$(get_ai_provider)" in
         openai)
-            echo -e "  • ${BLUE}gpt-5.4-nano${ENDCOLOR} - Cheapest+fastest, ideal for one-line subjects (~\$0.20/\$1.25 per M)"
-            echo -e "  • ${BLUE}gpt-5.4-mini${ENDCOLOR} - Balanced for full-body prose and strict TSV output (~\$0.75/\$4.50 per M)"
+            echo -e "  • ${BLUE}gpt-5.4-mini${ENDCOLOR} - Default: as fast as nano with better quality (~\$0.75/\$4.50 per M)"
+            echo -e "  • ${BLUE}gpt-5.4-nano${ENDCOLOR} - Budget option for high volume (~\$0.20/\$1.25 per M)"
             echo -e "  • ${BLUE}gpt-5.5${ENDCOLOR} - Flagship, only worth it for the hardest grouping cases"
             ;;
         ollama)

@@ -39,7 +39,7 @@ function print_help {
     echo
 
     printf "$hdr" "HISTORY"
-    printf "$row" "$CMD" "log (l, lg)"             "Pretty git log with branch comparison"
+    printf "$row" "$CMD" "log (l, lg)"             "Interactive commit browser with search, compare and AI summary"
     printf "$row" "$CMD" "reflog (rl, rlg)"        "Pretty git reflog"
     printf "$row" "$CMD" "last-commit (lc, lastc)" "Show last commit info"
     printf "$row" "$CMD" "last-ref (lr, lastr)"    "Show last reference info"

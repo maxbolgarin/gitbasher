@@ -65,6 +65,11 @@ teardown() {
     assert_output_contains "renderer subject"
     assert_output_contains "Test User"
     assert_output_contains "ago"
+    # Colors must be real escape bytes, not a mangled literal "x1b[33m"
+    if [[ "$output" == *"x1b["* ]]; then
+        echo "Escape sequences leaked as literal text: $output"
+        return 1
+    fi
 }
 
 @test "log: log_commit_list truncates subjects longer than 60 chars" {
@@ -157,4 +162,104 @@ teardown() {
     assert_output_contains "all"
     assert_output_contains "branch"
     assert_output_contains "search"
+}
+
+
+### interactive browser
+
+@test "log: browser prints one page and exits cleanly on EOF" {
+    git config gitbasher.log-count 2
+    make_test_commit one.txt "feat: one"
+    make_test_commit two.txt "feat: two"
+    current_branch="main"
+    run gitlog_browse "GIT LOG" head < /dev/null
+    assert_success
+    assert_output_contains "GIT LOG"
+    assert_output_contains "Page 1/2"
+    local numbered_lines
+    numbered_lines=$(echo "$output" | grep -c '^ *[0-9]*\. ')
+    [ "$numbered_lines" -eq 2 ]
+}
+
+@test "log: browser n key moves to the next page" {
+    git config gitbasher.log-count 2
+    make_test_commit one.txt "feat: one"
+    make_test_commit two.txt "feat: two"
+    current_branch="main"
+    run gitlog_browse "GIT LOG" head <<< "n"
+    assert_success
+    assert_output_contains "Page 2/2"
+    assert_output_contains "Initial commit"
+}
+
+@test "log: browser rejects an out-of-range commit number" {
+    make_test_commit one.txt "feat: one"
+    current_branch="main"
+    run gitlog_browse "GIT LOG" head <<< "99"
+    assert_success
+    assert_output_contains "No commit with number"
+}
+
+@test "log: bare dispatch opens the browser instead of the dump" {
+    make_test_commit one.txt "feat: browsed subject"
+    current_branch="main"
+    run gitlog_script < /dev/null
+    assert_success
+    assert_output_contains "1\. "
+    assert_output_contains "browsed subject"
+    assert_output_contains "commit number"
+}
+
+
+### commit action menu
+
+@test "log: action menu shows the commit and returns on enter" {
+    make_test_commit one.txt "feat: inspected commit"
+    run log_commit_actions "$(git rev-parse --short HEAD)" <<< ""
+    assert_success
+    assert_output_contains "inspected commit"
+    assert_output_contains "Revert"
+}
+
+@test "log: revert action refuses on a dirty tree" {
+    make_test_commit one.txt "feat: bad commit"
+    echo "dirt" >> one.txt
+    run log_commit_actions "$(git rev-parse --short HEAD)" <<< "4"
+    assert_output_contains "Cannot revert"
+    [ "$(git log -1 --pretty=%s)" = "feat: bad commit" ]
+}
+
+@test "log: revert action reverts the commit on a clean tree" {
+    make_test_commit one.txt "feat: bad commit"
+    after_commit() { echo "committed ($1)"; }
+    run log_commit_actions "$(git rev-parse --short HEAD)" <<< "4"
+    assert_success
+    [ "$(git log -1 --pretty=%s)" = "Revert \"feat: bad commit\"" ]
+}
+
+@test "log: fixup action requires staged changes" {
+    make_test_commit one.txt "feat: target"
+    run log_commit_actions "$(git rev-parse --short HEAD)" <<< "6"
+    assert_output_contains "No staged changes"
+}
+
+@test "log: fixup action creates a fixup commit from staged changes" {
+    make_test_commit one.txt "feat: target"
+    local target_hash
+    target_hash=$(git rev-parse --short HEAD)
+    echo "fix" >> one.txt
+    git add one.txt
+    run log_commit_actions "$target_hash" <<< "6"
+    assert_success
+    [ "$(git log -1 --pretty=%s)" = "fixup! feat: target" ]
+}
+
+@test "log: copy action pipes the full hash into the clipboard tool" {
+    make_test_commit one.txt "feat: copied"
+    mkdir -p "$TEST_REPO/fakebin"
+    printf '#!/usr/bin/env bash\ncat > "%s/clip.txt"\n' "$TEST_REPO" > "$TEST_REPO/fakebin/pbcopy"
+    chmod +x "$TEST_REPO/fakebin/pbcopy"
+    PATH="$TEST_REPO/fakebin:$PATH" run log_copy_hash "$(git rev-parse --short HEAD)"
+    assert_success
+    [ "$(cat "$TEST_REPO/clip.txt")" = "$(git rev-parse HEAD)" ]
 }

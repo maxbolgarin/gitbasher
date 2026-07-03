@@ -125,11 +125,20 @@ function log_commit_list {
         unpushed=$(git --no-pager rev-list --abbrev-commit "@{u}..HEAD" 2>/dev/null | tr '\n' ' ')
     fi
 
+    # Colors as real escape bytes: awk -v mangles the backslash in the *_ES
+    # vars and printf below does not interpret \x1b like echo -e would.
+    local hash_color deco_color author_color time_color end_color
+    hash_color=$(printf '%b' "$YELLOW_ES")
+    deco_color="$hash_color"
+    author_color=$(printf '%b' "$BLUE_ES")
+    time_color=$(printf '%b' "$GREEN_ES")
+    end_color=$(printf '%b' "$ENDCOLOR_ES")
+
     # %x1f field separators keep subjects containing '|' from breaking the
     # columns; awk re-emits '|' only as the column separator.
     local rows
     rows=$(git --no-pager log --no-walk=unsorted --pretty="%h%x1f%s%x1f%d%x1f%an%x1f%cr" "${page_hashes[@]}" 2>/dev/null | \
-        awk -v hash_c="$YELLOW_ES" -v deco_c="$YELLOW_ES" -v author_c="$BLUE_ES" -v time_c="$GREEN_ES" -v end_c="$ENDCOLOR_ES" '
+        awk -v hash_c="$hash_color" -v deco_c="$deco_color" -v author_c="$author_color" -v time_c="$time_color" -v end_c="$end_color" '
         BEGIN { FS = "\037" }
         {
             subj = $2
@@ -159,6 +168,246 @@ function log_commit_list {
         row_index=$((row_index + 1))
         printf "%2d. %s %s\n" "$index" "$mark" "$line"
     done <<< "$rows"
+}
+
+
+### Function copies a commit hash to the clipboard (prints it as a fallback)
+# $1: commit hash (short or full) - the full hash is what gets copied
+function log_copy_hash {
+    local full_hash
+    full_hash=$(git rev-parse "$1" 2>/dev/null)
+    if [ -z "$full_hash" ]; then
+        full_hash="$1"
+    fi
+
+    local tool=""
+    if command -v pbcopy >/dev/null 2>&1; then
+        tool="pbcopy"
+    elif command -v wl-copy >/dev/null 2>&1; then
+        tool="wl-copy"
+    elif command -v xclip >/dev/null 2>&1; then
+        tool="xclip -selection clipboard"
+    elif command -v clip.exe >/dev/null 2>&1; then
+        tool="clip.exe"
+    fi
+
+    if [ -n "$tool" ]; then
+        # $tool is unquoted on purpose: it can carry arguments (xclip)
+        printf '%s' "$full_hash" | $tool
+        echo -e "${GREEN}✓ Copied ${YELLOW}${full_hash}${ENDCOLOR}${GREEN} to clipboard${ENDCOLOR}"
+    else
+        echo -e "${YELLOW}No clipboard tool found - copy it manually:${ENDCOLOR}"
+        echo "$full_hash"
+    fi
+}
+
+
+### Function shows one commit and offers actions on it
+# $1: commit hash
+function log_commit_actions {
+    local hash="$1"
+    local choice result confirm
+
+    git show "$hash"
+
+    while true; do
+        echo
+        echo -e "${YELLOW}Commit ${hash}${ENDCOLOR} - choose an action:"
+        echo -e "1. Show diff again"
+        echo -e "2. Show stat"
+        echo -e "3. Copy hash"
+        echo -e "4. Revert this commit"
+        echo -e "5. Cherry-pick into the current branch"
+        echo -e "6. Fixup: commit staged changes into it"
+        echo -e "7. Restore a file from this commit"
+        echo -e "0. Back to the commit list"
+        echo
+
+        if ! read -n 1 -s choice; then
+            return
+        fi
+        normalize_key "$choice"
+        choice="$normalized_key"
+
+        case "$choice" in
+            "1")
+                git show "$hash"
+            ;;
+            "2")
+                echo
+                print_changes_stat "$(git --no-pager show --stat --format="" "$hash")"
+            ;;
+            "3")
+                echo
+                log_copy_hash "$hash"
+            ;;
+            "4")
+                echo
+                if [ -n "$(LC_ALL=C git status --porcelain 2>/dev/null)" ]; then
+                    echo -e "${RED}✗ Cannot revert - there are uncommitted changes.${ENDCOLOR}"
+                    echo -e "Commit or stash them first."
+                    continue
+                fi
+                result=$(git revert --no-edit "$hash" 2>&1)
+                check_code $? "$result" "revert"
+                after_commit "revert"
+                return
+            ;;
+            "5")
+                echo
+                perform_cherry_pick "$hash"
+                return
+            ;;
+            "6")
+                echo
+                if [ -z "$(git -c core.quotePath=false diff --name-only --cached 2>/dev/null)" ]; then
+                    echo -e "${RED}✗ No staged changes - stage the files to fix up first.${ENDCOLOR}"
+                    continue
+                fi
+                result=$(git commit --fixup "$hash" 2>&1)
+                check_code $? "$result" "fixup"
+                echo -e "${GREEN}✓ Created $(git log -1 --pretty=%s)${ENDCOLOR}"
+                echo -e "Squash it into place: ${YELLOW}gitb rebase autosquash${ENDCOLOR}"
+                return
+            ;;
+            "7")
+                echo
+                local files=()
+                local file_line
+                while IFS= read -r file_line; do
+                    if [ -n "$file_line" ]; then
+                        files+=("$file_line")
+                    fi
+                done < <(git -c core.quotePath=false --no-pager show --name-only --format="" "$hash" 2>/dev/null)
+                if [ ${#files[@]} -eq 0 ]; then
+                    echo -e "${YELLOW}This commit does not touch any files${ENDCOLOR}"
+                    continue
+                fi
+
+                echo -e "${YELLOW}Select a file to restore from ${hash}:${ENDCOLOR}"
+                local file_index
+                for ((file_index = 0; file_index < ${#files[@]}; file_index++)); do
+                    printf "%2d. %s\n" "$((file_index + 1))" "${files[file_index]}"
+                done
+                echo " 0. Cancel"
+                echo
+
+                if ! read -r -p "Enter file number: " choice; then
+                    echo
+                    continue
+                fi
+                if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt ${#files[@]} ]; then
+                    continue
+                fi
+
+                local file="${files[choice - 1]}"
+                echo -e "${RED}This will overwrite '${file}' in your working tree with its state from ${hash}.${ENDCOLOR}"
+                read -n 1 -s -p "Restore it (y/n)? " confirm
+                echo
+                if is_yes "$confirm"; then
+                    result=$(git checkout "$hash" -- "$file" 2>&1)
+                    check_code $? "$result" "restore"
+                    echo -e "${GREEN}✓ Restored ${file} from ${hash}${ENDCOLOR}"
+                fi
+            ;;
+            ""|"0"|"q")
+                return
+            ;;
+            *)
+                echo -e "${RED}✗ Unknown action: $choice${ENDCOLOR}"
+            ;;
+        esac
+    done
+}
+
+
+### Function runs the interactive commit browser: a paginated numbered list
+### where picking a commit opens it with an action menu
+# $1: title to print above the list
+# $2: kind of selection for log_collect_hashes
+# $3: optional value for the kind
+function gitlog_browse {
+    local title="$1"
+    local kind="$2"
+    local value="$3"
+
+    local page_size
+    page_size=$(get_config_value gitbasher.log-count "20")
+    if ! [[ "$page_size" =~ ^[1-9][0-9]*$ ]]; then
+        page_size=20
+    fi
+
+    local mark=""
+    if [ "$kind" == "head" ] || [ "$kind" == "count" ]; then
+        mark="mark_unpushed"
+    fi
+
+    log_collect_hashes "$kind" "$value"
+    if [ "$log_browse_total" -eq 0 ]; then
+        echo -e "${YELLOW}No commits to show${ENDCOLOR}"
+        return
+    fi
+
+    local total_pages=$(((log_browse_total + page_size - 1) / page_size))
+    local page=0
+    local choice
+
+    while true; do
+        echo -e "${YELLOW}${title}${ENDCOLOR} ${GRAY}|${ENDCOLOR} ${BLUE}${current_branch}${ENDCOLOR} ${GRAY}|${ENDCOLOR} ${log_browse_total} commits"
+        echo
+        log_commit_list "$((page * page_size))" "$page_size" "$mark"
+        echo
+        if [ "$total_pages" -gt 1 ]; then
+            echo -e "${GRAY}Page $((page + 1))/${total_pages}${ENDCOLOR} - enter a commit number to open it, ${BLUE}n${ENDCOLOR} next page, ${BLUE}p${ENDCOLOR} previous page, ${BLUE}0${ENDCOLOR} exit"
+        else
+            echo -e "Enter a commit number to open it, ${BLUE}0${ENDCOLOR} to exit"
+        fi
+
+        if ! read -r -e -p "Commit number: " choice; then
+            echo
+            return
+        fi
+        normalize_key "$choice"
+        choice="$normalized_key"
+
+        case "$choice" in
+            ""|"0"|"00"|"q")
+                return
+            ;;
+            "n")
+                if [ "$((page + 1))" -lt "$total_pages" ]; then
+                    page=$((page + 1))
+                fi
+                echo
+                continue
+            ;;
+            "p")
+                if [ "$page" -gt 0 ]; then
+                    page=$((page - 1))
+                fi
+                echo
+                continue
+            ;;
+        esac
+
+        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "$log_browse_total" ]; then
+            echo
+            log_commit_actions "${log_browse_hashes[choice - 1]}"
+            # An action could have rewritten history (revert, fixup) - refresh
+            log_collect_hashes "$kind" "$value"
+            if [ "$log_browse_total" -eq 0 ]; then
+                return
+            fi
+            total_pages=$(((log_browse_total + page_size - 1) / page_size))
+            if [ "$page" -ge "$total_pages" ]; then
+                page=$((total_pages - 1))
+            fi
+            echo
+        else
+            echo -e "${RED}✗ No commit with number '$choice'${ENDCOLOR}"
+            echo
+        fi
+    done
 }
 
 
@@ -529,7 +778,7 @@ function gitlog_script {
             echo -e "  gitb log [command]"
             echo
             echo -e "${YELLOW}Commands:${ENDCOLOR}"
-            echo -e "  ${GREEN}(no command)${ENDCOLOR}   Show log for current branch"
+            echo -e "  ${GREEN}(no command)${ENDCOLOR}   Interactive commit browser: pick a commit to view and act on it"
             echo -e "  ${GREEN}all, dump${ENDCOLOR}      Print the full log for the current branch"
             echo -e "  ${GREEN}branch, b${ENDCOLOR}      View log from different branches"
             echo -e "  ${GREEN}compare, c${ENDCOLOR}     Compare log between two branches"
@@ -546,7 +795,7 @@ function gitlog_script {
             echo -e "  gitb log search message"
         ;;
         "")
-            gitlog
+            gitlog_browse "GIT LOG" "head"
         ;;
         *)
             wrong_mode "log" "$mode"

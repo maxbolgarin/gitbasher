@@ -1426,6 +1426,22 @@ function handle_ai_commit_generation {
         if [ $? -ne 0 ] || [ -z "$ai_commit_message" ]; then
             echo
             echo -e "${RED}✗ Cannot generate AI commit message.${ENDCOLOR}"
+            echo
+            # Benign fallback prompt: Enter counts as yes, EOF/closed stdin
+            # declines so non-interactive runs keep today's abort behavior.
+            read_key choice "Continue with a manual commit message? (y/n) " || choice="n"
+            echo
+            if is_yes "$choice"; then
+                if [ "$ai_mode" = "subject" ]; then
+                    echo
+                fi
+                echo -e "${YELLOW}Falling back to manual commit message creation...${ENDCOLOR}"
+                if [ "$ai_mode" = "subject" ]; then
+                    echo
+                fi
+                # Staging is intentionally left intact for the manual flow.
+                return
+            fi
             cleanup_on_exit "$git_add"
             exit 1
         fi

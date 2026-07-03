@@ -6,7 +6,7 @@ Quick answers to questions that come up often. For detailed flow docs, see [READ
 
 ### Are my commits sent to a third party when I use `gitb commit ai`?
 
-Only if you pick a hosted provider (OpenAI, OpenRouter). Gitbasher sends the staged diff plus a short system prompt to the provider's API; the provider's data-retention policy then applies. Pick `ollama` to keep everything local — the diff never leaves your machine.
+Only if you pick a hosted provider (OpenAI, OpenRouter). Gitbasher sends the staged diff plus a short system prompt to the provider's API; the provider's data-retention policy then applies. Pick `ollama` to keep everything local — the diff never leaves your machine. The `claude` provider runs through your local Claude Code CLI, so the diff goes to Anthropic under your own Claude account.
 
 ### How do I set this up to be fully local?
 
@@ -61,7 +61,7 @@ In `git config` under the `gitbasher.*` namespace. Per-repo by default (in `.git
 | Key | What it controls |
 |-----|------------------|
 | `gitbasher.scopes` | Conventional-Commit scope list shown by `gitb commit` |
-| `gitbasher.ai-provider` | `openai`, `openrouter`, `ollama` |
+| `gitbasher.ai-provider` | `openai`, `openrouter`, `ollama`, `claude` |
 | `gitbasher.ai-model` | Provider-specific model id |
 | `gitbasher.ai-api-key-<provider>` | Per-provider key |
 | `gitbasher.ai-proxy` | Outbound proxy for AI calls |

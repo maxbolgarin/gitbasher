@@ -235,11 +235,12 @@ function is_valid_model_id {
 }
 
 ### Whether the active provider needs an API key.
-# Local Ollama servers don't authenticate by default.
+# Local Ollama servers don't authenticate by default; the claude provider
+# shells out to the local Claude Code CLI, which carries its own login.
 function ai_provider_requires_api_key {
     case "$(get_ai_provider)" in
-        ollama) return 1 ;;
-        *)      return 0 ;;
+        ollama|claude) return 1 ;;
+        *)             return 0 ;;
     esac
 }
 
@@ -293,6 +294,15 @@ readonly AI_DEFAULT_MODEL_SUBJECT_OLLAMA="qwen3:8b"
 readonly AI_DEFAULT_MODEL_FULL_OLLAMA="qwen3:8b"
 readonly AI_DEFAULT_MODEL_GROUPING_OLLAMA="qwen3:8b"
 
+# Claude Code CLI per-task defaults. The CLI resolves the alias slugs
+# (haiku/sonnet/opus) to the current model generation, so these never go
+# stale: haiku for the short interactive tasks, sonnet where prose quality
+# and strict structured output matter. Full ids (claude-haiku-4-5) work too.
+readonly AI_DEFAULT_MODEL_SIMPLE_CLAUDE="haiku"
+readonly AI_DEFAULT_MODEL_SUBJECT_CLAUDE="haiku"
+readonly AI_DEFAULT_MODEL_FULL_CLAUDE="sonnet"
+readonly AI_DEFAULT_MODEL_GROUPING_CLAUDE="sonnet"
+
 ### Resolve the model to use for a specific task.
 # Resolution order:
 #   1. gitbasher.ai-model-<task>  (per-task override, e.g. gitbasher.ai-model-simple)
@@ -333,6 +343,15 @@ function get_ai_model_for {
                 full)     echo "$AI_DEFAULT_MODEL_FULL_OLLAMA" ;;
                 grouping) echo "$AI_DEFAULT_MODEL_GROUPING_OLLAMA" ;;
                 *)        echo "$AI_DEFAULT_MODEL_SIMPLE_OLLAMA" ;;
+            esac
+            ;;
+        claude)
+            case "$task" in
+                simple)   echo "$AI_DEFAULT_MODEL_SIMPLE_CLAUDE" ;;
+                subject)  echo "$AI_DEFAULT_MODEL_SUBJECT_CLAUDE" ;;
+                full)     echo "$AI_DEFAULT_MODEL_FULL_CLAUDE" ;;
+                grouping) echo "$AI_DEFAULT_MODEL_GROUPING_CLAUDE" ;;
+                *)        echo "$AI_DEFAULT_MODEL_SIMPLE_CLAUDE" ;;
             esac
             ;;
         *)
@@ -803,6 +822,18 @@ function ai_smoke_check {
         return 0
     fi
 
+    if [ "$provider" = "claude" ]; then
+        if ! command -v claude >/dev/null 2>&1; then
+            echo -e "${RED}✗ claude CLI not found on PATH.${ENDCOLOR}" >&2
+            echo -e "${CYAN}💡 Install it with ${BLUE}npm install -g @anthropic-ai/claude-code${ENDCOLOR}${CYAN}, then sign in once.${ENDCOLOR}" >&2
+            return 1
+        fi
+        local claude_version
+        claude_version=$(claude --version 2>/dev/null | head -1)
+        echo -e "${GREEN}✓ claude CLI available${claude_version:+ (}${claude_version}${claude_version:+)}${ENDCOLOR}"
+        return 0
+    fi
+
     # Cloud providers: validate the key against the /models endpoint.
     local api_key
     api_key=$(get_ai_api_key)
@@ -873,18 +904,58 @@ function _ai_response_has_error {
 
 ### Request timeout in seconds, configurable via gitbasher.ai-timeout.
 # Local Ollama models generate slowly on laptop hardware (a squash grouping
-# can take minutes), so their default is much higher than cloud providers'.
+# can take minutes) and the claude CLI carries agent-startup overhead on top
+# of generation, so their defaults are much higher than cloud providers'.
 function get_ai_timeout {
     local t=$(get_config_value gitbasher.ai-timeout "")
     if [[ "$t" =~ ^[0-9]+$ ]] && [ "$t" -gt 0 ]; then
         printf '%s\n' "$t"
         return
     fi
-    if [ "$(get_ai_provider)" = "ollama" ]; then
-        printf '300\n'
+    case "$(get_ai_provider)" in
+        ollama|claude) printf '300\n' ;;
+        *)             printf '60\n' ;;
+    esac
+}
+
+
+### Run one prompt through the local Claude Code CLI (claude -p).
+# The prompt is piped via stdin (system + blank line + user): payloads reach
+# ~25KB and argv would risk E2BIG. perl's alarm survives exec, so it acts as
+# the timeout wrapper (macOS has no `timeout` command); degrades to no
+# wrapper when perl is missing. rc 142 = SIGALRM = timed out.
+# $1: system prompt, $2: user prompt, $3: model id or alias (haiku/sonnet/opus)
+# Echoes the raw model text; returns non-zero on failure.
+function _call_claude_cli {
+    local system_prompt="$1"
+    local user_prompt="$2"
+    local model="$3"
+    local timeout_s output rc
+
+    timeout_s=$(get_ai_timeout)
+
+    if command -v perl >/dev/null 2>&1; then
+        output=$(printf '%s\n\n%s' "$system_prompt" "$user_prompt" \
+            | perl -e 'alarm shift; exec @ARGV' "$timeout_s" \
+                claude -p --model "$model" --output-format text 2>/dev/null)
+        rc=$?
     else
-        printf '60\n'
+        output=$(printf '%s\n\n%s' "$system_prompt" "$user_prompt" \
+            | claude -p --model "$model" --output-format text 2>/dev/null)
+        rc=$?
     fi
+
+    if [ "$rc" -eq 142 ]; then
+        echo -e "${RED}✗ claude timed out after ${timeout_s}s.${ENDCOLOR}" >&2
+        echo -e "${YELLOW}Raise the limit with:${ENDCOLOR} ${GREEN}git config gitbasher.ai-timeout <seconds>${ENDCOLOR}" >&2
+        return 1
+    fi
+    if [ "$rc" -ne 0 ] || [ -z "$output" ]; then
+        echo -e "${RED}✗ claude CLI failed (exit ${rc}).${ENDCOLOR}" >&2
+        echo -e "${CYAN}💡 Check it works: ${BLUE}echo hi | claude -p${ENDCOLOR}${CYAN} — you may need to sign in first.${ENDCOLOR}" >&2
+        return 1
+    fi
+    printf '%s\n' "$output"
 }
 
 
@@ -919,6 +990,21 @@ function call_ai_api {
         echo -e "${YELLOW}Configure it with:${ENDCOLOR} ${GREEN}gitb cfg ai${ENDCOLOR}" >&2
         clear_sensitive_vars
         return 1
+    fi
+
+    # Local Claude Code CLI transport: no HTTP payload, no curl. $5
+    # (response_format) is intentionally ignored — the squash prompt already
+    # demands bare JSON and squash_parse_ai_plan extracts and validates it.
+    if [ "$provider" = "claude" ]; then
+        local claude_out
+        claude_out=$(_call_claude_cli "$system_prompt" "$user_prompt" "$model")
+        if [ $? -ne 0 ] || [ -z "$claude_out" ]; then
+            clear_sensitive_vars
+            return 1
+        fi
+        clear_sensitive_vars
+        echo "$claude_out"
+        return 0
     fi
 
     # Build OpenAI-style payload. The output-cap field name diverges by provider:
@@ -1234,8 +1320,18 @@ function call_ai_api {
 ### Function to check if AI tools are available
 # Returns: 0 if available, 1 if not
 function check_ai_available {
-    # Check if curl is available
-    if ! command -v curl >/dev/null 2>&1; then
+    local active_provider
+    active_provider=$(get_ai_provider)
+
+    # The claude provider shells out to the local CLI instead of curl.
+    if [ "$active_provider" = "claude" ]; then
+        if ! command -v claude >/dev/null 2>&1; then
+            echo -e "${RED}✗ claude CLI not found on PATH.${ENDCOLOR}" >&2
+            echo -e "${YELLOW}Install it with:${ENDCOLOR} ${GREEN}npm install -g @anthropic-ai/claude-code${ENDCOLOR}" >&2
+            echo -e "${YELLOW}Or switch provider with:${ENDCOLOR} ${GREEN}gitb cfg provider${ENDCOLOR}" >&2
+            return 1
+        fi
+    elif ! command -v curl >/dev/null 2>&1; then
         echo -e "${RED}curl is required for AI functionality but not installed${ENDCOLOR}" >&2
         return 1
     fi
@@ -1243,14 +1339,15 @@ function check_ai_available {
     # jq is required: the sed-based fallbacks cannot parse pretty-printed
     # responses and truncate content at the first escaped quote, so AI
     # features without jq fail in confusing ways mid-flow. Fail early with
-    # an install hint instead.
+    # an install hint instead. (The squash plan parser needs it for every
+    # provider, including the CLI one.)
     if ! command -v jq >/dev/null 2>&1; then
         echo -e "${RED}✗ jq is required for AI features but not installed.${ENDCOLOR}" >&2
         echo -e "${YELLOW}Install it with:${ENDCOLOR} ${GREEN}brew install jq${ENDCOLOR} (macOS) or ${GREEN}apt install jq${ENDCOLOR} (Linux)" >&2
         return 1
     fi
 
-    # Local providers (Ollama) don't need a key, so skip the key check for them.
+    # Local providers (Ollama, claude CLI) don't need a key, so skip the key check for them.
     if ai_provider_requires_api_key; then
         local api_key=$(get_ai_api_key)
         if [ -z "$api_key" ]; then

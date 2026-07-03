@@ -201,7 +201,7 @@ function configure_ai_key {
     echo
 
     # Local providers don't take a key — short-circuit instead of prompting for nothing.
-    if [ "$provider" = "ollama" ]; then
+    if ! ai_provider_requires_api_key; then
         echo -e "${YELLOW}Provider '${provider}' does not require an API key.${ENDCOLOR}"
         echo -e "Switch providers with ${GREEN}gitb cfg provider${ENDCOLOR} to set one."
         exit
@@ -329,10 +329,11 @@ function configure_ai_provider {
     echo -e "  1. ${BLUE}openrouter${ENDCOLOR}  Aggregator with hundreds of models — needs an API key"
     echo -e "  2. ${BLUE}openai${ENDCOLOR}      OpenAI direct (GPT-5 family) — needs an API key"
     echo -e "  3. ${BLUE}ollama${ENDCOLOR}      Local or remote models (you'll set the host) — no API key required"
+    echo -e "  4. ${BLUE}claude${ENDCOLOR}      Local Claude Code CLI (claude -p) — uses your Claude account, no API key"
     echo
     echo -e "Press Enter to keep the current provider, or enter 0 to reset to default (${AI_DEFAULT_PROVIDER})"
 
-    read_editable_input choice "Choice (1-3): "
+    read_editable_input choice "Choice (1-4): "
 
     if [ "$choice" == "" ]; then
         exit
@@ -352,6 +353,7 @@ function configure_ai_provider {
         1) new_provider="openrouter" ;;
         2) new_provider="openai" ;;
         3) new_provider="ollama" ;;
+        4) new_provider="claude" ;;
         *)
             echo -e "${RED}✗ Invalid choice.${ENDCOLOR}" >&2
             exit 1
@@ -399,6 +401,16 @@ function configure_ai_provider {
             echo -e "${CYAN}💡 Pick a model with ${GREEN}gitb cfg model${CYAN}.${ENDCOLOR}"
             echo
             ai_smoke_check || true
+            ;;
+        claude)
+            echo
+            if command -v claude >/dev/null 2>&1; then
+                ai_smoke_check || true
+            else
+                echo -e "${RED}✗ claude CLI not found on PATH.${ENDCOLOR}"
+                echo -e "${CYAN}💡 Install it with ${BLUE}npm install -g @anthropic-ai/claude-code${CYAN}, then sign in once.${ENDCOLOR}"
+            fi
+            echo -e "${CYAN}💡 Pick a model with ${GREEN}gitb cfg model${CYAN} (haiku, sonnet, opus).${ENDCOLOR}"
             ;;
         *)
             # Cloud provider: if a key is already configured for it, validate now.
@@ -479,6 +491,12 @@ function configure_ai_model {
             echo -e "  • ${BLUE}llama3.3:8b${ENDCOLOR} - Solid general-purpose alternative"
             echo -e "  • ${BLUE}qwen2.5-coder:7b${ENDCOLOR} - Code-focused; good when most diffs are code"
             echo -e "  Run ${BLUE}ollama list${ENDCOLOR} to see what you have pulled locally."
+            ;;
+        claude)
+            echo -e "  • ${BLUE}haiku${ENDCOLOR} - Fastest and cheapest; ideal for one-line messages"
+            echo -e "  • ${BLUE}sonnet${ENDCOLOR} - Best balance for full-body prose and grouping"
+            echo -e "  • ${BLUE}opus${ENDCOLOR} - Strongest, for the hardest cases"
+            echo -e "  Aliases resolve to the current model generation; full ids (${BLUE}claude-haiku-4-5${ENDCOLOR}) also work."
             ;;
         *)
             echo -e "  • ${BLUE}openrouter/auto${ENDCOLOR} - Auto-select best available model"
@@ -1222,7 +1240,7 @@ function config_script {
         print_help_row $PAD "ticket"    "ti, t, jira"       "Set the ticket prefix used in commits and branches"
         print_help_row $PAD "scopes"    "sc"                "Set the list of suggested commit scopes"
         print_help_row $PAD "ai"        "llm, key"          "Set the AI API key"
-        print_help_row $PAD "provider"  "prov"              "Choose the AI provider (openrouter, openai, ollama)"
+        print_help_row $PAD "provider"  "prov"              "Choose the AI provider (openrouter, openai, ollama, claude)"
         print_help_row $PAD "model"     "m"                 "Set the AI model override"
         print_help_row $PAD "proxy"     "prx, p"            "Set an HTTP/SOCKS proxy for AI requests"
         print_help_row $PAD "history"   "hist"              "Set how many recent commits to include in AI prompts"

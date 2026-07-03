@@ -216,19 +216,20 @@ Drop in an API key once (or run a local model with no key at all), then let an L
 
 ### Providers
 
-gitbasher supports three providers behind the same OpenAI-style chat-completions API. Default is `openrouter` — existing setups keep working unchanged.
+gitbasher supports four providers. Default is `openrouter` — existing setups keep working unchanged.
 
 | Provider | Best for | Needs key? |
 |----------|----------|-----------|
 | `openrouter` (default) | Trying many models behind one key (Gemini, Claude, GPT, DeepSeek…) | Yes — [openrouter.ai/keys](https://openrouter.ai/keys) |
 | `openai` | Direct access to GPT-5.4 family at OpenAI's own pricing | Yes — [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
 | `ollama` | **Fully local, fully private** — no key, no network, runs on your machine | No |
+| `claude` | You already use [Claude Code](https://claude.com/claude-code) — reuses the local `claude` CLI and its login, billed to your Claude account | No |
 
 ### Setup
 
 ```bash
 # 1. Pick a provider (skip to use the OpenRouter default)
-gitb cfg provider     # interactive — choose openrouter, openai, or ollama
+gitb cfg provider     # interactive — choose openrouter, openai, ollama, or claude
 
 # 2. For openrouter / openai: paste your key (local repo or global)
 gitb cfg ai
@@ -236,6 +237,9 @@ gitb cfg ai
 #    For ollama: just make sure the daemon is running and the default model is pulled
 ollama serve &
 ollama pull qwen3:8b
+
+#    For claude: just have the Claude Code CLI installed and signed in
+npm install -g @anthropic-ai/claude-code
 
 # 3. Optional: HTTP proxy (for restricted regions, openrouter/openai only)
 gitb cfg proxy
@@ -275,6 +279,15 @@ Each task uses a model tuned for speed/cost/quality, picked per provider. Defaul
 | All tasks | `qwen3:8b` | Best small instruction-follower among 7/8B models; most stable structured output (rarely drops fields in TSV); ~5 GB on disk, ~25 tok/s on a consumer laptop with GPU |
 
 Other strong local picks: `llama3.3:8b` (general-purpose), `qwen2.5-coder:7b` (code-heavy diffs).
+
+**Claude Code CLI** — local `claude -p`
+
+| Task | Default model | Why |
+|------|---------------|-----|
+| `simple` / `subject` | `haiku` | Fastest and cheapest for one-line output |
+| `full` / `grouping` | `sonnet` | Better prose and strict structured output |
+
+The alias slugs (`haiku`, `sonnet`, `opus`) always resolve to the current model generation; full ids like `claude-haiku-4-5` work too.
 
 Override per task or globally:
 ```bash
@@ -808,7 +821,7 @@ gitb origin remove                               # delete the remote
 | `ticket` | `ti` `t` `jira` | Ticket prefix for commits/branches |
 | `scopes` | `sc` `s` | Common scopes |
 | `ai` | `llm` `key` | AI API key |
-| `provider` | `prov` | AI provider (openrouter, openai, ollama) |
+| `provider` | `prov` | AI provider (openrouter, openai, ollama, claude) |
 | `model` | `m` | Default AI model |
 | `proxy` | `prx` `p` | HTTP proxy for AI calls |
 | `history` | `hist` | How many recent commits to include in AI prompts |
@@ -889,12 +902,12 @@ Overview-first diffs built for the gitbasher workflow — no flag memorization. 
 | `gitbasher.ticket` | `gitb cfg ticket` | Ticket prefix (`PROJ-`) |
 | `gitbasher.scopes` | `gitb cfg scopes` | Suggested commit scopes |
 | `gitbasher.ai-api-key-<provider>` | `gitb cfg ai` | Per-provider AI API key (or `GITB_AI_API_KEY_<PROVIDER>` env); legacy `gitbasher.ai-api-key` is read as a fallback |
-| `gitbasher.ai-provider` | `gitb cfg provider` | `openrouter` (default), `openai`, or `ollama` |
+| `gitbasher.ai-provider` | `gitb cfg provider` | `openrouter` (default), `openai`, `ollama`, or `claude` |
 | `gitbasher.ai-base-url` | `git config` | Custom OpenAI-compatible endpoint (LiteLLM, vLLM, remote Ollama) |
 | `gitbasher.ai-model[-task]` | `gitb cfg model` | AI model overrides (per provider) |
 | `gitbasher.ai-proxy` | `gitb cfg proxy` | HTTP proxy for AI calls |
 | `gitbasher.ai-ollama-host` | `git config gitbasher.ai-ollama-host <url>` | Ollama server URL (default `http://localhost:11434`) |
-| `gitbasher.ai-timeout` | `git config gitbasher.ai-timeout <seconds>` | AI request timeout in seconds (default `60`, `300` for ollama) |
+| `gitbasher.ai-timeout` | `git config gitbasher.ai-timeout <seconds>` | AI request timeout in seconds (default `60`, `300` for ollama/claude) |
 | `gitbasher.ai-diff-limit` | `gitb cfg diff` | Diff lines sent to AI (default `300`) |
 | `gitbasher.ai-diff-max-chars` | `gitb cfg diff` | Character cap on the diff sent to AI (default `20000`) |
 | `gitbasher.ai-commit-history-limit` | `gitb cfg history` | Recent commits included in AI prompts (default `10`) |
@@ -1001,6 +1014,7 @@ If `gitb commit ai` hangs, returns `connection refused`, or times out:
 - **Network reachability** — test the provider directly: `curl -fsSL https://api.openai.com/v1/models -H "Authorization: Bearer $OPENAI_API_KEY"` (or the equivalent for OpenRouter/Ollama). If that fails, gitbasher will too.
 - **Corporate proxy / restricted region** — `gitb cfg proxy` accepts `host:port` or `protocol://host:port`. Verify with `curl -x "$proxy" https://api.openai.com`.
 - **Local Ollama** — confirm the daemon is running (`curl http://localhost:11434/api/tags`). The default model must be pulled first (`ollama pull qwen3:8b`).
+- **Claude Code CLI** — confirm it responds (`echo hi | claude -p`); you may need to sign in first. Install with `npm install -g @anthropic-ai/claude-code`.
 - **Stale or rotated key** — `gitb cfg ai` re-prompts; prefer the env-var path (`export GITB_AI_API_KEY_OPENAI=...`) over `git config` so a leaked repo doesn't carry the secret.
 </details>
 

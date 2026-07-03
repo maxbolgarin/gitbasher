@@ -569,6 +569,165 @@ function last_ref {
 }
 
 
+### Function resolves an AI summary argument into a git revision range
+# $1: optional argument:
+#     * empty or "tag" - commits since the last tag (entire history if none)
+#     * a number - the last N commits
+#     * "unpushed" - commits missing from the upstream
+#     * a..b range or a single ref (meaning <ref>..HEAD)
+# Returns:
+#     log_ai_range - the resolved revision range
+#     log_ai_range_label - human-readable description of the range
+function log_resolve_ai_range {
+    local arg="$1"
+    log_ai_range=""
+    log_ai_range_label=""
+
+    if [ -z "$arg" ] || [ "$arg" == "tag" ]; then
+        local last_tag
+        last_tag=$(git describe --tags --abbrev=0 HEAD 2>/dev/null)
+        if [ -n "$last_tag" ]; then
+            log_ai_range="${last_tag}..HEAD"
+            log_ai_range_label="since tag $last_tag"
+        else
+            log_ai_range="HEAD"
+            log_ai_range_label="entire history (no tags found)"
+        fi
+        return 0
+    fi
+
+    if [[ "$arg" =~ ^[0-9]+$ ]] && [ "$arg" -gt 0 ]; then
+        if git rev-parse --verify --quiet "HEAD~$arg" >/dev/null 2>&1; then
+            log_ai_range="HEAD~$arg..HEAD"
+        else
+            log_ai_range="HEAD"
+        fi
+        log_ai_range_label="last $arg commits"
+        return 0
+    fi
+
+    if [ "$arg" == "unpushed" ]; then
+        if ! git rev-parse --verify --quiet "@{u}" >/dev/null 2>&1; then
+            echo -e "${RED}✗ No upstream configured for this branch${ENDCOLOR}"
+            return 1
+        fi
+        log_ai_range="@{u}..HEAD"
+        log_ai_range_label="unpushed commits"
+        return 0
+    fi
+
+    if git rev-list -n 1 "$arg" -- >/dev/null 2>&1; then
+        if [[ "$arg" == *".."* ]]; then
+            log_ai_range="$arg"
+            log_ai_range_label="range $arg"
+        else
+            log_ai_range="${arg}..HEAD"
+            log_ai_range_label="since $arg"
+        fi
+        return 0
+    fi
+
+    echo -e "${RED}✗ Cannot resolve '$arg' as a commit range${ENDCOLOR}"
+    return 1
+}
+
+
+### Function summarizes a range of commits in plain text using the AI engine
+# $1: optional range argument (see log_resolve_ai_range); prompts when empty
+function gitlog_ai {
+    local arg="$1"
+
+    if [ -z "$arg" ]; then
+        echo -e "${YELLOW}AI LOG SUMMARY${ENDCOLOR}"
+        echo
+        echo -e "${YELLOW}What should be summarized?${ENDCOLOR}"
+        echo "1. Commits since the last tag (default)"
+        echo "2. Unpushed commits"
+        echo "3. Last N commits"
+        echo "4. Commits in one branch but not in another"
+        echo "0. Exit"
+        echo
+
+        local menu_choice
+        read -n 1 -s menu_choice
+        normalize_key "$menu_choice"
+        menu_choice="$normalized_key"
+
+        case "$menu_choice" in
+            ""|"1")
+                arg=""
+            ;;
+            "2")
+                arg="unpushed"
+            ;;
+            "3")
+                local n
+                read_editable_input n "How many commits? "
+                if ! [[ "$n" =~ ^[1-9][0-9]*$ ]]; then
+                    echo -e "${RED}✗ Not a valid number of commits${ENDCOLOR}"
+                    return
+                fi
+                arg="$n"
+            ;;
+            "4")
+                echo -e "${YELLOW}Select the branch with the commits to summarize:${ENDCOLOR}"
+                choose_branch
+                if [ -n "$to_exit" ] || [ -z "$branch_name" ]; then
+                    return
+                fi
+                local first_branch="$branch_name"
+                echo
+                echo -e "${YELLOW}Select the branch to compare against:${ENDCOLOR}"
+                choose_branch
+                if [ -n "$to_exit" ] || [ -z "$branch_name" ]; then
+                    return
+                fi
+                arg="${branch_name}..${first_branch}"
+            ;;
+            "0")
+                return
+            ;;
+            *)
+                echo -e "${RED}✗ Invalid choice${ENDCOLOR}"
+                return
+            ;;
+        esac
+        echo
+    fi
+
+    if ! log_resolve_ai_range "$arg"; then
+        return 1
+    fi
+
+    local commits_summary
+    commits_summary=$(get_commit_messages_for_ai_range "$log_ai_range")
+    if [ -z "$commits_summary" ]; then
+        echo -e "${GREEN}No commits to summarize (${log_ai_range_label})${ENDCOLOR}"
+        return
+    fi
+
+    # check_ai_available prints its own "configure with gitb cfg ai" hint.
+    if ! check_ai_available; then
+        return 1
+    fi
+
+    echo -e "${YELLOW}AI LOG SUMMARY${ENDCOLOR} ${GRAY}|${ENDCOLOR} ${BLUE}${log_ai_range_label}${ENDCOLOR}"
+    echo
+
+    local system_prompt="You are a senior engineer summarizing a series of git commits for a teammate. You will receive commit subjects prefixed with their hashes, newest first, and possibly an overall change-size line. Group related commits into themes, state what changed and why it matters, and call out anything that looks risky or breaking. This is a commit history - never call it a 'PR', 'pull request' or 'release notes'. Write for a plain-text terminal: do NOT use Markdown (no '#' headings, no '*' or '**' for bold or bullets, no backticks, no tables); put short section labels on their own line ending with a colon, and start each list item on its own line with '- '. Keep it concise."
+
+    local response
+    response=$(call_ai_api "$system_prompt" "$commits_summary" 2>/dev/null)
+    if [ -z "$response" ]; then
+        echo -e "${RED}✗ Failed to generate an AI summary${ENDCOLOR}"
+        echo -e "Check your AI configuration with ${GREEN}gitb cfg ai${ENDCOLOR}."
+        return 1
+    fi
+
+    print_ai_summary "$response"
+}
+
+
 ### Function to search git log with various criteria
 function gitlog_search {
     local search_mode="$1"
@@ -766,7 +925,7 @@ function gitlog_search {
                 ;;
             esac
         ;;
-        "help"|"help")
+        "help")
             echo -e "${YELLOW}gitb log search${ENDCOLOR} - Search git log with various criteria"
             echo
             echo -e "${YELLOW}Usage:${ENDCOLOR}"
@@ -813,6 +972,9 @@ function gitlog_script {
         "all"|"dump")
             gitlog "$2"
         ;;
+        "ai")
+            gitlog_ai "$2"
+        ;;
         "help"|"h")
             echo -e "${YELLOW}gitb log${ENDCOLOR} - Git log utilities"
             echo
@@ -825,6 +987,7 @@ function gitlog_script {
             echo -e "  ${GREEN}branch, b${ENDCOLOR}      View log from different branches"
             echo -e "  ${GREEN}compare, c${ENDCOLOR}     Compare log between two branches"
             echo -e "  ${GREEN}search, s${ENDCOLOR}      Search git log with various criteria"
+            echo -e "  ${GREEN}ai${ENDCOLOR}             Summarize a range of commits with AI (since last tag, unpushed, ...)"
             echo -e "  ${GREEN}help, h${ENDCOLOR}        Show this help"
             echo
             echo -e "${YELLOW}Anything else is resolved automatically:${ENDCOLOR}"

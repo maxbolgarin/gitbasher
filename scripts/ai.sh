@@ -539,6 +539,44 @@ function get_recent_commit_messages_for_ai {
     echo "$recent_commits"
 }
 
+### Function to get commit messages from a revision range for AI context
+# $1: git revision range (e.g. v1.0..HEAD, main..feature, HEAD)
+# $2: optional maximum number of commit lines (default: 200)
+# Returns: hash-prefixed commit subjects, newest first, plus a change-size line
+function get_commit_messages_for_ai_range {
+    local range="$1"
+    local max_lines="${2:-200}"
+    local max_chars=6000
+
+    local commits
+    commits=$(git --no-pager log --no-merges --pretty="%h %s" "$range" 2>/dev/null | head -n "$max_lines")
+    if [ -z "$commits" ]; then
+        return
+    fi
+
+    local total
+    total=$(git --no-pager rev-list --count --no-merges "$range" 2>/dev/null)
+    if [ -n "$total" ] && [ "$total" -gt "$max_lines" ] 2>/dev/null; then
+        commits="${commits}
+... and $((total - max_lines)) more commits"
+    fi
+
+    commits=$(echo "$commits" | head -c "$max_chars")
+
+    # A shortstat line gives the model a sense of scale; only meaningful for
+    # a..b ranges (plain HEAD would diff the working tree instead)
+    if [[ "$range" == *".."* ]]; then
+        local stat
+        stat=$(git --no-pager diff --shortstat "$range" 2>/dev/null)
+        if [ -n "$stat" ]; then
+            commits="${commits}
+Overall change size:${stat}"
+        fi
+    fi
+
+    echo "$commits"
+}
+
 ### Function to validate and sanitize proxy URL to prevent command injection
 # $1: proxy URL to validate
 # Returns: 0 if valid, 1 if invalid

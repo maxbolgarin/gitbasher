@@ -12,6 +12,7 @@ load setup_suite
 setup() {
     setup_test_repo
     source_gitbasher_lite
+    source "${GITBASHER_ROOT}/scripts/ai.sh"
     source "${GITBASHER_ROOT}/scripts/gitlog.sh"
     cd "$TEST_REPO"
 }
@@ -374,6 +375,97 @@ teardown() {
     run gitlog_search hash <<< "$short_hash"
     assert_success
     assert_output_contains "findable by hash"
+}
+
+
+### AI summary
+
+@test "log: ai mode is gated when AI is unavailable" {
+    make_test_commit one.txt "feat: one"
+    check_ai_available() { return 1; }
+    call_ai_api() { echo "AI_WAS_CALLED"; }
+    run gitlog_ai 5
+    if [[ "$output" == *"AI_WAS_CALLED"* ]]; then
+        echo "AI must not be called when unavailable: $output"
+        return 1
+    fi
+}
+
+@test "log: ai default summarizes commits since the last tag" {
+    git tag v1.0
+    make_test_commit one.txt "feat: after tag one"
+    make_test_commit two.txt "feat: after tag two"
+    check_ai_available() { return 0; }
+    call_ai_api() { printf '%s' "$2" > "$TEST_REPO/prompt.txt"; echo "AI SUMMARY OUTPUT"; }
+    run gitlog_ai <<< ""
+    assert_success
+    assert_output_contains "AI SUMMARY OUTPUT"
+    assert_output_contains "v1.0"
+    local prompt
+    prompt=$(< "$TEST_REPO/prompt.txt")
+    [[ "$prompt" == *"after tag one"* ]]
+    [[ "$prompt" == *"after tag two"* ]]
+    [[ "$prompt" != *"Initial commit"* ]]
+}
+
+@test "log: ai numeric arg summarizes only the last N commits" {
+    make_test_commit one.txt "feat: older change"
+    make_test_commit two.txt "feat: newest change"
+    check_ai_available() { return 0; }
+    call_ai_api() { printf '%s' "$2" > "$TEST_REPO/prompt.txt"; echo "SUMMARY"; }
+    run gitlog_ai 1
+    assert_success
+    local prompt
+    prompt=$(< "$TEST_REPO/prompt.txt")
+    [[ "$prompt" == *"newest change"* ]]
+    [[ "$prompt" != *"older change"* ]]
+}
+
+@test "log: ai range arg summarizes exactly that range" {
+    create_test_branch feature
+    make_test_commit feat.txt "feat: only on feature"
+    git checkout -q main
+    check_ai_available() { return 0; }
+    call_ai_api() { printf '%s' "$2" > "$TEST_REPO/prompt.txt"; echo "SUMMARY"; }
+    run gitlog_ai main..feature
+    assert_success
+    local prompt
+    prompt=$(< "$TEST_REPO/prompt.txt")
+    [[ "$prompt" == *"only on feature"* ]]
+    [[ "$prompt" != *"Initial commit"* ]]
+}
+
+@test "log: ai unpushed arg summarizes commits missing from upstream" {
+    setup_remote_repo
+    make_test_commit local.txt "feat: not pushed"
+    check_ai_available() { return 0; }
+    call_ai_api() { printf '%s' "$2" > "$TEST_REPO/prompt.txt"; echo "SUMMARY"; }
+    run gitlog_ai unpushed
+    assert_success
+    local prompt
+    prompt=$(< "$TEST_REPO/prompt.txt")
+    [[ "$prompt" == *"not pushed"* ]]
+    [[ "$prompt" != *"Initial commit"* ]]
+}
+
+@test "log: ai rejects an unresolvable range" {
+    run gitlog_ai "bogus..nope"
+    assert_output_contains "Cannot resolve"
+}
+
+@test "log: ai range builder caps the commit line count" {
+    make_test_commit one.txt "feat: one"
+    make_test_commit two.txt "feat: two"
+    make_test_commit three.txt "feat: three"
+    run get_commit_messages_for_ai_range HEAD 2
+    assert_success
+    assert_output_contains "feat: three"
+    assert_output_contains "feat: two"
+    assert_output_contains "more commits"
+    if [[ "$output" == *"feat: one"* ]]; then
+        echo "Line cap was not applied: $output"
+        return 1
+    fi
 }
 
 

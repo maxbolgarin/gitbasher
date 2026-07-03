@@ -8,3 +8,7 @@ CLAUDE.md
 site/node_modules/
 site/dist/
 site/.astro/
+
+# Release tooling (semantic-release) artifacts at the repo root
+/node_modules/
+/package-lock.json

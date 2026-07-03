@@ -35,7 +35,7 @@ with_timeout() {
     [ "$status" -eq 0 ]
 }
 
-@test "confirm_destructive: Russian-layout н confirms" {
+@test "confirm_destructive: Russian-layout yes key confirms" {
     run confirm_destructive <<< "н"
     [ "$status" -eq 0 ]
 }

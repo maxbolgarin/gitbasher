@@ -712,6 +712,12 @@ function read_key {
             # Got a single byte - check if it's a UTF-8 leading byte that needs more bytes
             local _ord
             _ord=$(LC_CTYPE=C printf '%d' "'$_key" 2>/dev/null) || _ord=0
+            # bash 3.2 prints high bytes as signed chars (0xD0 -> -48), so
+            # the UTF-8 lead-byte ranges below never matched and multi-byte
+            # keys (Russian layout) collapsed to their first byte.
+            if [ "$_ord" -lt 0 ]; then
+                _ord=$((_ord + 256))
+            fi
 
             local _extra=0
             if (( _ord >= 192 && _ord < 224 )); then

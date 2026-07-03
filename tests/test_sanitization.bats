@@ -97,30 +97,32 @@ setup() {
     [ "$sanitized_file_path" = "*.sh" ]
 }
 
-@test "sanitize_file_path: removes null bytes" {
-    # Note: bash removes null bytes during command substitution, so we can't test directly
-    # Instead, we verify the function handles the input correctly and produces valid output
-    # The function uses 'tr -d \000' which removes null bytes
+@test "sanitize_file_path: accepts a clean filename verbatim" {
     local test_input="filename"
     sanitize_file_path "$test_input"
     [ $? -eq 0 ]
     [ "$sanitized_file_path" = "$test_input" ]
-    # Verify function doesn't crash with control characters (which includes null handling)
-    sanitize_file_path "$(printf 'file\001name')"
-    [ $? -eq 0 ]
-    [ -n "$sanitized_file_path" ]
 }
 
-@test "sanitize_file_path: removes ../ sequences" {
-    sanitize_file_path "../../etc/passwd"
-    [ $? -eq 0 ]
-    [[ "$sanitized_file_path" != *".."* ]]
+@test "sanitize_file_path: rejects control bytes instead of stripping them" {
+    ! sanitize_file_path "$(printf 'file\001name')"
+    [ -z "$sanitized_file_path" ]
 }
 
-@test "sanitize_file_path: removes rm commands" {
-    sanitize_file_path "file.txt; rm -rf /"
+@test "sanitize_file_path: keeps ../ verbatim (legal relative path)" {
+    # ../sibling layouts are normal for worktrees and clone destinations;
+    # silently deleting the ../ used to relocate them INSIDE the repo.
+    sanitize_file_path "../sibling-dir"
     [ $? -eq 0 ]
-    [[ "$sanitized_file_path" != *"rm"* ]]
+    [ "$sanitized_file_path" = "../sibling-dir" ]
+}
+
+@test "sanitize_file_path: keeps names containing rm verbatim" {
+    # Values are passed as git ARGUMENTS, never through a shell — deleting
+    # 'rm' tokens mangled real names (rmdir.c became dir.c).
+    sanitize_file_path "rmdir.c"
+    [ $? -eq 0 ]
+    [ "$sanitized_file_path" = "rmdir.c" ]
 }
 
 @test "sanitize_file_path: rejects empty input" {

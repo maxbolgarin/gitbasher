@@ -201,7 +201,10 @@ function status_hint {
     behind="${behind:-0}"
     ahead="${ahead:-0}"
 
-    if [ "$ahead" != "0" ]; then
+    if [ "$ahead" != "0" ] && [ "$behind" != "0" ]; then
+        # Diverged: a plain push would be rejected — integrate first
+        echo -e "${BLUE}→ diverged (↑$ahead ↓$behind) — run ${GREEN}gitb pull${BLUE} first${ENDCOLOR}"
+    elif [ "$ahead" != "0" ]; then
         echo -e "${BLUE}→ ahead $ahead — run ${GREEN}gitb push${ENDCOLOR}"
     elif [ "$behind" != "0" ]; then
         echo -e "${BLUE}→ behind $behind — run ${GREEN}gitb pull${ENDCOLOR}"
@@ -379,17 +382,30 @@ function log_commit_list {
     # %x1f field separators keep subjects containing '|' from breaking the
     # columns; awk re-emits '|' only as the column separator.
     local rows
+    # ctrl strips ANSI/OSC bytes a fetched commit subject could inject into
+    # the terminal; torn repairs a trailing UTF-8 sequence cut mid-character
+    # (length/substr are byte-based on macOS awk, and one torn byte makes
+    # BSD column silently drop that row and every row after it).
     rows=$(git --no-pager log --no-walk=unsorted --pretty="%h%x1f%s%x1f%d%x1f%an%x1f%cr" "${page_hashes[@]}" 2>/dev/null | \
-        awk -v hash_c="$hash_color" -v deco_c="$deco_color" -v author_c="$author_color" -v time_c="$time_color" -v end_c="$end_color" '
+        LC_ALL=C awk -v hash_c="$hash_color" -v deco_c="$deco_color" -v author_c="$author_color" -v time_c="$time_color" -v end_c="$end_color" \
+            -v ctrl='[\001-\010\013-\037\177]' -v torn='[\300-\367][\200-\277]*$' '
         BEGIN { FS = "\037" }
         {
             subj = $2
+            gsub(ctrl, "", subj)
             gsub(/\|/, "¦", subj)
-            if (length(subj) > 60) subj = substr(subj, 1, 57) "..."
+            if (length(subj) > 60) {
+                subj = substr(subj, 1, 57)
+                sub(torn, "", subj)
+                subj = subj "..."
+            }
             deco = $3
+            gsub(ctrl, "", deco)
             gsub(/^[ \t]+|[ \t]+$/, "", deco)
             if (deco != "") subj = subj " " deco_c deco end_c
-            print hash_c $1 end_c "|" subj "|" author_c $4 end_c "|" time_c $5 end_c
+            an = $4
+            gsub(ctrl, "", an)
+            print hash_c $1 end_c "|" subj "|" author_c an end_c "|" time_c $5 end_c
         }' | column -ts'|')
 
     local index=$start
@@ -448,7 +464,7 @@ function log_copy_hash {
 # $1: commit hash
 function log_commit_actions {
     local hash="$1"
-    local choice result confirm
+    local choice result
 
     git show "$hash"
 
@@ -465,7 +481,9 @@ function log_commit_actions {
         echo -e "0. Back to the commit list"
         echo
 
-        if ! read -n 1 -s choice; then
+        # read_key: a single arrow-key press arrives as one token instead of
+        # three keystrokes (Esc, [, letter) triggering three error rounds
+        if ! read_key choice; then
             return
         fi
         normalize_key "$choice"
@@ -541,12 +559,14 @@ function log_commit_actions {
                 if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt ${#files[@]} ]; then
                     continue
                 fi
+                # 10# so "09" is decimal, not an invalid-octal bash error
+                choice=$((10#$choice))
 
                 local file="${files[choice - 1]}"
                 echo -e "${RED}This will overwrite '${file}' in your working tree with its state from ${hash}.${ENDCOLOR}"
-                read -n 1 -s -p "Restore it (y/n)? " confirm
-                echo
-                if is_yes "$confirm"; then
+                printf "Restore it (y/n)? "
+                # Overwrites working-tree content: require an explicit "y"
+                if confirm_destructive; then
                     result=$(git checkout "$hash" -- "$file" 2>&1)
                     check_code $? "$result" "restore"
                     echo -e "${GREEN}✓ Restored ${file} from ${hash}${ENDCOLOR}"
@@ -570,6 +590,11 @@ function log_commit_actions {
 function log_smart_dispatch {
     local arg="$1"
 
+    # Multiple words are always one search phrase. Probing only the first
+    # word used to silently drop the rest: "gitb log docs update" opened
+    # the docs/ file history and discarded "update".
+    if [ $# -eq 1 ]; then
+
     if [[ "$arg" =~ ^[0-9]+$ ]]; then
         if [ "$arg" -eq 0 ]; then
             echo -e "${RED}✗ '0' is not a valid number of commits${ENDCOLOR}"
@@ -589,6 +614,8 @@ function log_smart_dispatch {
     if git rev-list -n 1 "$arg" -- >/dev/null 2>&1; then
         gitlog_browse "LOG: $arg" "ref" "$arg"
         return
+    fi
+
     fi
 
     local term="$*"
@@ -678,6 +705,8 @@ function gitlog_browse {
 
         if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "$log_browse_total" ]; then
             echo
+            # 10# so "09" is decimal, not an invalid-octal bash error
+            choice=$((10#$choice))
             log_commit_actions "${log_browse_hashes[choice - 1]}"
             # An action could have rewritten history (revert, fixup) - refresh
             log_collect_hashes "$kind" "$value"
@@ -891,7 +920,7 @@ function gitlog_ai {
         echo
 
         local menu_choice
-        read -n 1 -s menu_choice
+        read_key menu_choice || prompt_aborted
         normalize_key "$menu_choice"
         menu_choice="$normalized_key"
 
@@ -959,7 +988,7 @@ function gitlog_ai {
     local system_prompt="You are a senior engineer summarizing a series of git commits for a teammate. You will receive commit subjects prefixed with their hashes, newest first, and possibly an overall change-size line. Group related commits into themes, state what changed and why it matters, and call out anything that looks risky or breaking. This is a commit history - never call it a 'PR', 'pull request' or 'release notes'. Write for a plain-text terminal: do NOT use Markdown (no '#' headings, no '*' or '**' for bold or bullets, no backticks, no tables); put short section labels on their own line ending with a colon, and start each list item on its own line with '- '. Keep it concise."
 
     local response
-    response=$(call_ai_api "$system_prompt" "$commits_summary" 2>/dev/null)
+    response=$(call_ai_api "$system_prompt" "$commits_summary")
     if [ -z "$response" ]; then
         echo -e "${RED}✗ Failed to generate an AI summary${ENDCOLOR}"
         echo -e "Check your AI configuration with ${GREEN}gitb cfg ai${ENDCOLOR}."
@@ -1249,7 +1278,15 @@ function gitlog_script {
             echo -e "  gitb log search message"
         ;;
         "")
-            gitlog_browse "GIT LOG" "head"
+            # The browser needs a terminal on both ends: with piped stdout it
+            # would render pages into the pipe and block on an invisible
+            # prompt; with piped stdin it can't be driven. Fall back to the
+            # plain log so `gitb log | grep ...` behaves like git log.
+            if [ ! -t 0 ] || [ ! -t 1 ]; then
+                gitlog
+            else
+                gitlog_browse "GIT LOG" "head"
+            fi
         ;;
         *)
             log_smart_dispatch "$@"

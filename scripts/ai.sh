@@ -114,6 +114,12 @@ function set_ai_api_key {
 function unset_ai_api_key {
     local provider=$(get_ai_provider)
     unset_config_value "gitbasher.ai-api-key-${provider}"
+    # The legacy shared key is still an active fallback in get_ai_api_key —
+    # leaving it would keep the "removed" key working (and on disk).
+    if git config --get gitbasher.ai-api-key >/dev/null 2>&1 \
+            || git config --global --get gitbasher.ai-api-key >/dev/null 2>&1; then
+        unset_config_value "gitbasher.ai-api-key"
+    fi
 }
 
 ### Migrate the legacy `gitbasher.ai-api-key` to the per-provider slot for the
@@ -420,6 +426,8 @@ function mask_api_key {
 ### Function to get limited diff content for AI prompts
 # Returns: Diff content limited by configurable line and character caps
 function get_limited_diff_for_ai {
+    # Byte-unit consistency: ${#var} must measure what `head -c` cuts
+    local LC_ALL=C
     local diff_limit=$(get_ai_diff_limit)
     local max_chars=$(get_ai_diff_max_chars)
 
@@ -497,6 +505,7 @@ function get_limited_staged_files_for_ai {
 ### Function to get limited diff stat for AI prompts
 # Returns: Diff stat output limited to prevent token overflow on large commits
 function get_limited_diff_stat_for_ai {
+    local LC_ALL=C
     local max_lines=50
     local max_chars=2000
 
@@ -594,27 +603,41 @@ function validate_proxy_url {
         return 1
     fi
 
-    # Defense in depth: curl receives the URL as a single arg (no shell injection),
-    # but a clean string makes downstream auditing and logs less noisy.
-    local cleaned_url=$(echo "$proxy_url" | sed 's/[^a-zA-Z0-9.:/@_%?&=-]//g')
+    # Reject rather than rewrite: the old character-stripping pass silently
+    # corrupted credentials (user:p+ass@ lost its '+') and produced mystery
+    # 407s. curl receives the URL as a single argv element, so the only
+    # genuinely dangerous bytes are whitespace/quotes/control characters.
+    case "$proxy_url" in
+        *[[:space:]\'\"\\]*) return 1 ;;
+    esac
+    if LC_ALL=C printf '%s' "$proxy_url" | LC_ALL=C grep -q '[[:cntrl:]]'; then
+        return 1
+    fi
 
     local port=""
-    # http(s) | socks5 with optional userinfo, capped host length, mandatory port, optional path
-    if [[ "$cleaned_url" =~ ^(https?|socks5)://([a-zA-Z0-9._%-]+(:[a-zA-Z0-9._%-]+)?@)?([a-zA-Z0-9.-]{1,253}):([0-9]{1,5})(/.*)?$ ]]; then
+    # http(s) | socks4/4a/5/5h with optional userinfo; host or bracketed
+    # IPv6 literal; OPTIONAL port (curl defaults per scheme); optional path.
+    # Userinfo allows the sane credential charset (use %-encoding for the
+    # rest) — shell metacharacters like backticks are rejected outright.
+    local _proxy_re='^(https?|socks5h?|socks4a?)://([a-zA-Z0-9._%+!:~-]+@)?([a-zA-Z0-9._-]{1,253}|\[[0-9a-fA-F:.]+\])(:([0-9]{1,5}))?(/.*)?$'
+    local _hostport_re='^([a-zA-Z0-9._-]{1,253}):([0-9]{1,5})$'
+    if [[ "$proxy_url" =~ $_proxy_re ]]; then
         port="${BASH_REMATCH[5]}"
-    elif [[ "$cleaned_url" =~ ^([a-zA-Z0-9.-]{1,253}):([0-9]{1,5})$ ]]; then
+    elif [[ "$proxy_url" =~ $_hostport_re ]]; then
         # Bare host:port shorthand — curl treats it as http://
         port="${BASH_REMATCH[2]}"
     else
         return 1
     fi
 
-    # Port must be in the valid TCP range
-    if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
-        return 1
+    # Port, when present, must be in the valid TCP range
+    if [ -n "$port" ]; then
+        if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+            return 1
+        fi
     fi
 
-    validated_proxy_url="$cleaned_url"
+    validated_proxy_url="$proxy_url"
     return 0
 }
 
@@ -647,7 +670,7 @@ function secure_curl_with_api_key {
         local curl_cmd=(
             curl -s -X POST
             --connect-timeout 30
-            --max-time 60
+            --max-time "$(get_ai_timeout)"
         )
 
         # Add proxy if specified
@@ -790,8 +813,14 @@ function ai_smoke_check {
 
     local api_url models_url proxy code
     api_url=$(get_ai_api_url)
-    # /chat/completions -> /models on the same base.
-    models_url="${api_url/chat\/completions/models}"
+    # /chat/completions -> /models on the same base. OpenRouter's /models is
+    # public (200 with any key), so probe its auth-required /key endpoint —
+    # otherwise a mistyped key "validates" and only fails at first commit.
+    if [ "$provider" = "openrouter" ]; then
+        models_url="${api_url/chat\/completions/key}"
+    else
+        models_url="${api_url/chat\/completions/models}"
+    fi
     proxy=$(get_ai_proxy)
 
     code=$(secure_curl_status "$proxy" "$api_key" "$models_url")
@@ -827,6 +856,38 @@ function _json_escape_for_payload {
         | LC_ALL=C awk 'BEGIN{ORS=""} NR>1{print "\\n"} {print}'
 }
 
+### True when the response carries a top-level "error" member. A plain
+# substring grep false-positived on successful responses whose CONTENT
+# legitimately contained the word (escaped as \"error\" inside the string),
+# rejecting perfectly good completions.
+# $1: raw response body
+function _ai_response_has_error {
+    if command -v jq &>/dev/null; then
+        printf '%s' "$1" | jq -e 'type == "object" and has("error") and (.error != null)' >/dev/null 2>&1
+    else
+        # Anchored fallback: an unescaped "error" key followed by a colon
+        printf '%s' "$1" | LC_ALL=C grep -qE '(^|[^\\])"error"[[:space:]]*:'
+    fi
+}
+
+
+### Request timeout in seconds, configurable via gitbasher.ai-timeout.
+# Local Ollama models generate slowly on laptop hardware (a squash grouping
+# can take minutes), so their default is much higher than cloud providers'.
+function get_ai_timeout {
+    local t=$(get_config_value gitbasher.ai-timeout "")
+    if [[ "$t" =~ ^[0-9]+$ ]] && [ "$t" -gt 0 ]; then
+        printf '%s\n' "$t"
+        return
+    fi
+    if [ "$(get_ai_provider)" = "ollama" ]; then
+        printf '300\n'
+    else
+        printf '60\n'
+    fi
+}
+
+
 ### Function to make a chat-completions request against the configured AI provider.
 # $1: system prompt (instructions: role, task, types, rules, examples, output format)
 # $2: user prompt (data: recent commits, staged files, diff, scopes)
@@ -837,9 +898,10 @@ function _json_escape_for_payload {
 #     schema, so this passes through untouched.
 # Returns: AI response text
 function call_ai_api {
-    # Set trap to clear sensitive variables on exit/interrupt
-    trap 'clear_sensitive_vars' EXIT INT TERM
-
+    # No signal traps here: every return path below calls
+    # clear_sensitive_vars explicitly. A process-wide trap swallowed Ctrl-C
+    # for the rest of the run and silently replaced the commit-split flow's
+    # staging-restore trap.
     local system_prompt="$1"
     local user_prompt="$2"
     local max_tokens="${3:-$AI_MAX_TOKENS_FULL}"
@@ -869,6 +931,16 @@ function call_ai_api {
         tokens_field="max_completion_tokens"
     fi
 
+    # OpenAI's GPT-5/o-series reasoning models reject any non-default
+    # temperature (400 Unsupported value) — omit the field for them, the
+    # same way tokens_field switches above. Other providers/models keep it.
+    local include_temperature="true"
+    if [ "$provider" = "openai" ]; then
+        case "$model" in
+            gpt-5*|o[0-9]*) include_temperature="" ;;
+        esac
+    fi
+
     # Prefer jq for robust JSON encoding; fall back to sed/awk that preserves newlines as JSON \n.
     local json_payload
     if command -v jq &>/dev/null; then
@@ -877,9 +949,14 @@ function call_ai_api {
             --arg system "$system_prompt" \
             --arg user "$user_prompt" \
             --arg tokens_field "$tokens_field" \
-            --argjson temperature "$AI_TEMPERATURE" \
             --argjson max_tokens "$max_tokens" \
-            '{model: $model, messages: [{role: "system", content: $system}, {role: "user", content: $user}], temperature: $temperature} + {($tokens_field): $max_tokens}')
+            '{model: $model, messages: [{role: "system", content: $system}, {role: "user", content: $user}]} + {($tokens_field): $max_tokens}')
+        if [ -n "$include_temperature" ]; then
+            json_payload=$(jq -nc \
+                --argjson base "$json_payload" \
+                --argjson temperature "$AI_TEMPERATURE" \
+                '$base + {temperature: $temperature}')
+        fi
         if [ -n "$response_format" ]; then
             json_payload=$(jq -nc \
                 --argjson base "$json_payload" \
@@ -889,11 +966,18 @@ function call_ai_api {
     else
         local system_escaped=$(_json_escape_for_payload "$system_prompt")
         local user_escaped=$(_json_escape_for_payload "$user_prompt")
+        # The model id comes from user config — escape it like the prompts
+        # so a stray quote can't break (or inject fields into) the payload.
+        local model_escaped=$(_json_escape_for_payload "$model")
         local rf_field=""
         if [ -n "$response_format" ]; then
             rf_field=",\"response_format\":${response_format}"
         fi
-        json_payload="{\"model\":\"$model\",\"messages\":[{\"role\":\"system\",\"content\":\"$system_escaped\"},{\"role\":\"user\",\"content\":\"$user_escaped\"}],\"temperature\":$AI_TEMPERATURE,\"${tokens_field}\":$max_tokens${rf_field}}"
+        local temp_field=""
+        if [ -n "$include_temperature" ]; then
+            temp_field=",\"temperature\":$AI_TEMPERATURE"
+        fi
+        json_payload="{\"model\":\"$model_escaped\",\"messages\":[{\"role\":\"system\",\"content\":\"$system_escaped\"},{\"role\":\"user\",\"content\":\"$user_escaped\"}]${temp_field},\"${tokens_field}\":$max_tokens${rf_field}}"
     fi
 
     # Make API request with optional proxy and retry logic
@@ -930,8 +1014,7 @@ function call_ai_api {
         # If successful or non-retryable error, break
         if [ $curl_exit_code -eq 0 ] && [ -n "$response" ]; then
             # Check if it's a server error that we should retry
-            local has_error=$(echo "$response" | grep -q '"error"' && echo "true" || echo "false")
-            if [ "$has_error" = "true" ]; then
+            if _ai_response_has_error "$response"; then
                 local error_code=$(echo "$response" | grep -o '"code"[[:space:]]*:[[:space:]]*[0-9]*' | grep -o '[0-9]*')
                 # Only retry on 500/502/503 errors
                 if [[ "$error_code" =~ ^(500|502|503)$ ]]; then
@@ -951,6 +1034,17 @@ function call_ai_api {
     
     if [ $curl_exit_code -ne 0 ] || [ -z "$response" ]; then
         echo
+        if [ $curl_exit_code -eq 28 ]; then
+            # curl 28 = --max-time exceeded: this is a slow response, not a
+            # connectivity problem — say so instead of the network dump.
+            echo -e "${RED}✗ AI request timed out after $(get_ai_timeout)s.${ENDCOLOR}" >&2
+            echo -e "${YELLOW}Raise the limit with:${ENDCOLOR} ${GREEN}git config gitbasher.ai-timeout <seconds>${ENDCOLOR}" >&2
+            if [ "$provider" = "ollama" ]; then
+                echo -e "${CYAN}💡 Local models can be slow — a smaller model (gitb cfg model) also helps.${ENDCOLOR}" >&2
+            fi
+            clear_sensitive_vars
+            return 1
+        fi
         echo -e "${RED}✗ Cannot connect to AI service.${ENDCOLOR}" >&2
         echo -e "${YELLOW}Debug Information:${ENDCOLOR}" >&2
         echo -e "  • Curl exit code: $curl_exit_code" >&2
@@ -1014,9 +1108,7 @@ function call_ai_api {
     # echo "DEBUG: Raw response: $response" >&2
     
     # Check for API error - handle multi-line JSON properly
-    local has_error=$(echo "$response" | grep -q '"error"' && echo "true" || echo "false")
-    
-    if [ "$has_error" = "true" ]; then
+    if _ai_response_has_error "$response"; then
         # Extract error fields. OpenAI returns string codes (e.g. "invalid_api_key",
         # "unsupported_parameter") in the same .error.code slot where OpenRouter
         # returns numeric HTTP-ish codes — handle both.
@@ -1055,7 +1147,7 @@ function call_ai_api {
                     || [[ "$error_message" == *"too large"* ]] || [[ "$error_message" == *"context length"* ]]; then
                 kind="context"
             elif [[ "$error_message" == *"max_completion_tokens"* ]] || [[ "$error_message" == *"max_tokens"* ]] \
-                    || [[ "$error_message" == *"Unsupported parameter"* ]]; then
+                    || [[ "$error_message" == *"Unsupported parameter"* ]] || [[ "$error_message" == *"Unsupported value"* ]]; then
                 kind="bad_param"
             elif [[ "$error_message" == *"suspended"* ]]; then
                 kind="suspended"
@@ -1145,6 +1237,16 @@ function check_ai_available {
     # Check if curl is available
     if ! command -v curl >/dev/null 2>&1; then
         echo -e "${RED}curl is required for AI functionality but not installed${ENDCOLOR}" >&2
+        return 1
+    fi
+
+    # jq is required: the sed-based fallbacks cannot parse pretty-printed
+    # responses and truncate content at the first escaped quote, so AI
+    # features without jq fail in confusing ways mid-flow. Fail early with
+    # an install hint instead.
+    if ! command -v jq >/dev/null 2>&1; then
+        echo -e "${RED}✗ jq is required for AI features but not installed.${ENDCOLOR}" >&2
+        echo -e "${YELLOW}Install it with:${ENDCOLOR} ${GREEN}brew install jq${ENDCOLOR} (macOS) or ${GREEN}apt install jq${ENDCOLOR} (Linux)" >&2
         return 1
     fi
 

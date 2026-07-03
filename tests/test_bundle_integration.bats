@@ -65,7 +65,7 @@ teardown() {
 }
 
 @test "bundle: every top-level command's help dispatches" {
-    for cmd in commit push pull branch merge rebase wip worktree stash undo reset tag cherry squash hooks config update uninstall sync origin log; do
+    for cmd in commit push pull branch merge rebase wip worktree stash undo reset tag cherry squash hook config update uninstall sync origin log; do
         run bash "$BUNDLE_PATH" "$cmd" help
         [ "$status" -eq 0 ] || { echo "$cmd help failed: $output" >&2; return 1; }
         [ ${#output} -gt 20 ] || { echo "$cmd help suspiciously short: $output" >&2; return 1; }
@@ -93,15 +93,14 @@ teardown() {
     [[ "$output" == *"STASH"* ]] || [[ "$output" == *"stash"* ]]
 }
 
-@test "bundle: unknown subcommand falls through to top-level help" {
-    # base.sh treats an unknown first arg as "show usage" rather than erroring.
-    # The fall-through prints the full command table; we assert one of the
-    # canonical entries shows up so this catches a bundle that drops the help
-    # printer entirely.
+@test "bundle: unknown subcommand errors with a non-zero status" {
+    # An unknown first arg must be a detectable failure for scripts chaining
+    # on gitb, with a short pointer to `gitb help` instead of a silent
+    # exit-0 usage dump.
     run bash "$BUNDLE_PATH" definitely-not-a-command
-    [ "$status" -eq 0 ]
-    [[ "$output" == *"commit"* ]]
-    [[ "$output" == *"push"* ]]
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Unknown command"* ]]
+    [[ "$output" == *"gitb help"* ]]
 }
 
 @test "bundle: --version reports a version string" {

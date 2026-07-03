@@ -14,6 +14,15 @@ function cleanup_on_exit {
         # patterns against CWD, and `--` so paths starting with `-` are not parsed as options.
         ( set -f; git restore --staged -- $1 2>/dev/null )
     fi
+    # Fast mode stages everything ("."), so the restore above also unstaged
+    # whatever the user had carefully staged BEFORE running gitb — put that
+    # back (recorded by stage_fast_changes).
+    if [ -n "$_gitb_prestaged" ]; then
+        local _pf
+        while IFS= read -r _pf; do
+            [ -n "$_pf" ] && git add -- ":(top,literal)$_pf" >/dev/null 2>&1
+        done <<< "$_gitb_prestaged"
+    fi
 }
 
 ### Print git warning/hint output through gitbasher colors.
@@ -43,14 +52,14 @@ function print_git_warning_output {
 # Manual git add selections are intentionally not filtered.
 function unstage_embedded_repositories_from_fast_add {
     local staged_files
-    staged_files=$(git -c core.quotePath=false diff --name-only --cached)
+    staged_files=$(git -c core.quotePath=false diff --no-renames --name-only --cached)
     [ -z "$staged_files" ] && return 0
 
     local file
     while IFS= read -r file; do
         [ -z "$file" ] && continue
         if [ -d "$file" ] && [ -e "$file/.git" ]; then
-            git restore --staged -- "$file" >/dev/null 2>&1
+            git restore --staged -- ":(top,literal)$file" >/dev/null 2>&1
             echo -e "${YELLOW}⚠  Skipped embedded git repository in fast mode: ${file}${ENDCOLOR}"
             echo -e "${CYAN}💡 Select it manually if you really want to commit it.${ENDCOLOR}"
         fi
@@ -60,6 +69,9 @@ function unstage_embedded_repositories_from_fast_add {
 ### Stage all changes for fast modes without keeping embedded repositories.
 function stage_fast_changes {
     local result
+    # Remember what was staged BEFORE gitb stages everything, so an abort
+    # restores exactly the user's pre-existing staging (see cleanup_on_exit).
+    _gitb_prestaged=$(git -c core.quotePath=false diff --no-renames --name-only --cached)
     result=$(git add . 2>&1)
     local code=$?
 
@@ -134,7 +146,15 @@ function strip_ai_reasoning_preamble {
 function clean_ai_commit_message {
     local cleaned
     cleaned=$(strip_ai_reasoning_preamble "$1")
-    cleaned=$(echo "$cleaned" | LC_ALL=C sed 's/^"//;s/"$//' | LC_ALL=C sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    # Strip control bytes: jq fully decodes  escapes in the response,
+    # and auto-accept (ff) mode would commit them into history unreviewed.
+    cleaned=$(printf '%s' "$cleaned" | LC_ALL=C tr -d '\000-\010\013-\037\177')
+    # Trim wrapping quotes and whitespace at the MESSAGE edges only — the
+    # old per-line pass flattened body indentation and ate quotes at the
+    # start/end of every body line.
+    cleaned="${cleaned#\"}"
+    cleaned="${cleaned%\"}"
+    cleaned=$(printf '%s' "$cleaned" | LC_ALL=C sed -e '1s/^[[:space:]]*//' -e '$s/[[:space:]]*$//')
     strip_redundant_scope "$cleaned"
 }
 
@@ -167,7 +187,7 @@ function strip_redundant_scope {
 # Returns: detected_scopes variable set with space-separated scope names
 function detect_scopes_from_staged_files {
     detected_scopes=""
-    local staged_files=$(git -c core.quotePath=false diff --name-only --cached)
+    local staged_files=$(git -c core.quotePath=false diff --no-renames --name-only --cached)
 
     # Limit the number of files to process for scope detection (performance)
     local max_files_for_scopes=100
@@ -352,7 +372,7 @@ function build_split_groups_from_staged {
     IFS=' ' read -r -a scopes_arr <<< "$detected_scopes"
 
     local staged_files
-    staged_files=$(git -c core.quotePath=false diff --name-only --cached)
+    staged_files=$(git -c core.quotePath=false diff --no-renames --name-only --cached)
     [ -z "$staged_files" ] && return 1
 
     local file scope comp comp_lower comp_no_ext_lower assigned
@@ -484,7 +504,10 @@ function order_split_groups_by_dependency {
     local -a farr
     for scope in "${split_group_keys[@]}"; do
         farr=()
-        while IFS= read -r f; do [ -n "$f" ] && farr+=("$f"); done <<< "$(gmap_get split_groups "$scope")"
+        # :(top,literal): the names come from a repo-root-relative diff, so
+        # they must not be re-resolved against CWD nor treated as globs
+        # (e.g. Next.js's app/[id]/page.tsx).
+        while IFS= read -r f; do [ -n "$f" ] && farr+=(":(top,literal)$f"); done <<< "$(gmap_get split_groups "$scope")"
         [ ${#farr[@]} -eq 0 ] && { gmap_set added_text "$scope" ""; continue; }
         gmap_set added_text "$scope" "$(git -c core.quotePath=false diff --cached -- "${farr[@]}" 2>/dev/null \
             | grep '^+' | grep -v '^+++' || true)"
@@ -635,7 +658,7 @@ function consolidate_split_groups {
 # 1 on AI failure or unparseable output (caller falls back to the folder heuristic).
 function group_files_by_feature_with_ai {
     local staged_files
-    staged_files=$(git -c core.quotePath=false diff --name-only --cached)
+    staged_files=$(git -c core.quotePath=false diff --no-renames --name-only --cached)
     [ -z "$staged_files" ] && return 1
 
     local diff_stat diff_details recent_commits
@@ -651,6 +674,7 @@ function group_files_by_feature_with_ai {
     local max_groups
     max_groups=$(get_max_split_groups)
 
+    #### bundler-keep-begin (emitted content: bundler must not strip inside)
     local system_prompt="You group staged git files into commits by FEATURE — a single logical unit of work (a new capability, a bug fix, a refactor).
 
 A feature is defined by WHAT the change accomplishes, read from the actual code in <diff> — NOT by which directory the files live in. Files in DIFFERENT folders that implement the same feature belong in the SAME group; files in the SAME folder that implement unrelated changes belong in DIFFERENT groups.
@@ -682,6 +706,7 @@ ${heuristic_hint}
 </heuristic_candidates>
 
 Read <diff> to decide which files implement the same feature. Output TSV (scope<TAB>file) for every staged file. No prose."
+    #### bundler-keep-end
 
     local ai_response
     ai_response=$(call_ai_api "$system_prompt" "$user_prompt" "$AI_MAX_TOKENS_FULL" "$(get_ai_model_for grouping)" 2>/dev/null)
@@ -769,10 +794,10 @@ function _stage_file_by_status {
             # Index deletion that the user intends to commit. Worktree file may
             # exist or not; --cached --ignore-unmatch handles either case
             # without touching the worktree copy.
-            git rm --cached --ignore-unmatch -- "$file" >/dev/null 2>&1
+            git rm --cached --ignore-unmatch -- ":(top,literal)$file" >/dev/null 2>&1
             ;;
         *)
-            git add -- "$file" >/dev/null 2>&1
+            git add -- ":(top,literal)$file" >/dev/null 2>&1
             ;;
     esac
 }
@@ -796,7 +821,7 @@ function _capture_split_statuses {
                 gmap_set _split_status_by_file "$old" "${status:0:1}"
                 ;;
         esac
-    done < <(git -c core.quotePath=false diff --name-status --cached)
+    done < <(git -c core.quotePath=false diff --no-renames --name-status --cached)
 }
 
 ### Restore the original staging snapshot (used when user aborts mid-split).
@@ -812,10 +837,10 @@ function _restore_split_snapshot {
 
     # First, unstage anything currently staged so we start from a clean slate
     local currently_staged
-    currently_staged=$(git -c core.quotePath=false diff --name-only --cached)
+    currently_staged=$(git -c core.quotePath=false diff --no-renames --name-only --cached)
     if [ -n "$currently_staged" ]; then
         while IFS= read -r f; do
-            [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
+            [ -n "$f" ] && git restore --staged -- ":(top,literal)$f" >/dev/null 2>&1
         done <<< "$currently_staged"
     fi
 
@@ -877,7 +902,7 @@ function print_commit_type_menu {
 function print_split_groups_preview {
     gmap_clear staged_status_by_file
     local staged_diff status file new_file
-    staged_diff=$(git -c core.quotePath=false diff --name-status --cached)
+    staged_diff=$(git -c core.quotePath=false diff --no-renames --name-status --cached)
     while IFS=$'\t' read -r status file new_file; do
         [ -z "$file" ] && continue
         if [[ "$status" == R* || "$status" == C* ]]; then
@@ -938,7 +963,7 @@ function run_split_ai_for_scope {
     echo
     echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
     echo
-    read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) "
+    read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) " || choice="0"
     echo
     normalize_key "$choice"
 
@@ -959,7 +984,7 @@ ${ai_msg}"
         echo
         echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
         echo
-        read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) "
+        read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) " || choice="0"
         echo
         normalize_key "$choice"
     done
@@ -974,7 +999,7 @@ ${ai_msg}"
     elif [ "$normalized_key" = "s" ]; then
         echo -e "${YELLOW}Skipping scope '${_scope}' (files left unstaged)${ENDCOLOR}"
         while IFS= read -r f; do
-            [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
+            [ -n "$f" ] && git restore --staged -- ":(top,literal)$f" >/dev/null 2>&1
         done <<< "$_files_str"
         return 2
     elif [ "$choice" = "0" ]; then
@@ -990,7 +1015,7 @@ ${ai_msg}"
 # Returns 1 (and restores staging) on failure so caller can fall through.
 function perform_commit_split {
     local original_staged
-    original_staged=$(git -c core.quotePath=false diff --name-only --cached)
+    original_staged=$(git -c core.quotePath=false diff --no-renames --name-only --cached)
     if [ -z "$original_staged" ]; then
         echo -e "${RED}✗ No staged files to split.${ENDCOLOR}"
         return 1
@@ -1014,8 +1039,12 @@ function perform_commit_split {
         _snap_status=$(gmap_get _split_status_by_file "$f"); [ -z "$_snap_status" ] && _snap_status="M"
         printf '%s\t%s\n' "$_snap_status" "$f" >> "$snapshot_file"
     done <<< "$original_staged"
-    # Restore staging if the user kills the process mid-split
-    trap "_restore_split_snapshot '$snapshot_file'" INT TERM
+    # Restore staging if the user kills the process mid-split. The trap must
+    # EXIT: a non-exiting handler made Ctrl-C unkillable and let the loop
+    # continue against the restored (full) staging, producing a mislabeled
+    # mega-commit — with the snapshot already deleted.
+    # shellcheck disable=SC2064  # bake the snapshot path now, by design
+    trap "_restore_split_snapshot '$snapshot_file'; trap - INT TERM; echo; exit 130" INT TERM
 
     local total=${#split_group_keys[@]}
     local idx=0
@@ -1037,10 +1066,10 @@ function perform_commit_split {
 
         # Reset everything that's currently staged, then stage only this group
         local currently_staged
-        currently_staged=$(git -c core.quotePath=false diff --name-only --cached)
+        currently_staged=$(git -c core.quotePath=false diff --no-renames --name-only --cached)
         if [ -n "$currently_staged" ]; then
             while IFS= read -r f; do
-                [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
+                [ -n "$f" ] && git restore --staged -- ":(top,literal)$f" >/dev/null 2>&1
             done <<< "$currently_staged"
         fi
 
@@ -1126,7 +1155,7 @@ function perform_commit_split {
 
             local tchoice
             while true; do
-                read_key tchoice
+                read_key tchoice || tchoice="0"
                 if ! sanitize_choice_input "$tchoice" "^[0-9sg]$"; then
                     continue
                 fi
@@ -1165,7 +1194,7 @@ function perform_commit_split {
                     s)
                         echo -e "${YELLOW}Skipping scope '${scope}' (files left unstaged)${ENDCOLOR}"
                         while IFS= read -r f; do
-                            [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
+                            [ -n "$f" ] && git restore --staged -- ":(top,literal)$f" >/dev/null 2>&1
                         done <<< "$files_str"
                         continue 2
                         ;;
@@ -1197,7 +1226,7 @@ function perform_commit_split {
                 if [ -z "$manual_input" ]; then
                     echo -e "${YELLOW}Skipping scope '${scope}'${ENDCOLOR}"
                     while IFS= read -r f; do
-                        [ -n "$f" ] && git restore --staged -- "$f" >/dev/null 2>&1
+                        [ -n "$f" ] && git restore --staged -- ":(top,literal)$f" >/dev/null 2>&1
                     done <<< "$files_str"
                     continue
                 fi
@@ -1354,8 +1383,11 @@ function try_offer_commit_split {
         return 1
     fi
 
-    perform_commit_split
-    return $?
+    # 2 = "split was attempted and failed" (vs 1 = declined/not applicable):
+    # the forced-split caller must not treat a failed split as success, and
+    # must not unstage the staging the failure path just restored.
+    perform_commit_split || return 2
+    return 0
 }
 
 ### Function to handle AI commit message generation
@@ -1416,7 +1448,7 @@ function handle_ai_commit_generation {
             break
         fi
 
-        read_key choice "Use this commit message? (y/n/r to regenerate/e to edit/0 to exit) "
+        read_key choice "Use this commit message? (y/n/r to regenerate/e to edit/0 to exit) " || choice="0"
         echo
         if [ "$ai_mode" != "subject" ] && [ "$choice" != "0" ]; then
             echo
@@ -1478,7 +1510,7 @@ ${ai_commit_message}"
                 echo
                 echo -e "${YELLOW}⚠  Commit message cannot be empty.${ENDCOLOR}"
                 echo
-                read -n 1 -p "Try again? (y/n) " -s -e choice
+                read -n 1 -p "Try again? (y/n) " -s -e choice || choice="n"
                 if ! is_yes "$choice"; then
                     cleanup_on_exit "$git_add"
                     rm -f "$commitmsg_file"
@@ -1486,7 +1518,10 @@ ${ai_commit_message}"
                 fi
             done
 
-            commit_message=$(cat $commitmsg_file)
+            # Re-apply the comment filter: the loop above validated the
+            # FILTERED content, so an unfiltered re-read would commit '#'
+            # note lines (git commit -m does not strip comments).
+            commit_message=$(cat "$commitmsg_file" | sed '/^#/d')
             rm -f "$commitmsg_file"
             echo
         else
@@ -1588,7 +1623,9 @@ function set_commit_flag_from_token {
         scope|s)             scope="true";;
         msg|m)               msg="true";;
         ticket|jira|j|t)     ticket="true";;
-        staged)              staged="true";;
+        staged|st)           staged="true";;
+        ff)                  fast="true"; llm="true"; auto_accept="true";;
+        sff|ffst)            staged="true"; llm="true"; auto_accept="true";;
         no-split|nosplit|nos|nsp|nsl) no_split="true";;
         fixup|fix|x)         fixup="true";;
         amend|am|a)          amend="true";;
@@ -1654,6 +1691,37 @@ function validate_commit_flag_combo {
         echo -e "${RED}✗ 'fast' and 'staged' are mutually exclusive${ENDCOLOR}"
         echo -e "fast stages everything; staged commits what's already in the index."
         exit 1
+    fi
+
+    if [ -n "$split" ]; then
+        invalid=()
+        [ -n "$msg" ]      && invalid+=("msg")
+        [ -n "$ticket" ]   && invalid+=("ticket")
+        [ -n "$no_split" ] && invalid+=("no-split")
+        if [ ${#invalid[@]} -gt 0 ]; then
+            # Without this the split gate silently skipped and a single
+            # commit was created despite the SPLIT header and summary.
+            echo -e "${RED}✗ 'split' does not use: ${invalid[*]}${ENDCOLOR}"
+            echo -e "Split builds one message per group; only ai, fast, staged, push apply."
+            exit 1
+        fi
+    fi
+
+    if [ -n "$last" ]; then
+        invalid=()
+        [ -n "$push" ]   && invalid+=("push")
+        [ -n "$llm" ]    && invalid+=("ai")
+        [ -n "$fast" ]   && invalid+=("fast")
+        [ -n "$staged" ] && invalid+=("staged")
+        [ -n "$msg" ]    && invalid+=("msg")
+        [ -n "$ticket" ] && invalid+=("ticket")
+        [ -n "$scope" ]  && invalid+=("scope")
+        if [ ${#invalid[@]} -gt 0 ]; then
+            # 'last' routes straight to gitb edit; silently dropping the
+            # other flags (e.g. push) surprised users.
+            echo -e "${RED}✗ 'last' is a deprecated alias of ${GREEN}gitb edit${RED} and takes no modifiers: ${invalid[*]}${ENDCOLOR}"
+            exit 1
+        fi
     fi
 }
 
@@ -1774,12 +1842,14 @@ function commit_script {
     # Kept for backwards compatibility; not surfaced in help, completions, or
     # summaries. Routes silently so users with the old habit still get the
     # same `git commit --amend` editor flow.
+    # Validate BEFORE routing so `commit last push` is rejected instead of
+    # silently dropping the extra flags.
+    validate_commit_flag_combo
+
     if [ -n "$last" ]; then
         edit_script ""
         exit
     fi
-
-    validate_commit_flag_combo
 
 
     ### Print header
@@ -1934,7 +2004,7 @@ function commit_script {
 
     ### Check for staged files when using staged mode
     if [ -n "${staged}" ]; then
-        staged_files_check=$(git -c core.quotePath=false diff --name-only --cached)
+        staged_files_check=$(git -c core.quotePath=false diff --no-renames --name-only --cached)
         if [ -z "$staged_files_check" ]; then
             echo -e "${RED}✗ No staged files found.${ENDCOLOR}"
             exit 1
@@ -1977,7 +2047,7 @@ function commit_script {
         if [ -n "$saved_git_add" ]; then
             echo
             echo -e "${YELLOW}Found previous git add arguments:${ENDCOLOR} ${BOLD}$saved_git_add${ENDCOLOR}"
-            read_key choice "Use them? (y/n) "
+            read_key choice "Use them? (y/n) " || choice="n"
             echo
             if is_yes "$choice"; then
                 git add $saved_git_add
@@ -2047,7 +2117,7 @@ function commit_script {
 
             result=$(git add $git_add 2>&1)
             code=$?
-            staged_files_list="$(git -c core.quotePath=false diff --name-only --cached)"
+            staged_files_list="$(git -c core.quotePath=false diff --no-renames --name-only --cached)"
             if [ $code -eq 0 ] && [ -n "$staged_files_list" ]; then
                 # Save git add arguments for potential retry
                 git config gitbasher.cached-git-add "$git_add"
@@ -2062,7 +2132,7 @@ function commit_script {
                    
                     result_star=$(git add $git_add_with_star 2>&1)
                     code_star=$?
-                    staged_files_list_star="$(git -c core.quotePath=false diff --name-only --cached)"
+                    staged_files_list_star="$(git -c core.quotePath=false diff --no-renames --name-only --cached)"
                     if [ $code_star -eq 0 ] && [ -n "$staged_files_list_star" ]; then
                         # Save the successful git add arguments for potential retry
                         git config gitbasher.cached-git-add "$git_add_with_star"
@@ -2084,11 +2154,11 @@ function commit_script {
     ### Print staged files that we add at step 1
     if [ -z "${staged}" ]; then
         echo -e "${YELLOW}Staged files:${ENDCOLOR}"
-        staged_files_list="$(sed 's/^/\t/' <<< "$(git -c core.quotePath=false diff --name-only --cached)")"
+        staged_files_list="$(sed 's/^/\t/' <<< "$(git -c core.quotePath=false diff --no-renames --name-only --cached)")"
         print_staged_files
     else
         # Still need to set the staged files list for later use (editor template)
-        staged_files_list="$(sed 's/^/\t/' <<< "$(git -c core.quotePath=false diff --name-only --cached)")"
+        staged_files_list="$(sed 's/^/\t/' <<< "$(git -c core.quotePath=false diff --no-renames --name-only --cached)")"
     fi
 
 
@@ -2103,9 +2173,16 @@ function commit_script {
             _split_auto_yes="true"
         fi
         try_offer_commit_split "$split" "$_split_auto_yes"
+        _split_rc=$?
         # If the user explicitly asked for split mode but it wasn't applicable,
         # don't silently fall through to the single-commit flow.
         if [ -n "$split" ]; then
+            if [ "$_split_rc" -ge 2 ]; then
+                # The split ran and failed; its snapshot restore already put
+                # the staging back — don't unstage it again, and report the
+                # failure instead of exit 0.
+                exit 1
+            fi
             cleanup_on_exit "$git_add"
             exit 0
         fi
@@ -2118,7 +2195,7 @@ function commit_script {
         echo
         echo -e "${YELLOW}Found previous commit message:${ENDCOLOR} ${BOLD}$saved_commit_message${ENDCOLOR}"
         echo
-        read_key choice "Use it? (y/e to edit/n) "
+        read_key choice "Use it? (y/e to edit/n) " || choice="n"
         echo
         normalize_key "$choice"
         if [ "$normalized_key" = "y" ] || [ -z "$choice" ]; then
@@ -2256,7 +2333,7 @@ function commit_script {
     local -a types=("" "feat" "fix" "refactor" "test" "build" "ci" "chore" "docs")
 
     while [ true ]; do
-        read -n 1 -s choice
+        read -n 1 -s choice || choice="0"
 
         if [ "$choice" == "0" ]; then
             cleanup_on_exit "$git_add"
@@ -2427,6 +2504,7 @@ function commit_script {
     if [ -n "$msg" ]; then
         commitmsg_file=$(mktemp "${TMPDIR:-/tmp}/commitmsg.XXXXXX")
         chmod 600 "$commitmsg_file" 2>/dev/null || true
+        # shellcheck disable=SC2064  # bake the path now: the var may be out of scope at fire time
         trap "rm -f '$commitmsg_file'" EXIT INT TERM
         staged_with_tab="$(sed 's/^/####\t/' <<< "${staged_files_list}")"
 
@@ -2470,7 +2548,7 @@ ${staged_with_tab}
             echo
             echo -e "${YELLOW}⚠  Commit message cannot be empty.${ENDCOLOR}"
             echo
-            read -n 1 -p "Try again? (y/n) " -s -e choice
+            read -n 1 -p "Try again? (y/n) " -s -e choice || choice="n"
             if ! is_yes "$choice"; then
                 cleanup_on_exit "$git_add"
                 rm -f "$commitmsg_file"

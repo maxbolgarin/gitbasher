@@ -11,6 +11,12 @@ export GITBASHER_TEST_MODE="true"
 # BATS suite-level setup function
 # This runs once before all tests in the suite
 setup_suite() {
+    # Isolate the user's real ~/.gitconfig: several flows write global keys
+    # (gitbasher.completion.prompted, 'set globally' prompts), and tests
+    # used to leak those into the developer's actual config.
+    export GIT_CONFIG_GLOBAL="${BATS_SUITE_TMPDIR:-${TMPDIR:-/tmp}}/gitb-test-gitconfig"
+    : > "$GIT_CONFIG_GLOBAL"
+
     # Verify git is available
     if ! command -v git &> /dev/null; then
         echo "Error: git is not installed or not in PATH"
@@ -54,8 +60,11 @@ cleanup_test_repo() {
 
 # Source gitbasher scripts for testing
 source_gitbasher() {
-    source "${GITBASHER_ROOT}/scripts/init.sh"
+    # Production order (gitb.sh): common.sh BEFORE init.sh — init's startup
+    # probes call common helpers (validate_scope_list), and the reversed
+    # order silently 127'd them, masking real behavior.
     source "${GITBASHER_ROOT}/scripts/common.sh"
+    source "${GITBASHER_ROOT}/scripts/init.sh"
 }
 
 # Source gitbasher helper functions only, skipping the git config queries at the
@@ -63,8 +72,8 @@ source_gitbasher() {
 # and do not need a real git repo or any of the init.sh globals
 # (current_branch, main_branch, origin_name, sep, editor, ticket_name, scopes).
 source_gitbasher_lite() {
-    GITBASHER_SKIP_INIT_QUERIES=1 source "${GITBASHER_ROOT}/scripts/init.sh"
     source "${GITBASHER_ROOT}/scripts/common.sh"
+    GITBASHER_SKIP_INIT_QUERIES=1 source "${GITBASHER_ROOT}/scripts/init.sh"
 }
 
 # Create a test file with content

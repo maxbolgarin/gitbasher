@@ -132,6 +132,8 @@ function diff_commit {
 # but works on any range and degrades to sane defaults when the AI config
 # getters are not loaded (e.g. isolated unit tests).
 function get_limited_diff_for_ai_range {
+    # Byte-unit consistency: ${#var} must measure what `head -c` cuts
+    local LC_ALL=C
     local diff_limit max_chars
     if command -v get_ai_diff_limit >/dev/null 2>&1; then
         diff_limit=$(get_ai_diff_limit)
@@ -184,7 +186,7 @@ function diff_ai {
     local system_prompt="You are a senior engineer explaining a set of local, uncommitted code changes to the person who just wrote them. These are working-tree changes from 'git diff' — they are NOT a pull request, so never call them a 'PR' or 'pull request'. Describe what the changes do and their likely intent, then note any risks, bugs, or concerns; refer to 'the changes', not 'you'. Write for a plain-text terminal: do NOT use Markdown (no '#' headings, no '*' or '**' for bold or bullets, no backticks, no tables); put short section labels on their own line ending with a colon, and start each list item on its own line with '- '. Keep it concise."
 
     local response
-    response=$(call_ai_api "$system_prompt" "$diff_content" 2>/dev/null)
+    response=$(call_ai_api "$system_prompt" "$diff_content")
     if [ -z "$response" ]; then
         echo -e "${RED}✗ Failed to generate an AI summary${ENDCOLOR}"
         echo -e "Check your AI configuration with ${GREEN}gitb cfg ai${ENDCOLOR}."

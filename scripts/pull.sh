@@ -169,7 +169,7 @@ function pull_script {
         fetch "$current_branch" "$origin_name" "$all"
 
         if [ $fetch_code == 0 ] ; then
-            commits=$(commit_list 999 "tab" "HEAD..$origin_name/$current_branch")
+            if git rev-parse --verify --quiet "refs/remotes/$origin_name/$current_branch" >/dev/null 2>&1; then commits=$(commit_list 999 "tab" "HEAD..$origin_name/$current_branch"); else commits=""; fi
             if [ "$commits" != "" ]; then
                 if [ -n "$all" ]; then
                     echo -e "${GREEN}✓ Fetched all remotes${ENDCOLOR}"
@@ -190,7 +190,7 @@ function pull_script {
             fi
         fi
 
-        exit
+        exit $fetch_code
     fi
 
     if [ -n "$update" ]; then
@@ -200,7 +200,7 @@ function pull_script {
         update_code=$?
         
         if [ $update_code == 0 ] ; then
-            commits=$(commit_list 999 "tab" "HEAD..$origin_name/$current_branch")
+            if git rev-parse --verify --quiet "refs/remotes/$origin_name/$current_branch" >/dev/null 2>&1; then commits=$(commit_list 999 "tab" "HEAD..$origin_name/$current_branch"); else commits=""; fi
             if [ "$commits" != "" ]; then
                 echo -e "${GREEN}✓ Updated all remotes${ENDCOLOR}"
                 if [ "$update_output" != "" ]; then
@@ -224,7 +224,7 @@ function pull_script {
     
     echo -e "${YELLOW}Pulling '$origin_name/$current_branch'...${ENDCOLOR}"
     echo
-    pull $current_branch $origin_name $editor $mode $ffonly 
+    pull "$current_branch" "$origin_name" "$editor" "$mode" "$ffonly"
     exit
 }
 
@@ -344,7 +344,7 @@ function pull {
             echo -e "2. ${BLUE}Rebase${ENDCOLOR} — replays your local commits on top of the remote branch"
             echo -e "0. ${BLUE}Exit${ENDCOLOR} — leave the branch unchanged"
 
-            read -n 1 -s choice
+            read -n 1 -s choice || prompt_aborted
             re='^[120]+$'
             if ! [[ $choice =~ $re ]]; then
                 exit 0
@@ -354,13 +354,13 @@ function pull {
         echo
 
         if [ "$choice" == "1" ]; then
-            merge $1 $2 $3 "pull" "true" $5
+            merge "$1" "$2" "$3" "pull" "true" "$5"
             mode="merge"
             if [ $merge_code != 0 ] ; then
                 echo
            fi
         elif [ "$choice" == "2" ]; then
-           rebase_branch $1 $2 "true" $interactive $interactive
+           rebase_branch "$1" "$2" "true"
            mode="rebase"
            if [ $rebase_code != 0 ] ; then
                 echo

@@ -1,15 +1,28 @@
 #!/usr/bin/env bash
 
 
-### Consts for colors to use inside 'sed'
-RED_ES="\x1b[31m"
-GREEN_ES="\x1b[32m"
-YELLOW_ES="\x1b[33m"
-BLUE_ES="\x1b[34m"
-PURPLE_ES="\x1b[35m"
-CYAN_ES="\x1b[36m"
-GRAY_ES="\x1b[37m"
-ENDCOLOR_ES="\x1b[0m"
+### Consts for colors to use inside 'sed'. Emptied alongside the terminal
+### colors in init.sh when NO_COLOR is set or stdout is not a terminal —
+### they only ever appear on sed's replacement side, so empty is safe.
+if [ -n "$NO_COLOR" ] || [ ! -t 1 ]; then
+    RED_ES=""
+    GREEN_ES=""
+    YELLOW_ES=""
+    BLUE_ES=""
+    PURPLE_ES=""
+    CYAN_ES=""
+    GRAY_ES=""
+    ENDCOLOR_ES=""
+else
+    RED_ES="\x1b[31m"
+    GREEN_ES="\x1b[32m"
+    YELLOW_ES="\x1b[33m"
+    BLUE_ES="\x1b[34m"
+    PURPLE_ES="\x1b[35m"
+    CYAN_ES="\x1b[36m"
+    GRAY_ES="\x1b[37m"
+    ENDCOLOR_ES="\x1b[0m"
+fi
 
 
 ### ===== PORTABLE ASSOCIATIVE-ARRAY SHIM (bash 3.2+) =====
@@ -223,29 +236,27 @@ function sanitize_git_name {
 function sanitize_file_path {
     local input="$1"
     sanitized_file_path=""
-    
+
     if [ -z "$input" ]; then
         return 1
     fi
-    
-    # Remove null bytes and control characters (except tab and newline for multiline patterns)
-    local cleaned=$(echo "$input" | tr -d '\000-\010\013\014\016-\037\177')
-    
-    # Remove dangerous sequences
-    cleaned=$(echo "$cleaned" | sed 's/\.\.\///g')  # Remove ../
-    cleaned=$(echo "$cleaned" | sed 's/;[[:space:]]*rm[[:space:]]*/; /g')  # Remove rm commands after semicolon
-    cleaned=$(echo "$cleaned" | sed 's/&&[[:space:]]*rm[[:space:]]*/&& /g')  # Remove rm commands after &&
-    cleaned=$(echo "$cleaned" | sed 's/|[[:space:]]*rm[[:space:]]*/| /g')  # Remove rm commands after pipe
-    cleaned=$(echo "$cleaned" | sed 's/[[:space:]]rm[[:space:]]*/ /g')  # Remove rm commands with spaces around
-    cleaned=$(echo "$cleaned" | sed 's/^rm[[:space:]]*//g')  # Remove rm at start
-    cleaned=$(echo "$cleaned" | sed 's/[[:space:]]rm$//g')  # Remove rm at end
-    
-    # Limit length
-    if [ ${#cleaned} -gt 1000 ]; then
+
+    # Validate, never rewrite. The old pass silently DELETED "../" (so the
+    # standard ../sibling worktree layout landed inside the repo) and every
+    # "rm" token (so "rmdir.c" became "dir.c" and staged the wrong file).
+    # These values are only ever passed as ARGUMENTS to git — never through
+    # a shell — so the sole genuinely dangerous bytes are control chars.
+    # Reject those (tab allowed: legal in filenames) instead of mangling.
+    if printf '%s' "$input" | LC_ALL=C tr -d '\011' | LC_ALL=C grep -q '[[:cntrl:]]'; then
         return 1
     fi
-    
-    sanitized_file_path="$cleaned"
+
+    # Limit length
+    if [ ${#input} -gt 1000 ]; then
+        return 1
+    fi
+
+    sanitized_file_path="$input"
     return 0
 }
 
@@ -293,10 +304,15 @@ function sanitize_command {
        [[ "$input" == *"&"* ]] || [[ "$input" == *"\$"* ]] || [[ "$input" == *"\`"* ]]; then
         return 1
     fi
-    
-    # Only allow alphanumeric, dash, underscore, and slash for paths
-    local cleaned=$(echo "$input" | sed 's/[^a-zA-Z0-9._/-]//g')
-    
+
+    # Allow spaces so editors with flags work ("code --wait", "emacs -nw").
+    # The old charset silently deleted the space, producing "code--wait"
+    # and a baffling "binary not found" for a command the user never typed.
+    local cleaned=$(echo "$input" | sed 's/[^a-zA-Z0-9._/ -]//g')
+    if [ "$cleaned" != "$input" ]; then
+        return 1
+    fi
+
     # Validate length and format
     if [ ${#cleaned} -lt 1 ] || [ ${#cleaned} -gt 100 ] || [[ "$cleaned" =~ ^- ]]; then
         return 1
@@ -355,9 +371,10 @@ function validate_numeric_input {
     if ! [[ "$input" =~ ^[0-9]+$ ]]; then
         return 1
     fi
-    
-    # Convert to number for range checking
-    local num=$((input))
+
+    # 10#: leading zeros are decimal input, not octal ("010" used to
+    # validate as 8 and "09" threw a raw bash arithmetic error)
+    local num=$((10#$input))
     
     # Check minimum value
     if [ -n "$min_val" ] && [ "$num" -lt "$min_val" ]; then
@@ -603,6 +620,35 @@ function is_no {
     return 1
 }
 
+### EOF guard for interactive read loops: closed/exhausted stdin means the
+# prompt can never be answered — abort instead of spinning or auto-picking.
+# Usage: read -n 1 -s choice || prompt_aborted
+function prompt_aborted {
+    echo
+    echo -e "${YELLOW}Input closed — aborting.${ENDCOLOR}"
+    exit 1
+}
+
+### Destructive-action confirmation: only an explicit "yes" key proceeds.
+# Unlike is_yes-based prompts (where Enter means yes), Enter, Esc, EOF and
+# any other key DECLINE — a destructive prompt must never auto-confirm on
+# closed or exhausted stdin. Echoes the effective answer for transcripts.
+# Returns: 0 on explicit yes, 1 on decline, 2 on EOF/closed stdin
+function confirm_destructive {
+    local _cd_key=""
+    if ! read_key _cd_key; then
+        printf "n\n"
+        return 2
+    fi
+    normalize_key "$_cd_key"
+    if [ -n "$_cd_key" ] && [ "$normalized_key" == "y" ]; then
+        printf "y\n"
+        return 0
+    fi
+    printf "n\n"
+    return 1
+}
+
 ### Returns 0 (true) when HEAD points at a branch; 1 (false) when detached.
 function on_branch {
     git symbolic-ref --quiet HEAD >/dev/null 2>&1
@@ -635,12 +681,16 @@ function read_key {
     local _var="${1:-REPLY}"
     local _prompt="$2"
     local _key=""
+    local _rc=0
 
     if [ -n "$_prompt" ]; then
         printf '%s' "$_prompt"
     fi
 
-    IFS= read -r -s -n 1 _key
+    # A failed first read means EOF/closed stdin — callers that treat an
+    # empty key as "accept" must check the return code (Enter also yields
+    # an empty key, but with rc 0).
+    IFS= read -r -s -n 1 _key || _rc=1
 
     if [ -n "$_key" ]; then
         if [ "$_key" = $'\e' ]; then
@@ -666,6 +716,12 @@ function read_key {
             # Got a single byte - check if it's a UTF-8 leading byte that needs more bytes
             local _ord
             _ord=$(LC_CTYPE=C printf '%d' "'$_key" 2>/dev/null) || _ord=0
+            # bash 3.2 prints high bytes as signed chars (0xD0 -> -48), so
+            # the UTF-8 lead-byte ranges below never matched and multi-byte
+            # keys (Russian layout) collapsed to their first byte.
+            if [ "$_ord" -lt 0 ]; then
+                _ord=$((_ord + 256))
+            fi
 
             local _extra=0
             if (( _ord >= 192 && _ord < 224 )); then
@@ -685,6 +741,7 @@ function read_key {
     fi
 
     printf -v "$_var" '%s' "$_key"
+    return $_rc
 }
 
 ### Read editable text input, allowing Esc to cancel by submitting empty input.
@@ -704,14 +761,21 @@ function read_editable_input {
     if [ $# -ge 3 ]; then
         if ((BASH_VERSINFO[0] >= 4)); then
             # bash 4+: preload the editable buffer so the user edits in place.
-            IFS= read -r -e -p "$_prompt" -i "$3" "$_var"
+            if ! IFS= read -r -e -p "$_prompt" -i "$3" "$_var"; then
+                printf -v "$_var" ''
+                return 1
+            fi
         else
             # bash 3.2 has no `read -i` to preload readline. Degrade gracefully:
             # show the current value and keep it when the user submits an empty
-            # line (retype the line to change it).
+            # line (retype the line to change it). A FAILED read (EOF) must not
+            # count as accepting the default — return empty instead.
             local _reply _hint=""
             [ -n "$3" ] && _hint="[$3] "
-            IFS= read -r -e -p "${_prompt}${_hint}" _reply
+            if ! IFS= read -r -e -p "${_prompt}${_hint}" _reply; then
+                printf -v "$_var" ''
+                return 1
+            fi
             if [ -z "$_reply" ]; then
                 printf -v "$_var" '%s' "$3"
             else
@@ -719,7 +783,10 @@ function read_editable_input {
             fi
         fi
     else
-        IFS= read -r -e -p "$_prompt" "$_var"
+        if ! IFS= read -r -e -p "$_prompt" "$_var"; then
+            printf -v "$_var" ''
+            return 1
+        fi
     fi
 }
 
@@ -771,7 +838,7 @@ function wrong_mode {
     if [ -n "$2" ]; then
         echo -e "${RED}✗ Unknown mode ${YELLOW}$2${RED} for ${YELLOW}gitb $1${RED}.${ENDCOLOR}"
         echo -e "Run ${GREEN}gitb $1 help${ENDCOLOR} to see available modes."
-        exit
+        exit 1
     fi
 }
 
@@ -850,6 +917,11 @@ function get_repo {
     elif [[ "$repo" =~ ^ssh://git@([^/]+)/(.*)$ ]]; then
         repo="https://${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
     fi
+
+    # Strip embedded credentials (https://user:token@host/...): CI-generated
+    # clones carry access tokens there, and every link gitb prints would
+    # otherwise expose them in terminals, screenshots and logs.
+    repo=$(printf '%s\n' "$repo" | sed -E 's#^(https?://)[^/@]+@#\1#')
 
     # Strip .git suffix if present
     repo="${repo%.git}"
@@ -1324,7 +1396,11 @@ function check_code {
         echo -e "${RED}✗ Cannot $3.${ENDCOLOR}"
         echo -e "$2"
         if [ -n "$git_add" ]; then
-            git restore --staged "$git_add"
+            # Match `git add $git_add`: word-split intentionally (multiple
+            # paths), glob-off, `--` so dash-leading paths aren't options.
+            # A quoted "$git_add" treated the whole list as ONE pathspec and
+            # failed loudly for multi-file input.
+            ( set -f; git restore --staged -- $git_add 2>/dev/null )
         fi
         exit $1
     fi
@@ -1336,7 +1412,12 @@ function check_code {
 # $2: flag no echo
 function yes_no_choice {
     while true; do
-        read -n 1 -s choice
+        if ! read -n 1 -s choice; then
+            # EOF/closed stdin: never treat an unanswerable prompt as "yes".
+            printf "n\n"
+            echo -e "${YELLOW}Input closed — aborting.${ENDCOLOR}"
+            exit 1
+        fi
         if is_yes "$choice"; then
             if [ -n "$1" ]; then
                 echo -e "${YELLOW}$1${ENDCOLOR}"
@@ -1353,6 +1434,50 @@ function yes_no_choice {
 }
 
 
+### yes_no_choice's destructive twin: same output contract, but only an
+# explicit "yes" key proceeds. A decline (n/Enter/other key) exits 0 —
+# the user changed their mind, nothing happened. EOF exits 1 — the prompt
+# could never be answered. Use for prompts that delete, force-push, or
+# rewrite history.
+# $1: text to print on confirm
+# $2: pass anything to skip the trailing blank line
+function yes_no_choice_strict {
+    local _ync_rc
+    confirm_destructive
+    _ync_rc=$?
+    if [ "$_ync_rc" -eq 2 ]; then
+        echo -e "${YELLOW}Input closed — aborting.${ENDCOLOR}"
+        exit 1
+    fi
+    if [ "$_ync_rc" -ne 0 ]; then
+        exit 0
+    fi
+    if [ -n "$1" ]; then
+        echo -e "${YELLOW}$1${ENDCOLOR}"
+        if [ -z "$2" ]; then
+            echo
+        fi
+    fi
+}
+
+
+### Undo the staging recorded in $git_add when a picker is aborted. Prefers
+# cleanup_on_exit (commit.sh) when it is loaded: it word-splits multi-path
+# input the same way `git add $git_add` did, and re-stages files the user
+# had staged before a fast-mode `git add .` — a plain quoted restore
+# treated the whole list as one pathspec and dropped pre-existing staging.
+function _choose_restore_staged {
+    if [ -z "$git_add" ]; then
+        return
+    fi
+    if type cleanup_on_exit >/dev/null 2>&1; then
+        cleanup_on_exit "$git_add"
+    else
+        ( set -f; git restore --staged -- $git_add 2>/dev/null )
+    fi
+}
+
+
 ### Function waits a number from user and returns result of choice from a provided list
 # $1: list of values
 # Returns: 
@@ -1365,30 +1490,37 @@ function choose {
     number_of_values=${#values[@]}
 
     while true; do
+        local _choose_read_ok="true"
         if [ "$number_of_values" -gt 9 ]; then
-            read -p "$read_prefix" -e -n 2 choice
+            read -p "$read_prefix" -e -n 2 choice || _choose_read_ok=""
         else
-            read -p "$read_prefix" -n 1 -s choice
+            read -p "$read_prefix" -n 1 -s choice || _choose_read_ok=""
             # Drain trailing newline so users who press "1<Enter>" don't leak
             # the newline into the next read (e.g. worktree move's path prompt).
             drain_pending_input
         fi
 
+        if [ -z "$_choose_read_ok" ]; then
+            # EOF/closed stdin: abort without picking anything.
+            _choose_restore_staged
+            echo
+            echo -e "${YELLOW}Input closed — aborting.${ENDCOLOR}"
+            exit 1
+        fi
+
         if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
-            if [ -n "$git_add" ]; then
-                git restore --staged "$git_add"
-            fi
+            _choose_restore_staged
             if [ "$number_of_values" -le 9 ]; then
                 printf "%s" "$choice"
             fi
             exit
         fi
 
-        re='^[0-9=]+$'
+        # Whole-token match only: mixed input like "5=" must not reach the
+        # arithmetic below (bash would abort on "5=-1").
+        re='^([0-9][0-9]?|=|==)$'
         if ! [[ $choice =~ $re ]]; then
-            if [ -n "$git_add" ]; then
-                git restore --staged "$git_add"
-            fi
+            _choose_restore_staged
             exit
         fi
 
@@ -1397,7 +1529,8 @@ function choose {
             break
         fi
 
-        index=$(($choice-1))
+        # 10# so a leading zero ("09") is decimal, not an octal error
+        index=$((10#$choice-1))
         choice_result=${values[index]}
         if [ -n "$choice_result" ]; then
             if [ "$number_of_values" -le 9 ]; then
@@ -1406,9 +1539,7 @@ function choose {
             break
         else
             if [ "$number_of_values" -gt 9 ]; then
-                if [ -n "$git_add" ]; then
-                    git restore --staged "$git_add"
-                fi
+                _choose_restore_staged
                 exit
             fi
         fi
@@ -1469,11 +1600,14 @@ function commit_list {
         if [[ "$3" == *"HEAD"* ]]; then
             ref="$(echo "$3" | sed 's/HEAD..//')"
         else
-            return 
+            return
         fi
     fi
 
-    IFS=$'\n' 
+    # local: leaking IFS=$'\n' into the caller broke every later
+    # space-splitting expansion (e.g. it disabled the push-size warning
+    # after any commit picker ran)
+    local IFS=$'\n'
     read -rd '' -a commits_info <<<"$(git --no-pager log -n $1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} | %s | ${BLUE_ES}%an${ENDCOLOR_ES} | ${GREEN_ES}%cr${ENDCOLOR_ES}" $ref | column -ts'|')" || true
     read -rd '' -a commits_hash <<<"$(git --no-pager log -n $1 --pretty="%h" $ref)" || true
 
@@ -1496,7 +1630,7 @@ function commit_list {
 #     refs_info
 #     refs_hash
 function ref_list {
-    IFS=$'\n' 
+    local IFS=$'\n'
     read -rd '' -a refs_info <<<"$(git --no-pager reflog -n $1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} | ${BLUE_ES}%gd${ENDCOLOR_ES} | %gs | ${GREEN_ES}%cr${ENDCOLOR_ES}" | column -ts'|')" || true
     read -rd '' -a refs_hash <<<"$(git --no-pager reflog -n $1 --pretty="%gd")" || true
 
@@ -1601,8 +1735,12 @@ function print_ai_summary {
         fi
         # Leading bullet (*, +, -) -> colored bullet.
         line=$(printf '%s' "$line" | sed -E "s/^([[:space:]]*)[*+-][[:space:]]+/\\1${c_bullet}•${c_reset} /")
-        # Inline bold (**text** or __text__) -> terminal bold.
-        line=$(printf '%s' "$line" | sed -E "s/(\\*\\*|__)([^*_]+)(\\*\\*|__)/${c_bold}\\2${c_reset}/g")
+        # Inline bold -> terminal bold. Same-kind pairs only, anchored at
+        # word boundaries: the old cross-kind pattern paired '**' across
+        # spans (mangling '**a_b** and **c_d**') and ate math ('2**8') and
+        # dunder names ('__init__.py').
+        line=$(printf '%s' "$line" | sed -E "s/(^|[[:space:]])\\*\\*([^*]+)\\*\\*($|[[:space:]])/\\1${c_bold}\\2${c_reset}\\3/g")
+        line=$(printf '%s' "$line" | sed -E "s/(^|[[:space:]])__([^_]+)__($|[[:space:]])/\\1${c_bold}\\2${c_reset}\\3/g")
         printf '%s\n' "$line"
     done <<< "$text"
 }
@@ -1740,11 +1878,18 @@ function list_branches {
     fi
     branches_str=$(git --no-pager branch $args --format="%(refname:short)")
     branches_info_raw=$(git --no-pager branch $args --format="${BLUE_ES}%(refname:short)${ENDCOLOR_ES} | %(contents:subject) | ${YELLOW_ES}%(objectname:short)${ENDCOLOR_ES}  | ${GREEN_ES}%(committerdate:relative)${ENDCOLOR_ES}")
-    branches_info_str=$(echo "$branches_info_raw" | awk -v max=60 -F'\\|' '{
+    # ctrl/torn: strip terminal-control bytes from subjects and repair a
+    # trailing UTF-8 sequence cut mid-character (byte-based awk on macOS) —
+    # one torn byte makes BSD column silently drop the row and all after it.
+    branches_info_str=$(echo "$branches_info_raw" | LC_ALL=C awk -v max=60 \
+        -v ctrl='[\001-\010\013-\037\177]' -v torn='[\300-\367][\200-\277]*$' -F'\\|' '{
         subject=$2
+        gsub(ctrl,"",subject)
         gsub(/^[ \t]+|[ \t]+$/,"",subject)
         if (length(subject) > max) {
-            subject=substr(subject,1,max-3) "..."
+            subject=substr(subject,1,max-3)
+            sub(torn,"",subject)
+            subject=subject "..."
         }
         print $1 " | " subject " | " $3 " | " $4
     }' | column -ts'|' )
@@ -1754,9 +1899,14 @@ function list_branches {
     read -rd '' -a branches_info <<< "$branches_info_str" || true
 
     number_of_branches=${#branches[@]}
+    local _head_entries=0
     if [[ "$1" == "remote" ]]; then
-        # There is origin/HEAD
-        ((number_of_branches=number_of_branches-1))
+        # Subtract the symbolic origin/HEAD entry ONLY when it exists —
+        # plain `git remote add` + fetch never creates it (git < 2.47), and
+        # blindly decrementing made a single-branch remote read as "No
+        # branches found".
+        _head_entries=$(printf '%s\n' "$branches_str" | grep -cx "${origin_name}/HEAD" || true)
+        ((number_of_branches=number_of_branches-_head_entries))
     fi
 
     if [[ "$number_of_branches" == 0 ]]; then
@@ -1768,10 +1918,14 @@ function list_branches {
 
     branch_to_check="${branches[0]}"
     if [[ "$1" == "remote" ]]; then
-        # Remove 'origin/'
-        branch_to_check="${branches[1]}"
-        branch_to_check="$(sed "s/remotes\///g" <<< ${branch_to_check})"
-        branch_to_check="$(sed "s/${origin_name}\///g" <<< ${branch_to_check})"
+        # Skip the origin/HEAD slot only when it exists; strip the remote
+        # prefix with parameter expansion (a global sed also mangled branch
+        # names that contain "<origin>/" as a later path segment).
+        if [ "$_head_entries" -gt 0 ]; then
+            branch_to_check="${branches[1]}"
+        fi
+        branch_to_check="${branch_to_check#remotes/}"
+        branch_to_check="${branch_to_check#"$origin_name"/}"
     fi
 
     if [[ "$number_of_branches" == 1 ]] && [[ "${branch_to_check}" == "${current_branch}" ]]; then
@@ -1802,24 +1956,27 @@ function list_branches {
     for index in "${!branches[@]}"
     do
         branch_to_check="${branches[index]}"
-        if [[ "$1" == "delete" ]]; then
-            if [[ "$branch_to_check" == "${current_branch}"* ]] || [[ "$branch_to_check" == "${main_branch}"* ]]; then
-                continue    
-            fi
+        if [[ "$1" == "remote" ]]; then
+            branch_to_check="${branch_to_check#remotes/}"
+            branch_to_check="${branch_to_check#"$origin_name"/}"
         fi
-        if [[ "$1" == "merge" ]]; then
-            if [[ "$branch_to_check" == "${current_branch}"* ]]; then
+        # Exact-name comparisons: the old prefix matches made "main-old"
+        # collide with "main" (wrong info shown, branch unselectable) and
+        # hid every "fix-*" sibling of a branch named "fix".
+        if [[ "$1" == "delete" ]]; then
+            if [[ "$branch_to_check" == "$current_branch" ]] || [[ "$branch_to_check" == "$main_branch" ]]; then
                 continue
             fi
         fi
-        if [[ "$1" == "remote" ]]; then
-            branch_to_check="$(sed "s/remotes\///g" <<< ${branch_to_check})"
-            branch_to_check="$(sed "s/${origin_name}\///g" <<< ${branch_to_check})"
+        if [[ "$1" == "merge" ]]; then
+            if [[ "$branch_to_check" == "$current_branch" ]]; then
+                continue
+            fi
         fi
 
-        if [[ "$branch_to_check" == "${main_branch}"* ]]; then
+        if [[ "$branch_to_check" == "$main_branch" ]]; then
             branches_info_first_main[0]="${branches_info[index]}"
-        elif [[ "$branch_to_check" != "HEAD->"* ]] && [[ "$branch_to_check" != "$origin_name" ]]; then 
+        elif [[ "$branch_to_check" != "HEAD->"* ]] && [[ "$branch_to_check" != "HEAD" ]] && [[ "$branch_to_check" != "$origin_name" ]]; then
             branches_first_main+=(${branches[index]})
             branches_info_first_main+=("${branches_info[index]}")
         fi
@@ -1955,10 +2112,13 @@ function choose_branch {
         fi
     done
 
-    # For remote, ensure branch_name is just the branch part (no origin/ prefix for local creation)
+    # For remote, ensure branch_name is just the branch part (no origin/
+    # prefix for local creation). Prefix-only expansion — a global sed also
+    # stripped "<origin>/" appearing as a LATER path segment, mangling e.g.
+    # "origin/feature/origin/foo" into "feature/foo".
     if [[ "$1" == "remote" ]]; then
-        branch_name=$(sed "s/remotes\///g" <<< ${branch_name})
-        branch_name=$(sed "s/${origin_name}\///g" <<< ${branch_name})
+        branch_name="${branch_name#remotes/}"
+        branch_name="${branch_name#"$origin_name"/}"
     fi
 }
 
@@ -2015,7 +2175,7 @@ function switch {
         echo -e "${conflicts//[[:blank:]]/}"
         echo
         echo -e "${YELLOW}Commit or stash these files, then try again.${ENDCOLOR}"
-        exit
+        exit 1
     fi
 
     if [ $switch_code -ne 0 ]; then

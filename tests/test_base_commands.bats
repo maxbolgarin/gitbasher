@@ -6,6 +6,11 @@ load setup_suite
 
 setup() {
     setup_test_repo
+    # A fresh clone has no dist/gitb (it is gitignored and built at release
+    # time) — build it here so `make test` works without a prior make build.
+    if [ ! -f "${GITBASHER_ROOT}/dist/gitb" ]; then
+        (cd "${GITBASHER_ROOT}" && bash dist/build.sh ./scripts/gitb.sh ./dist/gitb dev >/dev/null 2>&1)
+    fi
 }
 
 teardown() {

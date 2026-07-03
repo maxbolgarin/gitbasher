@@ -46,6 +46,17 @@ if [ -n "$nonascii" ]; then
     fail=1
 fi
 
+# 1c. Bash-4-only constructs that `bash -n` cannot catch (they fail at
+# runtime, not parse time). `declare -g` (4.2+) silently made squash's
+# plan arrays function-local on 3.2 once — the whole feature broke while
+# the syntax gate stayed green.
+bash4isms=$(grep -nE 'declare -g|readarray|mapfile |\$\{[A-Za-z_]+(\[[^]]*\])?(,,|\^\^)\}' "$here"/scripts/*.sh 2>/dev/null | grep -v '^[^:]*:[0-9]*: *#' || true)
+if [ -n "$bash4isms" ]; then
+    echo "BASH-4-ONLY constructs in scripts/ (break at runtime under 3.2):"
+    printf '%s\n' "$bash4isms"
+    fail=1
+fi
+
 # 2. Load the helpers and exercise them.
 # shellcheck disable=SC1091
 source "$here/scripts/common.sh"

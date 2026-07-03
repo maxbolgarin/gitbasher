@@ -61,7 +61,7 @@ function set_sep {
     local -a seps=("" "/" "_" "-" "." "," "+" "=" "@")
 
     while [ true ]; do
-        read -n 1 -s choice
+        read -n 1 -s choice || prompt_aborted
 
         if [ "$choice" == "0" ]; then
             exit
@@ -106,20 +106,24 @@ function set_editor {
 
     # Sanitize editor command input
     if ! sanitize_command "$choice"; then
-        show_sanitization_error "editor" "Use only letters, numbers, dots, dashes, underscores, and slashes."
+        show_sanitization_error "editor" "Use letters, numbers, dots, dashes, underscores, slashes, and spaces for flags."
         exit 1
     fi
     choice="$sanitized_command"
 
     echo
 
-    which_output=$(which "$choice")
+    # Probe only the BINARY (first word): editors are routinely configured
+    # with flags ("code --wait", "emacs -nw") and the whole string never
+    # resolves as a command.
+    editor_binary="${choice%% *}"
+    which_output=$(which "$editor_binary")
     if [[ "${which_output}" == *"not found"* ]] || [[ "${which_output}" == "" ]]; then
-        echo -e "${RED}✗ Binary '${choice}' not found.${ENDCOLOR}" >&2
+        echo -e "${RED}✗ Binary '${editor_binary}' not found.${ENDCOLOR}" >&2
         exit 1
     fi
 
-    editor=$(set_config_value core.editor $choice)
+    editor=$(set_config_value core.editor "$choice")
     echo -e "${GREEN}✓ Using editor '$editor' (${which_output})${ENDCOLOR}"
     echo
 
@@ -164,14 +168,17 @@ function set_ticket {
 
     echo 
 
-    ticket_name=$(set_config_value gitbasher.ticket $ticket_name)
+    # Quoted: an unquoted value containing a space word-split, landing the
+    # second word in set_config_value's GLOBAL flag slot — the value was
+    # truncated AND silently written to ~/.gitconfig instead of the repo.
+    ticket_name=$(set_config_value gitbasher.ticket "$ticket_name")
     echo -e "${GREEN}✓ Set '${ticket_name}' as the ticket prefix in '${project_name}'${ENDCOLOR}"
     echo
 
     [ "$GITBASHER_NO_REPO" = "true" ] && exit
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     yes_no_choice "\nSet '${ticket_name}' globally" "true"
-    ticket_name=$(set_config_value gitbasher.ticket $ticket_name "true")
+    ticket_name=$(set_config_value gitbasher.ticket "$ticket_name" "true")
 }
 
 
@@ -235,7 +242,7 @@ function configure_ai_key {
     echo -e "  ${GREEN}env var${ENDCOLOR}    — recommended; the key never touches disk via gitbasher"
     echo -e "  ${BLUE}git config${ENDCOLOR} — convenient, but stored in plaintext under .git/config (or ~/.gitconfig if global)"
     echo
-    read -n 1 -p "Use environment variable (recommended)? (y/n) " ai_storage_choice
+    read -n 1 -p "Use environment variable (recommended)? (y/n) " ai_storage_choice || ai_storage_choice="n"
     echo
     if is_yes "$ai_storage_choice"; then
         echo
@@ -276,7 +283,7 @@ function configure_ai_key {
     # Basic validation - check for reasonable API key format
     if [[ ! "$ai_key_input" =~ ^[a-zA-Z0-9._-]{20,}$ ]]; then
         echo -e "${YELLOW}⚠  API key format does not look like a valid ${provider} key.${ENDCOLOR}" >&2
-        read -n 1 -p "Continue anyway? (y/n) " -s choice
+        read -n 1 -p "Continue anyway? (y/n) " -s choice || choice="n"
         echo
         if ! is_yes "$choice"; then
             exit 1
@@ -377,6 +384,13 @@ function configure_ai_provider {
                     *) host_input="http://${host_input}" ;;
                 esac
                 host_input="${host_input%/}"
+                # Validate before storing: this value is interpolated into
+                # every AI request URL, and garbage (spaces, quotes) used to
+                # be stored unchecked and fail later with opaque curl errors.
+                if ! validate_proxy_url "$host_input"; then
+                    echo -e "${RED}✗ '$host_input' does not look like a valid host URL (expected http://host[:port]).${ENDCOLOR}"
+                    exit 1
+                fi
                 set_ai_ollama_host "$host_input" >/dev/null
                 echo -e "${GREEN}✓ Ollama host set to ${host_input}${ENDCOLOR}"
             fi
@@ -398,11 +412,18 @@ function configure_ai_provider {
 
     if [ "$GITBASHER_NO_REPO" != "true" ]; then
         echo -e "Do you want to set this provider ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
-        yes_no_choice "\nSet AI provider globally" "true"
-        set_config_value gitbasher.ai-provider "$new_provider" "true"
-        # Keep the Ollama host at the same scope as the provider it belongs to.
-        if [ "$new_provider" = "ollama" ] && [ -n "$host_input" ]; then
-            set_config_value gitbasher.ai-ollama-host "$host_input" "true" >/dev/null
+        # Non-exiting confirm: yes_no_choice exits the process on "no",
+        # which skipped the missing-key follow-up below — the exact
+        # surprise that block exists to prevent.
+        local _prov_key=""
+        read_key _prov_key || _prov_key="n"
+        if is_yes "$_prov_key"; then
+            echo -e "${YELLOW}Set AI provider globally${ENDCOLOR}"
+            set_config_value gitbasher.ai-provider "$new_provider" "true"
+            # Keep the Ollama host at the same scope as the provider it belongs to.
+            if [ "$new_provider" = "ollama" ] && [ -n "$host_input" ]; then
+                set_config_value gitbasher.ai-ollama-host "$host_input" "true" >/dev/null
+            fi
         fi
     fi
 
@@ -648,7 +669,7 @@ function configure_ai_history {
         if [ "$limit_input" -gt 20 ]; then
             echo -e "${YELLOW}High values may exceed token limits and slow down AI responses.${ENDCOLOR}"
         fi
-        read -n 1 -p "Continue anyway? (y/n) " -s choice
+        read -n 1 -p "Continue anyway? (y/n) " -s choice || choice="n"
         echo
         if ! is_yes "$choice"; then
             exit
@@ -746,7 +767,7 @@ function configure_ai_diff {
         lines_input="$validated_number"
         if [ "$lines_input" -lt 50 ] || [ "$lines_input" -gt 2000 ]; then
             echo -e "${YELLOW}⚠  Value is outside the recommended range (50-2000).${ENDCOLOR}"
-            read -n 1 -p "Continue anyway? (y/n) " -s choice
+            read -n 1 -p "Continue anyway? (y/n) " -s choice || choice="n"
             echo
             if ! is_yes "$choice"; then
                 exit
@@ -765,7 +786,7 @@ function configure_ai_diff {
         chars_input="$validated_number"
         if [ "$chars_input" -lt 4000 ] || [ "$chars_input" -gt 100000 ]; then
             echo -e "${YELLOW}⚠  Value is outside the recommended range (4000-100000).${ENDCOLOR}"
-            read -n 1 -p "Continue anyway? (y/n) " -s choice
+            read -n 1 -p "Continue anyway? (y/n) " -s choice || choice="n"
             echo
             if ! is_yes "$choice"; then
                 exit
@@ -866,27 +887,49 @@ function delete_global {
     local -a actions=()
 
     _delete_global_add() {
-        local key="$1" label="$2" value_display="$3"
-        if [ -n "$value_display" ]; then
-            labels+=("${label}: ${value_display}")
+        # The RAW value gates the row; colors are applied here. Passing a
+        # pre-colored string made the emptiness test always true (the color
+        # codes alone are 15 chars), so every row showed even when unset and
+        # picking one printed a success message for a no-op unset.
+        local key="$1" label="$2" value="$3" color="${4:-$YELLOW}"
+        if [ -n "$value" ]; then
+            labels+=("${label}: ${color}${value}${ENDCOLOR}")
             actions+=("$key|$label")
         fi
     }
 
     local global_default=$(git config --global --get gitbasher.branch)
-    _delete_global_add "gitbasher.branch" "Default branch" "${YELLOW}${global_default}${ENDCOLOR}"
+    _delete_global_add "gitbasher.branch" "Default branch" "$global_default"
 
     local global_sep=$(git config --global --get gitbasher.sep)
-    _delete_global_add "gitbasher.sep" "Branch separator" "${YELLOW}${global_sep}${ENDCOLOR}"
+    _delete_global_add "gitbasher.sep" "Branch separator" "$global_sep"
 
     local global_editor=$(git config --global --get core.editor)
-    _delete_global_add "core.editor" "Commit message editor" "${YELLOW}${global_editor}${ENDCOLOR}"
+    _delete_global_add "core.editor" "Commit message editor" "$global_editor"
 
     local global_ticket=$(git config --global --get gitbasher.ticket)
-    _delete_global_add "gitbasher.ticket" "Ticket prefix" "${YELLOW}${global_ticket}${ENDCOLOR}"
+    _delete_global_add "gitbasher.ticket" "Ticket prefix" "$global_ticket"
 
     local global_scopes=$(git config --global --get gitbasher.scopes)
-    _delete_global_add "gitbasher.scopes" "Scopes list" "${YELLOW}${global_scopes}${ENDCOLOR}"
+    _delete_global_add "gitbasher.scopes" "Scopes list" "$global_scopes"
+
+    # Keys gitbasher itself writes globally but previously offered no way
+    # to remove (the Ollama host had NO removal path at all)
+    local global_provider=$(git config --global --get gitbasher.ai-provider)
+    _delete_global_add "gitbasher.ai-provider" "AI provider" "$global_provider" "$GREEN"
+
+    local global_ollama_host=$(git config --global --get gitbasher.ai-ollama-host)
+    _delete_global_add "gitbasher.ai-ollama-host" "Ollama host" "$global_ollama_host" "$GREEN"
+
+    local global_base_url=$(git config --global --get gitbasher.ai-base-url)
+    _delete_global_add "gitbasher.ai-base-url" "AI base URL" "$global_base_url" "$GREEN"
+
+    local _task_models
+    _task_models=$(git config --global --get-regexp '^gitbasher\.ai-model-' 2>/dev/null | awk '{print $1}' | tr '\n' '+' | sed 's/+$//')
+    if [ -n "$_task_models" ]; then
+        labels+=("AI per-task models: ${GREEN}configured${ENDCOLOR}")
+        actions+=("${_task_models}|AI per-task models")
+    fi
 
     # Per-provider AI keys; one row per provider that has a global key.
     while IFS=$'\t' read -r key_name; do
@@ -897,19 +940,19 @@ function delete_global {
     done < <(git config --global --get-regexp '^gitbasher\.ai-api-key-' 2>/dev/null | awk '{print $1}')
 
     local global_legacy_key=$(git config --global --get gitbasher.ai-api-key)
-    _delete_global_add "gitbasher.ai-api-key" "AI API key (legacy)" "${GREEN}configured${ENDCOLOR}"
+    _delete_global_add "gitbasher.ai-api-key" "AI API key (legacy)" "${global_legacy_key:+configured}" "$GREEN"
 
     local global_ai_model=$(git config --global --get gitbasher.ai-model)
-    _delete_global_add "gitbasher.ai-model" "AI model" "${GREEN}${global_ai_model}${ENDCOLOR}"
+    _delete_global_add "gitbasher.ai-model" "AI model" "$global_ai_model" "$GREEN"
 
     local global_ai_proxy=$(git config --global --get gitbasher.ai-proxy)
-    _delete_global_add "gitbasher.ai-proxy" "AI proxy" "${GREEN}${global_ai_proxy}${ENDCOLOR}"
+    _delete_global_add "gitbasher.ai-proxy" "AI proxy" "$global_ai_proxy" "$GREEN"
 
     local global_ai_history=$(git config --global --get gitbasher.ai-commit-history-limit)
-    _delete_global_add "gitbasher.ai-commit-history-limit" "AI commit history limit" "${GREEN}${global_ai_history}${ENDCOLOR}"
+    _delete_global_add "gitbasher.ai-commit-history-limit" "AI commit history limit" "$global_ai_history" "$GREEN"
 
     local global_push_warn=$(git config --global --get gitbasher.push-warn-size)
-    _delete_global_add "gitbasher.push-warn-size" "Push size warning" "${GREEN}${global_push_warn} MB${ENDCOLOR}"
+    _delete_global_add "gitbasher.push-warn-size" "Push size warning" "${global_push_warn:+${global_push_warn} MB}" "$GREEN"
 
     local global_ai_diff_lines=$(git config --global --get gitbasher.ai-diff-limit)
     local global_ai_diff_chars=$(git config --global --get gitbasher.ai-diff-max-chars)

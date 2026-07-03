@@ -131,7 +131,7 @@ stage_file() {
     [[ " ${split_group_keys[*]} " == *" refactor "* ]]
 }
 
-@test "orchestration: AI grouping is primary — runs even when heuristic is strong" {
+@test "orchestration: AI grouping is primary - runs even when heuristic is strong" {
     # Two files in two clearly-separated folders → the folder heuristic alone
     # already yields 2 clean groups (the old code would NOT have consulted AI).
     stage_file "api/a.go" "a"

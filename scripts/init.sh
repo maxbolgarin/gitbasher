@@ -7,16 +7,31 @@
 # Use octal \033 (not \e): both `echo -e` and `printf '%b'` interpret \033 on
 # every bash, whereas \e is a bash extension that bash 3.2's `printf %b` leaves
 # literal — which would emit raw "\e[31m" to the terminal there.
-RED="\033[31m"
-GREEN="\033[32m"
-YELLOW="\033[33m"
-BLUE="\033[34m"
-PURPLE="\033[35m"
-CYAN="\033[36m"
-GRAY="\033[37m"
-ENDCOLOR="\033[0m"
-BOLD="\033[1m"
-NORMAL="\033[0m"
+### Respect NO_COLOR and non-terminal stdout: piped or captured output
+### (gitb status > file, gitb log all | grep, CI logs) stays plain text.
+if [ -n "$NO_COLOR" ] || [ ! -t 1 ]; then
+    RED=""
+    GREEN=""
+    YELLOW=""
+    BLUE=""
+    PURPLE=""
+    CYAN=""
+    GRAY=""
+    ENDCOLOR=""
+    BOLD=""
+    NORMAL=""
+else
+    RED="\033[31m"
+    GREEN="\033[32m"
+    YELLOW="\033[33m"
+    BLUE="\033[34m"
+    PURPLE="\033[35m"
+    CYAN="\033[36m"
+    GRAY="\033[37m"
+    ENDCOLOR="\033[0m"
+    BOLD="\033[1m"
+    NORMAL="\033[0m"
+fi
 
 
 ### Function tries to get config from local, then from global, then returns default
@@ -35,7 +50,9 @@ function get_config_value {
             value=$2
         fi
     fi
-    echo -e "$value"
+    # printf, not echo -e: config values must round-trip verbatim (echo -e
+    # would expand backslash sequences and swallow values like "-n").
+    printf '%s\n' "$value"
 }
 
 
@@ -52,7 +69,7 @@ function set_config_value {
     else
         git config --global "$1" "$2"
     fi
-    echo -e "$2"
+    printf '%s\n' "$2"
 }
 
 
@@ -67,14 +84,17 @@ function unset_config_value {
 
     git config --unset "$1"
 
-    # Check if global config exists and ask user if they want to clear it too
+    # Check if global config exists and ask user if they want to clear it
+    # too. This must not exit on decline — callers still print their own
+    # local-clear confirmation afterwards.
     local global_config=$(git config --global --get "$1" 2>/dev/null)
     if [ -n "$global_config" ]; then
         echo
         echo -e "${YELLOW}Global $1 is also configured: ${BLUE}$global_config${ENDCOLOR}"
         echo -e "Do you want to clear it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
-        yes_no_choice "\nClear AI proxy globally" "false"
-        if [ $? -eq 0 ]; then
+        local _unset_key=""
+        read_key _unset_key || _unset_key="n"
+        if is_yes "$_unset_key"; then
             git config --global --unset "$1" 2>/dev/null
             echo -e "${GREEN}✓ Cleared $1 globally${ENDCOLOR}"
         fi
@@ -146,20 +166,31 @@ if [ -n "$_gitb_init_run_queries" ]; then
 ### Branches
 current_branch=$(git branch --show-current)
 
-main_branch=$(get_config_value gitbasher.branch "main")
-if [[ "$( git branch | grep -E "^[[:space:]*]*main[[:space:]]*$" )" == "" ]] && [[ "$( git branch | grep -E "^[[:space:]*]*master[[:space:]]*$" )" != "" ]]; then
-    main_branch="master"
-elif [[ "$(git branch | cat)" == "" ]]; then
-    main_branch=$current_branch
-fi
-
-if [ "$(get_config_value gitbasher.branch "")" == "" ]; then
+### The main/master auto-detection only applies when the user has not set
+### a default branch — an explicit gitbasher.branch must never be
+### overridden (a repo with master but no main used to force "master"
+### even after `gitb cfg default`). The "+" in the bracket class covers
+### branches checked out in linked worktrees.
+main_branch=$(get_config_value gitbasher.branch "")
+if [ "$main_branch" == "" ]; then
+    main_branch="main"
+    if [[ "$( git branch | grep -E "^[[:space:]*+]*main[[:space:]]*$" )" == "" ]] && [[ "$( git branch | grep -E "^[[:space:]*+]*master[[:space:]]*$" )" != "" ]]; then
+        main_branch="master"
+    elif [[ "$(git branch | cat)" == "" ]]; then
+        main_branch=$current_branch
+    fi
     git config --local gitbasher.branch "$main_branch"
 fi
 
 
-### Remote
-origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')
+### Remote — prefer "origin" when it exists. `git remote | head -1` is
+### alphabetical, so a remote named e.g. "backup" would otherwise hijack
+### every push/pull/URL target.
+if git remote | grep -qx "origin"; then
+    origin_name="origin"
+else
+    origin_name=$(git remote | head -n 1)
+fi
 if [ "$origin_name" == "" ]; then
     # Skip interactive prompt if in test mode or stdin is not a TTY (e.g., in tests or scripts)
     if [ -z "$GITBASHER_TEST_MODE" ] && [ -t 0 ]; then
@@ -199,7 +230,7 @@ if [ "$origin_name" == "" ]; then
             echo
             echo -e "${RED}✗ '$remote_url' is not a git repository.${ENDCOLOR}"
             echo "Make sure you have the correct access rights and that the repo exists."
-            exit
+            exit 1
         fi
 
         git remote add origin "$remote_url"
@@ -209,7 +240,7 @@ if [ "$origin_name" == "" ]; then
         fi
         echo
 
-        origin_name=$(git remote -v | head -n 1 | sed 's/\t.*//')
+        origin_name="origin"
     else
         # Non-interactive mode: skip remote setup, leave origin_name empty
         origin_name=""

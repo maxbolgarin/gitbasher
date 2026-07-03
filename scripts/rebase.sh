@@ -56,7 +56,7 @@ function rebase_script {
         print_help_header $PAD
         print_help_row $PAD "<empty>"         ""             "Pick a base branch and rebase the current branch onto it"
         print_help_row $PAD "main"            "master, m"    "Rebase the current branch onto $main_branch"
-        print_help_row $PAD "interactive"     "i"            "Pick a base commit and rebase interactively"
+        print_help_row $PAD "interactive"     "i"            "Pick a base branch and rebase onto it interactively"
         print_help_row $PAD "autosquash"      "a, s, ia"     "Interactive rebase on local commits with ${BLUE}--autosquash${ENDCOLOR}"
         print_help_row $PAD "fastautosquash"  "fast, sf, f"  "Apply fixup commits non-interactively"
         print_help_row $PAD "pull"            "p"            "Take all commits from a chosen branch and apply them here"
@@ -77,6 +77,9 @@ function rebase_script {
     fi
 
 
+    ### Rewriting a detached HEAD leaves the result on no branch
+    warn_if_detached_head "rebase"
+
     ### Check current branch for remote changes (skip for autosquash modes as they work on local commits)
     if [ -z "$autosquash" ] && [ -z "$fastautosquash" ]; then
         echo -e "${YELLOW}Checking current branch for remote changes...${ENDCOLOR}"
@@ -89,18 +92,21 @@ function rebase_script {
         
         if [ -z "$current_remote_commit" ]; then
             echo -e "${YELLOW}Remote branch ${origin_name}/${current_branch} not found — proceeding with local rebase.${ENDCOLOR}"
+        elif git merge-base --is-ancestor "$current_remote_commit" HEAD 2>/dev/null; then
+            # Local is simply ahead (unpushed commits) — nothing to pull
+            echo -e "${GREEN}✓ Local branch is ahead of remote (nothing to pull)${ENDCOLOR}"
         elif [ "$current_local_commit" != "$current_remote_commit" ]; then
             echo -e "${YELLOW}⚠  Remote changes detected on ${current_branch}.${ENDCOLOR}"
             echo
             echo -e "Do you want to pull ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} first (y/n)?"
-            read -n 1 -s choice
+            read -n 1 -s choice || prompt_aborted
             if is_yes "$choice"; then
                 echo
                 ### Reuse the canonical pull flow: fast-forward when possible,
                 ### otherwise prompt to merge or rebase divergent branches.
                 ### A bare "git pull" aborts on divergence ("Need to specify how
                 ### to reconcile divergent branches") because no strategy is set.
-                pull $current_branch $origin_name $editor
+                pull "$current_branch" "$origin_name" "$editor"
             fi
         else
             echo -e "${GREEN}✓ Current branch is up to date with remote${ENDCOLOR}"
@@ -138,21 +144,30 @@ function rebase_script {
             exit
         fi
 
-        # Find commits that are in source branch but not in current branch
-        commits_to_pull=$(git rev-list $current_branch..$source_branch --reverse 2>/dev/null)
-        
+        # Find commits that are in source branch but not in current branch.
+        # --no-merges: cherry-pick refuses merge commits without -m, so
+        # including them guaranteed a mid-sequence failure.
+        commits_to_pull=$(git rev-list --no-merges $current_branch..$source_branch --reverse 2>/dev/null)
+
         if [ -z "$commits_to_pull" ]; then
             echo -e "${GREEN}No new commits to pull from '${source_branch}'${ENDCOLOR}"
             exit
+        fi
+
+        merge_commits_skipped=$(git rev-list --min-parents=2 --count $current_branch..$source_branch 2>/dev/null)
+        if [ -n "$merge_commits_skipped" ] && [ "$merge_commits_skipped" -gt 0 ]; then
+            echo -e "${YELLOW}⚠  Skipping ${merge_commits_skipped} merge commit(s) — cherry-pick applies regular commits only.${ENDCOLOR}"
+            echo
         fi
 
         # Show commits that will be pulled
         commit_count=$(echo "$commits_to_pull" | wc -l | tr -d ' ')
         echo -e "${YELLOW}Found ${commit_count} commits to pull from '${source_branch}':${ENDCOLOR}"
         echo
-        
-        # Show commits with details
-        commits_to_pull_with_dates=$(git log -n 10 --oneline --format="${YELLOW}%h${ENDCOLOR} (${BLUE}%cr${ENDCOLOR}) ${BOLD}%s${ENDCOLOR}" $current_branch..$source_branch --reverse)
+
+        # Show the FIRST 10 to apply (reverse first, then trim — `-n 10
+        # --reverse` showed the newest 10 while applying the oldest first)
+        commits_to_pull_with_dates=$(git log --oneline --format="${YELLOW}%h${ENDCOLOR} (${BLUE}%cr${ENDCOLOR}) ${BOLD}%s${ENDCOLOR}" --no-merges $current_branch..$source_branch --reverse | head -10)
         echo -e "$commits_to_pull_with_dates" | sed 's/^/\t/'
         if [ "$commit_count" -gt 10 ]; then
             echo -e "\t${YELLOW}... and $((commit_count - 10)) more commits${ENDCOLOR}"
@@ -161,7 +176,7 @@ function rebase_script {
 
         # Ask for confirmation
         echo -e "Proceed with pulling ${commit_count} commits from '${source_branch}' to '${current_branch}' (y/n/0)?"
-        read -n 1 -s choice
+        read -n 1 -s choice || prompt_aborted
         if [ "$choice" == "0" ]; then
             exit
         fi
@@ -214,7 +229,7 @@ function rebase_script {
             echo -e "${YELLOW}Remote changes detected in target branch!${ENDCOLOR}"
             echo
             echo -e "Do you want to fetch ${YELLOW}${origin_name}/${new_base_branch}${ENDCOLOR} before rebase (y/n/0)?"
-            read -n 1 -s choice
+            read -n 1 -s choice || prompt_aborted
             if [ "$choice" == "0" ]; then
                 exit
             fi
@@ -319,13 +334,8 @@ function rebase_branch {
         echo
         
         # Ask for confirmation before proceeding
-        echo -e "Proceed with fast autosquash rebase (y/n/0)?"
-        read -n 1 -s choice
-        if [ "$choice" == "0" ]; then
-            exit
-        fi
-        if ! is_yes "$choice"; then
-            echo
+        echo -e "Proceed with fast autosquash rebase (y/n)?"
+        if ! confirm_destructive; then
             echo -e "${YELLOW}Rebase cancelled${ENDCOLOR}"
             exit
         fi
@@ -401,7 +411,7 @@ function rebase_todo_errors {
         echo -e "0. Exit (leave rebase in progress; do ${BOLD}not${NORMAL} abort)"
 
         while [ true ]; do
-            read -n 1 -s choice
+            read -n 1 -s choice || prompt_aborted
             re='^[012]+$'
             if [[ $choice =~ $re ]]; then
                 break
@@ -465,7 +475,10 @@ function rebase_conflicts {
         fi
 
         if [ "$new_step" == "true" ]; then
-            status=$(git status)
+            # LC_ALL=C: this parse scrapes English phrases ("commands done",
+            # "Unmerged paths:") — a localized git made every conflict step
+            # read as an empty commit, offering a confirmation-free skip.
+            status=$(LC_ALL=C git status)
             current_step=$(echo "$status" | sed -n 's/.*Last commands done (\([0-9]*\) commands done):/\1/p')
             if [ "$current_step" == "" ]; then
                 current_step=$(echo "$status" | sed -n 's/.*Last command done (\([0-9]*\) command done):/\1/p')
@@ -493,7 +506,7 @@ function rebase_conflicts {
         fi
 
         while [ true ]; do
-            read -n 1 -s choice
+            read -n 1 -s choice || prompt_aborted
             re='^[0123456]+$'
             if [[ $choice =~ $re ]]; then
                 break
@@ -501,15 +514,25 @@ function rebase_conflicts {
         done
 
         if [ "$choice" == "1" ]; then
-            files_with_conflicts_one_line="$(tr '\n' ' ' <<< "$(git --no-pager diff --name-only --diff-filter=U --relative)")"
-            
-            if [ -n "$files_with_conflicts_one_line" ] && [ "$files_with_conflicts_one_line" != " " ]; then
-                files_with_conflicts_new="$(git grep -l --name-only -E "[<=>]{7}" $files_with_conflicts_one_line 2>/dev/null || echo "")"
-                
-                if [ "$files_with_conflicts_new" != "" ]; then
+            # Check remaining conflict markers PER FILE: a space-joined list
+            # word-split on paths with spaces (git grep then died and the
+            # markers were committed), and running git grep with NO pathspec
+            # scans the whole tree, where an innocent ======= underline
+            # (RST headings) blocks the continue forever.
+            _rb_unmerged="$(git --no-pager diff --name-only --diff-filter=U --relative)"
+            _rb_unresolved=""
+            if [ -n "$_rb_unmerged" ]; then
+                while IFS= read -r _rb_f; do
+                    [ -z "$_rb_f" ] && continue
+                    if git grep -l -E '[<=>]{7}' -- ":(literal)$_rb_f" >/dev/null 2>&1; then
+                        _rb_unresolved="${_rb_unresolved}${_rb_f}"$'\n'
+                    fi
+                done <<< "$_rb_unmerged"
+
+                if [ -n "$_rb_unresolved" ]; then
                     echo
                     echo -e "${YELLOW}There are files with conflicts${ENDCOLOR}"
-                    echo -e "$(echo -e "${files_with_conflicts_new}" | tr ' ' '\n' | sed 's/^/\t/')"
+                    printf '%s' "$_rb_unresolved" | sed 's/^/\t/'
                     continue
                 fi
             fi
@@ -554,8 +577,7 @@ function rebase_conflicts {
                 echo
                 echo -e "${RED}⚠  Dropping this commit will permanently remove it from history.${ENDCOLOR}"
             echo -e "Are you sure you want to ${RED}skip and discard${ENDCOLOR} this commit (y/n)?"
-                read -n 1 -s choice_yes
-                if ! is_yes "$choice_yes"; then
+                if ! confirm_destructive; then
                     echo -e "${YELLOW}Continuing...${ENDCOLOR}"
                     continue
                 fi
@@ -580,9 +602,7 @@ function rebase_conflicts {
         if [ "$choice" == "4" ]; then
             echo
             echo -e "Are you sure you want to ${YELLOW}abort rebase${ENDCOLOR} (y/n)?"
-            read -n 1 -s choice_yes
-            if is_yes "$choice_yes"; then
-                echo
+            if confirm_destructive; then
                 echo -e "${YELLOW}Aborting rebase...${ENDCOLOR}"
                 git rebase --abort
                 exit $?
@@ -596,9 +616,7 @@ function rebase_conflicts {
             echo
             echo -e "${RED}⚠  This will discard your current changes for these files.${ENDCOLOR}"
             echo -e "Are you sure you want to ${GREEN}accept all incoming changes${ENDCOLOR} (y/n)?"
-            read -n 1 -s choice_yes
-            if is_yes "$choice_yes"; then
-                echo
+            if confirm_destructive; then
                 echo -e "${YELLOW}Accepting all incoming changes...${ENDCOLOR}"
                 
                 # Check for deleted files in conflicts
@@ -608,8 +626,7 @@ function rebase_conflicts {
                     echo "$deleted_files" | sed 's/^/\t/'
                     echo
                     echo -e "Do you want to continue and accept the deletions (y/n)?"
-                    read -n 1 -s choice_delete
-                    if ! is_yes "$choice_delete"; then
+                    if ! confirm_destructive; then
                         echo -e "${YELLOW}Cancelled. Continuing...${ENDCOLOR}"
                         continue
                     fi
@@ -629,7 +646,7 @@ function rebase_conflicts {
                     echo -e "3. Abort rebase"
                     echo
                     echo -e "What would you like to do (1/2/3)?"
-                    read -n 1 -s choice_resolve
+                    read -n 1 -s choice_resolve || prompt_aborted
                     if [ "$choice_resolve" == "1" ]; then
                         echo -e "${YELLOW}Please manually resolve conflicts and stage files, then return to this menu.${ENDCOLOR}"
                         continue
@@ -680,9 +697,7 @@ function rebase_conflicts {
             echo
             echo -e "${RED}⚠  This will discard the incoming changes for these files.${ENDCOLOR}"
             echo -e "Are you sure you want to ${GREEN}accept all current changes${ENDCOLOR} (y/n)?"
-            read -n 1 -s choice_yes
-            if is_yes "$choice_yes"; then
-                echo
+            if confirm_destructive; then
                 echo -e "${YELLOW}Accepting all current changes...${ENDCOLOR}"
                 
                 # Check for deleted files in conflicts
@@ -692,8 +707,7 @@ function rebase_conflicts {
                     echo "$deleted_files" | sed 's/^/\t/'
                     echo
                     echo -e "Do you want to continue and accept the deletions (y/n)?"
-                    read -n 1 -s choice_delete
-                    if ! is_yes "$choice_delete"; then
+                    if ! confirm_destructive; then
                         echo -e "${YELLOW}Cancelled. Continuing...${ENDCOLOR}"
                         continue
                     fi
@@ -782,7 +796,13 @@ function pull_commits_from_branch {
     
     total_commits=${#commit_array[@]}
     current_commit_index=0
-    
+
+    # Snapshot HEAD so an abort restores EXACTLY the pre-pull state.
+    # Counting applied commits (reset --hard HEAD~N) went wrong whenever a
+    # commit was skipped or empty — the miscounted reset rewound past
+    # pre-existing commits and destroyed them.
+    pull_commits_start_hash=$(git rev-parse HEAD)
+
     # Cherry-pick each commit
     for commit_hash in "${commit_array[@]}"; do
         current_commit_index=$((current_commit_index + 1))
@@ -906,7 +926,7 @@ function handle_cherry_pick_error {
     fi
     
     while [ true ]; do
-        read -n 1 -s choice
+        read -n 1 -s choice || prompt_aborted
         
         if [[ $cherry_pick_output == *"is now empty"* ]]; then
             case "$choice" in
@@ -946,7 +966,7 @@ function handle_cherry_pick_error {
                     echo
                     echo -e "${YELLOW}Aborting pull commits operation...${ENDCOLOR}"
                     git cherry-pick --abort 2>/dev/null
-                    git reset --hard HEAD~$((current_index - 1)) 2>/dev/null
+                    git reset --hard "$pull_commits_start_hash" 2>/dev/null
                     exit 1
                     ;;
                 0)
@@ -966,7 +986,7 @@ function handle_cherry_pick_error {
                     echo
                     echo -e "${YELLOW}Aborting pull commits operation...${ENDCOLOR}"
                     git cherry-pick --abort 2>/dev/null
-                    git reset --hard HEAD~$((current_index - 1)) 2>/dev/null
+                    git reset --hard "$pull_commits_start_hash" 2>/dev/null
                     exit 1
                     ;;
                 3)
@@ -1029,17 +1049,30 @@ function handle_cherry_pick_conflicts {
             print_menu="false"
         fi
         
-        read -n 1 -s choice
+        read -n 1 -s choice || prompt_aborted
         
         case "$choice" in
             1)
-                # Check if conflicts are resolved
-                files_with_conflicts=$(git grep -l --name-only -E "[<=>]{7}" $(git --no-pager diff --name-only --diff-filter=U --relative) 2>/dev/null || echo "")
-                
-                if [ -n "$files_with_conflicts" ]; then
+                # Check remaining conflict markers PER FILE. The old
+                # command-substituted list word-split spaced paths, and when
+                # everything was already staged it ran git grep with NO
+                # pathspec — scanning the whole tree, where an innocent
+                # ======= (RST heading underline) blocked continue forever.
+                _cp_unmerged=$(git --no-pager diff --name-only --diff-filter=U --relative)
+                _cp_unresolved=""
+                if [ -n "$_cp_unmerged" ]; then
+                    while IFS= read -r _cp_f; do
+                        [ -z "$_cp_f" ] && continue
+                        if git grep -l -E '[<=>]{7}' -- ":(literal)$_cp_f" >/dev/null 2>&1; then
+                            _cp_unresolved="${_cp_unresolved}${_cp_f}"$'\n'
+                        fi
+                    done <<< "$_cp_unmerged"
+                fi
+
+                if [ -n "$_cp_unresolved" ]; then
                     echo
                     echo -e "${YELLOW}There are still unresolved conflicts in:${ENDCOLOR}"
-                    echo "$files_with_conflicts" | sed 's/^/\t/'
+                    printf '%s' "$_cp_unresolved" | sed 's/^/\t/'
                     echo
                     continue
                 fi
@@ -1062,9 +1095,7 @@ function handle_cherry_pick_conflicts {
             2)
                 echo
                 echo -e "Are you sure you want to ${RED}skip${ENDCOLOR} this commit (y/n)?"
-                read -n 1 -s choice_yes
-                if is_yes "$choice_yes"; then
-                    echo
+                if confirm_destructive; then
                     echo -e "${YELLOW}Skipping commit ${commit_hash::7}${ENDCOLOR}"
                     git cherry-pick --skip 2>/dev/null
                     return
@@ -1076,9 +1107,7 @@ function handle_cherry_pick_conflicts {
             3)
                 echo
                 echo -e "Are you sure you want to ${GREEN}accept all incoming changes${ENDCOLOR} (y/n)?"
-                read -n 1 -s choice_yes
-                if is_yes "$choice_yes"; then
-                    echo
+                if confirm_destructive; then
                     echo -e "${YELLOW}Accepting all incoming changes...${ENDCOLOR}"
                     git checkout --theirs . 2>/dev/null
                     git add .
@@ -1100,9 +1129,7 @@ function handle_cherry_pick_conflicts {
             4)
                 echo
                 echo -e "Are you sure you want to ${GREEN}accept all current changes${ENDCOLOR} (y/n)?"
-                read -n 1 -s choice_yes
-                if is_yes "$choice_yes"; then
-                    echo
+                if confirm_destructive; then
                     echo -e "${YELLOW}Accepting all current changes...${ENDCOLOR}"
                     git checkout --ours . 2>/dev/null
                     git add .
@@ -1124,13 +1151,11 @@ function handle_cherry_pick_conflicts {
             5)
                 echo
                 echo -e "Are you sure you want to ${YELLOW}abort${ENDCOLOR} the pull operation (y/n)?"
-                read -n 1 -s choice_yes
-                if is_yes "$choice_yes"; then
-                    echo
+                if confirm_destructive; then
                     echo -e "${YELLOW}Aborting pull commits operation...${ENDCOLOR}"
                     git cherry-pick --abort 2>/dev/null
                     # Reset to state before any commits were applied
-                    git reset --hard HEAD~$((current_index - 1)) 2>/dev/null
+                    git reset --hard "$pull_commits_start_hash" 2>/dev/null
                     exit 1
                 else
                     echo

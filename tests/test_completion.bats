@@ -125,3 +125,47 @@ teardown() {
             || { echo "missing in zsh completion: $cmd" >&2; return 1; }
     done
 }
+
+
+### parity: completion lists must cover the real dispatch surface
+
+@test "completion: every dispatched top-level command is completable" {
+    out=$(_gitb_bash_completion_content)
+    cmd_block=$(printf '%s\n' "$out" | /usr/bin/sed -n '/_gitb_commands="/,/^"/p')
+    for cmd in commit edit push pull fetch merge rebase squash cherry sync \
+               wip branch tag config undo reset stash worktree hook origin \
+               clone update uninstall init log reflog last-commit last-ref \
+               diff status prev version help; do
+        if ! printf '%s\n' "$cmd_block" | /usr/bin/grep -qw "$cmd"; then
+            echo "missing from _gitb_commands: $cmd" >&2
+            return 1
+        fi
+    done
+}
+
+@test "completion: branch/reset/worktree/origin sub-lists match their dispatchers" {
+    out=$(_gitb_bash_completion_content)
+    printf '%s\n' "$out" | /usr/bin/grep '_gitb_sub_branch='   | /usr/bin/grep -qw "new"
+    printf '%s\n' "$out" | /usr/bin/grep '_gitb_sub_branch='   | /usr/bin/grep -qw "newd"
+    printf '%s\n' "$out" | /usr/bin/grep '_gitb_sub_reset='    | /usr/bin/grep -qw "ref"
+    printf '%s\n' "$out" | /usr/bin/grep '_gitb_sub_worktree=' | /usr/bin/grep -qw "manage"
+    printf '%s\n' "$out" | /usr/bin/grep '_gitb_sub_worktree=' | /usr/bin/grep -qw "goto"
+    printf '%s\n' "$out" | /usr/bin/grep '_gitb_sub_origin='   | /usr/bin/grep -qw "show"
+    printf '%s\n' "$out" | /usr/bin/grep '_gitb_sub_update='   | /usr/bin/grep -qw "check"
+    printf '%s\n' "$out" | /usr/bin/grep '_gitb_sub_commit_simple=' | /usr/bin/grep -qw "st"
+}
+
+@test "completion: zsh and fish no longer offer branch names merge/rebase reject" {
+    zsh_content=$(_gitb_zsh_completion_content)
+    if printf '%s' "$zsh_content" | /usr/bin/grep -A3 "merge|m|me)" | /usr/bin/grep -q 'refname:short'; then
+        echo "zsh still completes branch names for merge" >&2
+        return 1
+    fi
+    fish_content=$(_gitb_fish_completion_content)
+    if printf '%s' "$fish_content" | /usr/bin/grep '__gitb_merge' | /usr/bin/grep -q '__gitb_local_branches'; then
+        echo "fish still completes branch names for merge" >&2
+        return 1
+    fi
+    # log DOES accept branch positionals — it must keep them
+    printf '%s' "$fish_content" | /usr/bin/grep '__gitb_log' | /usr/bin/grep -q '__gitb_local_branches'
+}

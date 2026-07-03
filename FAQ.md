@@ -1,6 +1,6 @@
 # Frequently Asked Questions
 
-Quick answers to questions that come up often. For detailed flow docs, see [README.md](./README.md). For breaking changes between versions, see [MIGRATION_V3_TO_V4.md](./MIGRATION_V3_TO_V4.md). For security details, see [SECURITY.md](./SECURITY.md).
+Quick answers to questions that come up often. For detailed flow docs, see [README.md](./README.md). For security details, see [SECURITY.md](./SECURITY.md).
 
 ## AI features
 
@@ -28,7 +28,7 @@ export GITB_AI_API_KEY_OPENAI=sk-...
 export GITB_AI_API_KEY_OPENROUTER=...
 ```
 
-`gitb cfg ai` prints the current resolution order so you can see which slot is active. The `mask_api_key` helper masks keys in any diagnostic output gitbasher prints.
+Bare `gitb cfg` shows which slot each key resolves from; `gitb cfg ai` shows the configured key in masked form. The `mask_api_key` helper masks keys in any diagnostic output gitbasher prints.
 
 ### Why does `gitb commit ai` say "API key not configured"?
 
@@ -50,13 +50,13 @@ Inside WSL, yes — treat it as Linux. Native Windows (cmd, PowerShell, Git Bash
 
 ### Does it work in a CI environment?
 
-Yes for non-interactive subcommands (`gitb status`, `gitb pull --dry-run`, etc.). Anything that prompts (`gitb commit` with no flags, `gitb merge`) will block waiting on stdin. Pipe answers in, or use the explicit modes that accept arguments (`gitb commit fast`, `gitb push -y`).
+Yes for non-interactive subcommands (`gitb status`, `gitb pull dry`, etc.). Anything that prompts (`gitb commit` with no flags, `gitb merge`) will block waiting on stdin. Pipe answers in, or use the explicit modes that accept arguments (`gitb commit fast`, `gitb push yes`).
 
 ## Configuration
 
 ### Where does gitbasher store its settings?
 
-In `git config` under the `gitbasher.*` namespace. Per-repo by default (in `.git/config`); pass `g` to `gitb cfg` to edit the global file (`~/.gitconfig`). The keys you'll see most:
+In `git config` under the `gitbasher.*` namespace. Per-repo by default (in `.git/config`); after the local write, every `gitb cfg` setter asks whether to also set the value globally (`~/.gitconfig`). The keys you'll see most:
 
 | Key | What it controls |
 |-----|------------------|
@@ -65,7 +65,7 @@ In `git config` under the `gitbasher.*` namespace. Per-repo by default (in `.git
 | `gitbasher.ai-model` | Provider-specific model id |
 | `gitbasher.ai-api-key-<provider>` | Per-provider key |
 | `gitbasher.ai-proxy` | Outbound proxy for AI calls |
-| `gitbasher.worktreebase` | Base directory for `gitb wip --worktree` |
+| `gitbasher.worktreebase` | Base directory for worktrees (`gitb worktree`, `gitb wip up worktree`) |
 
 Touch them through `gitb cfg ...` rather than `git config` directly so you get the same precedence rules gitbasher uses internally.
 
@@ -88,14 +88,13 @@ curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.
 GITB_VERSION=v4.0.0 curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash
 ```
 
-The installer detects an existing install and replaces it in place; SHA-256 verification runs on every download.
+The installer detects an existing install and replaces it in place; downloads are SHA-256-verified when the release's checksum asset and a sha256 tool are available (otherwise it warns and continues).
 
 ### How do I uninstall?
 
 ```bash
-gitb uninstall              # removes the binary
-rm -rf ~/.gitbasher          # remove cache (optional)
-git config --global --unset-all gitbasher 2>/dev/null   # drop global gitbasher.* keys
+gitb uninstall              # removes the binary and local + global gitbasher.* config keys
+git config --global --remove-section gitbasher 2>/dev/null   # only if you skipped gitb uninstall
 ```
 
 For npm installs: `npm uninstall -g gitbasher`. For system-wide installs: `sudo rm /usr/local/bin/gitb`.
@@ -110,11 +109,11 @@ The npm package ships the same `dist/gitb` Bash binary plus a `bin` entry. Node.
 
 It saves your in-progress changes so you can switch contexts safely. Three backends:
 
-- **stash (default)** — `git stash push` with metadata gitbasher tracks so `gitb wip down` restores cleanly.
-- **branch** — commits to a sidekick branch named after your current branch with a `wip/` prefix; restored by cherry-picking.
+- **stash (default)** — `git stash push` with metadata gitbasher tracks so `gitb wip down` restores cleanly; by default it also force-pushes a `wip/<branch>` backup branch to the remote (skip with `nopush`).
+- **branch** — commits to a sidekick branch named after your current branch with a `wip/` prefix; restored via `git merge --squash --no-commit`.
 - **worktree** — moves the dirty tree into a separate `git worktree` so the original branch stays clean. Best when you need to run two contexts side-by-side.
 
-Pick a backend with `gitb wip up <backend>` or set the default with `gitb cfg wip-backend`.
+Pick a backend explicitly with `gitb wip up <backend>` (e.g. `gitb wip up worktree`); plain `gitb wip up` prompts for one each time.
 
 ### What does `gitb undo` undo?
 
@@ -125,7 +124,7 @@ Pick a backend with `gitb wip up <backend>` or set the default with `gitb cfg wi
 - `undo merge` / `undo rebase` — aborts one in progress, or rolls a finished one back to `ORIG_HEAD`.
 - `undo stash` — re-stashes changes you just popped or applied.
 
-Everything except `undo rebase` (which is a `--hard` reset) preserves your changes. And because Git keeps a reflog, even a mistaken undo is recoverable — `gitb reset ref` lets you jump HEAD to any recent state (reflog retention defaults to 90 days for reachable commits, 30 days for unreachable).
+Everything except `undo rebase` (which is a `--hard` reset) and `undo merge` (a `git reset --merge`, which discards the merge's changes) preserves your changes. And because Git keeps a reflog, even a mistaken undo is recoverable — `gitb reset ref` lets you jump HEAD to any recent state (reflog retention defaults to 90 days for reachable commits, 30 days for unreachable).
 
 ### `gitb undo` vs `gitb reset` — which one?
 
@@ -140,7 +139,7 @@ They meet in one spot: `gitb undo` and `gitb reset soft` both soft-reset the las
 
 ### `gitb pull` says "diverged" — what's the right move?
 
-Run `gitb sync`. It shows the divergence, lets you pick rebase or merge, and previews incoming commits with `--dry-run` before touching your local refs.
+Run `gitb sync`. It shows the divergence and rebases by default (use `gitb sync merge` to merge instead); `gitb sync dry` previews incoming commits before touching your local refs.
 
 ### `gitb log` used to dump everything into a pager — where did that go?
 

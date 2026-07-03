@@ -68,6 +68,9 @@ function merge_script {
     fi
 
 
+    ### Merging onto a detached HEAD leaves the result on no branch
+    warn_if_detached_head "merge"
+
     ### Check current branch for remote changes (skip for to-main mode as we'll switch anyway)
     if [ -z "$to_main" ]; then
         echo -e "${YELLOW}Checking current branch for remote changes...${ENDCOLOR}"
@@ -80,18 +83,21 @@ function merge_script {
         
         if [ -z "$current_remote_commit" ]; then
             echo -e "${YELLOW}Remote branch ${origin_name}/${current_branch} not found — proceeding with local merge.${ENDCOLOR}"
+        elif git merge-base --is-ancestor "$current_remote_commit" HEAD 2>/dev/null; then
+            # Local is simply ahead (unpushed commits) — nothing to pull
+            echo -e "${GREEN}✓ Local branch is ahead of remote (nothing to pull)${ENDCOLOR}"
         elif [ "$current_local_commit" != "$current_remote_commit" ]; then
             echo -e "${YELLOW}⚠  Remote changes detected on ${current_branch}.${ENDCOLOR}"
             echo
             echo -e "Do you want to pull ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} first (y/n)?"
-            read -n 1 -s choice
+            read -n 1 -s choice || prompt_aborted
             if is_yes "$choice"; then
                 echo
                 ### Reuse the canonical pull flow: fast-forward when possible,
                 ### otherwise prompt to merge or rebase divergent branches.
                 ### A bare "git pull" aborts on divergence ("Need to specify how
                 ### to reconcile divergent branches") because no strategy is set.
-                pull $current_branch $origin_name $editor
+                pull "$current_branch" "$origin_name" "$editor"
             fi
         else
             echo -e "${GREEN}✓ Current branch is up to date with remote${ENDCOLOR}"
@@ -155,11 +161,14 @@ function merge_script {
         
         if [ -z "$remote_commit" ]; then
             echo -e "${YELLOW}Remote branch ${origin_name}/${merge_branch} not found — proceeding with local merge.${ENDCOLOR}"
+        elif [ -n "$local_commit" ] && git merge-base --is-ancestor "$remote_commit" "$local_commit" 2>/dev/null; then
+            # The local copy already contains everything the remote has
+            echo -e "${GREEN}✓ Local branch is ahead of remote (nothing to fetch)${ENDCOLOR}"
         elif [ "$local_commit" != "$remote_commit" ]; then
             echo -e "${YELLOW}⚠  Remote changes detected.${ENDCOLOR}"
             echo
             echo -e "Do you want to fetch ${YELLOW}${origin_name}/${merge_branch}${ENDCOLOR} before merge (y/n)?"
-            read -n 1 -s choice
+            read -n 1 -s choice || prompt_aborted
             if is_yes "$choice"; then
                 echo
                 echo -e "${YELLOW}Fetching ${origin_name}/${merge_branch}...${ENDCOLOR}"
@@ -183,8 +192,11 @@ function merge_script {
 
     commit_message_before_merge="$(git --no-pager log --pretty="%s" -1)"
 
-    ### Run merge and handle conflicts
-    merge $merge_branch $origin_name $editor "merge" $merge_from_origin
+    ### Run merge and handle conflicts. Every arg is quoted: an unquoted
+    ### multi-word $editor (core.editor="code --wait") used to shift the
+    ### positional args, silently merging with --ff-only against the STALE
+    ### local branch and reporting "already up to date".
+    merge "$merge_branch" "$origin_name" "$editor" "merge" "$merge_from_origin"
 
 
     ### Nothing to merge
@@ -245,9 +257,9 @@ function merge {
         args="--ff-only"
     fi
     if [ "$5" == "true" ]; then
-        merge_output=$(git merge $args "$2/$1" 2>&1)
+        merge_output=$(LC_ALL=C git merge $args "$2/$1" 2>&1)
     else
-        merge_output=$(git merge $args "$1" 2>&1)
+        merge_output=$(LC_ALL=C git merge $args "$1" 2>&1)
     fi
     merge_code=$?
 
@@ -261,6 +273,8 @@ function merge {
     fi
 
     ### Cannot merge because there are uncommitted files that changed in origin
+    ### (LC_ALL=C on the git merge calls above keeps these English substrings
+    ### stable under non-English locales)
     if [[ $merge_output == *"Please commit your changes or stash them before you merge"* ]]; then
         echo -e "${RED}✗ Cannot $operation — uncommitted changes would be overwritten.${ENDCOLOR}"
         # Platform-specific reverse command: tac (Linux) or tail -r (BSD/macOS)
@@ -287,7 +301,7 @@ function merge {
     fi
 
     echo -e "${YELLOW}⚠  Conflicts detected — staged files need manual resolution.${ENDCOLOR}"
-    resolve_conflicts $1 $2 $3
+    resolve_conflicts "$1" "$2" "$3"
 
     # if we got here - conflicts were resolved
     merge_code=0
@@ -303,7 +317,14 @@ function resolve_conflicts {
 
     ### Ask user what he wants to do
     echo
-    default_message="Merge branch '$2/$1' into '$current_branch'"
+    # Only name the remote when the merge source actually was the remote
+    # branch — a local merge used to record "Merge branch 'origin/x'" for
+    # a branch that was never fetched.
+    local merge_label="$1"
+    if [ "$merge_from_origin" == "true" ]; then
+        merge_label="$2/$1"
+    fi
+    default_message="Merge branch '$merge_label' into '$current_branch'"
     echo -e "${YELLOW}Resolve conflicts manually, then choose an option:${ENDCOLOR}"
     echo -e "1. Create a merge commit with a generated message:"
     printf "\t${YELLOW}${default_message}${ENDCOLOR}\n"
@@ -323,10 +344,14 @@ function resolve_conflicts {
 
     ### Merge process
     while [ true ]; do
-        read -n 1 -s choice
+        read -n 1 -s choice || prompt_aborted
 
         if [ "$choice" == "1" ] || [ "$choice" == "2" ]; then
-            merge_commit $choice "${files_with_conflicts[@]}" "${default_message}" $1 $2 $3
+            # Files are passed as ONE newline-joined argument: splatting the
+            # array shifted every later parameter whenever 2+ files
+            # conflicted, turning a filename into the merge message and the
+            # origin name into the "editor".
+            merge_commit "$choice" "$(printf '%s\n' "${files_with_conflicts[@]}")" "${default_message}" "$1" "$2" "$3"
             if [ "$merge_error" == "false" ]; then
                 return
             fi
@@ -343,9 +368,7 @@ function resolve_conflicts {
             echo
             echo -e "${RED}⚠  This will discard your current changes for these files.${ENDCOLOR}"
             echo -e "Are you sure you want to ${GREEN}accept all incoming changes${ENDCOLOR} (y/n)?"
-            read -n 1 -s choice_yes
-            if is_yes "$choice_yes"; then
-                echo
+            if confirm_destructive; then
                 echo -e "${YELLOW}Accepting all incoming changes...${ENDCOLOR}"
                 
                 # Check for deleted files in conflicts
@@ -355,8 +378,7 @@ function resolve_conflicts {
                     echo "$deleted_files" | sed 's/^/\t/'
                     echo
                     echo -e "Do you want to continue and accept the deletions (y/n)?"
-                    read -n 1 -s choice_delete
-                    if ! is_yes "$choice_delete"; then
+                    if ! confirm_destructive; then
                         echo -e "${YELLOW}Cancelled. Continuing...${ENDCOLOR}"
                         continue
                     fi
@@ -376,7 +398,7 @@ function resolve_conflicts {
                     echo -e "3. Abort merge"
                     echo
                     echo -e "What would you like to do (1/2/3)?"
-                    read -n 1 -s choice_resolve
+                    read -n 1 -s choice_resolve || prompt_aborted
                     if [ "$choice_resolve" == "1" ]; then
                         echo -e "${YELLOW}Please manually resolve conflicts and stage files, then return to this menu.${ENDCOLOR}"
                         continue
@@ -423,9 +445,7 @@ function resolve_conflicts {
             echo
             echo -e "${RED}⚠  This will discard the incoming changes for these files.${ENDCOLOR}"
             echo -e "Are you sure you want to ${GREEN}accept all current changes${ENDCOLOR} (y/n)?"
-            read -n 1 -s choice_yes
-            if is_yes "$choice_yes"; then
-                echo
+            if confirm_destructive; then
                 echo -e "${YELLOW}Accepting all current changes...${ENDCOLOR}"
                 
                 # Check for deleted files in conflicts
@@ -435,8 +455,7 @@ function resolve_conflicts {
                     echo "$deleted_files" | sed 's/^/\t/'
                     echo
                     echo -e "Do you want to continue and accept the deletions (y/n)?"
-                    read -n 1 -s choice_delete
-                    if ! is_yes "$choice_delete"; then
+                    if ! confirm_destructive; then
                         echo -e "${YELLOW}Cancelled. Continuing...${ENDCOLOR}"
                         continue
                     fi
@@ -456,7 +475,7 @@ function resolve_conflicts {
                     echo -e "3. Abort merge"
                     echo
                     echo -e "What would you like to do (1/2/3)?"
-                    read -n 1 -s choice_resolve
+                    read -n 1 -s choice_resolve || prompt_aborted
                     if [ "$choice_resolve" == "1" ]; then
                         echo -e "${YELLOW}Please manually resolve conflicts and stage files, then return to this menu.${ENDCOLOR}"
                         continue
@@ -527,21 +546,29 @@ function merge_commit {
         return
     fi
 
-    ### Check if there are files with conflicts
-    # Use git's native unmerged listing (--diff-filter=U) instead of parsing
-    # `git grep` with a space-joined file list — that pattern silently breaks
-    # when paths contain spaces.
-    files_with_conflicts_one_line="$(echo "$2" | tr '\n' ' ' | sed 's/ $//')"
-    files_with_conflicts_new="$(git --no-pager diff --name-only --diff-filter=U 2>/dev/null)"
-    if [ "$files_with_conflicts_new" != "" ]; then
-        echo
-        echo -e "${YELLOW}There are files with conflicts${ENDCOLOR}"
-        echo -e "$(echo -e "${files_with_conflicts_new}" | tr ' ' '\n' | sed 's/^/\t/')"
-
-        echo
-        echo -e "Fix conflicts and press ${YELLOW}$1${ENDCOLOR} for one more time"
-        merge_error="true"
-        return
+    ### Check whether conflicts are actually resolved. --diff-filter=U lists
+    ### paths still unmerged in the INDEX — and the index stays unmerged
+    ### until `git add`, which the documented flow ("resolve, then press 1")
+    ### never runs. So gate on remaining conflict MARKERS in the files
+    ### (checked per file, space-safe) and stage the clean ones ourselves.
+    local _unmerged_now _unresolved="" _cf
+    _unmerged_now="$(git --no-pager diff --name-only --diff-filter=U 2>/dev/null)"
+    if [ -n "$_unmerged_now" ]; then
+        while IFS= read -r _cf; do
+            [ -z "$_cf" ] && continue
+            if git grep -l -E '[<=>]{7}' -- ":(literal)$_cf" >/dev/null 2>&1; then
+                _unresolved="${_unresolved}${_cf}"$'\n'
+            fi
+        done <<< "$_unmerged_now"
+        if [ -n "$_unresolved" ]; then
+            echo
+            echo -e "${YELLOW}There are files with conflicts${ENDCOLOR}"
+            printf '%s' "$_unresolved" | sed 's/^/\t/'
+            echo
+            echo -e "Fix conflicts and press ${YELLOW}$1${ENDCOLOR} for one more time"
+            merge_error="true"
+            return
+        fi
     fi
 
 
@@ -588,12 +615,15 @@ ${staged_with_tab}
             echo
             echo -e "${YELLOW}⚠  Merge commit message cannot be empty.${ENDCOLOR}"
             echo
-            read -n 1 -p "Do you want to try for one more time? (y/n) " -s -e choice
+            read -n 1 -p "Do you want to try for one more time? (y/n) " -s -e choice || choice="n"
             if ! is_yes "$choice"; then
-                git restore --staged $files_with_conflicts_one_line
+                # Unstage every conflicted file (per line — space-safe)
+                while IFS= read -r _cf; do
+                    [ -n "$_cf" ] && git restore --staged -- ":(literal)$_cf" 2>/dev/null
+                done <<< "$2"
                 rm -f "$commitmsg_file"
                 merge_error="true"
-                exit
+                exit 1
             fi
         done
 

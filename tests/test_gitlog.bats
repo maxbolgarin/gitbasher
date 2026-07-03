@@ -201,14 +201,18 @@ teardown() {
     assert_output_contains "No commit with number"
 }
 
-@test "log: bare dispatch opens the browser instead of the dump" {
+@test "log: bare dispatch without a terminal falls back to the plain log" {
+    # The interactive browser is the default only on a real terminal; with
+    # piped stdin/stdout it must behave like git log (no pages, no prompt).
     make_test_commit one.txt "feat: browsed subject"
     current_branch="main"
     run gitlog_script < /dev/null
     assert_success
-    assert_output_contains "1\. "
     assert_output_contains "browsed subject"
-    assert_output_contains "commit number"
+    if [[ "$output" == *"ommit number"* ]]; then
+        echo "browser prompt leaked into non-TTY output" >&2
+        return 1
+    fi
 }
 
 
@@ -479,4 +483,85 @@ teardown() {
     PATH="$TEST_REPO/fakebin:$PATH" run log_copy_hash "$(git rev-parse --short HEAD)"
     assert_success
     [ "$(cat "$TEST_REPO/clip.txt")" = "$(git rev-parse HEAD)" ]
+}
+
+
+### batch-5 regressions: UTF-8 truncation, non-TTY fallback, smart args
+
+@test "log_commit_list: long Cyrillic subject keeps every row (torn UTF-8 repair)" {
+    # Byte-based awk truncation used to cut mid-character; BSD column then
+    # silently dropped that row and every row after it.
+    make_test_commit a.txt "feat: first plain commit"
+    git commit --allow-empty -qm "фикс: очень длинное сообщение с кириллицей которое надо обрезать по границе символа без разрыва"
+    git commit --allow-empty -qm "feat: last plain commit"
+
+    log_collect_hashes "head"
+    run log_commit_list 0 10
+    assert_success
+    assert_output_contains "feat: first plain commit"
+    assert_output_contains "feat: last plain commit"
+    row_count=$(printf '%s\n' "$output" | /usr/bin/grep -c '^[[:space:]]*[0-9]')
+    [ "$row_count" -eq 4 ]
+}
+
+@test "log_commit_list: control bytes in subjects are stripped" {
+    make_test_commit b.txt "$(printf 'feat: evil \033]0;title\007 subject')"
+    log_collect_hashes "head"
+    run log_commit_list 0 10
+    assert_success
+    # The ESC/BEL bytes must be gone; the printable "]0;title" residue is
+    # harmless once the control bytes cannot trigger the OSC sequence.
+    if printf '%s' "$output" | LC_ALL=C /usr/bin/grep -q "$(printf '\033')"; then
+        echo "raw ESC byte leaked into output" >&2
+        return 1
+    fi
+}
+
+@test "gitlog_script: piped stdout falls back to plain log instead of the browser" {
+    make_test_commit c.txt "feat: piped"
+    run bash -c "
+        cd '$TEST_REPO'
+        source '$GITBASHER_ROOT/scripts/common.sh' 2>/dev/null
+        GITBASHER_SKIP_INIT_QUERIES=1 source '$GITBASHER_ROOT/scripts/init.sh' 2>/dev/null
+        source '$GITBASHER_ROOT/scripts/ai.sh' 2>/dev/null
+        source '$GITBASHER_ROOT/scripts/gitlog.sh'
+        current_branch=main; main_branch=main; origin_name=''
+        gitlog_script </dev/null
+    "
+    assert_success
+    [[ "$output" != *"Commit number"* ]]
+    [[ "$output" == *"feat: piped"* ]]
+}
+
+@test "log_smart_dispatch: multi-word input searches messages even when word 1 is a path" {
+    mkdir -p docs && echo x > docs/readme.md
+    git add docs && git commit -qm "docs: add readme"
+    git commit --allow-empty -qm "feat: docs update wanted"
+
+    run log_smart_dispatch docs update < /dev/null
+    [[ "$output" == *"COMMITS MATCHING"* ]]
+    [[ "$output" != *"FILE HISTORY"* ]]
+}
+
+@test "status_hint: diverged branch suggests pull, not push" {
+    setup_remote_repo
+    git remote add origin "$REMOTE_REPO" 2>/dev/null || true
+    git push -qu origin main 2>/dev/null
+    git commit --allow-empty -qm "local ahead"
+    git update-ref refs/remotes/origin/main "$(git rev-parse HEAD~1)"
+    git commit --allow-empty -qm "local ahead 2"
+    # simulate behind: move the remote-tracking ref to a commit not in HEAD's history
+    git branch tmp-behind HEAD~2 2>/dev/null || git branch tmp-behind HEAD~1
+    (cd "$(git rev-parse --show-toplevel)" && git commit --allow-empty -qm "x") >/dev/null 2>&1
+    # Build a real diverged state: remote has a commit HEAD lacks
+    git checkout -qb side HEAD~1 2>/dev/null || git checkout -qb side
+    git commit --allow-empty -qm "remote only"
+    git update-ref refs/remotes/origin/main "$(git rev-parse HEAD)"
+    git checkout -q main
+    git branch -q -D side
+    git branch -q --set-upstream-to=origin/main main 2>/dev/null || true
+
+    run status_hint
+    [[ "$output" == *"diverged"* ]]
+    [[ "$output" == *"pull"* ]]
 }

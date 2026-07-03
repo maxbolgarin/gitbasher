@@ -72,16 +72,16 @@ echo
 cd "$SCRIPT_DIR"
 
 # Run all test files
+TEST_EXIT_CODE=0
 if [ -n "$1" ]; then
-    # Run specific test file
+    # Run specific test file. `|| TEST_EXIT_CODE=$?` keeps set -e from
+    # killing the script on failure — the summary below was unreachable.
     echo "Running specific test: $1"
-    bats "$1"
+    bats "$1" || TEST_EXIT_CODE=$?
 else
     # Run all tests
-    bats *.bats
+    bats *.bats || TEST_EXIT_CODE=$?
 fi
-
-TEST_EXIT_CODE=$?
 
 echo
 echo "================================"

@@ -114,7 +114,7 @@ function reset_script {
         echo -e "${YELLOW}⚠  This will move HEAD; reset changes will be left unstaged.${ENDCOLOR}"
     fi
     echo -e "Are you sure you want to continue (y/n)?"
-    yes_no_choice "Resetting..."
+    yes_no_choice_strict "Resetting..."
 
     reset_output=$(git reset "$args" "$move_ref" 2>&1)
     check_code $? "$reset_output" "reset"

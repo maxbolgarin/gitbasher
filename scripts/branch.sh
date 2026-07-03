@@ -173,14 +173,16 @@ function branch_script {
         fetch_output=$(git fetch --prune 2>&1)
         check_code $? "$fetch_output" "fetch and prune remote"
 
-        # Find local branches whose upstream is gone
+        # Find local branches whose upstream is gone. Plumbing, not
+        # `git branch -vv` scraping: the human format prefixes worktree
+        # branches with "+" (parsed as a branch named "+") and a commit
+        # subject containing ": gone]" false-matched healthy branches.
         gone_branches=()
-        while IFS= read -r line; do
-            branch=$(echo "$line" | sed 's/^[ *]*//' | awk '{print $1}')
+        while IFS= read -r branch; do
             if [ -n "$branch" ] && [ "$branch" != "$main_branch" ] && [ "$branch" != "$current_branch" ]; then
                 gone_branches+=("$branch")
             fi
-        done < <(git branch -vv | grep ': gone\]')
+        done < <(git for-each-ref refs/heads --format='%(refname:short)%09%(upstream:track)' | awk -F'\t' '$2 == "[gone]" {print $1}')
 
         if [ ${#gone_branches[@]} -eq 0 ]; then
             echo -e "${GREEN}✓ All local branches have a corresponding remote.${ENDCOLOR}"
@@ -195,7 +197,7 @@ function branch_script {
 
         echo -e "${RED}⚠  These branches will be force-deleted (${BLUE}git branch -D${RED}).${ENDCOLOR}"
         echo -e "Are you sure you want to delete them (y/n)?"
-        yes_no_choice "Deleting gone branches..."
+        yes_no_choice_strict "Deleting gone branches..."
 
         for branch in "${gone_branches[@]}"; do
             delete_output=$(git branch -D "$branch" 2>&1)
@@ -221,7 +223,7 @@ function branch_script {
     ### Run tag checkout logic
     if [[ -n "${tag}" ]]; then
         echo -e "${YELLOW}Do you want to fetch remote tags first?${ENDCOLOR}"
-        read -n 1 -p "Fetch remote? (y/n) " choice
+        read -n 1 -p "Fetch remote? (y/n) " choice || choice="n"
         echo
 
         if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
@@ -342,7 +344,7 @@ function branch_script {
         printf "Continue (y/n)? "
 
         while [ true ]; do
-            read -n 1 -s choice
+            read -n 1 -s choice || prompt_aborted
             if is_yes "$choice"; then
                 printf "y\n\n"
                 echo -e "${YELLOW}Fetching remote and pruning...${ENDCOLOR}"
@@ -381,27 +383,23 @@ function branch_script {
                     echo -e "${RED}⚠  These branches will be force-deleted (${BLUE}git branch -D${RED}).${ENDCOLOR}"
                     printf "Are you sure you want to delete them (y/n)? "
 
-                    while [ true ]; do
-                        read -n 1 -s delete_choice
-                        if is_yes "$delete_choice"; then
-                            printf "y\n\n"
-                            for branch in "${branches_to_delete[@]}"; do
-                                delete_output=$(git branch -D "$branch" 2>&1)
-                                delete_code=$?
-                                if [ $delete_code -eq 0 ]; then
-                                    echo -e "${GREEN}✓ Deleted branch '$branch'${ENDCOLOR}"
-                                else
-                                    echo -e "${RED}✗ Cannot delete branch '$branch'.${ENDCOLOR}"
-                                    echo -e "${delete_output}"
-                                fi
-                            done
-                            echo
-                            break
-                        elif is_no "$delete_choice"; then
-                            printf "n\n\n"
-                            break
-                        fi
-                    done
+                    # Force-delete requires an explicit "y" — Enter/EOF decline
+                    if confirm_destructive; then
+                        echo
+                        for branch in "${branches_to_delete[@]}"; do
+                            delete_output=$(git branch -D "$branch" 2>&1)
+                            delete_code=$?
+                            if [ $delete_code -eq 0 ]; then
+                                echo -e "${GREEN}✓ Deleted branch '$branch'${ENDCOLOR}"
+                            else
+                                echo -e "${RED}✗ Cannot delete branch '$branch'.${ENDCOLOR}"
+                                echo -e "${delete_output}"
+                            fi
+                        done
+                        echo
+                    else
+                        echo
+                    fi
                 fi
                 break
             elif is_no "$choice"; then
@@ -433,14 +431,26 @@ function branch_script {
             printf "\nDelete these merged branches (y/n)? "
 
             while [ true ]; do
-                read -n 1 -s choice
+                read -n 1 -s choice || prompt_aborted
                 if is_yes "$choice"; then
                     printf "y\n\n"
-                    branches_to_delete="$(git branch --merged | grep -E -v "(^\*|master|main|develop|${main_branch})" | xargs)"
-                    IFS=$' ' read -rd '' -a branches <<<"$branches_to_delete"
-                    for index in "${!branches[@]}"
-                    do
-                        branch_to_delete="$(echo "${branches[index]}" | xargs)"
+                    # Plumbing list with EXACT-name exclusions. The old
+                    # human-format grep parsed the "+" worktree prefix as a
+                    # branch named "+", and its unanchored regex spared any
+                    # branch merely CONTAINING main/master/develop. A fresh
+                    # local array too — `branches_to_delete` is reused as an
+                    # ARRAY by the no-remote flow above.
+                    local -a merged_to_delete=()
+                    local _mb
+                    while IFS= read -r _mb; do
+                        [ -z "$_mb" ] && continue
+                        case "$_mb" in
+                            "$main_branch"|"$current_branch"|master|main|develop) continue ;;
+                        esac
+                        merged_to_delete+=("$_mb")
+                    done < <(git branch --merged --format='%(refname:short)')
+
+                    for branch_to_delete in "${merged_to_delete[@]}"; do
                         delete_output=$(git branch -d "$branch_to_delete" 2>&1)
                         delete_code=$?
                         if [ $delete_code == 0 ]; then
@@ -513,27 +523,23 @@ function branch_script {
             echo -e "${RED}⚠  These will be force-deleted (${BLUE}git branch -D${RED}).${ENDCOLOR}"
             printf "Are you sure (y/n)? "
 
-            while [ true ]; do
-                read -n 1 -s choice
-                if is_yes "$choice"; then
-                    printf "y\n\n"
-                    for branch in "${squash_merged_branches[@]}"; do
-                        delete_output=$(git branch -D "$branch" 2>&1)
-                        delete_code=$?
-                        if [ $delete_code -eq 0 ]; then
-                            echo -e "${GREEN}✓ Deleted branch '$branch'${ENDCOLOR}"
-                        else
-                            echo -e "${RED}✗ Cannot delete branch '$branch'.${ENDCOLOR}"
-                            echo -e "${delete_output}"
-                        fi
-                    done
-                    echo
-                    break
-                elif is_no "$choice"; then
-                    printf "n\n\n"
-                    break
-                fi
-            done
+            # Heuristic detection + force-delete: require an explicit "y"
+            if confirm_destructive; then
+                echo
+                for branch in "${squash_merged_branches[@]}"; do
+                    delete_output=$(git branch -D "$branch" 2>&1)
+                    delete_code=$?
+                    if [ $delete_code -eq 0 ]; then
+                        echo -e "${GREEN}✓ Deleted branch '$branch'${ENDCOLOR}"
+                    else
+                        echo -e "${RED}✗ Cannot delete branch '$branch'.${ENDCOLOR}"
+                        echo -e "${delete_output}"
+                    fi
+                done
+                echo
+            else
+                echo
+            fi
         fi
 
         # Delete in normal way
@@ -556,66 +562,58 @@ function branch_script {
             echo -e "${RED}⚠  Force-delete (${BLUE}git branch -D${RED}) will discard unmerged commits.${ENDCOLOR}"
             printf "Force-delete this branch (y/n)? "
 
-            while [ true ]; do
-                read -n 1 -s choice
-                if is_yes "$choice"; then
-                    printf "y\n\n"
+            # Discards unmerged commits: require an explicit "y"
+            confirm_destructive
+            case $? in
+                0)
+                    echo
                     delete_output=$(git branch -D "$branch_name" 2>&1)
                     delete_code=$?
                     if [ "$delete_code" != 0 ]; then
                         echo -e "${RED}✗ Cannot delete branch '$branch_name'.${ENDCOLOR}"
                         echo -e "${delete_output}"
-                        exit
+                        exit 1
                     fi
                     echo -e "${GREEN}✓ Deleted branch '$branch_name'${ENDCOLOR}"
-                    break
-
-                elif is_no "$choice"; then
-                    printf "n\n"
-                    exit
-                fi
-            done
+                ;;
+                2) exit 1 ;;
+                *) exit 0 ;;
+            esac
 
         else
             echo -e "${RED}✗ Cannot delete branch '$branch_name'.${ENDCOLOR}"
             echo -e "${delete_output}"
-            exit
+            exit 1
         fi
 
-        remote_check=$(git --no-pager log "$origin_name/$branch_name..HEAD" 2>&1)
-        if [[ $remote_check != *"unknown revision or path not in the working tree"* ]]; then
+        # Exit-code probe instead of matching git's (localized) error text
+        if git rev-parse --verify --quiet "refs/remotes/$origin_name/$branch_name" >/dev/null 2>&1; then
             echo
             printf "Also delete this branch on ${origin_name} (y/n)? "
 
-            while [ true ]; do
-                read -n 1 -s choice
-                if is_yes "$choice"; then
-                    printf "y\n\n"
-                    echo -e "${YELLOW}Deleting from remote...${ENDCOLOR}"
+            # Remote deletion is an optional extra step: explicit "y" only;
+            # declining just finishes (the local delete already succeeded).
+            if confirm_destructive; then
+                echo
+                echo -e "${YELLOW}Deleting from remote...${ENDCOLOR}"
 
-                    push_output=$(git push "$origin_name" -d "$branch_name" 2>&1)
-                    push_code=$?
+                push_output=$(LC_ALL=C git push "$origin_name" -d "$branch_name" 2>&1)
+                push_code=$?
 
-                    echo
-                    if [ "$push_code" != 0 ]; then
-                        # Check if the error is because the branch doesn't exist on remote (which is OK)
-                        if [[ $push_output == *"remote ref does not exist"* ]] || [[ $push_output == *"unable to delete"*"does not exist"* ]]; then
-                            echo -e "${YELLOW}Branch '$branch_name' does not exist on remote (already deleted or never pushed).${ENDCOLOR}"
-                        else
-                            echo -e "${RED}✗ Cannot delete branch '$branch_name' on remote.${ENDCOLOR}"
-                            echo -e "${push_output}"
-                            exit
-                        fi
+                echo
+                if [ "$push_code" != 0 ]; then
+                    # Check if the error is because the branch doesn't exist on remote (which is OK)
+                    if [[ $push_output == *"remote ref does not exist"* ]] || [[ $push_output == *"unable to delete"*"does not exist"* ]]; then
+                        echo -e "${YELLOW}Branch '$branch_name' does not exist on remote (already deleted or never pushed).${ENDCOLOR}"
                     else
-                        echo -e "${GREEN}✓ Deleted branch '$branch_name' on ${origin_name}${ENDCOLOR}"
+                        echo -e "${RED}✗ Cannot delete branch '$branch_name' on remote.${ENDCOLOR}"
+                        echo -e "${push_output}"
+                        exit 1
                     fi
-                    break
-
-                elif is_no "$choice"; then
-                    printf "n\n"
-                    exit
+                else
+                    echo -e "${GREEN}✓ Deleted branch '$branch_name' on ${origin_name}${ENDCOLOR}"
                 fi
-            done
+            fi
         fi
 
         exit
@@ -804,7 +802,7 @@ function branch_script {
 
         echo -e "${YELLOW}Pulling '$origin_name/$main_branch'...${ENDCOLOR}"
         echo
-        pull $main_branch $origin_name $editor
+        pull "$main_branch" "$origin_name" "$editor"
 
         from_branch=$main_branch
     fi

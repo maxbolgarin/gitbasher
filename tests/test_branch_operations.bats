@@ -146,8 +146,11 @@ teardown() {
 }
 
 @test "branch naming: sanitization removes dangerous characters" {
-    run sanitize_git_name "feature/test\$(rm -rf /)"
-    [ "$status" -eq 0 ]
+    # Direct call, not `run`: run executes in a subshell, so the global it
+    # sets was always unset here and the content assertions were vacuous.
+    sanitize_git_name "feature/test\$(rm -rf /)"
+    [ $? -eq 0 ]
+    [ -n "$sanitized_git_name" ]
     [[ "$sanitized_git_name" != *'$'* ]]
     [[ "$sanitized_git_name" != *'('* ]]
 }

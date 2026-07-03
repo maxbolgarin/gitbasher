@@ -63,6 +63,9 @@ function sync_script {
     fi
 
 
+    ### Rebasing/merging a detached HEAD leaves the result on no branch
+    warn_if_detached_head "sync"
+
     ### Check if already on default branch
     if [ "$current_branch" == "$main_branch" ]; then
         if [ -n "$sync_dry" ]; then
@@ -172,7 +175,7 @@ function sync_script {
         echo -e "${YELLOW}Merging ${origin_name}/${main_branch} into ${current_branch}...${ENDCOLOR}"
         echo
 
-        merge $main_branch $origin_name $editor "sync" "true"
+        merge "$main_branch" "$origin_name" "$editor" "sync" "true"
 
         if [[ $merge_output == *"Already up to date"* ]]; then
             echo -e "${GREEN}✓ Already up to date with ${main_branch}${ENDCOLOR}"

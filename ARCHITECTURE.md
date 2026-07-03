@@ -20,6 +20,7 @@ It targets contributors. If you only want to use gitbasher, the [README](./READM
 │   ├── commit.sh           # `gitb commit` — interactive, AI, split, amend, revert
 │   ├── edit.sh             # `gitb edit` — rewrite commit messages or rename the current branch
 │   ├── push.sh / pull.sh   # `gitb push`, `gitb pull`
+│   ├── fetch.sh / diff.sh  # `gitb fetch`, `gitb diff`
 │   ├── branch.sh           # `gitb branch`, `gitb prev`
 │   ├── tag.sh / cherry.sh  # `gitb tag`, `gitb cherry`
 │   ├── merge.sh / rebase.sh / squash.sh / sync.sh   # history / integration commands
@@ -28,10 +29,13 @@ It targets contributors. If you only want to use gitbasher, the [README](./READM
 │   ├── worktree.sh         # `gitb worktree` — list/add/remove/lock/move/prune
 │   ├── hooks.sh            # `gitb hook` — manage `.git/hooks/*`
 │   ├── origin.sh           # remote management
-│   └── gitlog.sh           # `gitb log`, `gitb reflog`, `gitb last-commit`, `gitb last-ref`
+│   ├── clone.sh            # `gitb clone` — clone a repo and set up gitbasher in it
+│   ├── update.sh / uninstall.sh   # `gitb update` (self-update), `gitb uninstall`
+│   ├── completion.sh       # shell tab-completion install (`gitb cfg completion`)
+│   └── gitlog.sh           # `gitb log`, `gitb status` dashboard, `gitb reflog`, `gitb last-commit`, `gitb last-ref`
 ├── dist/
 │   ├── build.sh            # bundler — inlines every `source` line into one file
-│   └── gitb                # generated bundle (committed; rebuilt by build.sh)
+│   └── gitb                # generated bundle (gitignored; built by build.sh / release CI)
 ├── tests/
 │   ├── run_tests.sh        # BATS runner
 │   └── test_*.bats         # one file per concern (commit, wip, worktree, …)
@@ -95,7 +99,7 @@ Properties of the bundle that matter:
 - **No `source` lines remain** — the bundle is a single self-contained file. The `|| { echo "..."; exit 1; }` guards on the original `source` lines are stripped along with their `source` line (the bundle can't encounter a missing file anyway).
 - **Comments are stripped** — don't put load-bearing logic in a comment. This includes per-line `# disable shellcheck` directives; those need to live as `# shellcheck` blocks (which are NOT stripped — they're 2 hashes only when combined with `shellcheck`, single-`#` comments are removed).
 - **Shebang stays** — `build.sh` re-adds `#!/usr/bin/env bash` as the first line of the output explicitly.
-- **The bundle is committed.** `dist/gitb` is checked into the repo so `npm install -g gitbasher` and the curl installer can ship a single file. semantic-release rebuilds it on every release via the `@semantic-release/exec` plugin.
+- **The bundle is not committed.** `dist/gitb` is gitignored; semantic-release builds it fresh on every release via the `@semantic-release/exec` plugin and ships it as a GitHub release asset / in the npm package, so `npm install -g gitbasher` and the curl installer get a single file.
 
 To rebuild locally:
 
@@ -134,7 +138,7 @@ User-visible settings live in `git config` under the `gitbasher.*` namespace, se
 - `gitbasher.worktreebase` — base path for `gitb worktree add` and `wip up worktree`
 - a handful of feature toggles (`gitbasher.confirm-push`, `gitbasher.color`, …)
 
-`get_config_value` and `set_config_value` in `common.sh` are the only paths that should touch these. Per-repo by default; `--global` is supported by passing the `g` mode to `gitb cfg`.
+`get_config_value` and `set_config_value` in `common.sh` are the only paths that should touch these. Per-repo by default; after the local write, each `gitb cfg` setter interactively asks whether to also set the value globally.
 
 ---
 
@@ -152,6 +156,6 @@ The `xargs -r` portability fix (replaced with `mapfile`-driven loops) is the can
 
 ## Releasing
 
-`@semantic-release/commit-analyzer` reads conventional commits on `main` and computes the next version. The `prepareCmd` in `.releaserc.json` rebuilds `dist/gitb`, recomputes the SHA-256 sidecar, and the GitHub asset list publishes both. `@semantic-release/git` commits the regenerated `dist/gitb` and the bumped `package.json` back to `main` with `[skip ci]`.
+`@semantic-release/commit-analyzer` reads conventional commits on `main` and computes the next version. The `prepareCmd` in `.releaserc.json` rebuilds `dist/gitb`, recomputes the SHA-256 sidecar, and the GitHub asset list publishes both. `@semantic-release/git` commits the bumped `package.json` and `CHANGELOG.md` back to `main` with `[skip ci]` — the bundle itself is not committed.
 
 There is no manual changelog edit — release notes are derived from commit history.

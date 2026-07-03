@@ -129,7 +129,11 @@ function edit_script {
     local seq_script
     seq_script=$(mktemp "${TMPDIR:-/tmp}/gitb-edit-seq.XXXXXX")
     chmod 600 "$seq_script"
-    trap 'rm -f "$seq_script"' EXIT INT TERM
+    # Double quotes bake the path in NOW: with single quotes the trap
+    # expanded $seq_script at exit time, when the local was already out of
+    # scope, so every run leaked a gitb-edit-seq.* file in $TMPDIR.
+    # shellcheck disable=SC2064  # bake the path now: the local is out of scope at fire time
+    trap "rm -f '$seq_script'" EXIT INT TERM
     cat > "$seq_script" <<SEQ_EOF
 todo="\$1"
 tmpfile="\$(mktemp "\${todo}.XXXXXX")"
@@ -172,6 +176,13 @@ function edit_branch_name {
         show_sanitization_error "branch name" "Use only letters, numbers, dots, dashes, underscores, and slashes."
         exit 1
     fi
+    # Never rename to a silently DIFFERENT name: sanitizing strips characters
+    # (e.g. non-ASCII), and pushing a mutated name publishes the wrong branch.
+    if [ "$sanitized_git_name" != "$new_name" ]; then
+        echo -e "${RED}✗ '${new_name}' contains characters gitbasher does not manage.${ENDCOLOR}"
+        echo -e "Closest supported name: ${YELLOW}${sanitized_git_name}${ENDCOLOR} — rerun with that name to use it."
+        exit 1
+    fi
     new_name="$sanitized_git_name"
 
     if [ "$new_name" = "$old_name" ]; then
@@ -190,7 +201,7 @@ function edit_branch_name {
         echo -e "${YELLOW}⚠  ${BOLD}${old_name}${NORMAL} is the configured main branch.${ENDCOLOR}"
         echo -e "Renaming it will leave ${YELLOW}gitbasher.branch${ENDCOLOR} pointing at the old name."
         printf "Rename anyway? (y/n) "
-        yes_no_choice
+        yes_no_choice_strict
         echo
     fi
 
@@ -222,7 +233,7 @@ function edit_branch_name {
     echo -e "${YELLOW}${BOLD}${old_name}${NORMAL}${YELLOW} also exists on ${origin_name}.${ENDCOLOR}"
     echo -e "Push ${BOLD}${new_name}${NORMAL} and delete the old remote branch?"
     printf "(y/n) "
-    yes_no_choice
+    yes_no_choice_strict
     echo
 
     local push_out

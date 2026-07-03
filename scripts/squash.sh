@@ -79,6 +79,8 @@ function squash_resolve_base_ref {
 # rest of the range.
 # $1: newline-separated full hashes (chronological, oldest first)
 function squash_build_commits_block {
+    # Byte-unit consistency: ${#var} must measure what `head -c` cuts
+    local LC_ALL=C
     local hashes_input="$1"
     local block=""
     local sep=""
@@ -159,6 +161,7 @@ This is chunk ${chunk_label} of a larger range — group ONLY the commits shown
 inside <commits>. Do not invent hashes from outside this chunk."
     fi
 
+    #### bundler-keep-begin (emitted content: bundler must not strip inside)
     local system_prompt='You are a git history editor. You receive a chronological list of commits (oldest first) inside <commits> and must propose how to consolidate them into a clean, changelog-ready history.
 
 Goals (in priority order):
@@ -208,6 +211,7 @@ CORRECTION (your previous attempt was rejected):
 ${correction_note}
 
 Re-do the grouping. Every input hash MUST appear in EXACTLY ONE \"commits\" array — no duplicates, no omissions, no hashes outside the input set. Output a single JSON object only."
+    #### bundler-keep-end
     fi
 
     # Size max_tokens to the commit count: ~120 tokens per commit covers a
@@ -236,10 +240,13 @@ function squash_parse_ai_plan {
 
     # Reset globals. These are keyed by 1-based group number, so plain indexed
     # arrays (bash 3.2 compatible) work in place of associative arrays.
+    # Plain assignment (not `declare -g`, which is bash 4.2+ and made these
+    # arrays function-local on the 3.2 floor, so the parsed plan never
+    # reached the caller and every squash failed after the paid AI call).
     unset squash_group_commits squash_group_message squash_group_body
-    declare -ga squash_group_commits=()
-    declare -ga squash_group_message=()
-    declare -ga squash_group_body=()
+    squash_group_commits=()
+    squash_group_message=()
+    squash_group_body=()
     squash_group_count=0
     squash_parse_error=""
 
@@ -248,9 +255,15 @@ function squash_parse_ai_plan {
         return 1
     fi
 
+    # Valid JSON is used as-is: the brace extractor below counts braces
+    # inside string values too, so a message like "fix: stray { in parser"
+    # would otherwise corrupt a perfectly valid response.
+    local json_only
+    if printf '%s' "$response" | jq -e . >/dev/null 2>&1; then
+        json_only="$response"
+    else
     # The model sometimes prepends/appends prose or markdown fences despite
     # response_format=json_object. Extract the outermost {...} block to be safe.
-    local json_only
     json_only=$(printf '%s' "$response" | LC_ALL=C awk '
         BEGIN{depth=0; started=0; out=""}
         {
@@ -262,6 +275,7 @@ function squash_parse_ai_plan {
             }
             if (started) out=out "\n"
         }')
+    fi
 
     if [ -z "$json_only" ]; then
         squash_parse_error="response is not JSON (no { } block found)"
@@ -498,11 +512,12 @@ function squash_run_ai_grouping {
         chunk_idx=$((chunk_idx + 1))
     done
 
-    # Copy accumulators back into the per-group globals (1-based indexed arrays).
+    # Copy accumulators back into the per-group globals (1-based indexed
+    # arrays; plain assignment — `declare -g` is bash 4.2+).
     unset squash_group_commits squash_group_message squash_group_body
-    declare -ga squash_group_commits=()
-    declare -ga squash_group_message=()
-    declare -ga squash_group_body=()
+    squash_group_commits=()
+    squash_group_message=()
+    squash_group_body=()
     squash_group_count=${#final_commits[@]}
 
     local g_idx
@@ -725,6 +740,17 @@ function squash_script {
         exit 0
     fi
 
+    # Refuse merge commits up front, BEFORE the paid AI call: the generated
+    # todo uses plain `pick` lines, which git rejects for merges ("'pick'
+    # does not accept merge commits"), so the rebase would always fail.
+    local merge_count
+    merge_count=$(git rev-list --min-parents=2 --count "${base_ref}..HEAD" 2>/dev/null)
+    if [ -n "$merge_count" ] && [ "$merge_count" -gt 0 ]; then
+        echo -e "${RED}✗ The range contains ${merge_count} merge commit(s), which squash cannot rewrite.${ENDCOLOR}"
+        echo -e "Rebase the branch first (${GREEN}gitb rebase main${ENDCOLOR}) to linearize it, then run ${GREEN}gitb squash${ENDCOLOR} again."
+        exit 1
+    fi
+
     local commit_count
     commit_count=$(printf '%s\n' "$commit_hashes_full" | grep -c .)
 
@@ -758,7 +784,7 @@ function squash_script {
         echo -e "${YELLOW}Will analyze ${BOLD}${commit_count}${NORMAL}${YELLOW} commits with AI.${ENDCOLOR}${size_warning}"
         echo -e "Continue (y/n)?"
         local pre_choice
-        read -n 1 -s pre_choice
+        read -n 1 -s pre_choice || prompt_aborted
         if ! is_yes "$pre_choice"; then
             echo
             echo -e "${YELLOW}Cancelled.${ENDCOLOR}"
@@ -818,10 +844,8 @@ function squash_script {
         echo -e "${RED}⚠  Applying this plan rewrites your commit history.${ENDCOLOR}"
         echo -e "${CYAN}💡 Recover the original branch with ${BOLD}gitb undo rebase${NORMAL}${CYAN} if needed.${ENDCOLOR}"
         echo -e "Are you sure you want to proceed (y/n)?"
-        local choice
-        read -n 1 -s choice
-        if ! is_yes "$choice"; then
-            echo
+        # History rewrite: require an explicit "y" — Enter/EOF decline
+        if ! confirm_destructive; then
             echo -e "${YELLOW}Cancelled.${ENDCOLOR}"
             exit 0
         fi

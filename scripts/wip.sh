@@ -25,12 +25,23 @@ function wip_remote_branch {
 #     wip_stash_ref - e.g. 'stash@{2}', or empty if not found
 function find_wip_stash {
     wip_stash_ref=""
-    local target
+    local target transfer
     target="$(wip_stash_message)"
+    # Interrupted wip-up runs leave the work in a "wip-transfer:" stash that
+    # must be discoverable too, or the data is invisible to `wip down`.
+    transfer="wip-transfer: ${current_branch}"
     while IFS= read -r line; do
         local ref="${line%%:*}"
         local subject="${line#*: }"
-        if [ "$subject" = "On ${current_branch}: ${target}" ] || [ "$subject" = "WIP on ${current_branch}: ${target}" ] || [[ "$line" == *"${target}"* ]]; then
+        # End-anchored matches only: a substring match popped ANOTHER
+        # branch's WIP whenever one branch name prefixed another
+        # (wip down on "dev" consumed the stash saved for "dev-x").
+        if [ "$subject" = "On ${current_branch}: ${target}" ] \
+                || [ "$subject" = "WIP on ${current_branch}: ${target}" ] \
+                || [ "$subject" = "$target" ] \
+                || [[ "$subject" == *": ${target}" ]] \
+                || [ "$subject" = "$transfer" ] \
+                || [[ "$subject" == *": ${transfer}" ]]; then
             wip_stash_ref="$ref"
             return 0
         fi
@@ -83,8 +94,14 @@ function find_wip_worktree {
 function wip_worktree_default_path {
     local base
     base=$(get_config_value gitbasher.worktreebase "")
+    # Anchor to the MAIN worktree's root (see default_worktree_path in
+    # worktree.sh) — --show-toplevel resolves the current worktree and
+    # nested wip worktrees inside other worktrees risk cascade deletion.
     local repo_root
-    repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+    repo_root=$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print substr($0,10); exit}')
+    if [ -z "$repo_root" ]; then
+        repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+    fi
     local safe_branch
     safe_branch=$(echo "wip-${current_branch}" | tr '/' '-')
 
@@ -115,7 +132,7 @@ function prompt_wip_backend {
     echo
 
     local choice
-    read -n 1 -s choice
+    read -n 1 -s choice || prompt_aborted
     echo
 
     case "$choice" in
@@ -306,7 +323,7 @@ function wip_up_branch {
     local ts
     ts=$(date +"%Y-%m-%d %H:%M:%S")
     local commit_output
-    commit_output=$(git -c commit.gpgsign=false commit -m "wip: ${original_branch} @ ${ts}" 2>&1)
+    commit_output=$(git -c commit.gpgsign=false commit --no-verify -m "wip: ${original_branch} @ ${ts}" 2>&1)
     if [ $? -ne 0 ]; then
         echo -e "${RED}✗ Cannot create WIP commit.${ENDCOLOR}"
         echo "$commit_output"
@@ -407,8 +424,13 @@ function wip_up_worktree {
         if ! git -C "$wip_path" diff --cached --quiet; then
             local ts
             ts=$(date +"%Y-%m-%d %H:%M:%S")
-            git -C "$wip_path" -c commit.gpgsign=false commit -m "wip: ${current_branch} @ ${ts}" >/dev/null 2>&1
-            wip_push_branch "$wip_branch"
+            # Checked + --no-verify: an unnoticed hook failure used to push
+            # a "backup" branch that pointed at base HEAD with no WIP in it.
+            if git -C "$wip_path" -c commit.gpgsign=false commit --no-verify -m "wip: ${current_branch} @ ${ts}" >/dev/null 2>&1; then
+                wip_push_branch "$wip_branch"
+            else
+                echo -e "${YELLOW}⚠  Could not commit the WIP inside the worktree — skipping the remote backup push.${ENDCOLOR}"
+            fi
             echo
         fi
     fi
@@ -534,7 +556,15 @@ function wip_down_worktree {
        [ -n "$(git -C "$wip_worktree_path" ls-files --others --exclude-standard)" ]; then
         has_pending="true"
         git -C "$wip_worktree_path" add -A >/dev/null 2>&1
-        git -C "$wip_worktree_path" -c commit.gpgsign=false commit -m "wip-pending: ${current_branch}" >/dev/null 2>&1
+        # --no-verify (internal bookkeeping commit) and a CHECKED exit code:
+        # a failing pre-commit hook here used to go unnoticed, the squash
+        # merge became a no-op, and the force-remove below deleted the
+        # worktree together with the user's uncommitted WIP.
+        if ! git -C "$wip_worktree_path" -c commit.gpgsign=false commit --no-verify -m "wip-pending: ${current_branch}" >/dev/null 2>&1; then
+            echo -e "${RED}✗ Cannot commit the pending changes inside the wip worktree — aborting restore.${ENDCOLOR}"
+            echo -e "${YELLOW}Your WIP is untouched at ${BOLD}${wip_worktree_path}${NORMAL}${YELLOW}.${ENDCOLOR}"
+            exit 1
+        fi
     fi
 
     # Squash-merge the wip branch into the current branch as uncommitted changes
@@ -562,6 +592,13 @@ function wip_down_worktree {
     echo
 
     echo -e "${YELLOW}Removing worktree ${wip_worktree_path}...${ENDCOLOR}"
+    # Last line of defense: never force-remove a wip worktree that still
+    # holds uncommitted work, whatever went wrong above.
+    if [ -n "$(git -C "$wip_worktree_path" status --porcelain 2>/dev/null)" ]; then
+        echo -e "${RED}✗ The wip worktree still has uncommitted changes — leaving it in place.${ENDCOLOR}"
+        echo -e "${YELLOW}Inspect ${BOLD}${wip_worktree_path}${NORMAL}${YELLOW} manually.${ENDCOLOR}"
+        exit 1
+    fi
     local rm_out rm_code
     rm_out=$(git worktree remove --force "$wip_worktree_path" 2>&1)
     rm_code=$?
@@ -597,7 +634,7 @@ function wip_up {
             worktree|w|wt|tree)  backend="worktree";;
             nopush|np|n)         nopush="true";;
             "")                  ;;
-            *)                   wrong_mode "wip up" "$arg";;
+            *)                   wrong_mode "wip" "$arg";;
         esac
     done
 
@@ -637,7 +674,7 @@ function wip_down {
         branch|b)            backend="branch";;
         worktree|w|wt|tree)  backend="worktree";;
         "")                  ;;
-        *)                   wrong_mode "wip down" "$1";;
+        *)                   wrong_mode "wip" "$1";;
     esac
 
     local header_msg="GIT WIP DOWN"
@@ -679,10 +716,16 @@ function wip_down {
             echo
 
             local choice
-            read -n 1 -s choice
+            read -n 1 -s choice || prompt_aborted
             echo
+            # Digits only BEFORE the arithmetic: a letter used to become
+            # index -1, which bash >= 4.3 resolves to the LAST backend —
+            # pressing "q" to quit started a restore.
+            if ! [[ "$choice" =~ ^[0-9]$ ]] || [ "$choice" = "0" ]; then
+                exit
+            fi
             local idx=$((choice-1))
-            if [ "$choice" = "0" ] || [ -z "${available[$idx]}" ]; then
+            if [ -z "${available[$idx]}" ]; then
                 exit
             fi
             backend="${available[$idx]}"

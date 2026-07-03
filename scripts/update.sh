@@ -30,6 +30,10 @@ function _compare_versions {
     local b="$(_normalize_version "$2")"
     a="${a%%-*}"
     b="${b%%-*}"
+    # Build metadata is not ordering-relevant (1.2.3+build5 parsed its third
+    # component as "35" and outranked 1.2.4)
+    a="${a%%+*}"
+    b="${b%%+*}"
 
     local IFS=.
     local -a aa=($a) bb=($b)
@@ -200,6 +204,11 @@ function _verify_gitb_sha256 {
 
     local tmp_sha
     tmp_sha=$(mktemp 2>/dev/null || mktemp -t gitb.sha256)
+    # Clean up on any exit — Ctrl-C mid-download used to leak the temp
+    # file. Double quotes bake the path NOW: the local is out of scope when
+    # the trap fires.
+    # shellcheck disable=SC2064  # bake the path now: the local is out of scope at fire time
+    trap "rm -f '$tmp_sha'" EXIT INT TERM
     if [ -z "$tmp_sha" ]; then
         _gitb_update_sha_warning="Could not create temp file for checksum — proceeding without verification."
         return 0
@@ -243,6 +252,8 @@ function _download_latest_gitb {
     local url="https://github.com/${GITBASHER_REPO}/releases/latest/download/gitb"
     local tmp
     tmp=$(mktemp 2>/dev/null || mktemp -t gitb)
+    # shellcheck disable=SC2064  # bake the path now: the local is out of scope at fire time
+    trap "rm -f '$tmp'" EXIT INT TERM
     if [ -z "$tmp" ]; then
         _gitb_update_download_err="Could not create a temp file for the download."
         return 1

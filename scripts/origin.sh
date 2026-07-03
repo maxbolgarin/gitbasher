@@ -294,7 +294,7 @@ function origin_remove {
     echo
     echo -e "${RED}⚠  This will remove the remote (you can re-add it later).${ENDCOLOR}"
     echo -e "Are you sure (y/n)?"
-    yes_no_choice "" "true"
+    yes_no_choice_strict "" "true"
 
     git remote remove "$target"
     echo

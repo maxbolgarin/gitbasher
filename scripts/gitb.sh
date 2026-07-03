@@ -22,8 +22,9 @@ fi
 ### anywhere in those cases instead of bailing out; everything else still
 ### fails fast with a clear message.
 GITBASHER_NO_REPO=""
-git_check=$(git branch --show-current 2>&1)
-if [[ "$git_check" == *"fatal: not a git repository"* ]]; then
+### Exit-code probe, not output matching: git localizes "fatal: not a git
+### repository", so string checks silently fail on non-English systems.
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     case "${1:-}" in
         ""|help|man|--help|-h|version|--version|-v|\
         config|cf|cfg|conf|\

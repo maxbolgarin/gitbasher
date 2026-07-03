@@ -79,6 +79,8 @@ function squash_resolve_base_ref {
 # rest of the range.
 # $1: newline-separated full hashes (chronological, oldest first)
 function squash_build_commits_block {
+    # Byte-unit consistency: ${#var} must measure what `head -c` cuts
+    local LC_ALL=C
     local hashes_input="$1"
     local block=""
     local sep=""

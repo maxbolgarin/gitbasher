@@ -1710,8 +1710,12 @@ function print_ai_summary {
         fi
         # Leading bullet (*, +, -) -> colored bullet.
         line=$(printf '%s' "$line" | sed -E "s/^([[:space:]]*)[*+-][[:space:]]+/\\1${c_bullet}•${c_reset} /")
-        # Inline bold (**text** or __text__) -> terminal bold.
-        line=$(printf '%s' "$line" | sed -E "s/(\\*\\*|__)([^*_]+)(\\*\\*|__)/${c_bold}\\2${c_reset}/g")
+        # Inline bold -> terminal bold. Same-kind pairs only, anchored at
+        # word boundaries: the old cross-kind pattern paired '**' across
+        # spans (mangling '**a_b** and **c_d**') and ate math ('2**8') and
+        # dunder names ('__init__.py').
+        line=$(printf '%s' "$line" | sed -E "s/(^|[[:space:]])\\*\\*([^*]+)\\*\\*($|[[:space:]])/\\1${c_bold}\\2${c_reset}\\3/g")
+        line=$(printf '%s' "$line" | sed -E "s/(^|[[:space:]])__([^_]+)__($|[[:space:]])/\\1${c_bold}\\2${c_reset}\\3/g")
         printf '%s\n' "$line"
     done <<< "$text"
 }

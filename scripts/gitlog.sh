@@ -988,7 +988,7 @@ function gitlog_ai {
     local system_prompt="You are a senior engineer summarizing a series of git commits for a teammate. You will receive commit subjects prefixed with their hashes, newest first, and possibly an overall change-size line. Group related commits into themes, state what changed and why it matters, and call out anything that looks risky or breaking. This is a commit history - never call it a 'PR', 'pull request' or 'release notes'. Write for a plain-text terminal: do NOT use Markdown (no '#' headings, no '*' or '**' for bold or bullets, no backticks, no tables); put short section labels on their own line ending with a colon, and start each list item on its own line with '- '. Keep it concise."
 
     local response
-    response=$(call_ai_api "$system_prompt" "$commits_summary" 2>/dev/null)
+    response=$(call_ai_api "$system_prompt" "$commits_summary")
     if [ -z "$response" ]; then
         echo -e "${RED}✗ Failed to generate an AI summary${ENDCOLOR}"
         echo -e "Check your AI configuration with ${GREEN}gitb cfg ai${ENDCOLOR}."

@@ -114,8 +114,10 @@ setup() {
     ! validate_proxy_url ""
 }
 
-@test "validate_proxy_url: rejects URL without port" {
-    ! validate_proxy_url "http://proxy.example.com"
+@test "validate_proxy_url: accepts URL without port (curl scheme default)" {
+    validate_proxy_url "http://proxy.example.com"
+    [ $? -eq 0 ]
+    [ "$validated_proxy_url" = "http://proxy.example.com" ]
 }
 
 @test "validate_proxy_url: rejects unsupported scheme" {
@@ -127,10 +129,29 @@ setup() {
     ! validate_proxy_url "http://proxy.example.com:8080 && id"
 }
 
-@test "validate_proxy_url: strips backticks before validation" {
-    # Sanitization removes backticks; result must not leak shell metacharacters
-    validate_proxy_url 'http://`whoami`@proxy.com:8080' || true
-    [[ "$validated_proxy_url" != *'`'* ]]
+@test "validate_proxy_url: preserves credential special characters verbatim" {
+    # The old sanitizer silently stripped '+' and '!' from passwords,
+    # producing mystery 407s. Validate, never mutate.
+    validate_proxy_url "http://user:se+cret!@proxy.example.com:8080"
+    [ $? -eq 0 ]
+    [ "$validated_proxy_url" = "http://user:se+cret!@proxy.example.com:8080" ]
+}
+
+@test "validate_proxy_url: accepts socks5h (Tor/SSH-tunnel standard)" {
+    validate_proxy_url "socks5h://127.0.0.1:9050"
+    [ $? -eq 0 ]
+    [ "$validated_proxy_url" = "socks5h://127.0.0.1:9050" ]
+}
+
+@test "validate_proxy_url: accepts bracketed IPv6 literal" {
+    validate_proxy_url "http://[2001:db8::1]:8080"
+    [ $? -eq 0 ]
+    [ "$validated_proxy_url" = "http://[2001:db8::1]:8080" ]
+}
+
+@test "validate_proxy_url: rejects backticks instead of stripping them" {
+    ! validate_proxy_url 'http://`whoami`@proxy.com:8080'
+    [ -z "$validated_proxy_url" ]
 }
 
 # ===== mask_api_key tests =====

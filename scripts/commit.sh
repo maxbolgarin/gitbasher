@@ -674,6 +674,7 @@ function group_files_by_feature_with_ai {
     local max_groups
     max_groups=$(get_max_split_groups)
 
+    #### bundler-keep-begin (emitted content: bundler must not strip inside)
     local system_prompt="You group staged git files into commits by FEATURE — a single logical unit of work (a new capability, a bug fix, a refactor).
 
 A feature is defined by WHAT the change accomplishes, read from the actual code in <diff> — NOT by which directory the files live in. Files in DIFFERENT folders that implement the same feature belong in the SAME group; files in the SAME folder that implement unrelated changes belong in DIFFERENT groups.
@@ -705,6 +706,7 @@ ${heuristic_hint}
 </heuristic_candidates>
 
 Read <diff> to decide which files implement the same feature. Output TSV (scope<TAB>file) for every staged file. No prose."
+    #### bundler-keep-end
 
     local ai_response
     ai_response=$(call_ai_api "$system_prompt" "$user_prompt" "$AI_MAX_TOKENS_FULL" "$(get_ai_model_for grouping)" 2>/dev/null)

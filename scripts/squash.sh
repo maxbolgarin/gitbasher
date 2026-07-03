@@ -161,6 +161,7 @@ This is chunk ${chunk_label} of a larger range — group ONLY the commits shown
 inside <commits>. Do not invent hashes from outside this chunk."
     fi
 
+    #### bundler-keep-begin (emitted content: bundler must not strip inside)
     local system_prompt='You are a git history editor. You receive a chronological list of commits (oldest first) inside <commits> and must propose how to consolidate them into a clean, changelog-ready history.
 
 Goals (in priority order):
@@ -210,6 +211,7 @@ CORRECTION (your previous attempt was rejected):
 ${correction_note}
 
 Re-do the grouping. Every input hash MUST appear in EXACTLY ONE \"commits\" array — no duplicates, no omissions, no hashes outside the input set. Output a single JSON object only."
+    #### bundler-keep-end
     fi
 
     # Size max_tokens to the commit count: ~120 tokens per commit covers a

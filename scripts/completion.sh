@@ -176,7 +176,7 @@ _gitb() {
             COMPREPLY=( $(compgen -W "$_gitb_sub_wip_backend" -- "$cur") )
             return 0
         fi
-        # down auto-detects and rejects nopush - offer backends only
+        #### down auto-detects and rejects nopush - offer backends only
         if [ "$sub" = "down" ] || [ "$sub" = "d" ]; then
             COMPREPLY=( $(compgen -W "stash s branch b worktree w wt tree" -- "$cur") )
             return 0
@@ -187,13 +187,12 @@ _gitb() {
         local subs="${!subs_var}"
         if [ -n "$subs" ]; then
             if [ "$canonical" = "log" ]; then
-                # gitb log also accepts a branch/ref as a smart positional -
-                # offer branch names alongside the modes (the old separate
-                # branch-name block was unreachable, and merge/rebase/branch
-                # reject bare branch arguments anyway). Filter for
-                # "tab-friendly" names: git permits shell-special characters
-                # inside refs, and unquoted COMPREPLY opens a small
-                # pathological window.
+                #### gitb log also accepts a branch/ref as a smart positional -
+                #### offer branch names alongside the modes. Tab-friendly-name
+                #### filter: git permits shell-special characters inside refs,
+                #### and unquoted COMPREPLY opens a small pathological window.
+                #### (4-hash comments survive the bundler unchanged - see the
+                #### note at the top of this file.)
                 local branches
                 branches=$(git for-each-ref --format='%(refname:short)' refs/heads 2>/dev/null | grep -E '^[A-Za-z0-9._/-]+$')
                 COMPREPLY=( $(compgen -W "$subs $branches" -- "$cur") )

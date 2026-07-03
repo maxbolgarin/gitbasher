@@ -87,8 +87,10 @@ if [ "$1" == "--version" ] || [ "$1" == "-v" ] || [ "$1" == "version" ]; then
     exit
 fi
 
-### Print settings f this is first run
-if [[ $is_first == "true" ]]; then
+### Print settings if this is first run. Terminal-only: with redirected
+### stdout the banner would corrupt machine-read output (e.g. the first
+### `gitb cfg auto print > file` on a fresh repo).
+if [[ $is_first == "true" ]] && [ -t 1 ]; then
     git config --local gitbasher.scopes ""
 
     echo -e "${GREEN}Thanks for using gitbasher in project '$project_name'${ENDCOLOR}"

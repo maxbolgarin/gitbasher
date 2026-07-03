@@ -376,7 +376,9 @@ function list_hooks {
 ### Function to create a new hook
 function create_hook {
     local hook_type="$1"
-    local template="$2"
+    # No template argument means the plain starter template (only an
+    # explicitly WRONG name is rejected below)
+    local template="${2:-basic}"
     local hooks_dir=$(get_hooks_dir)
     local hook_file="$hooks_dir/$hook_type"
     
@@ -407,6 +409,7 @@ function create_hook {
     
     # Create hook content based on template
     local hook_content=""
+    #### bundler-keep-begin (emitted content: bundler must not strip inside)
     case "$template" in
         "basic"|"")
             hook_content="#!/bin/sh
@@ -545,6 +548,7 @@ exit 0"
             echo -e "Run ${GREEN}gitb hook list samples${ENDCOLOR} to see available templates."
             return 1
         ;;
+    #### bundler-keep-end
     esac
 
     # Write hook file

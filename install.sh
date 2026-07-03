@@ -33,7 +33,23 @@ for arg in "$@"; do
         --sudo)    USE_SUDO=1 ;;
         --no-sudo) NO_SUDO=1 ;;
         -h|--help)
-            sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'
+            # Static usage: under `curl ... | bash -s -- --help` $0 is
+            # "bash", so self-sedding printed nothing and exited 0.
+            cat <<'GITB_USAGE'
+gitbasher installer
+
+Usage (install or upgrade):
+  curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash -s -- --sudo
+
+Flags:
+  --sudo         Install system-wide to /usr/local/bin (uses sudo if needed)
+  --no-sudo      Forbid sudo even when needed
+
+Environment:
+  GITB_VERSION   Tag to install (default: latest)
+  GITB_DIR       Target directory (default: ~/.local/bin, or /usr/local/bin with --sudo)
+GITB_USAGE
             exit 0 ;;
         *) printf "Unknown argument: %s\n" "$arg" >&2; exit 2 ;;
     esac
@@ -230,11 +246,19 @@ case ":$PATH:" in
             fish) shell_rc="$HOME/.config/fish/config.fish" ;;
         esac
         if [ -n "$shell_rc" ]; then
-            # Use %q so $TARGET_DIR / $shell_rc with whitespace or shell metacharacters
-            # render as a safely-quoted snippet the user can paste verbatim.
-            printf "  Add it with: ${BOLD}echo %q >> %q${OFF}\n" \
-                "export PATH=\"$TARGET_DIR:\$PATH\"" \
-                "$shell_rc"
+            if [ "${SHELL##*/}" = "fish" ]; then
+                # fish has no `export VAR=`; pasting the bash snippet breaks
+                # its config. fish_add_path is idempotent and persistent.
+                printf "  Add it with: ${BOLD}fish -c %q${OFF}\n" \
+                    "fish_add_path $TARGET_DIR"
+            else
+                # Use %q so $TARGET_DIR / $shell_rc with whitespace or shell
+                # metacharacters render as a safely-quoted snippet the user
+                # can paste verbatim.
+                printf "  Add it with: ${BOLD}echo %q >> %q${OFF}\n" \
+                    "export PATH=\"$TARGET_DIR:\$PATH\"" \
+                    "$shell_rc"
+            fi
         else
             printf "  Add ${BOLD}%q${OFF} to your PATH.\n" "$TARGET_DIR"
         fi

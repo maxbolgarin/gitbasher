@@ -7,7 +7,18 @@
 
 ### Function to get hooks directory path
 function get_hooks_dir {
-    local hooks_dir="$(git rev-parse --git-dir)/hooks"
+    # --git-path resolves hooks the way git itself does: correct inside
+    # linked worktrees (hooks are shared via the common dir) and when
+    # core.hooksPath is set (husky et al.). The old --git-dir/hooks pointed
+    # at a directory git never reads in both cases — created hooks
+    # "succeeded" but never ran.
+    local hooks_dir
+    hooks_dir="$(git rev-parse --git-path hooks 2>/dev/null)"
+    # --git-path may answer relative to the CWD — normalize to absolute
+    case "$hooks_dir" in
+        /*) ;;
+        *) hooks_dir="$(pwd)/$hooks_dir" ;;
+    esac
     echo "$hooks_dir"
 }
 
@@ -428,13 +439,12 @@ if git diff --cached --name-only --quiet; then
     exit 0
 fi
 
-# Example: Check for common issues
-staged_files=\$(git diff --cached --name-only -z)
-
-# Check for TODO/FIXME comments in staged files
+# Check for TODO/FIXME comments in staged files. The NUL-separated list is
+# piped straight through: capturing it in \$(...) strips the NULs and
+# silently disables the check.
 # --binary-files=without-match keeps grep from spamming \"binary file matches\"
 # lines for any binary blob that happens to be staged.
-if echo \"\$staged_files\" | xargs -0 grep -l --binary-files=without-match \"TODO\\|FIXME\" 2>/dev/null; then
+if git diff --cached --name-only -z | xargs -0 grep -l --binary-files=without-match \"TODO\\|FIXME\" 2>/dev/null; then
     echo \"⚠️  Warning: Found TODO/FIXME comments in staged files\"
     echo \"Continue anyway? (y/n)\"
     read -n 1 answer
@@ -455,7 +465,7 @@ while IFS= read -r -d '' file; do
             exit 1
         fi
     fi
-done <<<\"\$staged_files\"
+done < <(git diff --cached --name-only -z)
 
 echo \"Pre-commit checks passed\"
 exit 0"
@@ -527,8 +537,16 @@ done
 echo \"Pre-push checks passed\"
 exit 0"
         ;;
+        *)
+            # A typo'd template name used to fall through with empty
+            # content, silently creating an executable hook that always
+            # passes while the user believes their template is active.
+            echo -e "${RED}✗ Unknown template '${template}'.${ENDCOLOR}"
+            echo -e "Run ${GREEN}gitb hook list samples${ENDCOLOR} to see available templates."
+            return 1
+        ;;
     esac
-    
+
     # Write hook file
     echo "$hook_content" > "$hook_file"
     chmod +x "$hook_file"
@@ -562,24 +580,54 @@ function edit_hook {
     echo -e "${GRAY}File: $hook_file${ENDCOLOR}"
     echo
     
-    # Use configured editor
-    "$editor" "$hook_file"
-    
-    # Ensure hook remains executable
-    chmod +x "$hook_file"
-    echo -e "${GREEN}✓ Hook updated (executable)${ENDCOLOR}"
+    # Remember whether the hook was enabled — editing must not silently
+    # re-enable a deliberately disabled hook.
+    local was_executable=""
+    [ -x "$hook_file" ] && was_executable="true"
+
+    # Word-split $editor like every other invocation in gitbasher — the
+    # quoted form broke multi-word editors ("code --wait": command not
+    # found) yet still printed the success line.
+    if ! $editor "$hook_file"; then
+        echo -e "${RED}✗ Editor exited with an error — hook left as-is.${ENDCOLOR}"
+        return 1
+    fi
+
+    if [ -n "$was_executable" ]; then
+        chmod +x "$hook_file"
+        echo -e "${GREEN}✓ Hook updated (enabled)${ENDCOLOR}"
+    else
+        echo -e "${GREEN}✓ Hook updated (still disabled — enable with ${BLUE}gitb hook enable $hook_type${GREEN})${ENDCOLOR}"
+    fi
 }
 
 ### Function to toggle hook executable status
 function toggle_hook {
     local hook_type="$1"
+    # $2: "enable" / "disable" force the state idempotently — as blind
+    # toggle aliases they did the OPPOSITE of their name half the time
+    # (e.g. `gitb hook disable x` on an already-disabled hook enabled it).
+    local want="$2"
     local hooks_dir=$(get_hooks_dir)
     local hook_file="$hooks_dir/$hook_type"
-    
+
     if [ ! -f "$hook_file" ]; then
         echo -e "${RED}✗ Hook '$hook_type' does not exist.${ENDCOLOR}"
         return 1
     fi
+
+    case "$want" in
+        enable)
+            chmod +x "$hook_file"
+            echo -e "${GREEN}✓ Enabled hook: $hook_type${ENDCOLOR}"
+            return
+            ;;
+        disable)
+            chmod -x "$hook_file"
+            echo -e "${YELLOW}✓ Disabled hook: $hook_type${ENDCOLOR}"
+            return
+            ;;
+    esac
 
     if [ -x "$hook_file" ]; then
         chmod -x "$hook_file"
@@ -713,17 +761,39 @@ function test_hook {
     echo -e "${YELLOW}Testing hook: $hook_type${ENDCOLOR}"
     echo -e "${GRAY}Running: $hook_file${ENDCOLOR}"
     echo "----------------------------------------"
-    
-    # Run the hook and capture exit code
-    "$hook_file"
-    local exit_code=$?
-    
+
+    # Closed stdin plus representative args per hook type: the shipped
+    # pre-push template reads stdin (it used to hang forever waiting for a
+    # terminal), and commit-msg hooks always receive a message file — with
+    # no argument the conventional-commits template failed on a good hook.
+    local exit_code
+    case "$hook_type" in
+        commit-msg|prepare-commit-msg)
+            local sample_msg_file
+            sample_msg_file=$(mktemp "${TMPDIR:-/tmp}/gitb-hooktest.XXXXXX")
+            printf 'feat: sample message for hook testing\n' > "$sample_msg_file"
+            "$hook_file" "$sample_msg_file" < /dev/null
+            exit_code=$?
+            rm -f "$sample_msg_file"
+            ;;
+        pre-push)
+            "$hook_file" "${origin_name:-origin}" "" < /dev/null
+            exit_code=$?
+            ;;
+        *)
+            "$hook_file" < /dev/null
+            exit_code=$?
+            ;;
+    esac
+
     echo "----------------------------------------"
     if [ $exit_code -eq 0 ]; then
         echo -e "${GREEN}✓ Hook test passed (exit code: $exit_code)${ENDCOLOR}"
     else
         echo -e "${RED}✗ Hook test failed (exit code: $exit_code)${ENDCOLOR}"
     fi
+    # Propagate so `gitb hook test x && ...` means something
+    return $exit_code
 }
 
 ### Function to show hook content
@@ -921,8 +991,11 @@ function hooks_script {
                 return 1
             fi
             hook_type="$sanitized_git_name"
-            
-            toggle_hook "$hook_type"
+
+            case "$mode" in
+                enable|disable) toggle_hook "$hook_type" "$mode" ;;
+                *)              toggle_hook "$hook_type" ;;
+            esac
         ;;
         "remove"|"delete"|"rm"|"r")
             if [ -z "$hook_type" ]; then

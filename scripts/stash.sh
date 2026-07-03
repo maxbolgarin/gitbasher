@@ -383,7 +383,7 @@ function stash_script {
         
         echo
         echo -e "${RED}⚠  Dropping stash $selected_stash cannot be undone.${ENDCOLOR}"
-        echo -e "Are you sure you want to drop it (y/n)?"
+        echo -e "Are you sure you want to drop it (y/N)?"
         yes_no_choice_strict "Dropping stash"
 
         drop_output=$(git stash drop "$selected_stash" 2>&1)

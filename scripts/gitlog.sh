@@ -564,7 +564,7 @@ function log_commit_actions {
 
                 local file="${files[choice - 1]}"
                 echo -e "${RED}This will overwrite '${file}' in your working tree with its state from ${hash}.${ENDCOLOR}"
-                printf "Restore it (y/n)? "
+                printf "Restore it (y/N)? "
                 # Overwrites working-tree content: require an explicit "y"
                 if confirm_destructive; then
                     result=$(git checkout "$hash" -- "$file" 2>&1)

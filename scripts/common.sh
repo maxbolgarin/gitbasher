@@ -183,7 +183,9 @@ function to_upper {
 ###   Warnings  : ${YELLOW}⚠  <statement>.${ENDCOLOR}              (red ⚠ if destructive)
 ###   Tips      : ${CYAN}💡 <Tip text>${ENDCOLOR}
 ###   Steps     : ${YELLOW}Step N.${ENDCOLOR} <Imperative instruction>
-###   Confirm   : routine "(y/n)?", destructive prefixed with red ⚠ line
+###   Confirm   : the Enter default is capitalized — "(Y/n)?" when Enter
+###               confirms (benign prompts), "(y/N)?" when Enter declines
+###               (destructive prompts, prefixed with a red ⚠ line)
 ###   Menu exit : "0. Exit" (or "00. Exit" when paginated/≥10 items)
 ###   Invalid   : ${RED}✗ Invalid choice.${ENDCOLOR}
 ###

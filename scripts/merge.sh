@@ -89,7 +89,7 @@ function merge_script {
         elif [ "$current_local_commit" != "$current_remote_commit" ]; then
             echo -e "${YELLOW}⚠  Remote changes detected on ${current_branch}.${ENDCOLOR}"
             echo
-            echo -e "Do you want to pull ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} first (y/n)?"
+            echo -e "Do you want to pull ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} first (Y/n)?"
             read -n 1 -s choice || prompt_aborted
             if is_yes "$choice"; then
                 echo
@@ -167,7 +167,7 @@ function merge_script {
         elif [ "$local_commit" != "$remote_commit" ]; then
             echo -e "${YELLOW}⚠  Remote changes detected.${ENDCOLOR}"
             echo
-            echo -e "Do you want to fetch ${YELLOW}${origin_name}/${merge_branch}${ENDCOLOR} before merge (y/n)?"
+            echo -e "Do you want to fetch ${YELLOW}${origin_name}/${merge_branch}${ENDCOLOR} before merge (Y/n)?"
             read -n 1 -s choice || prompt_aborted
             if is_yes "$choice"; then
                 echo
@@ -367,7 +367,7 @@ function resolve_conflicts {
         if [ "$choice" == "4" ]; then
             echo
             echo -e "${RED}⚠  This will discard your current changes for these files.${ENDCOLOR}"
-            echo -e "Are you sure you want to ${GREEN}accept all incoming changes${ENDCOLOR} (y/n)?"
+            echo -e "Are you sure you want to ${GREEN}accept all incoming changes${ENDCOLOR} (y/N)?"
             if confirm_destructive; then
                 echo -e "${YELLOW}Accepting all incoming changes...${ENDCOLOR}"
                 
@@ -377,7 +377,7 @@ function resolve_conflicts {
                     echo -e "${YELLOW}⚠  Some files were deleted in the incoming branch:${ENDCOLOR}"
                     echo "$deleted_files" | sed 's/^/\t/'
                     echo
-                    echo -e "Do you want to continue and accept the deletions (y/n)?"
+                    echo -e "Do you want to continue and accept the deletions (y/N)?"
                     if ! confirm_destructive; then
                         echo -e "${YELLOW}Cancelled. Continuing...${ENDCOLOR}"
                         continue
@@ -444,7 +444,7 @@ function resolve_conflicts {
         if [ "$choice" == "5" ]; then
             echo
             echo -e "${RED}⚠  This will discard the incoming changes for these files.${ENDCOLOR}"
-            echo -e "Are you sure you want to ${GREEN}accept all current changes${ENDCOLOR} (y/n)?"
+            echo -e "Are you sure you want to ${GREEN}accept all current changes${ENDCOLOR} (y/N)?"
             if confirm_destructive; then
                 echo -e "${YELLOW}Accepting all current changes...${ENDCOLOR}"
                 
@@ -454,7 +454,7 @@ function resolve_conflicts {
                     echo -e "${YELLOW}⚠  Some files were deleted in the current branch:${ENDCOLOR}"
                     echo "$deleted_files" | sed 's/^/\t/'
                     echo
-                    echo -e "Do you want to continue and accept the deletions (y/n)?"
+                    echo -e "Do you want to continue and accept the deletions (y/N)?"
                     if ! confirm_destructive; then
                         echo -e "${YELLOW}Cancelled. Continuing...${ENDCOLOR}"
                         continue
@@ -615,7 +615,7 @@ ${staged_with_tab}
             echo
             echo -e "${YELLOW}⚠  Merge commit message cannot be empty.${ENDCOLOR}"
             echo
-            read -n 1 -p "Do you want to try for one more time? (y/n) " -s -e choice || choice="n"
+            read -n 1 -p "Do you want to try for one more time? (Y/n) " -s -e choice || choice="n"
             if ! is_yes "$choice"; then
                 # Unstage every conflicted file (per line — space-safe)
                 while IFS= read -r _cf; do

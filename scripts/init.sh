@@ -91,7 +91,7 @@ function unset_config_value {
     if [ -n "$global_config" ]; then
         echo
         echo -e "${YELLOW}Global $1 is also configured: ${BLUE}$global_config${ENDCOLOR}"
-        echo -e "Do you want to clear it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+        echo -e "Do you want to clear it ${YELLOW}globally${ENDCOLOR} for all projects (Y/n)?"
         local _unset_key=""
         read_key _unset_key || _unset_key="n"
         if is_yes "$_unset_key"; then

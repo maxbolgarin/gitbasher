@@ -293,7 +293,7 @@ function origin_remove {
     echo -e "URL: ${GRAY}$existing${ENDCOLOR}"
     echo
     echo -e "${RED}⚠  This will remove the remote (you can re-add it later).${ENDCOLOR}"
-    echo -e "Are you sure (y/n)?"
+    echo -e "Are you sure (y/N)?"
     yes_no_choice_strict "" "true"
 
     git remote remove "$target"

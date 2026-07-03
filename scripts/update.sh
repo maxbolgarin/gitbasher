@@ -469,9 +469,9 @@ function update_script {
 
     echo -e "Install location: ${BLUE}${install_path}${ENDCOLOR}"
     if [ $cmp -eq 2 ]; then
-        echo -e "Update ${YELLOW}${current_version}${ENDCOLOR} → ${GREEN}${latest_version}${ENDCOLOR}? (y/n)"
+        echo -e "Update ${YELLOW}${current_version}${ENDCOLOR} → ${GREEN}${latest_version}${ENDCOLOR}? (Y/n)"
     else
-        echo -e "Reinstall ${GREEN}${latest_version}${ENDCOLOR} over the current binary? (y/n)"
+        echo -e "Reinstall ${GREEN}${latest_version}${ENDCOLOR} over the current binary? (Y/n)"
     fi
     yes_no_choice "Updating..."
 

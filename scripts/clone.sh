@@ -141,7 +141,7 @@ function clone_script {
     # already inside "$target_abs" at this point (cd'd in above).
     if [ -z "$GITBASHER_TEST_MODE" ] && [ -t 0 ]; then
         local clone_cd_choice
-        echo -e "${YELLOW}Enter the new repo now (y/n)?${ENDCOLOR}"
+        echo -e "${YELLOW}Enter the new repo now (Y/n)?${ENDCOLOR}"
         read -n 1 -s clone_cd_choice
         echo
         if is_yes "$clone_cd_choice"; then

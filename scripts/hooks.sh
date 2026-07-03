@@ -399,7 +399,7 @@ function create_hook {
     if [ -f "$hook_file" ]; then
         echo -e "${YELLOW}⚠  Hook '$hook_type' already exists.${ENDCOLOR}"
         echo -e "${RED}⚠  Overwriting will replace its contents.${ENDCOLOR}"
-        echo -e "Overwrite (y/n)?"
+        echo -e "Overwrite (y/N)?"
         # Replaces the user's existing hook: require an explicit "y"
         if ! confirm_destructive; then
             echo -e "${YELLOW}Hook creation cancelled.${ENDCOLOR}"
@@ -449,7 +449,7 @@ fi
 # lines for any binary blob that happens to be staged.
 if git diff --cached --name-only -z | xargs -0 grep -l --binary-files=without-match \"TODO\\|FIXME\" 2>/dev/null; then
     echo \"⚠️  Warning: Found TODO/FIXME comments in staged files\"
-    echo \"Continue anyway? (y/n)\"
+    echo \"Continue anyway? (y/N)\"
     read -n 1 answer
     echo
     if [ \"\$answer\" != \"y\" ] && [ \"\$answer\" != \"Y\" ]; then
@@ -560,7 +560,7 @@ exit 0"
     
     # Offer to edit the hook
     echo
-    echo -e "Do you want to ${BLUE}edit${ENDCOLOR} the hook now? (y/n)"
+    echo -e "Do you want to ${BLUE}edit${ENDCOLOR} the hook now? (Y/n)"
     read -n 1 -s choice || prompt_aborted
     echo
     if is_yes "$choice"; then
@@ -655,7 +655,7 @@ function remove_hook {
 
     echo -e "${RED}⚠  Deleting hook '$hook_type' cannot be undone.${ENDCOLOR}"
     echo -e "${GRAY}File: $hook_file${ENDCOLOR}"
-    echo -e "Are you sure you want to delete it (y/n)?"
+    echo -e "Are you sure you want to delete it (y/N)?"
     # Irreversible file deletion: require an explicit "y"
     if confirm_destructive; then
         rm "$hook_file"
@@ -706,7 +706,7 @@ function remove_all_hooks {
 
     echo
     echo -e "${RED}⚠  This will permanently delete $hook_count hooks.${ENDCOLOR}"
-    echo -e "${YELLOW}Are you absolutely sure (y/n)?${ENDCOLOR}"
+    echo -e "${YELLOW}Are you absolutely sure (Y/n)?${ENDCOLOR}"
     read -n 1 -p "Your choice: " choice < /dev/tty || choice="0"
     echo
     echo
@@ -870,7 +870,7 @@ function install_samples {
 
     echo
     echo -e "${YELLOW}Ready to install $sample_count sample hooks.${ENDCOLOR}"
-    echo -e "Continue (y/n)?"
+    echo -e "Continue (Y/n)?"
     read -n 1 -p "Your choice: " choice < /dev/tty || choice="n"
     echo
     echo

@@ -591,7 +591,7 @@ function _do_worktree_remove {
         echo -e "${RED}${rm_output}${ENDCOLOR}"
         echo
         echo -e "${YELLOW}Force remove this worktree? (uncommitted changes will be lost)${ENDCOLOR}"
-        echo -e "Do you want to continue (y/n)?"
+        echo -e "Do you want to continue (y/N)?"
         yes_no_choice_strict "Force removing worktree..."
 
         # --force TWICE: a locked worktree needs it doubled, so the single
@@ -641,7 +641,7 @@ function worktree_prune {
     echo "$dry_run"
     echo
 
-    echo -e "${YELLOW}Continue? (y/n)${ENDCOLOR}"
+    echo -e "${YELLOW}Continue? (Y/n)${ENDCOLOR}"
     yes_no_choice "Pruning..."
 
     local prune_output

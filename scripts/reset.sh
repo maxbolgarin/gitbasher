@@ -113,7 +113,7 @@ function reset_script {
     else
         echo -e "${YELLOW}⚠  This will move HEAD; reset changes will be left unstaged.${ENDCOLOR}"
     fi
-    echo -e "Are you sure you want to continue (y/n)?"
+    echo -e "Are you sure you want to continue (y/N)?"
     yes_no_choice_strict "Resetting..."
 
     reset_output=$(git reset "$args" "$move_ref" 2>&1)

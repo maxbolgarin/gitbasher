@@ -208,7 +208,7 @@ function push_script {
             echo -e "${BLUE}Branch ${YELLOW}${current_branch}${BLUE} does not exist on ${YELLOW}${origin_name}${BLUE} yet.${ENDCOLOR}"
             echo
             if [ -z "${fast}" ]; then
-                echo -e "Do you want to push the new branch to ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} (y/n)?"
+                echo -e "Do you want to push the new branch to ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} (Y/n)?"
                 yes_no_choice "Pushing..."
             else
                 echo -e "${YELLOW}Pushing...${ENDCOLOR}"
@@ -294,7 +294,7 @@ function push_script {
         if [ "${current_branch}" == "${main_branch}" ]; then
             echo -e "${RED}⚠  You are about to push directly to the default branch ${YELLOW}${main_branch}${RED}.${ENDCOLOR}"
         fi
-        echo -e "Do you want to push${RED}${force_label}${ENDCOLOR} these commits to ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} (y/n)?"
+        echo -e "Do you want to push${RED}${force_label}${ENDCOLOR} these commits to ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} (Y/n)?"
         yes_no_choice "Pushing..."
     else
         echo -e "${YELLOW}Pushing...${ENDCOLOR}"
@@ -314,7 +314,7 @@ function push_script {
         echo
         pull "$current_branch" "$origin_name" "$editor" "rebase"
     else
-        echo -e "Do you want to pull ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} (y/n)?"
+        echo -e "Do you want to pull ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} (Y/n)?"
         yes_no_choice "Pulling..."
         pull "$current_branch" "$origin_name" "$editor"
     fi

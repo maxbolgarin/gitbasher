@@ -136,7 +136,7 @@ function cherry_script {
             echo -e "Files with changes:"
             git status --porcelain | sed 's/^/  /'
             echo
-            echo -e "Continue with cherry-pick (may cause conflicts) (y/n)?"
+            echo -e "Continue with cherry-pick (may cause conflicts) (Y/n)?"
             yes_no_choice "Proceeding..."
             echo
         fi
@@ -254,7 +254,7 @@ function handle_cherry_pick_conflicts {
     # Check for empty commit
     if [[ $output == *"The previous cherry-pick is now empty"* ]]; then
         echo -e "${YELLOW}This commit is empty after cherry-pick (changes already applied).${ENDCOLOR}"
-        echo -e "Skip it (y/n)?"
+        echo -e "Skip it (y/N)?"
         yes_no_choice_strict "Skipping empty commit..."
 
         skip_output=$(git cherry-pick --skip 2>&1)
@@ -412,7 +412,7 @@ function choose_commits_interactive {
         echo -e "  ${commit::7} - $message"
     done
     echo
-    echo -e "Proceed with cherry-pick? (y/n)"
+    echo -e "Proceed with cherry-pick? (Y/n)"
     yes_no_choice "Proceeding with cherry-pick..."
     
     # Perform cherry-picks

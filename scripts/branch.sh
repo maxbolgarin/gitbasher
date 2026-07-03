@@ -196,7 +196,7 @@ function branch_script {
         echo
 
         echo -e "${RED}⚠  These branches will be force-deleted (${BLUE}git branch -D${RED}).${ENDCOLOR}"
-        echo -e "Are you sure you want to delete them (y/n)?"
+        echo -e "Are you sure you want to delete them (y/N)?"
         yes_no_choice_strict "Deleting gone branches..."
 
         for branch in "${gone_branches[@]}"; do
@@ -223,7 +223,7 @@ function branch_script {
     ### Run tag checkout logic
     if [[ -n "${tag}" ]]; then
         echo -e "${YELLOW}Do you want to fetch remote tags first?${ENDCOLOR}"
-        read -n 1 -p "Fetch remote? (y/n) " choice || choice="n"
+        read -n 1 -p "Fetch remote? (Y/n) " choice || choice="n"
         echo
 
         if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
@@ -341,7 +341,7 @@ function branch_script {
         echo -e "${YELLOW}Clean up local branches that no longer exist on the remote?${ENDCOLOR}"
         echo
 
-        printf "Continue (y/n)? "
+        printf "Continue (Y/n)? "
 
         while [ true ]; do
             read -n 1 -s choice || prompt_aborted
@@ -381,7 +381,7 @@ function branch_script {
                     echo
 
                     echo -e "${RED}⚠  These branches will be force-deleted (${BLUE}git branch -D${RED}).${ENDCOLOR}"
-                    printf "Are you sure you want to delete them (y/n)? "
+                    printf "Are you sure you want to delete them (y/N)? "
 
                     # Force-delete requires an explicit "y" — Enter/EOF decline
                     if confirm_destructive; then
@@ -428,7 +428,7 @@ function branch_script {
                 printf "\t${merged_branches_without_main[index]}\n"
             done
 
-            printf "\nDelete these merged branches (y/n)? "
+            printf "\nDelete these merged branches (Y/n)? "
 
             while [ true ]; do
                 read -n 1 -s choice || prompt_aborted
@@ -521,7 +521,7 @@ function branch_script {
             echo
 
             echo -e "${RED}⚠  These will be force-deleted (${BLUE}git branch -D${RED}).${ENDCOLOR}"
-            printf "Are you sure (y/n)? "
+            printf "Are you sure (y/N)? "
 
             # Heuristic detection + force-delete: require an explicit "y"
             if confirm_destructive; then
@@ -560,7 +560,7 @@ function branch_script {
         elif [[ ${delete_output} == *"is not fully merged"* ]]; then
             echo -e "${YELLOW}⚠  Branch '$branch_name' is not fully merged.${ENDCOLOR}"
             echo -e "${RED}⚠  Force-delete (${BLUE}git branch -D${RED}) will discard unmerged commits.${ENDCOLOR}"
-            printf "Force-delete this branch (y/n)? "
+            printf "Force-delete this branch (y/N)? "
 
             # Discards unmerged commits: require an explicit "y"
             confirm_destructive
@@ -589,7 +589,7 @@ function branch_script {
         # Exit-code probe instead of matching git's (localized) error text
         if git rev-parse --verify --quiet "refs/remotes/$origin_name/$branch_name" >/dev/null 2>&1; then
             echo
-            printf "Also delete this branch on ${origin_name} (y/n)? "
+            printf "Also delete this branch on ${origin_name} (y/N)? "
 
             # Remote deletion is an optional extra step: explicit "y" only;
             # declining just finishes (the local delete already succeeded).
@@ -828,7 +828,7 @@ function branch_script {
         # registers it on ${origin_name} (and sets up tracking with -u).
         if [ -n "$origin_name" ]; then
             echo
-            echo -e "Do you want to push the new branch to ${YELLOW}${origin_name}/${branch_name}${ENDCOLOR} (y/n)?"
+            echo -e "Do you want to push the new branch to ${YELLOW}${origin_name}/${branch_name}${ENDCOLOR} (Y/n)?"
             yes_no_choice "Pushing..."
 
             # push uses the current_branch global; we just switched onto branch_name.

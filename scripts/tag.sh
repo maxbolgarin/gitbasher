@@ -311,7 +311,7 @@ function tag_script {
     ### Delete all case
     if [ -n "${delete}" ] && [ -z "$select" ]; then
         echo
-        echo -e "${YELLOW}Do you really want to delete all local tags (y/n)?${ENDCOLOR}"
+        echo -e "${YELLOW}Do you really want to delete all local tags (y/N)?${ENDCOLOR}"
         yes_no_choice_strict "\nDeleting all local tags..."
         # Per-tag loop: xargs re-parses quotes, so one legal tag name
         # containing an apostrophe aborted the whole delete-all with a raw
@@ -365,7 +365,7 @@ function tag_script {
 
         echo -e "${GREEN}✓ Deleted tag '${tag_name}'${ENDCOLOR}"
         echo
-        echo -e "Also delete this tag on ${YELLOW}${origin_name}${ENDCOLOR} (y/n)?"
+        echo -e "Also delete this tag on ${YELLOW}${origin_name}${ENDCOLOR} (y/N)?"
         yes_no_choice_strict "\nDeleting..."
         push_tag $tag_name "true"
 
@@ -458,7 +458,7 @@ function tag_script {
             echo
             echo -e "${YELLOW}⚠  Tag message cannot be empty.${ENDCOLOR}"
             echo
-            read -n 1 -p "Try again? (y/n) " -s -e choice || choice="n"
+            read -n 1 -p "Try again? (Y/n) " -s -e choice || choice="n"
             if ! is_yes "$choice"; then
                 rm -f "$tag_file"
                 exit
@@ -511,7 +511,7 @@ function tag_script {
 
 
     ### Push tag
-    echo -e "Do you want to push it to ${YELLOW}${origin_name}${ENDCOLOR} (y/n)?"
+    echo -e "Do you want to push it to ${YELLOW}${origin_name}${ENDCOLOR} (Y/n)?"
     yes_no_choice "\nPushing..."
 
     push_tag $tag_name

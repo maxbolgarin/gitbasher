@@ -1429,7 +1429,7 @@ function handle_ai_commit_generation {
             echo
             # Benign fallback prompt: Enter counts as yes, EOF/closed stdin
             # declines so non-interactive runs keep today's abort behavior.
-            read_key choice "Continue with a manual commit message? (y/n) " || choice="n"
+            read_key choice "Continue with a manual commit message? (Y/n) " || choice="n"
             echo
             if is_yes "$choice"; then
                 if [ "$ai_mode" = "subject" ]; then
@@ -1526,7 +1526,7 @@ ${ai_commit_message}"
                 echo
                 echo -e "${YELLOW}⚠  Commit message cannot be empty.${ENDCOLOR}"
                 echo
-                read -n 1 -p "Try again? (y/n) " -s -e choice || choice="n"
+                read -n 1 -p "Try again? (Y/n) " -s -e choice || choice="n"
                 if ! is_yes "$choice"; then
                     cleanup_on_exit "$git_add"
                     rm -f "$commitmsg_file"
@@ -2063,7 +2063,7 @@ function commit_script {
         if [ -n "$saved_git_add" ]; then
             echo
             echo -e "${YELLOW}Found previous git add arguments:${ENDCOLOR} ${BOLD}$saved_git_add${ENDCOLOR}"
-            read_key choice "Use them? (y/n) " || choice="n"
+            read_key choice "Use them? (Y/n) " || choice="n"
             echo
             if is_yes "$choice"; then
                 git add $saved_git_add
@@ -2564,7 +2564,7 @@ ${staged_with_tab}
             echo
             echo -e "${YELLOW}⚠  Commit message cannot be empty.${ENDCOLOR}"
             echo
-            read -n 1 -p "Try again? (y/n) " -s -e choice || choice="n"
+            read -n 1 -p "Try again? (Y/n) " -s -e choice || choice="n"
             if ! is_yes "$choice"; then
                 cleanup_on_exit "$git_add"
                 rm -f "$commitmsg_file"

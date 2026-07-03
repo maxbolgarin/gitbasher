@@ -98,7 +98,7 @@ function rebase_script {
         elif [ "$current_local_commit" != "$current_remote_commit" ]; then
             echo -e "${YELLOW}⚠  Remote changes detected on ${current_branch}.${ENDCOLOR}"
             echo
-            echo -e "Do you want to pull ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} first (y/n)?"
+            echo -e "Do you want to pull ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} first (Y/n)?"
             read -n 1 -s choice || prompt_aborted
             if is_yes "$choice"; then
                 echo
@@ -334,7 +334,7 @@ function rebase_branch {
         echo
         
         # Ask for confirmation before proceeding
-        echo -e "Proceed with fast autosquash rebase (y/n)?"
+        echo -e "Proceed with fast autosquash rebase (y/N)?"
         if ! confirm_destructive; then
             echo -e "${YELLOW}Rebase cancelled${ENDCOLOR}"
             exit
@@ -576,7 +576,7 @@ function rebase_conflicts {
             if [ "$force_skip" != "true" ]; then
                 echo
                 echo -e "${RED}⚠  Dropping this commit will permanently remove it from history.${ENDCOLOR}"
-            echo -e "Are you sure you want to ${RED}skip and discard${ENDCOLOR} this commit (y/n)?"
+            echo -e "Are you sure you want to ${RED}skip and discard${ENDCOLOR} this commit (y/N)?"
                 if ! confirm_destructive; then
                     echo -e "${YELLOW}Continuing...${ENDCOLOR}"
                     continue
@@ -601,7 +601,7 @@ function rebase_conflicts {
 
         if [ "$choice" == "4" ]; then
             echo
-            echo -e "Are you sure you want to ${YELLOW}abort rebase${ENDCOLOR} (y/n)?"
+            echo -e "Are you sure you want to ${YELLOW}abort rebase${ENDCOLOR} (y/N)?"
             if confirm_destructive; then
                 echo -e "${YELLOW}Aborting rebase...${ENDCOLOR}"
                 git rebase --abort
@@ -615,7 +615,7 @@ function rebase_conflicts {
         if [ "$choice" == "5" ]; then
             echo
             echo -e "${RED}⚠  This will discard your current changes for these files.${ENDCOLOR}"
-            echo -e "Are you sure you want to ${GREEN}accept all incoming changes${ENDCOLOR} (y/n)?"
+            echo -e "Are you sure you want to ${GREEN}accept all incoming changes${ENDCOLOR} (y/N)?"
             if confirm_destructive; then
                 echo -e "${YELLOW}Accepting all incoming changes...${ENDCOLOR}"
                 
@@ -625,7 +625,7 @@ function rebase_conflicts {
                     echo -e "${YELLOW}⚠  Some files were deleted in the incoming branch:${ENDCOLOR}"
                     echo "$deleted_files" | sed 's/^/\t/'
                     echo
-                    echo -e "Do you want to continue and accept the deletions (y/n)?"
+                    echo -e "Do you want to continue and accept the deletions (y/N)?"
                     if ! confirm_destructive; then
                         echo -e "${YELLOW}Cancelled. Continuing...${ENDCOLOR}"
                         continue
@@ -696,7 +696,7 @@ function rebase_conflicts {
         if [ "$choice" == "6" ]; then
             echo
             echo -e "${RED}⚠  This will discard the incoming changes for these files.${ENDCOLOR}"
-            echo -e "Are you sure you want to ${GREEN}accept all current changes${ENDCOLOR} (y/n)?"
+            echo -e "Are you sure you want to ${GREEN}accept all current changes${ENDCOLOR} (y/N)?"
             if confirm_destructive; then
                 echo -e "${YELLOW}Accepting all current changes...${ENDCOLOR}"
                 
@@ -706,7 +706,7 @@ function rebase_conflicts {
                     echo -e "${YELLOW}⚠  Some files were deleted in the current branch:${ENDCOLOR}"
                     echo "$deleted_files" | sed 's/^/\t/'
                     echo
-                    echo -e "Do you want to continue and accept the deletions (y/n)?"
+                    echo -e "Do you want to continue and accept the deletions (y/N)?"
                     if ! confirm_destructive; then
                         echo -e "${YELLOW}Cancelled. Continuing...${ENDCOLOR}"
                         continue
@@ -1094,7 +1094,7 @@ function handle_cherry_pick_conflicts {
                 ;;
             2)
                 echo
-                echo -e "Are you sure you want to ${RED}skip${ENDCOLOR} this commit (y/n)?"
+                echo -e "Are you sure you want to ${RED}skip${ENDCOLOR} this commit (y/N)?"
                 if confirm_destructive; then
                     echo -e "${YELLOW}Skipping commit ${commit_hash::7}${ENDCOLOR}"
                     git cherry-pick --skip 2>/dev/null
@@ -1106,7 +1106,7 @@ function handle_cherry_pick_conflicts {
                 ;;
             3)
                 echo
-                echo -e "Are you sure you want to ${GREEN}accept all incoming changes${ENDCOLOR} (y/n)?"
+                echo -e "Are you sure you want to ${GREEN}accept all incoming changes${ENDCOLOR} (y/N)?"
                 if confirm_destructive; then
                     echo -e "${YELLOW}Accepting all incoming changes...${ENDCOLOR}"
                     git checkout --theirs . 2>/dev/null
@@ -1128,7 +1128,7 @@ function handle_cherry_pick_conflicts {
                 ;;
             4)
                 echo
-                echo -e "Are you sure you want to ${GREEN}accept all current changes${ENDCOLOR} (y/n)?"
+                echo -e "Are you sure you want to ${GREEN}accept all current changes${ENDCOLOR} (y/N)?"
                 if confirm_destructive; then
                     echo -e "${YELLOW}Accepting all current changes...${ENDCOLOR}"
                     git checkout --ours . 2>/dev/null
@@ -1150,7 +1150,7 @@ function handle_cherry_pick_conflicts {
                 ;;
             5)
                 echo
-                echo -e "Are you sure you want to ${YELLOW}abort${ENDCOLOR} the pull operation (y/n)?"
+                echo -e "Are you sure you want to ${YELLOW}abort${ENDCOLOR} the pull operation (y/N)?"
                 if confirm_destructive; then
                     echo -e "${YELLOW}Aborting pull commits operation...${ENDCOLOR}"
                     git cherry-pick --abort 2>/dev/null

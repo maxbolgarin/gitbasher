@@ -236,10 +236,13 @@ function squash_parse_ai_plan {
 
     # Reset globals. These are keyed by 1-based group number, so plain indexed
     # arrays (bash 3.2 compatible) work in place of associative arrays.
+    # Plain assignment (not `declare -g`, which is bash 4.2+ and made these
+    # arrays function-local on the 3.2 floor, so the parsed plan never
+    # reached the caller and every squash failed after the paid AI call).
     unset squash_group_commits squash_group_message squash_group_body
-    declare -ga squash_group_commits=()
-    declare -ga squash_group_message=()
-    declare -ga squash_group_body=()
+    squash_group_commits=()
+    squash_group_message=()
+    squash_group_body=()
     squash_group_count=0
     squash_parse_error=""
 
@@ -248,9 +251,15 @@ function squash_parse_ai_plan {
         return 1
     fi
 
+    # Valid JSON is used as-is: the brace extractor below counts braces
+    # inside string values too, so a message like "fix: stray { in parser"
+    # would otherwise corrupt a perfectly valid response.
+    local json_only
+    if printf '%s' "$response" | jq -e . >/dev/null 2>&1; then
+        json_only="$response"
+    else
     # The model sometimes prepends/appends prose or markdown fences despite
     # response_format=json_object. Extract the outermost {...} block to be safe.
-    local json_only
     json_only=$(printf '%s' "$response" | LC_ALL=C awk '
         BEGIN{depth=0; started=0; out=""}
         {
@@ -262,6 +271,7 @@ function squash_parse_ai_plan {
             }
             if (started) out=out "\n"
         }')
+    fi
 
     if [ -z "$json_only" ]; then
         squash_parse_error="response is not JSON (no { } block found)"
@@ -498,11 +508,12 @@ function squash_run_ai_grouping {
         chunk_idx=$((chunk_idx + 1))
     done
 
-    # Copy accumulators back into the per-group globals (1-based indexed arrays).
+    # Copy accumulators back into the per-group globals (1-based indexed
+    # arrays; plain assignment — `declare -g` is bash 4.2+).
     unset squash_group_commits squash_group_message squash_group_body
-    declare -ga squash_group_commits=()
-    declare -ga squash_group_message=()
-    declare -ga squash_group_body=()
+    squash_group_commits=()
+    squash_group_message=()
+    squash_group_body=()
     squash_group_count=${#final_commits[@]}
 
     local g_idx
@@ -723,6 +734,17 @@ function squash_script {
     if [ -z "$commit_hashes_full" ]; then
         echo -e "${GREEN}✓ Nothing to squash — no commits between ${source_label} (${base_ref::12}) and HEAD${ENDCOLOR}"
         exit 0
+    fi
+
+    # Refuse merge commits up front, BEFORE the paid AI call: the generated
+    # todo uses plain `pick` lines, which git rejects for merges ("'pick'
+    # does not accept merge commits"), so the rebase would always fail.
+    local merge_count
+    merge_count=$(git rev-list --min-parents=2 --count "${base_ref}..HEAD" 2>/dev/null)
+    if [ -n "$merge_count" ] && [ "$merge_count" -gt 0 ]; then
+        echo -e "${RED}✗ The range contains ${merge_count} merge commit(s), which squash cannot rewrite.${ENDCOLOR}"
+        echo -e "Rebase the branch first (${GREEN}gitb rebase main${ENDCOLOR}) to linearize it, then run ${GREEN}gitb squash${ENDCOLOR} again."
+        exit 1
     fi
 
     local commit_count

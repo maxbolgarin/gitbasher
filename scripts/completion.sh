@@ -62,7 +62,7 @@ _gitb_sub_reset="soft s undo u interactive i help h"
 _gitb_sub_stash="select sel all list l pop p show s drop d apply a help h"
 _gitb_sub_worktree="list l ls add a new n c addd ad nd cd addb ab from b addr ar remote r remove rm del d prune pr p lock unlock ul move mv path cd switch sw help h"
 _gitb_sub_origin="set add new a change update c u set-url rename mv ren remove delete rm del d help h"
-_gitb_sub_log="branch b compare comp c search s help h"
+_gitb_sub_log="branch b compare comp c search s all dump ai help h"
 _gitb_sub_diff="staged s cached all a branch b commit c ai help h"
 _gitb_sub_hook="list create edit toggle test show remove select install help"
 _gitb_sub_log_branch="local l remote r all a help h"
@@ -423,7 +423,7 @@ _gitb() {
                     _values 'origin action' 'set[set remote]' 'change[change remote URL]' 'rename[rename remote]' 'remove[remove remote]' 'help[show help]'
                     ;;
                 log|l|lg)
-                    _values 'log mode' 'branch[log per branch]' 'compare[compare branches]' 'search[search log]' 'help[show help]'
+                    _values 'log mode' 'branch[log per branch]' 'compare[compare branches]' 'search[search log]' 'all[full log dump]' 'dump[full log dump]' 'ai[AI summary of a range]' 'help[show help]'
                     ;;
                 diff|d|di)
                     _values 'diff mode' 'staged[staged changes]' 'all[all uncommitted changes]' 'branch[compare with a branch]' 'commit[show a commit diff]' 'ai[AI summary]' 'help[show help]'
@@ -616,7 +616,7 @@ complete -c gitb -n "$__gitb_worktree" -a "list add addd addb addr remove prune 
 set -l __gitb_origin "__gitb_using_cmd origin or o remote; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_origin" -a "set change rename remove help"
 set -l __gitb_log "__gitb_using_cmd log l lg; and __gitb_at_position 2"
-complete -c gitb -n "$__gitb_log" -a "branch compare search help"
+complete -c gitb -n "$__gitb_log" -a "branch compare search all dump ai help"
 set -l __gitb_diff "__gitb_using_cmd diff d di; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_diff" -a "staged all branch commit ai help"
 set -l __gitb_hook "__gitb_using_cmd hook ho hk; and __gitb_at_position 2"

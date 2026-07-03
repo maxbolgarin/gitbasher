@@ -82,6 +82,14 @@ function undo_commit {
         exit 1
     fi
 
+    # The soft reset below needs a parent — give the root commit a clear
+    # message instead of git's raw "ambiguous argument 'HEAD~1'" fatal.
+    if ! git rev-parse --verify --quiet HEAD~1 >/dev/null 2>&1; then
+        echo -e "${YELLOW}The only commit in this repository is the root commit — nothing to reset to.${ENDCOLOR}"
+        echo -e "Use ${GREEN}git update-ref -d HEAD${ENDCOLOR} if you really want to un-commit it."
+        exit 1
+    fi
+
     # Show the commit that will be undone
     cancelled_commit=$(git log -n 1 --pretty="%s | ${YELLOW}%h${ENDCOLOR} | ${CYAN}%cd${ENDCOLOR} (${GREEN}%cr${ENDCOLOR})")
     echo -e "${YELLOW}Commit to undo:${ENDCOLOR}"
@@ -117,17 +125,20 @@ function undo_commit {
 
 ### Undo last amend - restore pre-amend state from reflog
 function undo_amend {
-    # Find the reflog entry before the amend
+    # Find the reflog entry before the amend. Match the reflog ACTION
+    # prefix "commit (amend):" — a substring match on the whole entry also
+    # caught ordinary commits whose SUBJECT merely contained the word
+    # "amend" and soft-reset to the wrong ref.
     last_action=$(git reflog -n 1 --pretty="%gs" 2>/dev/null)
 
-    if [[ "$last_action" != *"amend"* ]]; then
+    if [[ "$last_action" != "commit (amend)"* ]]; then
         echo -e "${YELLOW}Last action was not an amend:${ENDCOLOR} $last_action"
         echo
         echo -e "Looking for the most recent amend in reflog..."
         echo
 
         # Search reflog for the most recent amend
-        amend_ref=$(git reflog --pretty="%gd %gs" | grep "amend" | head -n 1 | awk '{print $1}')
+        amend_ref=$(git reflog --pretty="%gd %gs" | grep -E "^HEAD@\{[0-9]+\} commit \(amend\):" | head -n 1 | awk '{print $1}')
 
         if [ -z "$amend_ref" ]; then
             echo -e "${YELLOW}No amend found in reflog.${ENDCOLOR}"
@@ -280,6 +291,16 @@ function undo_rebase {
     echo -e "${YELLOW}Current HEAD:${ENDCOLOR}\t\t$current_commit"
     echo -e "${GREEN}Pre-rebase state:${ENDCOLOR}\t$orig_commit"
     echo
+
+    # reset --hard also wipes UNCOMMITTED work made after the rebase — the
+    # warning above only covers rebase changes, so refuse on a dirty tree.
+    if [ -n "$(LC_ALL=C git status --porcelain)" ]; then
+        echo -e "${RED}✗ You have uncommitted changes that a hard reset would destroy:${ENDCOLOR}"
+        git_status
+        echo
+        echo -e "${YELLOW}Commit or stash them first (e.g. ${GREEN}gitb stash all${YELLOW}), then retry.${ENDCOLOR}"
+        exit 1
+    fi
 
     echo -e "${RED}⚠  This will discard all rebase changes and restore the original branch state.${ENDCOLOR}"
     echo -e "Are you sure you want to undo the rebase (y/n)?"

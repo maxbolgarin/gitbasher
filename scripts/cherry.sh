@@ -69,8 +69,12 @@ function cherry_script {
         exit
     fi
 
-    # Check if we're in the middle of a cherry-pick operation
-    if [ -d ".git/sequencer" ]; then
+    # Check if we're in the middle of a cherry-pick operation.
+    # cherry_in_progress resolves the real git dir (CWD/worktree-safe) and
+    # checks CHERRY_PICK_HEAD — ".git/sequencer" only exists for MULTI-commit
+    # sequences, so a single-commit conflict made continue/abort claim
+    # "No cherry-pick is in progress".
+    if cherry_in_progress; then
         if [ -z "${continue_mode}" ] && [ -z "${abort_mode}" ]; then
             echo -e "${YELLOW}⚠  A cherry-pick is already in progress.${ENDCOLOR}"
             echo -e "Run ${GREEN}gitb cherry continue${ENDCOLOR} after resolving conflicts."
@@ -81,7 +85,7 @@ function cherry_script {
 
     ### Handle abort mode
     if [ -n "${abort_mode}" ]; then
-        if [ ! -d ".git/sequencer" ]; then
+        if ! cherry_in_progress; then
             echo -e "${YELLOW}No cherry-pick is in progress.${ENDCOLOR}"
             exit
         fi
@@ -96,7 +100,7 @@ function cherry_script {
 
     ### Handle continue mode
     if [ -n "${continue_mode}" ]; then
-        if [ ! -d ".git/sequencer" ]; then
+        if ! cherry_in_progress; then
             echo -e "${YELLOW}No cherry-pick is in progress.${ENDCOLOR}"
             exit
         fi
@@ -210,15 +214,29 @@ function perform_cherry_pick {
     fi
 }
 
+### True when a cherry-pick is in progress. Resolves the real git dir
+# (CWD-independent, works in linked worktrees where .git is a file) and
+# checks CHERRY_PICK_HEAD, which exists for single-commit conflicts too —
+# .git/sequencer appears only for multi-commit sequences.
+function cherry_in_progress {
+    local gd
+    gd=$(git rev-parse --git-dir 2>/dev/null) || return 1
+    [ -f "$gd/CHERRY_PICK_HEAD" ] || [ -d "$gd/sequencer" ]
+}
+
+
 ### Function to handle cherry-pick conflicts and errors
 # $1: cherry-pick output
 # $2: cherry-pick return code
 function handle_cherry_pick_conflicts {
     local output="$1"
     local code="$2"
-    
-    # Check for conflicts
-    if [[ $output == *"fix conflicts and run \"git cherry-pick --continue\""* ]] || [[ $output == *"after resolving the conflicts"* ]]; then
+
+    # Probe the live repo state instead of matching git's prose — the old
+    # substrings targeted pre-2.4x phrasing ("fix conflicts and run ...")
+    # that modern git no longer prints, so the guided recovery path was
+    # dead and every conflict fell through to the generic failure.
+    if cherry_in_progress && [[ $output != *"is now empty"* ]]; then
         echo -e "${YELLOW}⚠  Cherry-pick conflicts detected.${ENDCOLOR}"
         echo
         echo -e "${YELLOW}Conflicted files:${ENDCOLOR}"

@@ -231,8 +231,10 @@ function stash_script {
 
         echo
         echo -e "${YELLOW}Changed files to stash:${ENDCOLOR}"
-        # Show what files would be staged (changed files only)
-        files_to_stash=$(git add --dry-run "$git_add" 2>/dev/null | sed 's/^add /\t/' | sed "s/'//g")
+        # Word-split like the real operation below (multiple space-separated
+        # patterns), globbing off — the quoted form validated a DIFFERENT
+        # pathspec than the one later executed.
+        files_to_stash=$( set -f; git add --dry-run -- $git_add 2>/dev/null | sed 's/^add /\t/' | sed "s/'//g" )
         echo -e "${GREEN}$files_to_stash${ENDCOLOR}"
         echo
 
@@ -251,17 +253,17 @@ function stash_script {
         echo -e "${YELLOW}Stashing selected files...${ENDCOLOR}"
         echo
 
-        # Create a temporary stash with only the specified files
-        # First stage the files
-        result=$(git add $git_add 2>&1)
-        if [ $? -ne 0 ]; then
-            echo -e "${RED}✗ Cannot stage files.${ENDCOLOR}"
-            echo "$result"
-            exit 1
-        fi
+        # Pathspec form (git >= 2.13) instead of the stage-then---staged
+        # dance, which (a) required git 2.35 while the installer's floor is
+        # 2.23, and (b) swept files the user had staged BEFOREHAND into the
+        # stash alongside the selection. -u includes untracked matches.
+        local -a _stash_paths=()
+        local _sp
+        while IFS= read -r _sp; do
+            [ -n "$_sp" ] && _stash_paths+=("$_sp")
+        done < <( set -f; for _sp in $git_add; do printf '%s\n' "$_sp"; done )
 
-        # Stash staged files
-        stash_output=$(git stash push -m "$stash_message" --staged 2>&1)
+        stash_output=$(git stash push -m "$stash_message" -u -- "${_stash_paths[@]}" 2>&1)
         stash_code=$?
 
         if [ $stash_code -eq 0 ]; then
@@ -270,16 +272,17 @@ function stash_script {
         else
             echo -e "${RED}✗ Cannot stash files.${ENDCOLOR}"
             echo "$stash_output"
-            # Restore staged files on error
-            git restore --staged "$git_add" 2>/dev/null
             exit $stash_code
         fi
     fi
 
     ### Stash all changes
     if [ -n "$all_mode" ]; then
-        # Check if there are changes to stash
-        if git diff --quiet && git diff --cached --quiet; then
+        # Check if there are changes to stash — including untracked files,
+        # which the stash below picks up (--include-untracked) but the old
+        # tracked-only probe missed ("No changes" with new files present).
+        if git diff --quiet && git diff --cached --quiet \
+                && [ -z "$(git ls-files --others --exclude-standard)" ]; then
             echo -e "${GREEN}✓ No changes to stash${ENDCOLOR}"
             exit
         fi

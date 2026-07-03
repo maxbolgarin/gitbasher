@@ -1570,6 +1570,44 @@ function print_changes_stat {
 }
 
 
+### Render an AI summary for the terminal: strip the Markdown that models emit
+### (headings, bold, bullets) and re-style it in gitbasher's colors. Defensive —
+### the prompt asks for plain text, but models slip, so raw markup never leaks.
+function print_ai_summary {
+    local text="$1"
+    local esc c_bold c_bullet c_head c_reset
+    esc=$(printf '\033')
+    c_bold="${esc}[1m"
+    c_bullet="${esc}[36m"
+    c_head="${esc}[33m"
+    c_reset="${esc}[0m"
+
+    local label_re='^[[:space:]]*[A-Za-z][A-Za-z0-9 &/_-]*:[[:space:]]*$'
+    local backtick='`'
+    local line
+    while IFS= read -r line; do
+        # Drop inline-code backticks the model emits despite the prompt.
+        line=${line//$backtick/}
+        # Markdown heading (#, ##, ###) -> plain colored header.
+        if [[ "$line" =~ ^[[:space:]]*#+[[:space:]] ]]; then
+            line=$(printf '%s' "$line" | sed -E 's/^[[:space:]]*#+[[:space:]]*//; s/[[:space:]]*#+[[:space:]]*$//')
+            printf '%s%s%s\n' "$c_head" "$line" "$c_reset"
+            continue
+        fi
+        # A standalone label line ("Risks & Concerns:") -> colored header.
+        if [[ "$line" =~ $label_re ]]; then
+            printf '%s%s%s\n' "$c_head" "$line" "$c_reset"
+            continue
+        fi
+        # Leading bullet (*, +, -) -> colored bullet.
+        line=$(printf '%s' "$line" | sed -E "s/^([[:space:]]*)[*+-][[:space:]]+/\\1${c_bullet}•${c_reset} /")
+        # Inline bold (**text** or __text__) -> terminal bold.
+        line=$(printf '%s' "$line" | sed -E "s/(\\*\\*|__)([^*_]+)(\\*\\*|__)/${c_bold}\\2${c_reset}/g")
+        printf '%s\n' "$line"
+    done <<< "$text"
+}
+
+
 ### Threshold, in MB, above which a push warns about its total size or a single
 ### large blob. 0 disables the check entirely (also a performance opt-out).
 function get_push_warn_size {

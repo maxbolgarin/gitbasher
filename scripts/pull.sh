@@ -169,7 +169,7 @@ function pull_script {
         fetch "$current_branch" "$origin_name" "$all"
 
         if [ $fetch_code == 0 ] ; then
-            commits=$(commit_list 999 "tab" "HEAD..$origin_name/$current_branch")
+            if git rev-parse --verify --quiet "refs/remotes/$origin_name/$current_branch" >/dev/null 2>&1; then commits=$(commit_list 999 "tab" "HEAD..$origin_name/$current_branch"); else commits=""; fi
             if [ "$commits" != "" ]; then
                 if [ -n "$all" ]; then
                     echo -e "${GREEN}✓ Fetched all remotes${ENDCOLOR}"
@@ -200,7 +200,7 @@ function pull_script {
         update_code=$?
         
         if [ $update_code == 0 ] ; then
-            commits=$(commit_list 999 "tab" "HEAD..$origin_name/$current_branch")
+            if git rev-parse --verify --quiet "refs/remotes/$origin_name/$current_branch" >/dev/null 2>&1; then commits=$(commit_list 999 "tab" "HEAD..$origin_name/$current_branch"); else commits=""; fi
             if [ "$commits" != "" ]; then
                 echo -e "${GREEN}✓ Updated all remotes${ENDCOLOR}"
                 if [ "$update_output" != "" ]; then

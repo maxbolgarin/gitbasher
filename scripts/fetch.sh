@@ -18,6 +18,13 @@ function pruned_branch_names {
 ### a freshly-updated remote-tracking ref (i.e. call after a successful fetch).
 function fetch_report_incoming {
     local commits count
+    # A branch that only exists locally has no remote-tracking ref — the
+    # range compare used to spray "fatal: ambiguous argument" to stderr and
+    # then claim "Already up to date".
+    if ! git rev-parse --verify --quiet "refs/remotes/$origin_name/$current_branch" >/dev/null 2>&1; then
+        echo -e "${YELLOW}Branch '$current_branch' has no counterpart on $origin_name — nothing to compare.${ENDCOLOR}"
+        return
+    fi
     commits=$(commit_list 999 "tab" "HEAD..$origin_name/$current_branch")
     if [ "$commits" != "" ]; then
         count=$(echo -e "$commits" | wc -l | sed 's/^ *//;s/ *$//')

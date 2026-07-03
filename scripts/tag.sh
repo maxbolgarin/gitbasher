@@ -28,6 +28,14 @@ function push_tag {
             echo -e "${YELLOW}Tag '$1' does not exist on ${origin_name}.${ENDCOLOR}"
             exit
         fi
+        # A failed remote delete (network down, auth, protected tag) used
+        # to print the success line and exit 0 while the tag survived on
+        # the remote — with the local copy already gone.
+        if [ "$push_code" != 0 ]; then
+            echo -e "${RED}✗ Cannot delete tag '$1' on ${origin_name}.${ENDCOLOR}"
+            echo "$push_output"
+            exit $push_code
+        fi
         echo -e "${GREEN}✓ Deleted tag '$1' on ${origin_name}${ENDCOLOR}"
         exit
     fi
@@ -305,7 +313,20 @@ function tag_script {
         echo
         echo -e "${YELLOW}Do you really want to delete all local tags (y/n)?${ENDCOLOR}"
         yes_no_choice_strict "\nDeleting all local tags..."
-        git tag | xargs git tag -d
+        # Per-tag loop: xargs re-parses quotes, so one legal tag name
+        # containing an apostrophe aborted the whole delete-all with a raw
+        # "unterminated quote" error and deleted nothing.
+        local _da_failed=0
+        while IFS= read -r _da_tag; do
+            [ -z "$_da_tag" ] && continue
+            if ! git tag -d "$_da_tag" >/dev/null 2>&1; then
+                echo -e "${RED}✗ Cannot delete tag '$_da_tag'${ENDCOLOR}"
+                _da_failed=1
+            fi
+        done < <(git tag)
+        if [ "$_da_failed" != 0 ]; then
+            exit 1
+        fi
         exit
     fi
 
@@ -369,6 +390,10 @@ function tag_script {
     fi
 
     commit_message=$(git log -1 --pretty=%B $commit_hash | cat)
+    # Subject only for the draft template below: a multi-line %B body would
+    # land UNPREFIXED in the draft, survive the '#'-filter, and become the
+    # tag message when the user saves the editor untouched.
+    commit_subject=$(git log -1 --pretty=%s $commit_hash | cat)
     echo -e "${BLUE}[$current_branch ${commit_hash::7}]${ENDCOLOR} ${commit_message}"
 
 
@@ -418,7 +443,7 @@ function tag_script {
         echo """
 ####
 #### Write some words about the new tag '${tag_name}'
-#### [$current_branch ${commit_hash::7}] ${commit_message}
+#### [$current_branch ${commit_hash::7}] ${commit_subject}
 ####
 #### You can place changelog here if this tag for a new release
 """ >> "$tag_file"

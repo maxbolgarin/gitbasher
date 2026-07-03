@@ -2,6 +2,29 @@
 
 All notable changes to gitbasher are generated automatically by [semantic-release](https://github.com/semantic-release/semantic-release) from [Conventional Commits](https://www.conventionalcommits.org/) on `main`. The project follows [Semantic Versioning](https://semver.org/).
 
+## [5.1.0](https://github.com/maxbolgarin/gitbasher/compare/v5.0.1...v5.1.0) (2026-07-03)
+
+### 🚀 Features
+
+* **ai:** add local Claude Code CLI (claude -p) provider ([bc3e663](https://github.com/maxbolgarin/gitbasher/commit/bc3e66341903c1ed93f7191dc6ee6840173bf13b))
+* **config:** keep or replace an existing AI key with one keystroke ([95ba4a6](https://github.com/maxbolgarin/gitbasher/commit/95ba4a649d8ab9288cb5e73760076effce2b8ddc))
+* **commit:** offer manual fallback when AI message generation fails ([39ac769](https://github.com/maxbolgarin/gitbasher/commit/39ac7697d6ca5063c09aa8b661c1263581e2adc3))
+* **config:** turn gitb cfg ai into a provider/key/model setup wizard ([22795fe](https://github.com/maxbolgarin/gitbasher/commit/22795fe90980b2a6e848529eff6aa3a2939f89f5))
+
+### 🐛 Bug Fixes
+
+* **ai:** move OpenRouter default models to the current generations ([82a26a0](https://github.com/maxbolgarin/gitbasher/commit/82a26a0797aafe11e71ff4e8e737830fe567b4c2))
+* **ai:** pick default models by measured latency, speed first ([29d48b8](https://github.com/maxbolgarin/gitbasher/commit/29d48b8d21ac04bd639dee723770a2bcdae38328))
+
+### 📚 Documentation
+
+* **site:** mention the claude CLI provider and the cfg ai wizard ([23c9087](https://github.com/maxbolgarin/gitbasher/commit/23c9087783b805f8ed651735304305a1163a47c3))
+* refresh test count, document the AI fallback, mention claude on the site FAQ ([af6527d](https://github.com/maxbolgarin/gitbasher/commit/af6527d08aceb20bf75ab7a3c0fe745fe1cef16f))
+
+### 💎 Styles
+
+* capitalize the Enter default in every y/n prompt ([37349a0](https://github.com/maxbolgarin/gitbasher/commit/37349a0d166b235b9b7c33dc2767e5b2093ec004))
+
 ## [5.0.1](https://github.com/maxbolgarin/gitbasher/compare/v5.0.0...v5.0.1) (2026-07-03)
 
 ### 🐛 Bug Fixes

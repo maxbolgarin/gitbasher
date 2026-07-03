@@ -216,9 +216,9 @@ function show_hooks_menu {
     
     # Validate choice
     if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt ${#actions[@]} ]; then
-        exit
+        exit 1
     fi
-    
+
     # Get selected action
     local selected_action="${actions[$((choice - 1))]}"
     local action_command="${selected_action%%:*}"
@@ -310,11 +310,13 @@ function select_hook_template {
         choice=1
     fi
     
-    # Validate choice
+    # Validate choice: an invalid entry must abort creation, not silently
+    # fall back to a template the user didn't pick (this runs inside $(),
+    # so failure is signalled via the return code).
     if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt ${#templates[@]} ]; then
-        exit
+        return 1
     fi
-    
+
     # Return selected template
     selected_template="${templates[$((choice - 1))]}"
     echo "$selected_template"
@@ -870,7 +872,8 @@ function hooks_script {
                 
                 echo
                 if ! template=$(select_hook_template "$hook_type"); then
-                    template="basic"
+                    echo -e "${YELLOW}Hook creation cancelled${ENDCOLOR}"
+                    return 1
                 fi
                 if [ -z "$template" ]; then
                     template="basic"
@@ -1043,7 +1046,7 @@ function hooks_script {
             echo -e "  ${GREEN}gitb hook install${ENDCOLOR}               Install all sample hooks"
         ;;
         *)
-            wrong_mode "hooks" "$mode"
+            wrong_mode "hook" "$mode"
         ;;
     esac
 } 

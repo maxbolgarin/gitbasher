@@ -190,7 +190,7 @@ function pull_script {
             fi
         fi
 
-        exit
+        exit $fetch_code
     fi
 
     if [ -n "$update" ]; then

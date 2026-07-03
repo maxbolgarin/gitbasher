@@ -771,7 +771,7 @@ function wrong_mode {
     if [ -n "$2" ]; then
         echo -e "${RED}✗ Unknown mode ${YELLOW}$2${RED} for ${YELLOW}gitb $1${RED}.${ENDCOLOR}"
         echo -e "Run ${GREEN}gitb $1 help${ENDCOLOR} to see available modes."
-        exit
+        exit 1
     fi
 }
 
@@ -2015,7 +2015,7 @@ function switch {
         echo -e "${conflicts//[[:blank:]]/}"
         echo
         echo -e "${YELLOW}Commit or stash these files, then try again.${ENDCOLOR}"
-        exit
+        exit 1
     fi
 
     if [ $switch_code -ne 0 ]; then

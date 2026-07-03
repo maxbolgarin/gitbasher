@@ -565,7 +565,7 @@ function branch_script {
                     if [ "$delete_code" != 0 ]; then
                         echo -e "${RED}✗ Cannot delete branch '$branch_name'.${ENDCOLOR}"
                         echo -e "${delete_output}"
-                        exit
+                        exit 1
                     fi
                     echo -e "${GREEN}✓ Deleted branch '$branch_name'${ENDCOLOR}"
                     break
@@ -579,7 +579,7 @@ function branch_script {
         else
             echo -e "${RED}✗ Cannot delete branch '$branch_name'.${ENDCOLOR}"
             echo -e "${delete_output}"
-            exit
+            exit 1
         fi
 
         remote_check=$(git --no-pager log "$origin_name/$branch_name..HEAD" 2>&1)
@@ -604,7 +604,7 @@ function branch_script {
                         else
                             echo -e "${RED}✗ Cannot delete branch '$branch_name' on remote.${ENDCOLOR}"
                             echo -e "${push_output}"
-                            exit
+                            exit 1
                         fi
                     else
                         echo -e "${GREEN}✓ Deleted branch '$branch_name' on ${origin_name}${ENDCOLOR}"

@@ -216,7 +216,9 @@ case "$1" in
     ;;
 
     *)
-        print_help
+        echo -e "${RED}✗ Unknown command ${YELLOW}$1${RED}.${ENDCOLOR}"
+        echo -e "Run ${GREEN}gitb help${ENDCOLOR} to see available commands."
+        exit 1
     ;;
 esac
 

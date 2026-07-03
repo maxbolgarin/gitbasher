@@ -466,7 +466,7 @@ function tag_script {
             echo -e "${RED}✗ Cannot create tag '${tag_name}'.${ENDCOLOR}"
             echo -e "$tag_output"
         fi
-        exit
+        exit $tag_code
     fi
 
     if [ -n "$annotated" ]; then

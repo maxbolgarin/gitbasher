@@ -593,7 +593,7 @@ ${staged_with_tab}
                 git restore --staged $files_with_conflicts_one_line
                 rm -f "$commitmsg_file"
                 merge_error="true"
-                exit
+                exit 1
             fi
         done
 

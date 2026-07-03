@@ -597,7 +597,7 @@ function wip_up {
             worktree|w|wt|tree)  backend="worktree";;
             nopush|np|n)         nopush="true";;
             "")                  ;;
-            *)                   wrong_mode "wip up" "$arg";;
+            *)                   wrong_mode "wip" "$arg";;
         esac
     done
 
@@ -637,7 +637,7 @@ function wip_down {
         branch|b)            backend="branch";;
         worktree|w|wt|tree)  backend="worktree";;
         "")                  ;;
-        *)                   wrong_mode "wip down" "$1";;
+        *)                   wrong_mode "wip" "$1";;
     esac
 
     local header_msg="GIT WIP DOWN"

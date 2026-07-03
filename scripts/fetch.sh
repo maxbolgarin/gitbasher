@@ -126,5 +126,5 @@ function fetch_script {
         fetch_report_incoming
     fi
 
-    exit
+    exit $fetch_code
 }

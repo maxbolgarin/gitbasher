@@ -199,7 +199,7 @@ if [ "$origin_name" == "" ]; then
             echo
             echo -e "${RED}✗ '$remote_url' is not a git repository.${ENDCOLOR}"
             echo "Make sure you have the correct access rights and that the repo exists."
-            exit
+            exit 1
         fi
 
         git remote add origin "$remote_url"

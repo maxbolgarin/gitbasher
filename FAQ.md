@@ -124,6 +124,10 @@ The most common destructive Git ops, driven by reflog: commits (incl. amend), me
 
 Run `gitb sync`. It shows the divergence, lets you pick rebase or merge, and previews incoming commits with `--dry-run` before touching your local refs.
 
+### `gitb log` used to dump everything into a pager — where did that go?
+
+Bare `gitb log` is now an interactive browser: a numbered, paginated commit list where picking a commit shows it and offers actions (diff, stat, copy hash, revert, cherry-pick, fixup, restore a file). The old full dump is still there as `gitb log all` (alias `dump`). Piping still works — non-interactive runs print the first page and exit. You can also pass an argument directly: a number (`gitb log 20`), a file path, a ref or range, or words to search commit messages. Page size: `git config gitbasher.log-count 30`.
+
 ## Contributing and bugs
 
 ### How do I report a bug?

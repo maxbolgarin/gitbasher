@@ -812,15 +812,31 @@ gitb origin remove                               # delete the remote
 
 ### `gitb log`
 
-<details>
-<summary>All log modes</summary>
+An interactive commit browser instead of a wall of text. Bare `gitb log` shows a paginated, numbered commit list (with branch/tag decorations and `↑` on unpushed commits) — pick a number to open the commit and act on it: view the diff or stat, copy the hash, revert, cherry-pick, fix up staged changes into it, or restore a single file from it.
 
 | Mode | Aliases | Description |
 |------|---------|-------------|
-| `<empty>` | | Pretty log for current branch |
+| _(none)_ | | Interactive commit browser for the current branch |
+| `all` | `dump` | Classic full log dump through the pager |
 | `branch` | `b` | Pick a branch to log |
 | `compare` | `comp` `c` | Compare two branches |
 | `search` | `s` | Search commits |
+| `ai` | | Summarize a commit range in plain English (needs `gitb cfg ai`) |
+| `help` | `h` | Show inline help |
+
+Anything else after `gitb log` is resolved automatically:
+
+```bash
+gitb log 20                  # browse the last 20 commits
+gitb log scripts/gitb.sh     # browse one file's history (follows renames)
+gitb log main..feature       # browse a range (plain refs work too)
+gitb log broken teapot       # search commit messages for the phrase
+```
+
+`gitb log ai` summarizes what happened since the last tag; `gitb log ai 30`, `gitb log ai unpushed` and `gitb log ai main..feature` narrow the range. Page size is configurable: `git config gitbasher.log-count 30`.
+
+<details>
+<summary>Search sub-modes</summary>
 
 **Search sub-modes:** `message`/`msg`/`m`, `author`/`a`, `file`/`f`, `content`/`pickaxe`/`p`, `date`/`d`, `hash`/`commit`/`h`.
 
@@ -872,6 +888,7 @@ Overview-first diffs built for the gitbasher workflow — no flag memorization. 
 | `gitbasher.commit-auto-split` | `git config gitbasher.commit-auto-split <ask\|always\|never>` | Offer to split a commit per scope (default `ask`) |
 | `gitbasher.commit-max-split-groups` | `git config gitbasher.commit-max-split-groups <2..20>` | Cap on split commits per run (default `7`) |
 | `gitbasher.commit-split-order` | `git config gitbasher.commit-split-order <auto\|alpha>` | Order split commits by dependency (`auto`, default) or alphabetically (`alpha`) |
+| `gitbasher.log-count` | `git config gitbasher.log-count <n>` | Commits per page in the `gitb log` browser (default `20`) |
 
 **Clear gitbasher config** (per-repo settings live with the repo and disappear with it):
 ```bash

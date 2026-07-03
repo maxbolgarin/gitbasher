@@ -940,7 +940,7 @@ GITB_DIR=/opt/bin curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitba
 
 ### Pin a release
 ```bash
-GITB_VERSION=v4.1.0 curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash
+GITB_VERSION=v5.0.0 curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash
 ```
 
 ## Uninstall

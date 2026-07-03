@@ -45,7 +45,7 @@ body:
     attributes:
       label: gitbasher version
       description: Output of `gitb --version`.
-      placeholder: gitbasher v3.10.2
+      placeholder: gitbasher v5.0.0
     validations:
       required: true
 

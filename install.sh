@@ -6,7 +6,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash -s -- --sudo
 #
 # Re-running this installer is the supported upgrade path: it replaces the
-# existing binary in place. Pin a specific tag with GITB_VERSION=v4.1.0 (or
+# existing binary in place. Pin a specific tag with GITB_VERSION=v5.0.0 (or
 # any released tag); leave it unset to grab the latest release. Once installed,
 # `gitb update` does the same thing without needing the curl one-liner.
 #

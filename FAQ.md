@@ -85,7 +85,7 @@ gitb update
 curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash
 
 # pin a specific version
-GITB_VERSION=v4.1.0 curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash
+GITB_VERSION=v5.0.0 curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash
 ```
 
 The installer detects an existing install and replaces it in place; downloads are SHA-256-verified when the release's checksum asset and a sha256 tool are available (otherwise it warns and continues).

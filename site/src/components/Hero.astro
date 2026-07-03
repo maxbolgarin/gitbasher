@@ -28,15 +28,18 @@ const installCmd = 'curl -fsSL https://raw.githubusercontent.com/maxbolgarin/git
 
     <div class="real-output" aria-label="Running gitb in a terminal">
       <pre><code><span class="tok-prompt">$</span> <span class="tok-cmd">gitb</span>
-<strong>gitbasher</strong> v4.0.0 <span class="tok-dim">— git, made fluent</span>
+<strong>gitbasher</strong> v5.0.0 <span class="tok-dim">— git, made fluent</span>
 
 usage: <span class="tok-flag">gitb &lt;command&gt; [mode]</span>
 
 <span class="tok-cat">DAILY</span>
   status (s)                  Show repo state and changed files
+  diff (d, di)                Overview, pick-a-file, branch &amp; AI diffs
   commit (c, co, com)         Create commits — interactive, AI, amend, revert
+  edit (ed, ee)               Rewrite the last commit message (git commit --amend)
   push (p, ps, pus)           Push current branch safely
   pull (pu, pl, pul)          Pull from remote
+  fetch (fe)                  Fetch from remote without merging
   sync (sy)                   Sync current branch with main
 
 <span class="tok-cat">BRANCHES</span>
@@ -48,23 +51,26 @@ usage: <span class="tok-flag">gitb &lt;command&gt; [mode]</span>
   prev (-)                    Switch to previous branch (like cd -)
 
 <span class="tok-cat">HISTORY</span>
-  log (l, lg)                 Pretty git log with branch comparison
+  log (l, lg)                 Interactive commit browser with search, compare and AI summary
   reflog (rl, rlg)            Pretty git reflog
+  last-commit (lc, lastc)     Show last commit info
+  last-ref (lr, lastr)        Show last reference info
   tag (t, tg)                 Create, list, push, fetch, delete tags
 
 <span class="tok-cat">RECOVERY</span>
   undo (un)                   Undo commit, amend, merge, rebase, stash
   reset (res)                 Preview and apply git reset flows
   stash (st, sta)             Manage git stashes
-  wip (w)                     Stash WIP, optionally back up to remote
+  wip (w)                     Stash work-in-progress, optionally back up remote
 
 <span class="tok-cat">SETUP</span>
-  clone (cl, clo)             Clone a remote repo and initialize gitbasher
+  clone (cl, clo)             Clone a remote repo and initialize gitbasher in it
+  init (i)                    Create a git repo here and set up gitbasher
   origin (or, o, remote)      Manage remotes
   hook (ho, hk)               Manage git hooks
   worktree (wt, tree)         Manage git worktrees
   config (cf, cfg, conf)      Configure gitbasher
-  update (up, upd)            Check for and install updates
+  update (up, upd)            Check for and install gitbasher updates
   uninstall (uns, uni)        Remove gitbasher config and binary
 
 Run <span class="tok-flag">gitb &lt;command&gt; help</span> for modes and examples</code></pre>

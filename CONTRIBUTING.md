@@ -50,7 +50,7 @@ Aim for **no new** warnings. The CI bar is `severity: error`; widening to `sever
 - **Target Bash 3.2** (the version macOS ships as `/bin/bash`). Do **not** use bash 4-only features — no associative arrays (`declare -A`), `mapfile`/`readarray`, `${var,,}`/`${var^^}` case-folding, or `read -i`. Use the helpers in `scripts/common.sh` instead: the `gmap_*` / `gset_*` map/set shim, `to_lower` / `to_upper`, and `while IFS= read -r` loops. Plain indexed arrays are fine for integer-keyed data. The `bash32` CI job runs the full suite under macOS's real bash 3.2.
 - **Quote variables** in `git` invocations and any path/branch/ref handling, except where word-splitting is intentional (and document why with a comment).
 - **Prefer portable constructs** over GNU-only extensions. Tested examples:
-  - `mapfile -t arr < <(cmd) ; [ ${#arr[@]} -gt 0 ] && cmd2 "${arr[@]}"` instead of `cmd | xargs -r cmd2`
+  - `while IFS= read -r line; do cmd2 "$line"; done < <(cmd)` instead of `cmd | xargs -r cmd2`
   - `sed` with explicit GNU/BSD detection (see `dist/build.sh` for the pattern)
 - **Trap cleanup** — interactive scripts that touch the staging area should register an `EXIT`/`INT`/`TERM` trap that restores state. See `cleanup_on_exit` in `scripts/commit.sh`.
 - **No new global variables** in `scripts/common.sh` — declare with `local` inside functions.
@@ -60,7 +60,7 @@ Aim for **no new** warnings. The CI bar is `severity: error`; widening to `sever
 This project uses [Conventional Commits](https://www.conventionalcommits.org/). Recent commits demonstrate the style:
 
 ```
-fix(merge): replace GNU-only xargs -r with portable mapfile pattern
+fix(merge): replace GNU-only xargs -r with a portable read loop
 feat(ai): support OpenRouter request timeouts
 docs(readme): clarify wget HTTPS hardening
 test(branch): cover delete-with-spaces edge case

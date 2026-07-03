@@ -6,16 +6,17 @@
 #   curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash -s -- --sudo
 #
 # Re-running this installer is the supported upgrade path: it replaces the
-# existing binary in place. Pin a specific tag with GITB_VERSION=v4.0.0 (or
+# existing binary in place. Pin a specific tag with GITB_VERSION=v4.1.0 (or
 # any released tag); leave it unset to grab the latest release. Once installed,
 # `gitb update` does the same thing without needing the curl one-liner.
 #
 # Flags:
 #   --sudo         Install system-wide to /usr/local/bin (uses sudo if needed)
+#   --no-sudo      Never invoke sudo; fail instead (same as GITB_NO_SUDO=1)
 #
 # Environment:
 #   GITB_VERSION   Tag to install (default: latest). Use 'latest' to upgrade
-#                  to the newest release, or 'v3.10.2' to roll back.
+#                  to the newest release, or 'v4.1.0' to roll back.
 #   GITB_DIR       Target directory (default: ~/.local/bin, or /usr/local/bin with --sudo)
 #   GITB_SUDO      Set to 1 for system-wide install (same as --sudo)
 #   GITB_NO_SUDO   Set to 1 to forbid sudo even when needed (kept for back-compat)

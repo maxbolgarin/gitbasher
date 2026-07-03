@@ -54,19 +54,19 @@ There is no per-command process exec — `scripts/gitb.sh` `source`s every other
 1. **All functions share one namespace.** Helper names in `common.sh` (`yes_no_choice`, `git_status`, `sanitize_git_name`, `get_config_value`, `wrong_mode`, …) are visible from every other file. Don't define a private helper with a name another file might already use.
 2. **No new global variables in `common.sh`.** Use `local` inside functions. Globals leak across commands and silently break the next subcommand the user runs.
 
-Source order is deterministic and lives at `scripts/gitb.sh:69-95`. `common.sh` and `init.sh` come first, then domain scripts, then `base.sh` last (so `print_help` sees everything). When a `source` line fails it dies with `exit 1` — see `gitb.sh:69-95` for the guard pattern.
+Source order is deterministic and lives at `scripts/gitb.sh:105-138`. `common.sh` and `init.sh` come first, then domain scripts, then `base.sh` last (so `print_help` sees everything). When a `source` line fails it dies with `exit 1` — see `gitb.sh:105-138` for the guard pattern.
 
 `init.sh` runs git config / remote probes at source time. Tests that only need the validators / sanitizers can short-circuit those by exporting `GITBASHER_SKIP_INIT_QUERIES=1` before sourcing — that's what the `source_gitbasher_lite` helper in `tests/setup_suite.bash` does. The flag is internal to the test layer; production runs never set it.
 
 ### Top-level dispatch
 
-`scripts/base.sh` is the dispatcher: a `case "$1"` block (`base.sh:102-181`) maps each command name and its aliases to the corresponding `*_script` function. The convention: `commit_script`, `push_script`, `branch_script`, etc. — defined in their respective files.
+`scripts/base.sh` is the dispatcher: a `case "$1"` block (`base.sh:127-229`) maps each command name and its aliases to the corresponding `*_script` function. The convention: `commit_script`, `push_script`, `branch_script`, etc. — defined in their respective files.
 
 Aliases are colocated with the canonical name in the case pattern (`commit|c|co|com)`), and the same aliases are mirrored in `print_help` so `gitb --help` stays in sync.
 
 ### `--help` / `-h` normalization
 
-`scripts/base.sh:86-93` rewrites every occurrence of `--help` / `-h` in `$@` to the literal token `help` before dispatch. This means each subcommand handler only has to look for `help`, not three spellings. `gitb commit --help`, `gitb commit -h`, and `gitb commit help` all hit the same branch.
+`scripts/base.sh:108-119` rewrites every occurrence of `--help` / `-h` in `$@` to the literal token `help` before dispatch. This means each subcommand handler only has to look for `help`, not three spellings. `gitb commit --help`, `gitb commit -h`, and `gitb commit help` all hit the same branch.
 
 ### Bash 3.2 compatibility
 
@@ -81,13 +81,13 @@ Only Bash < 3.2 is unsupported: `scripts/gitb.sh` then tries to `exec` a newer b
 
 ### Stale lock detection
 
-`scripts/gitb.sh:50-64` checks `git rev-parse --git-dir` at startup and prompts before removing a stale `index.lock`. This catches the common "another git process is running" sequel to a Ctrl+C'd git command.
+`scripts/gitb.sh:81-92` checks `git rev-parse --git-dir` at startup and prompts before removing a stale `index.lock`. This catches the common "another git process is running" sequel to a Ctrl+C'd git command.
 
 ---
 
 ## The build pipeline
 
-`dist/build.sh` is a 20-line bundler. It reads `scripts/gitb.sh` line by line and, every time a line matches `^[[:space:]]*(source|\.)[[:space:]]+([^[:space:]]+)`, replaces it with the contents of the referenced file. Everything else passes through. The result is piped through `sed` to strip:
+`dist/build.sh` is a ~46-line bundler. It reads `scripts/gitb.sh` line by line and, every time a line matches `^[[:space:]]*(source|\.)[[:space:]]+([^[:space:]]+)`, replaces it with the contents of the referenced file. Everything else passes through. The result is piped through `awk` to strip:
 
 - Lines whose first non-whitespace is `#`, `##`, or `###` followed by a space or `!` (comments and shebangs from inlined files)
 - Empty/whitespace-only lines
@@ -97,7 +97,7 @@ Then the bundle is written to `dist/gitb` and the version placeholder `GITBASHER
 Properties of the bundle that matter:
 
 - **No `source` lines remain** — the bundle is a single self-contained file. The `|| { echo "..."; exit 1; }` guards on the original `source` lines are stripped along with their `source` line (the bundle can't encounter a missing file anyway).
-- **Comments are stripped** — don't put load-bearing logic in a comment. This includes per-line `# disable shellcheck` directives; those need to live as `# shellcheck` blocks (which are NOT stripped — they're 2 hashes only when combined with `shellcheck`, single-`#` comments are removed).
+- **Comments are stripped** — don't put load-bearing logic in a comment. Lines whose first non-whitespace is `#`, `##`, or `###` followed by a space or `!` are removed (including `# shellcheck` directives — fine, since shellcheck runs against `scripts/*.sh`, not the bundle). Four-hash `####` comments survive, and anything between `#### bundler-keep-begin` and `#### bundler-keep-end` fences is kept verbatim — that's how hook templates and other heredoc content containing `#` lines ship intact.
 - **Shebang stays** — `build.sh` re-adds `#!/usr/bin/env bash` as the first line of the output explicitly.
 - **The bundle is not committed.** `dist/gitb` is gitignored; semantic-release builds it fresh on every release via the `@semantic-release/exec` plugin and ships it as a GitHub release asset / in the npm package, so `npm install -g gitbasher` and the curl installer get a single file.
 
@@ -118,7 +118,7 @@ End-to-end, `gitb wip up worktree` does this:
 1. Shell finds `gitb` on `PATH` (installed by npm or the install script). It is the bundled `dist/gitb`.
 2. The bash 3.2+ check passes (or re-execs an older shell).
 3. The stale-lock check passes.
-4. `case "$1"` in the dispatch matches `wip|w` → calls `wip_script "${@:2}"` (`base.sh:124-126`).
+4. `case "$1"` in the dispatch matches `wip|w` → calls `wip_script "${@:2}"` (`base.sh:158-160`).
 5. `wip_script` is the entry function defined in `scripts/wip.sh`. It parses subcommand args (`up`, `down`, …) and dispatches to `wip_up` / `wip_down`.
 6. `wip_up` parses backend arguments, optionally calls `prompt_wip_backend` (interactive picker), then calls one of `wip_up_stash` / `wip_up_branch` / `wip_up_worktree`.
 7. The backend functions call `git` directly with carefully-quoted arguments and use the helpers in `common.sh` for prompts, status display, and color output.
@@ -132,11 +132,11 @@ Each script broadly follows that pattern: a `<name>_script` entry function, a fe
 User-visible settings live in `git config` under the `gitbasher.*` namespace, set via `gitb config`:
 
 - `gitbasher.scopes` — comma-separated commit scopes for the picker
-- `gitbasher.ai-provider`, `gitbasher.ai-api-key`, `gitbasher.ai-model` — AI client
+- `gitbasher.ai-provider`, `gitbasher.ai-api-key-<provider>`, `gitbasher.ai-model` — AI client
 - `gitbasher.ai-ollama-host` — Ollama server location (default `http://localhost:11434`)
 - `gitbasher.ai-proxy` — optional HTTPS proxy for restricted regions
 - `gitbasher.worktreebase` — base path for `gitb worktree add` and `wip up worktree`
-- a handful of feature toggles (`gitbasher.confirm-push`, `gitbasher.color`, …)
+- behavior tuning (`gitbasher.push-warn-size`, `gitbasher.log-count`, `gitbasher.ai-timeout`, …)
 
 `get_config_value` and `set_config_value` in `common.sh` are the only paths that should touch these. Per-repo by default; after the local write, each `gitb cfg` setter interactively asks whether to also set the value globally.
 
@@ -150,7 +150,7 @@ BATS, run via `bash tests/run_tests.sh`. The runner sets up a temporary git repo
 - Stub external commands (`git`, `curl`) by prepending a fake binary to `PATH`, not by mocking inside Bash.
 - Assert against captured stdout/stderr and the exit code.
 
-The `xargs -r` portability fix (replaced with `mapfile`-driven loops) is the canonical example of a behavior change that lives or dies by its BATS coverage.
+The `xargs -r` portability fix (replaced with `while IFS= read -r` loops) is the canonical example of a behavior change that lives or dies by its BATS coverage.
 
 ---
 

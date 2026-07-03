@@ -16,7 +16,7 @@ const recipes = [
     body: 'Stages everything, drafts a conventional message from your diff, lets you confirm, commits, then pushes. Use a hosted provider or run Ollama locally — your call.',
     cmd: 'gitb commit ai fast push',
     expands: [
-      'git add -A',
+      'git add .',
       'git diff --cached  →  llm  →  "feat(scope): subject"',
       'git commit -m "..."',
       'git push -u origin HEAD',

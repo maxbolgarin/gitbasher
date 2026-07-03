@@ -14,11 +14,11 @@ const faqs = [
   },
   {
     q: 'Where are my settings (and API keys) stored?',
-    a: 'In <code>git config</code> under the <code>gitbasher.*</code> namespace — per-repo by default, or global with <code>gitb cfg g</code>. For shared machines, set API keys via env vars like <code>GITB_AI_API_KEY_OPENAI</code>; gitbasher checks env first.',
+    a: 'In <code>git config</code> under the <code>gitbasher.*</code> namespace — per-repo by default, and every <code>gitb cfg</code> setter offers to also save the value globally. For shared machines, set API keys via env vars like <code>GITB_AI_API_KEY_OPENAI</code>; gitbasher checks env first.',
   },
   {
     q: 'Does it work in CI?',
-    a: 'Non-interactive subcommands, yes. Anything that prompts will block on stdin — use explicit modes (<code>gitb commit fast</code>, <code>gitb push -y</code>) for CI scripts.',
+    a: 'Non-interactive subcommands, yes. Anything that prompts will block on stdin — use explicit modes (<code>gitb commit fast</code>, <code>gitb push yes</code>) for CI scripts.',
   },
   {
     q: 'How do I update or uninstall?',

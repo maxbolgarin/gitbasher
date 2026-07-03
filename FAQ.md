@@ -85,7 +85,7 @@ gitb update
 curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash
 
 # pin a specific version
-GITB_VERSION=v4.0.0 curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash
+GITB_VERSION=v4.1.0 curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash
 ```
 
 The installer detects an existing install and replaces it in place; downloads are SHA-256-verified when the release's checksum asset and a sha256 tool are available (otherwise it warns and continues).
@@ -101,7 +101,7 @@ For npm installs: `npm uninstall -g gitbasher`. For system-wide installs: `sudo 
 
 ### What is in the npm package, and do I need Node.js?
 
-The npm package ships the same `dist/gitb` Bash binary plus a `bin` entry. Node.js (≥14) is required to run `npm install`, but **not** to run `gitb` itself — gitbasher is pure Bash at runtime. If you don't want Node, use the curl installer.
+The npm package ships the same `dist/gitb` Bash binary plus a `bin` entry. Node.js is only needed to run `npm install` itself, **not** to run `gitb` — gitbasher is pure Bash at runtime. If you don't want Node, use the curl installer.
 
 ## Workflow questions
 
@@ -143,7 +143,7 @@ Run `gitb sync`. It shows the divergence and rebases by default (use `gitb sync 
 
 ### `gitb log` used to dump everything into a pager — where did that go?
 
-Bare `gitb log` is now an interactive browser: a numbered, paginated commit list where picking a commit shows it and offers actions (diff, stat, copy hash, revert, cherry-pick, fixup, restore a file). The old full dump is still there as `gitb log all` (alias `dump`). Piping still works — non-interactive runs print the first page and exit. You can also pass an argument directly: a number (`gitb log 20`), a file path, a ref or range, or words to search commit messages. Page size: `git config gitbasher.log-count 30`.
+Bare `gitb log` is now an interactive browser: a numbered, paginated commit list where picking a commit shows it and offers actions (diff, stat, copy hash, revert, cherry-pick, fixup, restore a file). The old full dump is still there as `gitb log all` (alias `dump`). Piping still works — non-interactive runs print a plain `git log`-style listing and exit. You can also pass an argument directly: a number (`gitb log 20`), a file path, a ref or range, or words to search commit messages. Page size: `git config gitbasher.log-count 30`.
 
 ## Contributing and bugs
 

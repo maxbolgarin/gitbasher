@@ -1,6 +1,6 @@
 ---
 const ollamaSetup = `# one-time
-brew install ollama          # or follow ollama.com for your OS
+brew install ollama jq       # jq is required for AI features
 ollama serve &               # daemon, leave running
 ollama pull qwen3:8b         # or any model you like
 gitb cfg ai                  # pick "ollama" + the pulled model
@@ -8,7 +8,7 @@ gitb cfg ai                  # pick "ollama" + the pulled model
 # from now on
 gitb commit ai               # diff → localhost:11434 → message`;
 
-const hostedSetup = `# pick OpenAI or OpenRouter
+const hostedSetup = `# pick OpenAI or OpenRouter (requires jq)
 gitb cfg ai
 
 # keep keys out of git config (resolved first):

@@ -63,8 +63,8 @@ teardown() {
 @test "completion: covers common short aliases" {
     out=$(_gitb_bash_completion_content)
     cmds_block=$(printf '%s' "$out" | awk '/^_gitb_commands="$/,/^"$/')
-    # Aliases from base.sh that users actually type. Updated alongside the
-    # MIGRATION_V3_TO_V4.md "alias swap" entry — keep both files in sync.
+    # Aliases from base.sh that users actually type — keep in sync with
+    # the dispatch case patterns in scripts/base.sh.
     for alias in c p pu m r b t st w; do
         # Match the alias as a whole word in the multiline block.
         printf '%s\n' "$cmds_block" | grep -qE "(^| )$alias( |$)" \

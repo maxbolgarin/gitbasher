@@ -236,29 +236,27 @@ function sanitize_git_name {
 function sanitize_file_path {
     local input="$1"
     sanitized_file_path=""
-    
+
     if [ -z "$input" ]; then
         return 1
     fi
-    
-    # Remove null bytes and control characters (except tab and newline for multiline patterns)
-    local cleaned=$(echo "$input" | tr -d '\000-\010\013\014\016-\037\177')
-    
-    # Remove dangerous sequences
-    cleaned=$(echo "$cleaned" | sed 's/\.\.\///g')  # Remove ../
-    cleaned=$(echo "$cleaned" | sed 's/;[[:space:]]*rm[[:space:]]*/; /g')  # Remove rm commands after semicolon
-    cleaned=$(echo "$cleaned" | sed 's/&&[[:space:]]*rm[[:space:]]*/&& /g')  # Remove rm commands after &&
-    cleaned=$(echo "$cleaned" | sed 's/|[[:space:]]*rm[[:space:]]*/| /g')  # Remove rm commands after pipe
-    cleaned=$(echo "$cleaned" | sed 's/[[:space:]]rm[[:space:]]*/ /g')  # Remove rm commands with spaces around
-    cleaned=$(echo "$cleaned" | sed 's/^rm[[:space:]]*//g')  # Remove rm at start
-    cleaned=$(echo "$cleaned" | sed 's/[[:space:]]rm$//g')  # Remove rm at end
-    
-    # Limit length
-    if [ ${#cleaned} -gt 1000 ]; then
+
+    # Validate, never rewrite. The old pass silently DELETED "../" (so the
+    # standard ../sibling worktree layout landed inside the repo) and every
+    # "rm" token (so "rmdir.c" became "dir.c" and staged the wrong file).
+    # These values are only ever passed as ARGUMENTS to git — never through
+    # a shell — so the sole genuinely dangerous bytes are control chars.
+    # Reject those (tab allowed: legal in filenames) instead of mangling.
+    if printf '%s' "$input" | LC_ALL=C tr -d '\011' | LC_ALL=C grep -q '[[:cntrl:]]'; then
         return 1
     fi
-    
-    sanitized_file_path="$cleaned"
+
+    # Limit length
+    if [ ${#input} -gt 1000 ]; then
+        return 1
+    fi
+
+    sanitized_file_path="$input"
     return 0
 }
 

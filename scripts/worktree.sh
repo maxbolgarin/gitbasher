@@ -180,8 +180,15 @@ function default_worktree_path {
     local base
     base=$(get_config_value gitbasher.worktreebase "")
 
+    # Anchor to the MAIN worktree's root: --show-toplevel resolves the
+    # CURRENT worktree, so `wt add` run from inside a worktree used to nest
+    # the new one there — and a later force-remove of the outer worktree
+    # deleted the nested one with it.
     local repo_root
-    repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+    repo_root=$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print substr($0,10); exit}')
+    if [ -z "$repo_root" ]; then
+        repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+    fi
 
     # Replace path-unfriendly slashes in branch name with dashes for the dir name
     local safe_branch
@@ -363,6 +370,13 @@ function prompt_worktree_path {
     if [ -z "$custom_path" ]; then
         wt_path="$default_path"
     else
+        # Expand a leading ~ like the shell would: git treats it literally,
+        # creating a directory named "~" in the CWD — a notorious cleanup
+        # footgun — while every printed hint resolves to \$HOME.
+        case "$custom_path" in
+            "~") custom_path="$HOME" ;;
+            "~/"*) custom_path="${HOME}${custom_path#\~}" ;;
+        esac
         if ! sanitize_file_path "$custom_path"; then
             show_sanitization_error "worktree path" "Path contains invalid characters."
             return 1
@@ -560,7 +574,8 @@ function _do_worktree_remove {
     echo -e "${YELLOW}Removing worktree at ${BOLD}${selected_worktree_path}${NORMAL}${YELLOW} (${selected_worktree_head})...${ENDCOLOR}"
 
     local rm_output
-    rm_output=$(git worktree remove "$selected_worktree_path" 2>&1)
+    # LC_ALL=C keeps the English substrings below stable across locales
+    rm_output=$(LC_ALL=C git worktree remove "$selected_worktree_path" 2>&1)
     local rm_code=$?
 
     if [ $rm_code -eq 0 ]; then
@@ -578,7 +593,10 @@ function _do_worktree_remove {
         echo -e "Do you want to continue (y/n)?"
         yes_no_choice_strict "Force removing worktree..."
 
-        rm_output=$(git worktree remove --force "$selected_worktree_path" 2>&1)
+        # --force TWICE: a locked worktree needs it doubled, so the single
+        # --force retry failed again with the same fatal the user had just
+        # confirmed past
+        rm_output=$(LC_ALL=C git worktree remove --force --force "$selected_worktree_path" 2>&1)
         rm_code=$?
 
         if [ $rm_code -eq 0 ]; then
@@ -715,6 +733,11 @@ function _do_worktree_move {
         return 1
     fi
 
+    # Expand a leading ~ like the shell would (git treats it literally)
+    case "$new_path" in
+        "~") new_path="$HOME" ;;
+        "~/"*) new_path="${HOME}${new_path#\~}" ;;
+    esac
     if ! sanitize_file_path "$new_path"; then
         show_sanitization_error "worktree path" "Path contains invalid characters."
         return 1
@@ -802,17 +825,24 @@ function worktree_manage {
 
 ### Function prints the path of a chosen worktree (so the user can `cd $(...)`)
 function worktree_path {
-    echo -e "${YELLOW}Pick a worktree${ENDCOLOR}"
-    echo
+    # All interaction goes to stderr so `cd $(gitb worktree path)` captures
+    # ONLY the path — the menu used to be captured too, leaving the picker
+    # invisible and handing cd a dozen arguments.
+    echo -e "${YELLOW}Pick a worktree${ENDCOLOR}" >&2
+    echo >&2
 
-    if ! choose_worktree; then
+    if ! choose_worktree >&2; then
         return 1
     fi
 
-    echo
-    echo -e "${GREEN}Path:${ENDCOLOR} ${selected_worktree_path}"
-    echo
-    echo -e "Open it with: ${YELLOW}cd ${selected_worktree_path}${ENDCOLOR}"
+    if [ -t 1 ]; then
+        echo
+        echo -e "${GREEN}Path:${ENDCOLOR} ${selected_worktree_path}"
+        echo
+        echo -e "Open it with: ${YELLOW}cd \"${selected_worktree_path}\"${ENDCOLOR}"
+    else
+        printf '%s\n' "$selected_worktree_path"
+    fi
     return 0
 }
 
@@ -905,8 +935,14 @@ function worktree_script {
         header="$header GO TO"
     fi
 
-    echo -e "${YELLOW}${header}${ENDCOLOR}"
-    echo
+    if [ -n "$path_mode" ]; then
+        # Header to stderr: path mode's stdout is the machine-readable path
+        echo -e "${YELLOW}${header}${ENDCOLOR}" >&2
+        echo >&2
+    else
+        echo -e "${YELLOW}${header}${ENDCOLOR}"
+        echo
+    fi
 
     if [ -n "$help" ]; then
         echo -e "usage: ${YELLOW}gitb worktree <mode>${ENDCOLOR}"

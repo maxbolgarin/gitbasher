@@ -197,28 +197,29 @@ setup() {
     [ $? -eq 0 ]
 }
 
-@test "sanitize_file_path: removes leading rm command" {
+@test "sanitize_file_path: keeps rm-prefixed names verbatim" {
+    # Values only ever reach git as arguments (behind `--`), never a shell.
+    # The old token-stripping mangled real names: "rmdir.c" -> "dir.c".
     sanitize_file_path "rm important.txt"
     [ $? -eq 0 ]
-    [[ "$sanitized_file_path" != "rm important.txt" ]]
+    [ "$sanitized_file_path" = "rm important.txt" ]
 }
 
-@test "sanitize_file_path: removes trailing rm" {
-    sanitize_file_path "important.txt rm"
+@test "sanitize_file_path: keeps names with embedded rm tokens verbatim" {
+    sanitize_file_path "my rmdir.txt"
     [ $? -eq 0 ]
-    [[ "$sanitized_file_path" != *" rm" ]]
+    [ "$sanitized_file_path" = "my rmdir.txt" ]
 }
 
-@test "sanitize_file_path: removes rm after &&" {
+@test "sanitize_file_path: keeps shell metacharacters verbatim (inert as arguments)" {
     sanitize_file_path "file && rm trash"
     [ $? -eq 0 ]
-    [[ "$sanitized_file_path" != *"rm trash"* ]]
+    [ "$sanitized_file_path" = "file && rm trash" ]
 }
 
-@test "sanitize_file_path: removes rm after pipe" {
-    sanitize_file_path "file | rm trash"
-    [ $? -eq 0 ]
-    [[ "$sanitized_file_path" != *"rm trash"* ]]
+@test "sanitize_file_path: rejects escape-sequence bytes" {
+    ! sanitize_file_path "$(printf 'evil\033[31mname')"
+    [ -z "$sanitized_file_path" ]
 }
 
 @test "sanitize_file_path: accepts path at exactly 1000 chars" {

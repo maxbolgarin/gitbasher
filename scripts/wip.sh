@@ -94,8 +94,14 @@ function find_wip_worktree {
 function wip_worktree_default_path {
     local base
     base=$(get_config_value gitbasher.worktreebase "")
+    # Anchor to the MAIN worktree's root (see default_worktree_path in
+    # worktree.sh) — --show-toplevel resolves the current worktree and
+    # nested wip worktrees inside other worktrees risk cascade deletion.
     local repo_root
-    repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+    repo_root=$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print substr($0,10); exit}')
+    if [ -z "$repo_root" ]; then
+        repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+    fi
     local safe_branch
     safe_branch=$(echo "wip-${current_branch}" | tr '/' '-')
 

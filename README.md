@@ -111,7 +111,7 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 - **AI commit messages** — `gitb c ai` writes the message from your diff. OpenRouter (Gemini/Claude/GPT/…), OpenAI direct, or **fully local via Ollama** — no key, no network, no data leaves your machine.
 - **Safer git** — push/pull detect conflicts up front, `undo` rolls back commit/amend/merge/rebase/stash, `reset` is interactive with a preview.
 - **Whole workflows, not just commands** — `sync`, `wip`, `branch newd`, `merge to-main`, `squash` chain the steps you'd otherwise do by hand.
-- **One file, no deps** — pure bash for every git operation; only the AI features need `jq` and `curl`. Drop the binary anywhere on `PATH` and go. **870+ BATS tests** cover sanitization, git ops, and branch logic.
+- **One file, no deps** — pure bash for every git operation; only the AI features need `jq` and `curl`. Drop the binary anywhere on `PATH` and go. **900+ BATS tests** cover sanitization, git ops, and branch logic.
 
 <p align="center">
   <img src=".github/push.gif" width="640" alt="gitb push demo" />
@@ -1012,6 +1012,7 @@ gitb cfg proxy        # in restricted regions
 If `gitb commit ai` hangs, returns `connection refused`, or times out:
 
 - **jq missing** — all AI features require `jq` (check with `command -v jq`; install via `brew install jq` / `apt install jq`). Without it every AI command aborts with an install hint.
+- **Generation failed mid-commit?** gitbasher offers to continue with a manual commit message (staging is preserved) — press Enter to accept and write it yourself, or `n` to abort.
 - **Network reachability** — test the provider directly: `curl -fsSL https://api.openai.com/v1/models -H "Authorization: Bearer $OPENAI_API_KEY"` (or the equivalent for OpenRouter/Ollama). If that fails, gitbasher will too.
 - **Corporate proxy / restricted region** — `gitb cfg proxy` accepts `host:port` or `protocol://host:port`. Verify with `curl -x "$proxy" https://api.openai.com`.
 - **Local Ollama** — confirm the daemon is running (`curl http://localhost:11434/api/tags`). The default model must be pulled first (`ollama pull qwen3:8b`).
@@ -1094,7 +1095,7 @@ PRs welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for the dev setup, BATS te
 
 ```bash
 make build               # rebuild dist/gitb
-make test                # run all 870+ tests
+make test                # run all 900+ tests
 make test-file FILE=test_sanitization.bats
 ```
 

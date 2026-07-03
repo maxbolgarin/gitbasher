@@ -1,15 +1,28 @@
 #!/usr/bin/env bash
 
 
-### Consts for colors to use inside 'sed'
-RED_ES="\x1b[31m"
-GREEN_ES="\x1b[32m"
-YELLOW_ES="\x1b[33m"
-BLUE_ES="\x1b[34m"
-PURPLE_ES="\x1b[35m"
-CYAN_ES="\x1b[36m"
-GRAY_ES="\x1b[37m"
-ENDCOLOR_ES="\x1b[0m"
+### Consts for colors to use inside 'sed'. Emptied alongside the terminal
+### colors in init.sh when NO_COLOR is set or stdout is not a terminal —
+### they only ever appear on sed's replacement side, so empty is safe.
+if [ -n "$NO_COLOR" ] || [ ! -t 1 ]; then
+    RED_ES=""
+    GREEN_ES=""
+    YELLOW_ES=""
+    BLUE_ES=""
+    PURPLE_ES=""
+    CYAN_ES=""
+    GRAY_ES=""
+    ENDCOLOR_ES=""
+else
+    RED_ES="\x1b[31m"
+    GREEN_ES="\x1b[32m"
+    YELLOW_ES="\x1b[33m"
+    BLUE_ES="\x1b[34m"
+    PURPLE_ES="\x1b[35m"
+    CYAN_ES="\x1b[36m"
+    GRAY_ES="\x1b[37m"
+    ENDCOLOR_ES="\x1b[0m"
+fi
 
 
 ### ===== PORTABLE ASSOCIATIVE-ARRAY SHIM (bash 3.2+) =====
@@ -1830,11 +1843,18 @@ function list_branches {
     fi
     branches_str=$(git --no-pager branch $args --format="%(refname:short)")
     branches_info_raw=$(git --no-pager branch $args --format="${BLUE_ES}%(refname:short)${ENDCOLOR_ES} | %(contents:subject) | ${YELLOW_ES}%(objectname:short)${ENDCOLOR_ES}  | ${GREEN_ES}%(committerdate:relative)${ENDCOLOR_ES}")
-    branches_info_str=$(echo "$branches_info_raw" | awk -v max=60 -F'\\|' '{
+    # ctrl/torn: strip terminal-control bytes from subjects and repair a
+    # trailing UTF-8 sequence cut mid-character (byte-based awk on macOS) —
+    # one torn byte makes BSD column silently drop the row and all after it.
+    branches_info_str=$(echo "$branches_info_raw" | LC_ALL=C awk -v max=60 \
+        -v ctrl='[\001-\010\013-\037\177]' -v torn='[\300-\367][\200-\277]*$' -F'\\|' '{
         subject=$2
+        gsub(ctrl,"",subject)
         gsub(/^[ \t]+|[ \t]+$/,"",subject)
         if (length(subject) > max) {
-            subject=substr(subject,1,max-3) "..."
+            subject=substr(subject,1,max-3)
+            sub(torn,"",subject)
+            subject=subject "..."
         }
         print $1 " | " subject " | " $3 " | " $4
     }' | column -ts'|' )

@@ -321,6 +321,50 @@ function log_commit_actions {
 }
 
 
+### Function resolves a free-form log argument into a browser mode
+# Precedence: commit count, then file path, then ref/range, then message search
+# $1: the argument to resolve
+# $@: with several words everything is searched as one message phrase
+function log_smart_dispatch {
+    local arg="$1"
+
+    if [[ "$arg" =~ ^[0-9]+$ ]]; then
+        if [ "$arg" -eq 0 ]; then
+            echo -e "${RED}✗ '0' is not a valid number of commits${ENDCOLOR}"
+            return
+        fi
+        gitlog_browse "LAST $arg COMMITS" "count" "$arg"
+        return
+    fi
+
+    # A path that exists now, or one that only past commits know about
+    if [ -e "$arg" ] || [ -n "$(git --no-pager log --oneline -1 -- "$arg" 2>/dev/null)" ]; then
+        gitlog_browse "FILE HISTORY: $arg" "path" "$arg"
+        return
+    fi
+
+    # One plumbing call validates plain refs, a..b, a...b and HEAD~N alike
+    if git rev-list -n 1 "$arg" -- >/dev/null 2>&1; then
+        gitlog_browse "LOG: $arg" "ref" "$arg"
+        return
+    fi
+
+    local term="$*"
+    if ! sanitize_text_input "$term" 200; then
+        show_sanitization_error "search term" "Use printable characters only, max 200 characters."
+        return
+    fi
+    term="$sanitized_text"
+
+    log_collect_hashes "grep" "$term"
+    if [ "$log_browse_total" -eq 0 ]; then
+        echo -e "${YELLOW}No commits found matching '${term}'${ENDCOLOR}"
+        return
+    fi
+    gitlog_browse "COMMITS MATCHING '$term'" "grep" "$term"
+}
+
+
 ### Function runs the interactive commit browser: a paginated numbered list
 ### where picking a commit opens it with an action menu
 # $1: title to print above the list
@@ -684,13 +728,11 @@ function gitlog_search {
             fi
             
             echo
-            echo -e "${YELLOW}Commits matching hash pattern: '$hash_term'${ENDCOLOR}"
+            echo -e "${YELLOW}Commit matching hash: '$hash_term'${ENDCOLOR}"
             echo
-            git log --grep="$hash_term" --pretty="%C(Yellow)%h%C(reset) | %C(Cyan)%ad%C(reset) | %C(Blue)%an%C(reset) | %s (%C(Green)%cr%C(reset))" --all || \
-            git log --oneline --all | grep -i "$hash_term" | head -20 | while read line; do
-                hash=$(echo "$line" | cut -d' ' -f1)
-                git log --pretty="%C(Yellow)%h%C(reset) | %C(Cyan)%ad%C(reset) | %C(Blue)%an%C(reset) | %s (%C(Green)%cr%C(reset))" -1 "$hash"
-            done
+            if ! git --no-pager log -1 "$hash_term" --pretty="%C(yellow)%h%C(reset)%C(auto)%d%C(reset) | %s | %C(blue)%an%C(reset) | %C(green)%cr%C(reset)" -- 2>/dev/null; then
+                echo -e "${RED}✗ No commit found for hash '$hash_term'${ENDCOLOR}"
+            fi
         ;;
         "interactive"|"i"|"")
             echo -e "${YELLOW}GIT LOG INTERACTIVE SEARCH${ENDCOLOR}"
@@ -785,20 +827,27 @@ function gitlog_script {
             echo -e "  ${GREEN}search, s${ENDCOLOR}      Search git log with various criteria"
             echo -e "  ${GREEN}help, h${ENDCOLOR}        Show this help"
             echo
+            echo -e "${YELLOW}Anything else is resolved automatically:${ENDCOLOR}"
+            echo -e "  ${GREEN}a number${ENDCOLOR}       Browse the last N commits (gitb log 20)"
+            echo -e "  ${GREEN}a path${ENDCOLOR}         Browse the file's history across renames (gitb log scripts/gitb.sh)"
+            echo -e "  ${GREEN}a ref/range${ENDCOLOR}    Browse that branch or range (gitb log main..feature)"
+            echo -e "  ${GREEN}other words${ENDCOLOR}    Search commit messages (gitb log fix teapot)"
+            echo
             echo -e "${YELLOW}Examples:${ENDCOLOR}"
             echo -e "  gitb log"
+            echo -e "  gitb log 20"
+            echo -e "  gitb log scripts/common.sh"
+            echo -e "  gitb log main..feature"
             echo -e "  gitb log all"
-            echo -e "  gitb log branch"
             echo -e "  gitb log branch local"
             echo -e "  gitb log compare"
-            echo -e "  gitb log search"
             echo -e "  gitb log search message"
         ;;
         "")
             gitlog_browse "GIT LOG" "head"
         ;;
         *)
-            wrong_mode "log" "$mode"
+            log_smart_dispatch "$@"
         ;;
     esac
 }

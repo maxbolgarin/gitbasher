@@ -194,7 +194,7 @@ case "$1" in
         exit
     ;;
     log|l|lg)
-        gitlog_script $2 $3
+        gitlog_script "${@:2}"
     ;;
     reflog|rl|rlg)
         reflog

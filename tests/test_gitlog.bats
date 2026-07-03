@@ -254,6 +254,131 @@ teardown() {
     [ "$(git log -1 --pretty=%s)" = "fixup! feat: target" ]
 }
 
+### smart positional arguments
+
+@test "log: numeric arg limits the list to that many commits" {
+    make_test_commit one.txt "feat: one"
+    make_test_commit two.txt "feat: two"
+    current_branch="main"
+    run gitlog_script 2 < /dev/null
+    assert_success
+    assert_output_contains "LAST 2 COMMITS"
+    local numbered_lines
+    numbered_lines=$(echo "$output" | grep -c '^ *[0-9]*\. ')
+    [ "$numbered_lines" -eq 2 ]
+}
+
+@test "log: zero is rejected as a commit count" {
+    run gitlog_script 0
+    assert_output_contains "not a valid"
+}
+
+@test "log: numeric arg beats a file of the same name" {
+    create_test_file "5" "a file named five"
+    git add 5 && git commit -m "feat: add file named 5"
+    current_branch="main"
+    run gitlog_script 5 < /dev/null
+    assert_success
+    assert_output_contains "LAST 5 COMMITS"
+}
+
+@test "log: path arg shows file history and follows renames" {
+    make_test_commit a.txt "feat: original file"
+    git mv a.txt b.txt
+    git commit -m "refactor: rename a to b"
+    current_branch="main"
+    run gitlog_script b.txt < /dev/null
+    assert_success
+    assert_output_contains "FILE HISTORY"
+    assert_output_contains "original file"
+    assert_output_contains "rename a to b"
+}
+
+@test "log: deleted but tracked path still resolves to file history" {
+    make_test_commit gone.txt "feat: short lived file"
+    git rm -q gone.txt
+    git commit -m "chore: remove short lived file"
+    current_branch="main"
+    run gitlog_script gone.txt < /dev/null
+    assert_success
+    assert_output_contains "FILE HISTORY"
+    assert_output_contains "short lived file"
+}
+
+@test "log: branch arg shows that ref's history" {
+    create_test_branch feature
+    make_test_commit feat.txt "feat: only on feature"
+    git checkout -q main
+    current_branch="main"
+    run gitlog_script feature < /dev/null
+    assert_success
+    assert_output_contains "only on feature"
+}
+
+@test "log: range arg shows only the commits in the range" {
+    create_test_branch feature
+    make_test_commit feat.txt "feat: only on feature"
+    git checkout -q main
+    current_branch="main"
+    run gitlog_script main..feature < /dev/null
+    assert_success
+    assert_output_contains "only on feature"
+    local numbered_lines
+    numbered_lines=$(echo "$output" | grep -c '^ *[0-9]*\. ')
+    [ "$numbered_lines" -eq 1 ]
+}
+
+@test "log: reserved word all wins over a branch named all" {
+    git branch all
+    make_test_commit one.txt "feat: reserved winner"
+    run gitlog_script all
+    assert_success
+    assert_output_contains "reserved winner"
+    if [[ "$output" == *"commit number"* ]]; then
+        echo "Reserved word 'all' opened the browser instead of the dump: $output"
+        return 1
+    fi
+}
+
+@test "log: unknown word falls back to message search" {
+    make_test_commit one.txt "fix: teapot handling"
+    make_test_commit two.txt "feat: unrelated"
+    current_branch="main"
+    run gitlog_script teapot < /dev/null
+    assert_success
+    assert_output_contains "COMMITS MATCHING"
+    assert_output_contains "teapot handling"
+    local numbered_lines
+    numbered_lines=$(echo "$output" | grep -c '^ *[0-9]*\. ')
+    [ "$numbered_lines" -eq 1 ]
+}
+
+@test "log: multi-word args are searched as one phrase" {
+    make_test_commit one.txt "fix: teapot handling"
+    current_branch="main"
+    run gitlog_script teapot handling < /dev/null
+    assert_success
+    assert_output_contains "COMMITS MATCHING"
+    assert_output_contains "teapot handling"
+}
+
+@test "log: search with no matches reports it" {
+    run gitlog_script zzznothingzzz < /dev/null
+    assert_output_contains "No commits found"
+}
+
+@test "log: search by hash finds the commit itself" {
+    make_test_commit one.txt "feat: findable by hash"
+    local short_hash
+    short_hash=$(git rev-parse --short HEAD)
+    run gitlog_search hash <<< "$short_hash"
+    assert_success
+    assert_output_contains "findable by hash"
+}
+
+
+### clipboard
+
 @test "log: copy action pipes the full hash into the clipboard tool" {
     make_test_commit one.txt "feat: copied"
     mkdir -p "$TEST_REPO/fakebin"

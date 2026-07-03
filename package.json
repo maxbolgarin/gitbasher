@@ -54,6 +54,6 @@
         "@semantic-release/github": "latest",
         "@semantic-release/npm": "latest",
         "@semantic-release/git": "latest",
-        "conventional-changelog-conventionalcommits": "latest"
+        "conventional-changelog-conventionalcommits": "^8.0.0"
     }
 }

@@ -758,7 +758,7 @@ function squash_script {
         echo -e "${YELLOW}Will analyze ${BOLD}${commit_count}${NORMAL}${YELLOW} commits with AI.${ENDCOLOR}${size_warning}"
         echo -e "Continue (y/n)?"
         local pre_choice
-        read -n 1 -s pre_choice
+        read -n 1 -s pre_choice || prompt_aborted
         if ! is_yes "$pre_choice"; then
             echo
             echo -e "${YELLOW}Cancelled.${ENDCOLOR}"
@@ -818,10 +818,8 @@ function squash_script {
         echo -e "${RED}⚠  Applying this plan rewrites your commit history.${ENDCOLOR}"
         echo -e "${CYAN}💡 Recover the original branch with ${BOLD}gitb undo rebase${NORMAL}${CYAN} if needed.${ENDCOLOR}"
         echo -e "Are you sure you want to proceed (y/n)?"
-        local choice
-        read -n 1 -s choice
-        if ! is_yes "$choice"; then
-            echo
+        # History rewrite: require an explicit "y" — Enter/EOF decline
+        if ! confirm_destructive; then
             echo -e "${YELLOW}Cancelled.${ENDCOLOR}"
             exit 0
         fi

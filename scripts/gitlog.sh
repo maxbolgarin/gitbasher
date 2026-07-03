@@ -544,9 +544,9 @@ function log_commit_actions {
 
                 local file="${files[choice - 1]}"
                 echo -e "${RED}This will overwrite '${file}' in your working tree with its state from ${hash}.${ENDCOLOR}"
-                read -n 1 -s -p "Restore it (y/n)? " confirm
-                echo
-                if is_yes "$confirm"; then
+                printf "Restore it (y/n)? "
+                # Overwrites working-tree content: require an explicit "y"
+                if confirm_destructive; then
                     result=$(git checkout "$hash" -- "$file" 2>&1)
                     check_code $? "$result" "restore"
                     echo -e "${GREEN}✓ Restored ${file} from ${hash}${ENDCOLOR}"
@@ -891,7 +891,7 @@ function gitlog_ai {
         echo
 
         local menu_choice
-        read -n 1 -s menu_choice
+        read -n 1 -s menu_choice || prompt_aborted
         normalize_key "$menu_choice"
         menu_choice="$normalized_key"
 

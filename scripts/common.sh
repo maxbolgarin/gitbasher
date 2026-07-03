@@ -603,6 +603,35 @@ function is_no {
     return 1
 }
 
+### EOF guard for interactive read loops: closed/exhausted stdin means the
+# prompt can never be answered — abort instead of spinning or auto-picking.
+# Usage: read -n 1 -s choice || prompt_aborted
+function prompt_aborted {
+    echo
+    echo -e "${YELLOW}Input closed — aborting.${ENDCOLOR}"
+    exit 1
+}
+
+### Destructive-action confirmation: only an explicit "yes" key proceeds.
+# Unlike is_yes-based prompts (where Enter means yes), Enter, Esc, EOF and
+# any other key DECLINE — a destructive prompt must never auto-confirm on
+# closed or exhausted stdin. Echoes the effective answer for transcripts.
+# Returns: 0 on explicit yes, 1 on decline, 2 on EOF/closed stdin
+function confirm_destructive {
+    local _cd_key=""
+    if ! read_key _cd_key; then
+        printf "n\n"
+        return 2
+    fi
+    normalize_key "$_cd_key"
+    if [ -n "$_cd_key" ] && [ "$normalized_key" == "y" ]; then
+        printf "y\n"
+        return 0
+    fi
+    printf "n\n"
+    return 1
+}
+
 ### Returns 0 (true) when HEAD points at a branch; 1 (false) when detached.
 function on_branch {
     git symbolic-ref --quiet HEAD >/dev/null 2>&1
@@ -635,12 +664,16 @@ function read_key {
     local _var="${1:-REPLY}"
     local _prompt="$2"
     local _key=""
+    local _rc=0
 
     if [ -n "$_prompt" ]; then
         printf '%s' "$_prompt"
     fi
 
-    IFS= read -r -s -n 1 _key
+    # A failed first read means EOF/closed stdin — callers that treat an
+    # empty key as "accept" must check the return code (Enter also yields
+    # an empty key, but with rc 0).
+    IFS= read -r -s -n 1 _key || _rc=1
 
     if [ -n "$_key" ]; then
         if [ "$_key" = $'\e' ]; then
@@ -685,6 +718,7 @@ function read_key {
     fi
 
     printf -v "$_var" '%s' "$_key"
+    return $_rc
 }
 
 ### Read editable text input, allowing Esc to cancel by submitting empty input.
@@ -704,14 +738,21 @@ function read_editable_input {
     if [ $# -ge 3 ]; then
         if ((BASH_VERSINFO[0] >= 4)); then
             # bash 4+: preload the editable buffer so the user edits in place.
-            IFS= read -r -e -p "$_prompt" -i "$3" "$_var"
+            if ! IFS= read -r -e -p "$_prompt" -i "$3" "$_var"; then
+                printf -v "$_var" ''
+                return 1
+            fi
         else
             # bash 3.2 has no `read -i` to preload readline. Degrade gracefully:
             # show the current value and keep it when the user submits an empty
-            # line (retype the line to change it).
+            # line (retype the line to change it). A FAILED read (EOF) must not
+            # count as accepting the default — return empty instead.
             local _reply _hint=""
             [ -n "$3" ] && _hint="[$3] "
-            IFS= read -r -e -p "${_prompt}${_hint}" _reply
+            if ! IFS= read -r -e -p "${_prompt}${_hint}" _reply; then
+                printf -v "$_var" ''
+                return 1
+            fi
             if [ -z "$_reply" ]; then
                 printf -v "$_var" '%s' "$3"
             else
@@ -719,7 +760,10 @@ function read_editable_input {
             fi
         fi
     else
-        IFS= read -r -e -p "$_prompt" "$_var"
+        if ! IFS= read -r -e -p "$_prompt" "$_var"; then
+            printf -v "$_var" ''
+            return 1
+        fi
     fi
 }
 
@@ -1336,7 +1380,12 @@ function check_code {
 # $2: flag no echo
 function yes_no_choice {
     while true; do
-        read -n 1 -s choice
+        if ! read -n 1 -s choice; then
+            # EOF/closed stdin: never treat an unanswerable prompt as "yes".
+            printf "n\n"
+            echo -e "${YELLOW}Input closed — aborting.${ENDCOLOR}"
+            exit 1
+        fi
         if is_yes "$choice"; then
             if [ -n "$1" ]; then
                 echo -e "${YELLOW}$1${ENDCOLOR}"
@@ -1353,6 +1402,33 @@ function yes_no_choice {
 }
 
 
+### yes_no_choice's destructive twin: same output contract, but only an
+# explicit "yes" key proceeds. A decline (n/Enter/other key) exits 0 —
+# the user changed their mind, nothing happened. EOF exits 1 — the prompt
+# could never be answered. Use for prompts that delete, force-push, or
+# rewrite history.
+# $1: text to print on confirm
+# $2: pass anything to skip the trailing blank line
+function yes_no_choice_strict {
+    local _ync_rc
+    confirm_destructive
+    _ync_rc=$?
+    if [ "$_ync_rc" -eq 2 ]; then
+        echo -e "${YELLOW}Input closed — aborting.${ENDCOLOR}"
+        exit 1
+    fi
+    if [ "$_ync_rc" -ne 0 ]; then
+        exit 0
+    fi
+    if [ -n "$1" ]; then
+        echo -e "${YELLOW}$1${ENDCOLOR}"
+        if [ -z "$2" ]; then
+            echo
+        fi
+    fi
+}
+
+
 ### Function waits a number from user and returns result of choice from a provided list
 # $1: list of values
 # Returns: 
@@ -1365,13 +1441,24 @@ function choose {
     number_of_values=${#values[@]}
 
     while true; do
+        local _choose_read_ok="true"
         if [ "$number_of_values" -gt 9 ]; then
-            read -p "$read_prefix" -e -n 2 choice
+            read -p "$read_prefix" -e -n 2 choice || _choose_read_ok=""
         else
-            read -p "$read_prefix" -n 1 -s choice
+            read -p "$read_prefix" -n 1 -s choice || _choose_read_ok=""
             # Drain trailing newline so users who press "1<Enter>" don't leak
             # the newline into the next read (e.g. worktree move's path prompt).
             drain_pending_input
+        fi
+
+        if [ -z "$_choose_read_ok" ]; then
+            # EOF/closed stdin: abort without picking anything.
+            if [ -n "$git_add" ]; then
+                git restore --staged "$git_add"
+            fi
+            echo
+            echo -e "${YELLOW}Input closed — aborting.${ENDCOLOR}"
+            exit 1
         fi
 
         if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
@@ -1384,7 +1471,9 @@ function choose {
             exit
         fi
 
-        re='^[0-9=]+$'
+        # Whole-token match only: mixed input like "5=" must not reach the
+        # arithmetic below (bash would abort on "5=-1").
+        re='^([0-9][0-9]?|=|==)$'
         if ! [[ $choice =~ $re ]]; then
             if [ -n "$git_add" ]; then
                 git restore --staged "$git_add"
@@ -1397,7 +1486,8 @@ function choose {
             break
         fi
 
-        index=$(($choice-1))
+        # 10# so a leading zero ("09") is decimal, not an octal error
+        index=$((10#$choice-1))
         choice_result=${values[index]}
         if [ -n "$choice_result" ]; then
             if [ "$number_of_values" -le 9 ]; then

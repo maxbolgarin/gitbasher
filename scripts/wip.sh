@@ -115,7 +115,7 @@ function prompt_wip_backend {
     echo
 
     local choice
-    read -n 1 -s choice
+    read -n 1 -s choice || prompt_aborted
     echo
 
     case "$choice" in
@@ -679,7 +679,7 @@ function wip_down {
             echo
 
             local choice
-            read -n 1 -s choice
+            read -n 1 -s choice || prompt_aborted
             echo
             local idx=$((choice-1))
             if [ "$choice" = "0" ] || [ -z "${available[$idx]}" ]; then

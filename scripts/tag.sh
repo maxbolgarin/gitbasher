@@ -304,7 +304,7 @@ function tag_script {
     if [ -n "${delete}" ] && [ -z "$select" ]; then
         echo
         echo -e "${YELLOW}Do you really want to delete all local tags (y/n)?${ENDCOLOR}"
-        yes_no_choice "\nDeleting all local tags..."
+        yes_no_choice_strict "\nDeleting all local tags..."
         git tag | xargs git tag -d
         exit
     fi
@@ -345,7 +345,7 @@ function tag_script {
         echo -e "${GREEN}✓ Deleted tag '${tag_name}'${ENDCOLOR}"
         echo
         echo -e "Also delete this tag on ${YELLOW}${origin_name}${ENDCOLOR} (y/n)?"
-        yes_no_choice "\nDeleting..."
+        yes_no_choice_strict "\nDeleting..."
         push_tag $tag_name "true"
 
         exit
@@ -433,7 +433,7 @@ function tag_script {
             echo
             echo -e "${YELLOW}⚠  Tag message cannot be empty.${ENDCOLOR}"
             echo
-            read -n 1 -p "Try again? (y/n) " -s -e choice
+            read -n 1 -p "Try again? (y/n) " -s -e choice || choice="n"
             if ! is_yes "$choice"; then
                 rm -f "$tag_file"
                 exit

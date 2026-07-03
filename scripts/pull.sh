@@ -344,7 +344,7 @@ function pull {
             echo -e "2. ${BLUE}Rebase${ENDCOLOR} — replays your local commits on top of the remote branch"
             echo -e "0. ${BLUE}Exit${ENDCOLOR} — leave the branch unchanged"
 
-            read -n 1 -s choice
+            read -n 1 -s choice || prompt_aborted
             re='^[120]+$'
             if ! [[ $choice =~ $re ]]; then
                 exit 0

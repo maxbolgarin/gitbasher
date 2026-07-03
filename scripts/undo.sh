@@ -90,7 +90,7 @@ function undo_commit {
 
     echo -e "This will undo the last commit but ${GREEN}keep all changes staged${ENDCOLOR}"
     echo -e "Do you want to continue (y/n)?"
-    yes_no_choice "Undoing commit..."
+    yes_no_choice_strict "Undoing commit..."
 
     reset_output=$(git reset --soft HEAD~1 2>&1)
     reset_code=$?
@@ -159,7 +159,7 @@ function undo_amend {
     echo
 
     echo -e "Do you want to undo the amend (y/n)?"
-    yes_no_choice "Undoing amend..."
+    yes_no_choice_strict "Undoing amend..."
 
     reset_output=$(git reset --soft "$pre_amend_ref" 2>&1)
     reset_code=$?
@@ -186,7 +186,7 @@ function undo_merge {
     if [ -f "$(git rev-parse --git-dir)/MERGE_HEAD" ]; then
         echo -e "${YELLOW}⚠  A merge is in progress.${ENDCOLOR}"
         echo -e "Abort the ongoing merge (y/n)?"
-        yes_no_choice "Aborting merge..."
+        yes_no_choice_strict "Aborting merge..."
 
         abort_output=$(git merge --abort 2>&1)
         abort_code=$?
@@ -226,7 +226,7 @@ function undo_merge {
 
     echo -e "${RED}⚠  This will discard the merge commit and all merge changes.${ENDCOLOR}"
     echo -e "Are you sure you want to undo the merge (y/n)?"
-    yes_no_choice "Undoing merge..."
+    yes_no_choice_strict "Undoing merge..."
 
     reset_output=$(git reset --merge ORIG_HEAD 2>&1)
     reset_code=$?
@@ -250,7 +250,7 @@ function undo_rebase {
     if [ -d "$(git rev-parse --git-dir)/rebase-merge" ] || [ -d "$(git rev-parse --git-dir)/rebase-apply" ]; then
         echo -e "${YELLOW}⚠  A rebase is in progress.${ENDCOLOR}"
         echo -e "Abort the ongoing rebase (y/n)?"
-        yes_no_choice "Aborting rebase..."
+        yes_no_choice_strict "Aborting rebase..."
 
         abort_output=$(git rebase --abort 2>&1)
         abort_code=$?
@@ -283,7 +283,7 @@ function undo_rebase {
 
     echo -e "${RED}⚠  This will discard all rebase changes and restore the original branch state.${ENDCOLOR}"
     echo -e "Are you sure you want to undo the rebase (y/n)?"
-    yes_no_choice "Undoing rebase..."
+    yes_no_choice_strict "Undoing rebase..."
 
     reset_output=$(git reset --hard ORIG_HEAD 2>&1)
     reset_code=$?
@@ -316,7 +316,7 @@ function undo_stash {
 
     echo -e "This will stash all current changes to undo the last stash pop/apply."
     echo -e "Continue (y/n)?"
-    yes_no_choice "Re-stashing changes..."
+    yes_no_choice_strict "Re-stashing changes..."
 
     stash_output=$(git stash push -m "undo: re-stashed changes" --include-untracked 2>&1)
     stash_code=$?

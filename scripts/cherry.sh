@@ -237,7 +237,7 @@ function handle_cherry_pick_conflicts {
     if [[ $output == *"The previous cherry-pick is now empty"* ]]; then
         echo -e "${YELLOW}This commit is empty after cherry-pick (changes already applied).${ENDCOLOR}"
         echo -e "Skip it (y/n)?"
-        yes_no_choice "Skipping empty commit..."
+        yes_no_choice_strict "Skipping empty commit..."
 
         skip_output=$(git cherry-pick --skip 2>&1)
         if [ $? == 0 ]; then

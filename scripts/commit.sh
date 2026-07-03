@@ -938,7 +938,7 @@ function run_split_ai_for_scope {
     echo
     echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
     echo
-    read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) "
+    read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) " || choice="0"
     echo
     normalize_key "$choice"
 
@@ -959,7 +959,7 @@ ${ai_msg}"
         echo
         echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
         echo
-        read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) "
+        read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) " || choice="0"
         echo
         normalize_key "$choice"
     done
@@ -1126,7 +1126,7 @@ function perform_commit_split {
 
             local tchoice
             while true; do
-                read_key tchoice
+                read_key tchoice || tchoice="0"
                 if ! sanitize_choice_input "$tchoice" "^[0-9sg]$"; then
                     continue
                 fi
@@ -1416,7 +1416,7 @@ function handle_ai_commit_generation {
             break
         fi
 
-        read_key choice "Use this commit message? (y/n/r to regenerate/e to edit/0 to exit) "
+        read_key choice "Use this commit message? (y/n/r to regenerate/e to edit/0 to exit) " || choice="0"
         echo
         if [ "$ai_mode" != "subject" ] && [ "$choice" != "0" ]; then
             echo
@@ -1478,7 +1478,7 @@ ${ai_commit_message}"
                 echo
                 echo -e "${YELLOW}⚠  Commit message cannot be empty.${ENDCOLOR}"
                 echo
-                read -n 1 -p "Try again? (y/n) " -s -e choice
+                read -n 1 -p "Try again? (y/n) " -s -e choice || choice="n"
                 if ! is_yes "$choice"; then
                     cleanup_on_exit "$git_add"
                     rm -f "$commitmsg_file"
@@ -1977,7 +1977,7 @@ function commit_script {
         if [ -n "$saved_git_add" ]; then
             echo
             echo -e "${YELLOW}Found previous git add arguments:${ENDCOLOR} ${BOLD}$saved_git_add${ENDCOLOR}"
-            read_key choice "Use them? (y/n) "
+            read_key choice "Use them? (y/n) " || choice="n"
             echo
             if is_yes "$choice"; then
                 git add $saved_git_add
@@ -2118,7 +2118,7 @@ function commit_script {
         echo
         echo -e "${YELLOW}Found previous commit message:${ENDCOLOR} ${BOLD}$saved_commit_message${ENDCOLOR}"
         echo
-        read_key choice "Use it? (y/e to edit/n) "
+        read_key choice "Use it? (y/e to edit/n) " || choice="n"
         echo
         normalize_key "$choice"
         if [ "$normalized_key" = "y" ] || [ -z "$choice" ]; then
@@ -2256,7 +2256,7 @@ function commit_script {
     local -a types=("" "feat" "fix" "refactor" "test" "build" "ci" "chore" "docs")
 
     while [ true ]; do
-        read -n 1 -s choice
+        read -n 1 -s choice || choice="0"
 
         if [ "$choice" == "0" ]; then
             cleanup_on_exit "$git_add"
@@ -2470,7 +2470,7 @@ ${staged_with_tab}
             echo
             echo -e "${YELLOW}⚠  Commit message cannot be empty.${ENDCOLOR}"
             echo
-            read -n 1 -p "Try again? (y/n) " -s -e choice
+            read -n 1 -p "Try again? (y/n) " -s -e choice || choice="n"
             if ! is_yes "$choice"; then
                 cleanup_on_exit "$git_add"
                 rm -f "$commitmsg_file"

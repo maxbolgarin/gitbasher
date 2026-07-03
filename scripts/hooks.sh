@@ -161,7 +161,7 @@ function select_hook_type {
     
     echo >&2
     if [ ${#available_hooks[@]} -le 9 ]; then
-        read -n 1 -p "Enter number (1-${#available_hooks[@]}): " choice < /dev/tty
+        read -n 1 -p "Enter number (1-${#available_hooks[@]}): " choice < /dev/tty || return 1
         echo >&2  # Add newline after single character input
     else
         read -p "Enter number (1-${#available_hooks[@]}): " choice < /dev/tty
@@ -208,7 +208,7 @@ function show_hooks_menu {
     
     echo >&2
     if [ ${#actions[@]} -le 9 ]; then
-        read -n 1 -p "Enter number (1-${#actions[@]}): " choice < /dev/tty
+        read -n 1 -p "Enter number (1-${#actions[@]}): " choice < /dev/tty || exit 1
         echo >&2  # Add newline after single character input
     else
         read -p "Enter number (1-${#actions[@]}): " choice < /dev/tty
@@ -299,7 +299,7 @@ function select_hook_template {
     
     echo >&2
     if [ ${#templates[@]} -le 9 ]; then
-        read -n 1 -p "Enter number (1-${#templates[@]}, default: 1): " choice < /dev/tty
+        read -n 1 -p "Enter number (1-${#templates[@]}, default: 1): " choice < /dev/tty || return 1
         echo >&2  # Add newline after single character input
     else
         read -p "Enter number (1-${#templates[@]}, default: 1): " choice < /dev/tty
@@ -387,11 +387,10 @@ function create_hook {
         echo -e "${YELLOW}⚠  Hook '$hook_type' already exists.${ENDCOLOR}"
         echo -e "${RED}⚠  Overwriting will replace its contents.${ENDCOLOR}"
         echo -e "Overwrite (y/n)?"
-        read -n 1 -s choice
-        echo
-        if ! is_yes "$choice"; then
+        # Replaces the user's existing hook: require an explicit "y"
+        if ! confirm_destructive; then
             echo -e "${YELLOW}Hook creation cancelled.${ENDCOLOR}"
-            return
+            return 1
         fi
     fi
     
@@ -540,7 +539,7 @@ exit 0"
     # Offer to edit the hook
     echo
     echo -e "Do you want to ${BLUE}edit${ENDCOLOR} the hook now? (y/n)"
-    read -n 1 -s choice
+    read -n 1 -s choice || prompt_aborted
     echo
     if is_yes "$choice"; then
         edit_hook "$hook_type"
@@ -605,10 +604,8 @@ function remove_hook {
     echo -e "${RED}⚠  Deleting hook '$hook_type' cannot be undone.${ENDCOLOR}"
     echo -e "${GRAY}File: $hook_file${ENDCOLOR}"
     echo -e "Are you sure you want to delete it (y/n)?"
-    read -n 1 -s choice
-    echo
-
-    if is_yes "$choice"; then
+    # Irreversible file deletion: require an explicit "y"
+    if confirm_destructive; then
         rm "$hook_file"
         echo -e "${GREEN}✓ Removed hook: $hook_type${ENDCOLOR}"
     else
@@ -658,7 +655,7 @@ function remove_all_hooks {
     echo
     echo -e "${RED}⚠  This will permanently delete $hook_count hooks.${ENDCOLOR}"
     echo -e "${YELLOW}Are you absolutely sure (y/n)?${ENDCOLOR}"
-    read -n 1 -p "Your choice: " choice < /dev/tty
+    read -n 1 -p "Your choice: " choice < /dev/tty || choice="0"
     echo
     echo
 
@@ -800,7 +797,7 @@ function install_samples {
     echo
     echo -e "${YELLOW}Ready to install $sample_count sample hooks.${ENDCOLOR}"
     echo -e "Continue (y/n)?"
-    read -n 1 -p "Your choice: " choice < /dev/tty
+    read -n 1 -p "Your choice: " choice < /dev/tty || choice="n"
     echo
     echo
     

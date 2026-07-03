@@ -576,7 +576,7 @@ function _do_worktree_remove {
         echo
         echo -e "${YELLOW}Force remove this worktree? (uncommitted changes will be lost)${ENDCOLOR}"
         echo -e "Do you want to continue (y/n)?"
-        yes_no_choice "Force removing worktree..."
+        yes_no_choice_strict "Force removing worktree..."
 
         rm_output=$(git worktree remove --force "$selected_worktree_path" 2>&1)
         rm_code=$?

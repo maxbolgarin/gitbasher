@@ -61,7 +61,7 @@ function set_sep {
     local -a seps=("" "/" "_" "-" "." "," "+" "=" "@")
 
     while [ true ]; do
-        read -n 1 -s choice
+        read -n 1 -s choice || prompt_aborted
 
         if [ "$choice" == "0" ]; then
             exit
@@ -235,7 +235,7 @@ function configure_ai_key {
     echo -e "  ${GREEN}env var${ENDCOLOR}    — recommended; the key never touches disk via gitbasher"
     echo -e "  ${BLUE}git config${ENDCOLOR} — convenient, but stored in plaintext under .git/config (or ~/.gitconfig if global)"
     echo
-    read -n 1 -p "Use environment variable (recommended)? (y/n) " ai_storage_choice
+    read -n 1 -p "Use environment variable (recommended)? (y/n) " ai_storage_choice || ai_storage_choice="n"
     echo
     if is_yes "$ai_storage_choice"; then
         echo
@@ -276,7 +276,7 @@ function configure_ai_key {
     # Basic validation - check for reasonable API key format
     if [[ ! "$ai_key_input" =~ ^[a-zA-Z0-9._-]{20,}$ ]]; then
         echo -e "${YELLOW}⚠  API key format does not look like a valid ${provider} key.${ENDCOLOR}" >&2
-        read -n 1 -p "Continue anyway? (y/n) " -s choice
+        read -n 1 -p "Continue anyway? (y/n) " -s choice || choice="n"
         echo
         if ! is_yes "$choice"; then
             exit 1
@@ -648,7 +648,7 @@ function configure_ai_history {
         if [ "$limit_input" -gt 20 ]; then
             echo -e "${YELLOW}High values may exceed token limits and slow down AI responses.${ENDCOLOR}"
         fi
-        read -n 1 -p "Continue anyway? (y/n) " -s choice
+        read -n 1 -p "Continue anyway? (y/n) " -s choice || choice="n"
         echo
         if ! is_yes "$choice"; then
             exit
@@ -746,7 +746,7 @@ function configure_ai_diff {
         lines_input="$validated_number"
         if [ "$lines_input" -lt 50 ] || [ "$lines_input" -gt 2000 ]; then
             echo -e "${YELLOW}⚠  Value is outside the recommended range (50-2000).${ENDCOLOR}"
-            read -n 1 -p "Continue anyway? (y/n) " -s choice
+            read -n 1 -p "Continue anyway? (y/n) " -s choice || choice="n"
             echo
             if ! is_yes "$choice"; then
                 exit
@@ -765,7 +765,7 @@ function configure_ai_diff {
         chars_input="$validated_number"
         if [ "$chars_input" -lt 4000 ] || [ "$chars_input" -gt 100000 ]; then
             echo -e "${YELLOW}⚠  Value is outside the recommended range (4000-100000).${ENDCOLOR}"
-            read -n 1 -p "Continue anyway? (y/n) " -s choice
+            read -n 1 -p "Continue anyway? (y/n) " -s choice || choice="n"
             echo
             if ! is_yes "$choice"; then
                 exit

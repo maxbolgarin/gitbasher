@@ -190,7 +190,7 @@ function edit_branch_name {
         echo -e "${YELLOW}⚠  ${BOLD}${old_name}${NORMAL} is the configured main branch.${ENDCOLOR}"
         echo -e "Renaming it will leave ${YELLOW}gitbasher.branch${ENDCOLOR} pointing at the old name."
         printf "Rename anyway? (y/n) "
-        yes_no_choice
+        yes_no_choice_strict
         echo
     fi
 
@@ -222,7 +222,7 @@ function edit_branch_name {
     echo -e "${YELLOW}${BOLD}${old_name}${NORMAL}${YELLOW} also exists on ${origin_name}.${ENDCOLOR}"
     echo -e "Push ${BOLD}${new_name}${NORMAL} and delete the old remote branch?"
     printf "(y/n) "
-    yes_no_choice
+    yes_no_choice_strict
     echo
 
     local push_out

@@ -29,11 +29,14 @@ teardown() {
 }
 
 @test "get_hooks_dir: resolves the shared hooks dir inside a linked worktree" {
-    git worktree add -q -b wt-branch ../hooks-wt-test >/dev/null 2>&1 || git worktree add -q -b wt-branch "$TEST_REPO/../hooks-wt-test"
-    expected=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || git rev-parse --git-common-dir)
-    pushd "$(git worktree list --porcelain | /usr/bin/awk '/^worktree /{p=substr($0,10)} END{print p}')" >/dev/null
+    # Unique, auto-cleaned destination: a fixed ../ path leaked between
+    # runs and made the second run fail on "already exists"
+    wt_dest="$BATS_TEST_TMPDIR/hooks-wt-test"
+    git worktree add -q -b wt-branch "$wt_dest"
+    pushd "$wt_dest" >/dev/null
     result=$(get_hooks_dir)
     popd >/dev/null
+    git worktree remove --force "$wt_dest" 2>/dev/null || true
     [[ "$result" == *"/hooks" ]]
     # Must NOT point into the per-worktree admin dir
     [[ "$result" != *"worktrees"* ]]

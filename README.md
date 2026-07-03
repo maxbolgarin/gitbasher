@@ -111,7 +111,7 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 - **AI commit messages** — `gitb c ai` writes the message from your diff. OpenRouter (Gemini/Claude/GPT/…), OpenAI direct, or **fully local via Ollama** — no key, no network, no data leaves your machine.
 - **Safer git** — push/pull detect conflicts up front, `undo` rolls back commit/amend/merge/rebase/stash, `reset` is interactive with a preview.
 - **Whole workflows, not just commands** — `sync`, `wip`, `branch newd`, `merge to-main`, `squash` chain the steps you'd otherwise do by hand.
-- **One file, no deps** — pure bash. Drop the binary anywhere on `PATH` and go. **115+ BATS tests** cover sanitization, git ops, and branch logic.
+- **One file, no deps** — pure bash. Drop the binary anywhere on `PATH` and go. **850+ BATS tests** cover sanitization, git ops, and branch logic.
 
 <p align="center">
   <img src=".github/push.gif" width="640" alt="gitb push demo" />
@@ -136,7 +136,7 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 | **Config** | `config` (`cfg`) | User, default branch, separator, editor, ticket prefix, scopes, AI provider/key/model, proxy, completion |
 | **Lifecycle** | `update` (`up`), `uninstall` (`uns`) | Self-update from latest GitHub release · one-shot uninstall (config + binary) |
 
-Total: **26 top-level commands**, **60+ aliases**, **100+ modes**.
+Total: **31 top-level commands**, **60+ aliases**, **100+ modes**.
 
 ---
 
@@ -168,9 +168,9 @@ gitb sync merge      # use merge instead of rebase
 ### Save WIP across machines / branches
 ```bash
 gitb wip up          # stash changes + push backup to origin/wip/<branch>
-# … on another machine …
-gitb pull            # fetch the wip/<branch>
-gitb wip down        # pop the wip stash and remove the remote backup
+# … on another machine: fetch the backup branch and restore it manually …
+git fetch origin wip/<branch>
+git merge --squash --no-commit origin/wip/<branch>
 ```
 
 ### Hotfix
@@ -327,8 +327,11 @@ git config gitbasher.ai-base-url http://my-gateway:4000/v1/chat/completions
 | [`hook`](#gitb-hook) | `ho` `hk` | Manage git hooks: list, create, edit, toggle, remove, test, show |
 | [`origin`](#gitb-origin) | `or` `o` `remote` | Add, change, rename, or remove the remote origin |
 | [`init`](#gitb-init) | `i` | `git init` + optional origin setup prompt |
+| `clone` | `cl` `clo` | Clone a repository and set up gitbasher in it |
+| `update` | `up` `upd` | Self-update gitb to the latest release |
+| [`uninstall`](#uninstall) | `uns` `uni` | Remove the binary and `gitbasher.*` config keys |
 | [`config`](#gitb-config) | `cf` `cfg` `conf` | Configure user, branch, AI, scopes, ticket prefix, etc. |
-| [`log`](#gitb-log) | `l` `lg` | Pretty log: current, branch, compare, search |
+| [`log`](#gitb-log) | `l` `lg` | Interactive commit browser; also branch, compare, search, and full-dump modes |
 | [`status`](#info-commands) | `s` | Repo status and changed files |
 | [`diff`](#gitb-diff) | `d` `di` | Overview-first diffs: staged, all, branch, commit, AI summary |
 | [`reflog`](#info-commands) | `rl` `rlg` | Pretty reflog |
@@ -449,7 +452,7 @@ Large pushes stream git's live progress bar (like `clone`/`fetch`), and gitbashe
 | `<empty>` | | Smart pull (strategy picker) |
 | `fetch` | `fe` | Fetch only |
 | `all` | `fa` | Fetch all branches |
-| `upd` | `u` | Update remote refs / prune |
+| `upd` | `u` | Update remote refs (`git remote update`) |
 | `ffonly` | `ff` | Fast-forward only |
 | `merge` | `m` | Always create merge commit |
 | `rebase` | `r` | Rebase current onto remote |
@@ -698,7 +701,7 @@ long-running reviews, or comparing branches side-by-side.
 | `<empty>` | | Show existing worktrees + interactive menu |
 | `list` | `l` `ls` | List all worktrees with branch and lock state |
 | `add` | `a` `new` `n` `c` | Create worktree with a new branch from current `HEAD` |
-| `addd` | `ad` `nd` `cd` | Fetch, then create worktree with new branch from default branch |
+| `addd` | `ad` `nd` | Fetch, then create worktree with new branch from default branch |
 | `addb` | `ab` `from` `b` | Create worktree from an existing local branch |
 | `addr` | `ar` `remote` `r` | Fetch + create worktree tracking a remote branch |
 | `remove` | `rm` `del` `d` | Pick a worktree to remove (force-prompt on dirty trees) |
@@ -706,7 +709,9 @@ long-running reviews, or comparing branches side-by-side.
 | `lock` | | Lock a worktree (with optional reason) |
 | `unlock` | `ul` | Unlock a worktree |
 | `prune` | `pr` `p` | Clean up stale worktree records (dry-run preview first) |
-| `path` | `cd` `switch` `sw` | Print the path to a chosen worktree (use with `cd $(...)`) |
+| `manage` | `m` | Pick a worktree, then move / lock / unlock / delete it |
+| `goto` | `go` `g` `cd` `switch` | Open a subshell inside a chosen worktree |
+| `path` | `sw` | Print the path to a chosen worktree (use with `cd $(...)`) |
 
 </details>
 
@@ -718,8 +723,8 @@ gitb wt remove             # interactive removal (with force prompt if dirty)
 cd "$(gitb wt path)"       # cd into a chosen worktree
 ```
 
-By default new worktrees are created at `../<repo>-<branch>`. Override the
-parent directory globally or per-repo:
+By default new worktrees are created at `<repo_root>/.worktree/<branch>` (slashes
+in the branch name become dashes). Override the base directory globally or per-repo:
 
 ```bash
 git config --global gitbasher.worktreebase ~/code/worktrees
@@ -734,9 +739,11 @@ git config --global gitbasher.worktreebase ~/code/worktrees
 |------|---------|-------------|
 | `<empty>` | | Interactive action menu |
 | `list` | `l` | All hooks with status |
+| `select` | `sel` | Browse hook types with descriptions |
 | `create` | `new` `c` | New hook from templates |
 | `edit` | `e` | Edit existing hook |
-| `toggle` | `t` | Enable/disable hook |
+| `toggle` | `t` | Enable/disable hook (`enable` / `disable` force that state) |
+| `install` | `samples` | Install all available sample hooks |
 | `remove` | `rm` `r` | Delete hook(s) |
 | `test` | `run` `check` | Test hook execution |
 | `show` | `cat` `view` `s` | Display hook contents |
@@ -775,8 +782,8 @@ without a remote, rename the repo on GitHub/GitLab, or move it to a new host.
 
 </details>
 
-Each mutating mode accepts an optional URL/name as a second argument to skip
-the interactive prompt:
+The `set`, `change`, and `rename` modes accept an optional URL/name as a second
+argument to skip the interactive prompt:
 
 ```bash
 gitb origin                                      # show remotes
@@ -796,7 +803,7 @@ gitb origin remove                               # delete the remote
 | `<empty>` | | Show current configuration |
 | `user` | `u` `name` `email` | Set name and email |
 | `default` | `def` `d` `b` `main` | Set default branch |
-| `separator` | `sep` `s` | Branch-name separator |
+| `separator` | `sep` | Branch-name separator |
 | `editor` | `ed` `e` | Commit-message editor |
 | `ticket` | `ti` `t` `jira` | Ticket prefix for commits/branches |
 | `scopes` | `sc` `s` | Common scopes |
@@ -804,6 +811,8 @@ gitb origin remove                               # delete the remote
 | `provider` | `prov` | AI provider (openrouter, openai, ollama) |
 | `model` | `m` | Default AI model |
 | `proxy` | `prx` `p` | HTTP proxy for AI calls |
+| `history` | `hist` | How many recent commits to include in AI prompts |
+| `diff` | `payload` | AI diff payload size (line and character caps) |
 | `push-size` | `ps` `pushsize` | Warn before pushing more than N MB (0 disables) |
 | `completion` | `comp` | Install / uninstall bash & zsh tab completion |
 | `delete` | `unset` `del` | Remove global config |
@@ -876,18 +885,25 @@ Overview-first diffs built for the gitbasher workflow — no flag memorization. 
 | `user.name` / `user.email` | `gitb cfg user` | Your identity |
 | `gitbasher.branch` | `gitb cfg default` | Default branch (`main`, `master`, …) |
 | `gitbasher.sep` | `gitb cfg separator` | Branch-name separator (`/`, `-`, …) |
-| `gitbasher.editor` | `gitb cfg editor` | Editor for messages |
+| `core.editor` | `gitb cfg editor` | Editor for messages |
 | `gitbasher.ticket` | `gitb cfg ticket` | Ticket prefix (`PROJ-`) |
 | `gitbasher.scopes` | `gitb cfg scopes` | Suggested commit scopes |
-| `gitbasher.ai-api-key` | `gitb cfg ai` | AI provider API key (or `GITB_AI_API_KEY` env) |
+| `gitbasher.ai-api-key-<provider>` | `gitb cfg ai` | Per-provider AI API key (or `GITB_AI_API_KEY_<PROVIDER>` env); legacy `gitbasher.ai-api-key` is read as a fallback |
 | `gitbasher.ai-provider` | `gitb cfg provider` | `openrouter` (default), `openai`, or `ollama` |
 | `gitbasher.ai-base-url` | `git config` | Custom OpenAI-compatible endpoint (LiteLLM, vLLM, remote Ollama) |
 | `gitbasher.ai-model[-task]` | `gitb cfg model` | AI model overrides (per provider) |
-| `gitbasher.proxy` | `gitb cfg proxy` | HTTP proxy for AI calls |
-| `gitbasher.worktreebase` | `git config gitbasher.worktreebase <dir>` | Parent directory for new worktrees (defaults to `..`) |
+| `gitbasher.ai-proxy` | `gitb cfg proxy` | HTTP proxy for AI calls |
+| `gitbasher.ai-ollama-host` | `git config gitbasher.ai-ollama-host <url>` | Ollama server URL (default `http://localhost:11434`) |
+| `gitbasher.ai-timeout` | `git config gitbasher.ai-timeout <seconds>` | AI request timeout in seconds (default `60`, `300` for ollama) |
+| `gitbasher.ai-diff-limit` | `gitb cfg diff` | Diff lines sent to AI (default `300`) |
+| `gitbasher.ai-diff-max-chars` | `gitb cfg diff` | Character cap on the diff sent to AI (default `20000`) |
+| `gitbasher.ai-commit-history-limit` | `gitb cfg history` | Recent commits included in AI prompts (default `10`) |
+| `gitbasher.push-warn-size` | `gitb cfg push-size` | Warn before pushing more than N MB (default `50`, `0` disables) |
+| `gitbasher.worktreebase` | `git config gitbasher.worktreebase <dir>` | Base directory for new worktrees (default `.worktree` under the repo root) |
 | `gitbasher.commit-auto-split` | `git config gitbasher.commit-auto-split <ask\|always\|never>` | Offer to split a commit per scope (default `ask`) |
 | `gitbasher.commit-max-split-groups` | `git config gitbasher.commit-max-split-groups <2..20>` | Cap on split commits per run (default `7`) |
 | `gitbasher.commit-split-order` | `git config gitbasher.commit-split-order <auto\|alpha>` | Order split commits by dependency (`auto`, default) or alphabetically (`alpha`) |
+| `gitbasher.commit-ai-grouping` | `git config gitbasher.commit-ai-grouping <never\|auto\|always>` | AI feature grouping for commit splits (default `auto`) |
 | `gitbasher.log-count` | `git config gitbasher.log-count <n>` | Commits per page in the `gitb log` browser (default `20`) |
 
 **Clear gitbasher config** (per-repo settings live with the repo and disappear with it):
@@ -983,7 +999,7 @@ If `gitb commit ai` hangs, returns `connection refused`, or times out:
 
 - **Network reachability** — test the provider directly: `curl -fsSL https://api.openai.com/v1/models -H "Authorization: Bearer $OPENAI_API_KEY"` (or the equivalent for OpenRouter/Ollama). If that fails, gitbasher will too.
 - **Corporate proxy / restricted region** — `gitb cfg proxy` accepts `host:port` or `protocol://host:port`. Verify with `curl -x "$proxy" https://api.openai.com`.
-- **Local Ollama** — confirm the daemon is running (`curl http://localhost:11434/api/tags`). The default model must be pulled first (`ollama pull llama3`).
+- **Local Ollama** — confirm the daemon is running (`curl http://localhost:11434/api/tags`). The default model must be pulled first (`ollama pull qwen3:8b`).
 - **Stale or rotated key** — `gitb cfg ai` re-prompts; prefer the env-var path (`export GITB_AI_API_KEY_OPENAI=...`) over `git config` so a leaked repo doesn't carry the secret.
 </details>
 
@@ -1035,7 +1051,7 @@ Per-repo settings live in `.git/config` and need write access to that file (`chm
 | `Another git process seems to be running ... index.lock` | gitbasher detects this at startup and prompts to remove the stale lock |
 | `error: pathspec '<branch>' did not match any file(s) known to git` | `gitb pull` to fetch, or `gitb b new <branch>` to create a fresh branch with a conventional name |
 | `fatal: detached HEAD` after checkout | gitbasher warns before destructive ops in detached HEAD; use `gitb b` to switch to a real branch first |
-| `gpg: signing failed` on commit | export `GPG_TTY=$(tty)` or run `gitb config` to disable signing per-repo |
+| `gpg: signing failed` on commit | export `GPG_TTY=$(tty)` or run `git config commit.gpgsign false` to disable signing per-repo |
 
 If you hit a confusing git error not listed here, run the same flow with `git` directly first — gitbasher passes git's stderr through unchanged, so the underlying message is the source of truth.
 </details>
@@ -1047,7 +1063,6 @@ If you hit a confusing git error not listed here, run the same flow with `git` d
 npm uninstall -g gitbasher           # if installed via npm
 sudo rm /usr/local/bin/gitb          # if installed system-wide
 rm -f ~/.local/bin/gitb              # if installed per-user
-rm -rf ~/.gitbasher                  # remove config (optional)
 ```
 </details>
 
@@ -1061,7 +1076,7 @@ PRs welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for the dev setup, BATS te
 
 ```bash
 make build               # rebuild dist/gitb
-make test                # run all 115+ tests
+make test                # run all 850+ tests
 make test-file FILE=test_sanitization.bats
 ```
 

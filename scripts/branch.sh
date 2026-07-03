@@ -788,7 +788,7 @@ function branch_script {
 
         echo -e "${YELLOW}Pulling '$origin_name/$main_branch'...${ENDCOLOR}"
         echo
-        pull $main_branch $origin_name $editor
+        pull "$main_branch" "$origin_name" "$editor"
 
         from_branch=$main_branch
     fi

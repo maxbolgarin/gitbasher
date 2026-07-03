@@ -224,7 +224,7 @@ function pull_script {
     
     echo -e "${YELLOW}Pulling '$origin_name/$current_branch'...${ENDCOLOR}"
     echo
-    pull $current_branch $origin_name $editor $mode $ffonly 
+    pull "$current_branch" "$origin_name" "$editor" "$mode" "$ffonly"
     exit
 }
 
@@ -354,13 +354,13 @@ function pull {
         echo
 
         if [ "$choice" == "1" ]; then
-            merge $1 $2 $3 "pull" "true" $5
+            merge "$1" "$2" "$3" "pull" "true" "$5"
             mode="merge"
             if [ $merge_code != 0 ] ; then
                 echo
            fi
         elif [ "$choice" == "2" ]; then
-           rebase_branch $1 $2 "true" $interactive $interactive
+           rebase_branch "$1" "$2" "true"
            mode="rebase"
            if [ $rebase_code != 0 ] ; then
                 echo

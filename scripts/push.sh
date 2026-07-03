@@ -312,11 +312,11 @@ function push_script {
     if [ -n "${fast}" ]; then
         echo -e "${YELLOW}Pulling...${ENDCOLOR}"
         echo
-        pull $current_branch $origin_name $editor "rebase"
+        pull "$current_branch" "$origin_name" "$editor" "rebase"
     else
         echo -e "Do you want to pull ${YELLOW}${origin_name}/${current_branch}${ENDCOLOR} (y/n)?"
         yes_no_choice "Pulling..."
-        pull $current_branch $origin_name $editor
+        pull "$current_branch" "$origin_name" "$editor"
     fi
 
 

@@ -373,6 +373,7 @@ function prompt_worktree_path {
         # Expand a leading ~ like the shell would: git treats it literally,
         # creating a directory named "~" in the CWD — a notorious cleanup
         # footgun — while every printed hint resolves to \$HOME.
+        # shellcheck disable=SC2088  # literal-tilde case labels are the point
         case "$custom_path" in
             "~") custom_path="$HOME" ;;
             "~/"*) custom_path="${HOME}${custom_path#\~}" ;;
@@ -734,6 +735,7 @@ function _do_worktree_move {
     fi
 
     # Expand a leading ~ like the shell would (git treats it literally)
+    # shellcheck disable=SC2088  # literal-tilde case labels are the point
     case "$new_path" in
         "~") new_path="$HOME" ;;
         "~/"*) new_path="${HOME}${new_path#\~}" ;;

@@ -464,7 +464,7 @@ function log_copy_hash {
 # $1: commit hash
 function log_commit_actions {
     local hash="$1"
-    local choice result confirm
+    local choice result
 
     git show "$hash"
 

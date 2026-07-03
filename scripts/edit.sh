@@ -132,6 +132,7 @@ function edit_script {
     # Double quotes bake the path in NOW: with single quotes the trap
     # expanded $seq_script at exit time, when the local was already out of
     # scope, so every run leaked a gitb-edit-seq.* file in $TMPDIR.
+    # shellcheck disable=SC2064  # bake the path now: the local is out of scope at fire time
     trap "rm -f '$seq_script'" EXIT INT TERM
     cat > "$seq_script" <<SEQ_EOF
 todo="\$1"

@@ -207,6 +207,7 @@ function _verify_gitb_sha256 {
     # Clean up on any exit — Ctrl-C mid-download used to leak the temp
     # file. Double quotes bake the path NOW: the local is out of scope when
     # the trap fires.
+    # shellcheck disable=SC2064  # bake the path now: the local is out of scope at fire time
     trap "rm -f '$tmp_sha'" EXIT INT TERM
     if [ -z "$tmp_sha" ]; then
         _gitb_update_sha_warning="Could not create temp file for checksum — proceeding without verification."
@@ -251,6 +252,7 @@ function _download_latest_gitb {
     local url="https://github.com/${GITBASHER_REPO}/releases/latest/download/gitb"
     local tmp
     tmp=$(mktemp 2>/dev/null || mktemp -t gitb)
+    # shellcheck disable=SC2064  # bake the path now: the local is out of scope at fire time
     trap "rm -f '$tmp'" EXIT INT TERM
     if [ -z "$tmp" ]; then
         _gitb_update_download_err="Could not create a temp file for the download."

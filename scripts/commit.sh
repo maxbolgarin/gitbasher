@@ -1043,6 +1043,7 @@ function perform_commit_split {
     # EXIT: a non-exiting handler made Ctrl-C unkillable and let the loop
     # continue against the restored (full) staging, producing a mislabeled
     # mega-commit — with the snapshot already deleted.
+    # shellcheck disable=SC2064  # bake the snapshot path now, by design
     trap "_restore_split_snapshot '$snapshot_file'; trap - INT TERM; echo; exit 130" INT TERM
 
     local total=${#split_group_keys[@]}
@@ -2503,6 +2504,7 @@ function commit_script {
     if [ -n "$msg" ]; then
         commitmsg_file=$(mktemp "${TMPDIR:-/tmp}/commitmsg.XXXXXX")
         chmod 600 "$commitmsg_file" 2>/dev/null || true
+        # shellcheck disable=SC2064  # bake the path now: the var may be out of scope at fire time
         trap "rm -f '$commitmsg_file'" EXIT INT TERM
         staged_with_tab="$(sed 's/^/####\t/' <<< "${staged_files_list}")"
 

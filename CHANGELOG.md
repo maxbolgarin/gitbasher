@@ -4,6 +4,94 @@ All notable changes to gitbasher are generated automatically by [semantic-releas
 
 ## [5.0.0](https://github.com/maxbolgarin/gitbasher/compare/v4.1.0...v5.0.0) (2026-07-03)
 
+### ⚠ BREAKING CHANGES
+
+* unknown commands and unknown modes now exit non-zero
+(previously 0). Destructive prompts (force-delete, drop, remove, undo,
+reset, delete-all, accept-theirs/ours, squash apply) require an
+explicit "y": Enter declines and closed stdin aborts instead of
+auto-confirming. Piped or redirected `gitb log` prints the plain log
+instead of interactive browser pages, and all output is uncolored when
+stdout is not a terminal (NO_COLOR is honored). jq is required for AI
+features. Path inputs containing control characters are rejected
+instead of silently rewritten, and `../` in worktree/clone paths is
+honored instead of stripped.
+
+### 🚀 Features
+
+* **log:** add ai mode summarizing commit ranges ([469d7c1](https://github.com/maxbolgarin/gitbasher/commit/469d7c16274e31bab9959c3802f12847871a41aa))
+* **completion:** add all, dump and ai modes to log completion ([e7435e3](https://github.com/maxbolgarin/gitbasher/commit/e7435e3b37b656ea87b22afff4c6fa5871192ec8))
+* **log:** add commit list renderer with decorations, truncation and unpushed markers ([783cb8e](https://github.com/maxbolgarin/gitbasher/commit/783cb8e15291669a0d41f01b13092f9978e9501d))
+* add diff command and AI-powered feature grouping for commits ([c725be6](https://github.com/maxbolgarin/gitbasher/commit/c725be642515e58045e38896535fa7a979a0c8e3))
+* **ai:** add ollama host configuration, model id validation, and provider smoke check functionality ([b7c4e20](https://github.com/maxbolgarin/gitbasher/commit/b7c4e2085268eda01aa8cbc7a3d6c795ef2b8c79))
+* **merge:** add push modifier to merge command for automatic post-merge pushing ([ceb38c6](https://github.com/maxbolgarin/gitbasher/commit/ceb38c6fd798c5335598fdf7f2cbba3cdf7ef9d1))
+* **rebase:** add push modifier to rebase command for post-rebase force-pushing ([1a4fa38](https://github.com/maxbolgarin/gitbasher/commit/1a4fa38662806fa6b936e78b248db031799f1a11))
+* **completion:** add push options to merge and rebase commands ([37d6df5](https://github.com/maxbolgarin/gitbasher/commit/37d6df5d33f587513d30037e9ffcab86c0f9e38c))
+* **fetch:** add top-level fetch command with prune mode ([7f981ef](https://github.com/maxbolgarin/gitbasher/commit/7f981ef77ca5a9cc9bfe7b567b8ed60972130139))
+* **log:** make an interactive commit browser the default log view ([c033bac](https://github.com/maxbolgarin/gitbasher/commit/c033bac2c29d2994228eb60997136fc87000782b))
+* **branch:** offer to push new branches to the remote ([e74cfdb](https://github.com/maxbolgarin/gitbasher/commit/e74cfdb86c952b1cea66ca395601227ae62552e8))
+* **commit:** order split commits by scope dependency ([96f7518](https://github.com/maxbolgarin/gitbasher/commit/96f7518d9af2a9451fd11cb11be8db655f78fe88))
+* reliability overhaul - safe prompts, honest exit codes, true bash 3.2 support ([645970f](https://github.com/maxbolgarin/gitbasher/commit/645970fdc75bb7a8a6d917d1653c0a977ad2572e))
+* **status:** show upstream, stash, in-progress state and grouped changes ([e3f23b3](https://github.com/maxbolgarin/gitbasher/commit/e3f23b33e73b051db7eaaf647870e363a5d12dd9))
+* **push:** stream live progress and warn before large pushes ([a1f3f33](https://github.com/maxbolgarin/gitbasher/commit/a1f3f33a0074badd07633a1ed61338bdc31724e9))
+* **log:** support smart positional arguments (count, path, ref, message search) ([be9f1ee](https://github.com/maxbolgarin/gitbasher/commit/be9f1eed3e3efa64bdd60c6b446b1fdc476e75fc))
+
+### 🐛 Bug Fixes
+
+* **common:** assemble multi-byte keys correctly under bash 3.2 ([0b65802](https://github.com/maxbolgarin/gitbasher/commit/0b65802130da7335b98fb4c8752c570564827472))
+* **branch:** exact-name list filtering and plumbing-based cleanup parsers ([9c6b2b0](https://github.com/maxbolgarin/gitbasher/commit/9c6b2b05f039f9b4d6d8a3f17867805fe754e361))
+* **common:** exit non-zero on error paths instead of status 0 ([f2b6330](https://github.com/maxbolgarin/gitbasher/commit/f2b6330db148eacce6b5ecf4c9bdc84c32704031))
+* **install): working --help and fish advice; test(infra:** honest harness ([4f1bbe8](https://github.com/maxbolgarin/gitbasher/commit/4f1bbe8acc64f939d7d32c845677a0b09aeb695e))
+* **worktree:** honest path handling and a usable path mode ([7a9ea79](https://github.com/maxbolgarin/gitbasher/commit/7a9ea7920f9caa1ff4a2f6b0c1bdea1c60d5662b))
+* **tag:** honest remote deletes, robust delete-all, clean tag drafts ([98f4ec0](https://github.com/maxbolgarin/gitbasher/commit/98f4ec01041b0fa5ee96ef04bc520d4d79af5ae0))
+* **stash): pathspec-based select; fix(undo): honest guards; fix(cherry:** live state detection ([52d27fb](https://github.com/maxbolgarin/gitbasher/commit/52d27fbf1e08703d51b5df16137145ec9c9ad4ca))
+* **init:** make environment probes locale-proof and respect user config ([1ecee30](https://github.com/maxbolgarin/gitbasher/commit/1ecee30aaae2e7c8b08a4aaf90584d0f6ba13811))
+* **commit:** make the atomic-split flow safe with real-world repos ([19b52d3](https://github.com/maxbolgarin/gitbasher/commit/19b52d37e1fb08ff1f92b058a6e092e958cedd1c))
+* **common:** never auto-confirm prompts on EOF; kill input spin loops ([f46fed6](https://github.com/maxbolgarin/gitbasher/commit/f46fed63b6560932a3ed24cd1c959162e40a1d3d))
+* **wip:** never destroy WIP on restore failure; safer discovery ([be8674e](https://github.com/maxbolgarin/gitbasher/commit/be8674ea4e105fa8d410eb0cd272dfac6b3a3fce))
+* **base:** pass all arguments to merge and rebase scripts ([91a40b6](https://github.com/maxbolgarin/gitbasher/commit/91a40b6a3e7ece803b1c5c0d6c641568db8ada3e))
+* **base:** quote dispatch args, clean --version, document init/version ([d2b57ee](https://github.com/maxbolgarin/gitbasher/commit/d2b57ee7337b7d23f15bca7093898c7c311a7368))
+* **completion:** re-sync all three shells with the real dispatch surface ([e7fb34b](https://github.com/maxbolgarin/gitbasher/commit/e7fb34bc6ba2da539548704992461da1a91fd532))
+* real bash 3.2 runtime gaps in colors and read timeouts ([78f2eb2](https://github.com/maxbolgarin/gitbasher/commit/78f2eb20c717139a0bf53207fcbf6925a27844af))
+* **merge:** reconcile divergent branches in pre-merge/rebase pull ([5f98352](https://github.com/maxbolgarin/gitbasher/commit/5f9835241e4a26514f6ed2ab9a14d8b51ef1720b))
+* **build:** released bundle emits byte-identical artifacts to dev runs ([85aa24e](https://github.com/maxbolgarin/gitbasher/commit/85aa24e48813510c9707970bc37deed6fa11529d))
+* **hook:** resolve hooks like git does; working templates and honest modes ([a889c1d](https://github.com/maxbolgarin/gitbasher/commit/a889c1d08e2706de20557c92d7d6bc6deb2f59c5))
+* **rebase:** restore exact pre-pull state on abort; safer conflict loop ([65e9b4b](https://github.com/maxbolgarin/gitbasher/commit/65e9b4b529872db7a430160ee15a459afbeb33ac))
+* **push:** show transfer progress only when a push or fetch runs long ([74a3d0c](https://github.com/maxbolgarin/gitbasher/commit/74a3d0c33ebef36b7ef4d27c32f8295defa709f9))
+* **log:** stop dropping rows on macOS, guard non-TTY use, sanitize output ([d61e5cd](https://github.com/maxbolgarin/gitbasher/commit/d61e5cd0467b036b31e5b8b74917ee1cfe024d0c))
+* **commit:** strip model reasoning preamble from AI commit messages ([0d61206](https://github.com/maxbolgarin/gitbasher/commit/0d61206a9738d4ca3c657cc156778a2ff772bb92))
+* **ai:** trap safety, honest error handling, robust proxy/key management ([5bf3b1c](https://github.com/maxbolgarin/gitbasher/commit/5bf3b1cf3e24e925bb9fbfb59fadb6bed3bdc31d))
+* **commit:** treat Enter as No at atomic-split (y/N) prompt ([e86bd0b](https://github.com/maxbolgarin/gitbasher/commit/e86bd0b19b9b907f5dfe748d64fd3228ee96a6f8))
+* **merge:** unblock conflict resolution, stop arg shifts, honest checks ([5871ce3](https://github.com/maxbolgarin/gitbasher/commit/5871ce3202c4ff572f64f8ddfc8fb53d41037dbb))
+* **squash:** work on bash 3.2, refuse merge ranges before the AI call ([1ce4ad2](https://github.com/maxbolgarin/gitbasher/commit/1ce4ad225a5c8cdfe7f076fdaa8ebe1d66d38436))
+* **config:** working delete menu, safe writes, honest validation ([14ef2b8](https://github.com/maxbolgarin/gitbasher/commit/14ef2b86573930a407f88502f0099438e1909273))
+
+### 📚 Documentation
+
+* align README/FAQ/ARCHITECTURE with actual behavior ([9670681](https://github.com/maxbolgarin/gitbasher/commit/9670681b020c4c9ae252d4f2c26bdd3f00f29fa6))
+* **log:** document the interactive browser, smart args and ai summary ([28c7957](https://github.com/maxbolgarin/gitbasher/commit/28c7957b2613a70456bc105fbd935e741faff588))
+* **faq:** explain undo operation semantics and undo vs reset ([88dc9e4](https://github.com/maxbolgarin/gitbasher/commit/88dc9e46841f6592434e4eeeb27fb5897ec991c3))
+* fix accuracy drift across README, FAQ, ARCHITECTURE, site and comments ([7f00931](https://github.com/maxbolgarin/gitbasher/commit/7f0093181812e9a2d9749368f941e47e6bb89560))
+* use v5.0.0 in version-pin examples ([89d980c](https://github.com/maxbolgarin/gitbasher/commit/89d980cdfa34912b5ef8a95d49273ff3ac77a5ce))
+
+### 📦 Code Refactoring
+
+* make gitbasher run on bash 3.2 ([f575b05](https://github.com/maxbolgarin/gitbasher/commit/f575b055ed0813a965fd9d2b104d80f13ec142b6))
+* make merged scope-dependency ordering bash 3.2 compatible ([746b9cd](https://github.com/maxbolgarin/gitbasher/commit/746b9cd96a74cb29394bfa41ad7671c4faf9c9c8))
+* **diff:** move print_ai_summary to common.sh for cross-command reuse ([e1153e3](https://github.com/maxbolgarin/gitbasher/commit/e1153e39033e5fd9a526b90df6dab015e8132d4b))
+
+### 🚨 Tests
+
+* add 6 test suites for clone, commit splitting, and validation logic ([ec91278](https://github.com/maxbolgarin/gitbasher/commit/ec912787a8088a10fb07b76e0280c63ad567af98))
+* add tests for ollama AI configuration and merge/rebase push modifiers ([4e35b3a](https://github.com/maxbolgarin/gitbasher/commit/4e35b3adbcfb0df8df4fcc694d377c4539415ddf))
+* keep [@test](https://github.com/test) descriptions ASCII for bash 3.2 (bats name mangling) ([2ef48a7](https://github.com/maxbolgarin/gitbasher/commit/2ef48a79ef43f9dfb3b7b3ae65cb8d0736a9a031))
+* make test code bash 3.2 compatible ([b7b81fa](https://github.com/maxbolgarin/gitbasher/commit/b7b81fab2b38cf0eb31a3d1906abab9c87a99beb))
+* replace non-ASCII dash in test name that breaks bats under bash 3.2 ([6ac525b](https://github.com/maxbolgarin/gitbasher/commit/6ac525b2c788bac35fd9c941e714a14efec0482e))
+
+### ⚙️ Continuous Integration
+
+* add Docker bash:3.2 syntax + shim self-test job ([e6ec1e2](https://github.com/maxbolgarin/gitbasher/commit/e6ec1e273110b150244a4df375bb654b86f51dec))
+
 ## [4.1.0](https://github.com/maxbolgarin/gitbasher/compare/v4.0.0...v4.1.0) (2026-05-29)
 
 ### 🚀 Features

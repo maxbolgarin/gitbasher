@@ -2,6 +2,8 @@
 
 All notable changes to gitbasher are generated automatically by [semantic-release](https://github.com/semantic-release/semantic-release) from [Conventional Commits](https://www.conventionalcommits.org/) on `main`. The project follows [Semantic Versioning](https://semver.org/).
 
+## [5.0.0](https://github.com/maxbolgarin/gitbasher/compare/v4.1.0...v5.0.0) (2026-07-03)
+
 ## [4.1.0](https://github.com/maxbolgarin/gitbasher/compare/v4.0.0...v4.1.0) (2026-05-29)
 
 ### 🚀 Features

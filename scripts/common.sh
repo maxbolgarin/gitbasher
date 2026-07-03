@@ -1387,7 +1387,11 @@ function check_code {
         echo -e "${RED}✗ Cannot $3.${ENDCOLOR}"
         echo -e "$2"
         if [ -n "$git_add" ]; then
-            git restore --staged "$git_add"
+            # Match `git add $git_add`: word-split intentionally (multiple
+            # paths), glob-off, `--` so dash-leading paths aren't options.
+            # A quoted "$git_add" treated the whole list as ONE pathspec and
+            # failed loudly for multi-file input.
+            ( set -f; git restore --staged -- $git_add 2>/dev/null )
         fi
         exit $1
     fi
@@ -1448,6 +1452,23 @@ function yes_no_choice_strict {
 }
 
 
+### Undo the staging recorded in $git_add when a picker is aborted. Prefers
+# cleanup_on_exit (commit.sh) when it is loaded: it word-splits multi-path
+# input the same way `git add $git_add` did, and re-stages files the user
+# had staged before a fast-mode `git add .` — a plain quoted restore
+# treated the whole list as one pathspec and dropped pre-existing staging.
+function _choose_restore_staged {
+    if [ -z "$git_add" ]; then
+        return
+    fi
+    if type cleanup_on_exit >/dev/null 2>&1; then
+        cleanup_on_exit "$git_add"
+    else
+        ( set -f; git restore --staged -- $git_add 2>/dev/null )
+    fi
+}
+
+
 ### Function waits a number from user and returns result of choice from a provided list
 # $1: list of values
 # Returns: 
@@ -1472,18 +1493,14 @@ function choose {
 
         if [ -z "$_choose_read_ok" ]; then
             # EOF/closed stdin: abort without picking anything.
-            if [ -n "$git_add" ]; then
-                git restore --staged "$git_add"
-            fi
+            _choose_restore_staged
             echo
             echo -e "${YELLOW}Input closed — aborting.${ENDCOLOR}"
             exit 1
         fi
 
         if [ "$choice" == "0" ] || [ "$choice" == "00" ]; then
-            if [ -n "$git_add" ]; then
-                git restore --staged "$git_add"
-            fi
+            _choose_restore_staged
             if [ "$number_of_values" -le 9 ]; then
                 printf "%s" "$choice"
             fi
@@ -1494,9 +1511,7 @@ function choose {
         # arithmetic below (bash would abort on "5=-1").
         re='^([0-9][0-9]?|=|==)$'
         if ! [[ $choice =~ $re ]]; then
-            if [ -n "$git_add" ]; then
-                git restore --staged "$git_add"
-            fi
+            _choose_restore_staged
             exit
         fi
 
@@ -1515,9 +1530,7 @@ function choose {
             break
         else
             if [ "$number_of_values" -gt 9 ]; then
-                if [ -n "$git_add" ]; then
-                    git restore --staged "$git_add"
-                fi
+                _choose_restore_staged
                 exit
             fi
         fi

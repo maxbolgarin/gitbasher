@@ -16,7 +16,9 @@ function print_help {
 
     local CMD=26
     local hdr="${YELLOW}%s${ENDCOLOR}\n"
-    local row="  ${BOLD}%-*s${NORMAL}  %s\n"
+    # %b, not %s: descriptions embed ${GREEN}/${ENDCOLOR}, which are literal
+    # backslash strings that only render as colors when escape-interpreted.
+    local row="  ${BOLD}%-*s${NORMAL}  %b\n"
 
     printf "$hdr" "DAILY"
     printf "$row" "$CMD" "status (s)"              "Show repo state and changed files"

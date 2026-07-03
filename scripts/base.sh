@@ -55,6 +55,7 @@ function print_help {
 
     printf "$hdr" "SETUP"
     printf "$row" "$CMD" "clone (cl, clo)"        "Clone a remote repo and initialize gitbasher in it"
+    printf "$row" "$CMD" "init (i)"                "Create a git repo here and set up gitbasher"
     printf "$row" "$CMD" "origin (or, o, remote)"  "Manage remotes"
     printf "$row" "$CMD" "hook (ho, hk)"           "Manage git hooks"
     printf "$row" "$CMD" "worktree (wt, tree)"     "Manage git worktrees"
@@ -64,6 +65,7 @@ function print_help {
     echo
 
     echo -e "Run ${YELLOW}gitb <command> help${ENDCOLOR} for modes and examples"
+    echo -e "Run ${YELLOW}gitb version${ENDCOLOR} (or ${YELLOW}-v${ENDCOLOR}) to print the installed version"
 
     exit
 }
@@ -76,6 +78,13 @@ if [ "$GITBASHER_NO_REPO" = "true" ]; then
 else
     project_name="$(get_repo_name)"
     repo_url="$(get_repo)"
+fi
+
+### Version must answer before any first-run side effects: scripts parse
+### `gitb --version`, so it has to print exactly one line and write nothing.
+if [ "$1" == "--version" ] || [ "$1" == "-v" ] || [ "$1" == "version" ]; then
+    echo "gitbasher v${GITBASHER_VERSION}"
+    exit
 fi
 
 ### Print settings f this is first run
@@ -93,11 +102,6 @@ if [[ $is_first == "true" ]]; then
 fi
 
 _gitb_first_run_completion_prompt
-
-if [ "$1" == "--version" ] || [ "$1" == "-v" ] || [ "$1" == "version" ]; then
-    echo "gitbasher v${GITBASHER_VERSION}"
-    exit
-fi
 
 ### Normalize --help/-h anywhere in args -> 'help' so every subcommand
 ### handler sees a consistent token. Lets users write `gitb --help`,
@@ -126,13 +130,13 @@ case "$1" in
         edit_script "${@:2}"
     ;;
     push|p|ps|pus)         
-        push_script $2
+        push_script "$2"
     ;;
     pull|pu|pl|pul)
-        pull_script $2
+        pull_script "$2"
     ;;
     fetch|fe)
-        fetch_script $2
+        fetch_script "$2"
     ;;
     merge|m|me)
         merge_script "${@:2}"
@@ -144,37 +148,37 @@ case "$1" in
         squash_script "$2"
     ;;
     cherry|ch|cp)
-        cherry_script $2 $3
+        cherry_script "$2" "$3"
     ;;
     sync|sy)
-        sync_script $2
+        sync_script "$2"
     ;;
     wip|w)
         wip_script "${@:2}"
     ;;
     branch|b|br|bran)         
-        branch_script $2
+        branch_script "$2"
     ;;
     tag|t|tg)         
-        tag_script $2
+        tag_script "$2"
     ;;
     config|cf|cfg|conf)
         config_script "${@:2}"
     ;;
     undo|un)
-        undo_script $2
+        undo_script "$2"
     ;;
     reset|res)
-        reset_script $2
+        reset_script "$2"
     ;;
     stash|st|sta)
-        stash_script $2
+        stash_script "$2"
     ;;
     worktree|wt|tree)
         worktree_script "$2"
     ;;
     hook|ho|hk)
-        hooks_script $2 $3 $4
+        hooks_script "$2" "$3" "$4"
     ;;
     origin|or|o|remote)
         origin_script "$2" "$3"

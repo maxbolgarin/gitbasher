@@ -909,6 +909,13 @@ function _gitb_first_run_completion_prompt {
     prompted=$(get_config_value gitbasher.completion.prompted "")
     [ "$prompted" = "true" ] && return 0
 
+    # Redirected stdout (e.g. `gitb cfg auto print > file`) must not get the
+    # prompt text mixed into its output — skip WITHOUT marking as prompted,
+    # so the next interactive run still offers the install.
+    if [ ! -t 1 ]; then
+        return 0
+    fi
+
     if [ ! -t 0 ]; then
         git config --global gitbasher.completion.prompted "true" 2>/dev/null
         return 0

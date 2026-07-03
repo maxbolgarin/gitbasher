@@ -304,10 +304,15 @@ function sanitize_command {
        [[ "$input" == *"&"* ]] || [[ "$input" == *"\$"* ]] || [[ "$input" == *"\`"* ]]; then
         return 1
     fi
-    
-    # Only allow alphanumeric, dash, underscore, and slash for paths
-    local cleaned=$(echo "$input" | sed 's/[^a-zA-Z0-9._/-]//g')
-    
+
+    # Allow spaces so editors with flags work ("code --wait", "emacs -nw").
+    # The old charset silently deleted the space, producing "code--wait"
+    # and a baffling "binary not found" for a command the user never typed.
+    local cleaned=$(echo "$input" | sed 's/[^a-zA-Z0-9._/ -]//g')
+    if [ "$cleaned" != "$input" ]; then
+        return 1
+    fi
+
     # Validate length and format
     if [ ${#cleaned} -lt 1 ] || [ ${#cleaned} -gt 100 ] || [[ "$cleaned" =~ ^- ]]; then
         return 1
@@ -366,9 +371,10 @@ function validate_numeric_input {
     if ! [[ "$input" =~ ^[0-9]+$ ]]; then
         return 1
     fi
-    
-    # Convert to number for range checking
-    local num=$((input))
+
+    # 10#: leading zeros are decimal input, not octal ("010" used to
+    # validate as 8 and "09" threw a raw bash arithmetic error)
+    local num=$((10#$input))
     
     # Check minimum value
     if [ -n "$min_val" ] && [ "$num" -lt "$min_val" ]; then

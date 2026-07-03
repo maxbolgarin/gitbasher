@@ -118,7 +118,25 @@ Pick a backend with `gitb wip up <backend>` or set the default with `gitb cfg wi
 
 ### What does `gitb undo` undo?
 
-The most common destructive Git ops, driven by reflog: commits (incl. amend), merges, rebases, stash apply/pop. Run `gitb undo` and pick from the recent reflog entries. Because it's reflog-driven, your previous state is recoverable for as long as the reflog retains it (default 90 days for reachable, 30 days for unreachable).
+`gitb undo` reverses your **last** Git operation — you pick which kind, and it targets the most recent action of that type (there is no reflog picker):
+
+- `gitb undo` / `undo commit` — undoes the last commit via `git reset --soft HEAD~1`, keeping its changes staged.
+- `undo amend` — restores the pre-amend commit (located via reflog).
+- `undo merge` / `undo rebase` — aborts one in progress, or rolls a finished one back to `ORIG_HEAD`.
+- `undo stash` — re-stashes changes you just popped or applied.
+
+Everything except `undo rebase` (which is a `--hard` reset) preserves your changes. And because Git keeps a reflog, even a mistaken undo is recoverable — `gitb reset ref` lets you jump HEAD to any recent state (reflog retention defaults to 90 days for reachable commits, 30 days for unreachable).
+
+### `gitb undo` vs `gitb reset` — which one?
+
+They overlap but answer different questions:
+
+- **`gitb reset`** is *position-based* — "move my branch back to a point." You choose the destination: the last commit (`gitb reset`, or `reset soft` to keep changes staged), any older commit (`reset interactive`), or a reflog entry (`reset ref`). It never uses `--hard`, so your file changes are always preserved.
+- **`gitb undo`** is *operation-based* — "reverse the last thing I did" (commit, amend, merge, rebase, or stash), with the right git command picked for you.
+
+They meet in one spot: `gitb undo` and `gitb reset soft` both soft-reset the last commit. Reach for `undo` as the quick one-liner; reach for `reset` when you want to go back further or choose mixed-vs-soft.
+
+**Neither removes a single commit from the middle of history.** Resetting to the 5th of 10 commits moves HEAD there and drops the four *newer* commits too (their changes land back in your working tree). To excise or edit just one older commit, use `gitb rebase interactive` (base = a branch) or `gitb rebase autosquash` (pick a base commit, then set that commit's line to `drop`/`edit` in the todo list). If the commit is already pushed and shared, prefer `gitb commit revert`, which adds a new commit that undoes the target without rewriting history.
 
 ### `gitb pull` says "diverged" — what's the right move?
 

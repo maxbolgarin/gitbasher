@@ -862,10 +862,10 @@ function is_network_error {
 ### follow the file until the command exits. Returns the command's exit code.
 # $1: pid of the background command
 # $2: file capturing the command's combined stdout+stderr
-# $3: quiet window length in ticks of 0.25s (8 = ~2s)
+# $3: quiet window length in ticks of 0.25s (40 = ~10s)
 # $4: name of the variable to receive "true" when output was revealed
 function _stream_transfer_after_delay {
-    local __st_pid="$1" __st_file="$2" __st_quiet="${3:-8}" __st_flag_var="$4"
+    local __st_pid="$1" __st_file="$2" __st_quiet="${3:-40}" __st_flag_var="$4"
     local __st_ticks=0 __st_printed=0 __st_size=0 __st_code=0 __st_revealed=""
     while kill -0 "$__st_pid" 2>/dev/null; do
         sleep 0.25
@@ -898,10 +898,11 @@ function _stream_transfer_after_delay {
 
 ### Run a git (or any) transfer command, capturing combined stdout+stderr and
 ### the exit code for downstream parsing. Interactive runs start silent and
-### reveal the captured stream live only when the transfer outlives a ~2s
-### quiet window — small pushes/fetches stay noise-free while big ones still
-### show git's native progress. Falls back to silent capture when there is no
-### TTY (tests/CI) or mktemp fails; in that fallback --progress is stripped
+### reveal the captured stream live only when the transfer outlives a ~10s
+### quiet window — an ordinary network push (2-5s of ssh handshake and pack
+### upload) stays noise-free; only genuinely large transfers show git's
+### native progress. Falls back to silent capture when there is no TTY
+### (tests/CI) or mktemp fails; in that fallback --progress is stripped
 ### from the args so it can't pollute the captured output.
 # $1: name of the variable to receive captured output
 # $2: name of the variable to receive the exit code
@@ -920,7 +921,7 @@ function stream_or_capture_git {
         if [ -n "$__tmp" ]; then
             __ran="true"
             "$@" >"$__tmp" 2>&1 &
-            _stream_transfer_after_delay $! "$__tmp" "${GITBASHER_PROGRESS_QUIET_TICKS:-8}" __shown
+            _stream_transfer_after_delay $! "$__tmp" "${GITBASHER_PROGRESS_QUIET_TICKS:-40}" __shown
             __code=$?
             __output=$(cat "$__tmp")
             rm -f "$__tmp"

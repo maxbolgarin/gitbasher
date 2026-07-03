@@ -173,14 +173,16 @@ function branch_script {
         fetch_output=$(git fetch --prune 2>&1)
         check_code $? "$fetch_output" "fetch and prune remote"
 
-        # Find local branches whose upstream is gone
+        # Find local branches whose upstream is gone. Plumbing, not
+        # `git branch -vv` scraping: the human format prefixes worktree
+        # branches with "+" (parsed as a branch named "+") and a commit
+        # subject containing ": gone]" false-matched healthy branches.
         gone_branches=()
-        while IFS= read -r line; do
-            branch=$(echo "$line" | sed 's/^[ *]*//' | awk '{print $1}')
+        while IFS= read -r branch; do
             if [ -n "$branch" ] && [ "$branch" != "$main_branch" ] && [ "$branch" != "$current_branch" ]; then
                 gone_branches+=("$branch")
             fi
-        done < <(git branch -vv | grep ': gone\]')
+        done < <(git for-each-ref refs/heads --format='%(refname:short)%09%(upstream:track)' | awk -F'\t' '$2 == "[gone]" {print $1}')
 
         if [ ${#gone_branches[@]} -eq 0 ]; then
             echo -e "${GREEN}✓ All local branches have a corresponding remote.${ENDCOLOR}"
@@ -432,11 +434,23 @@ function branch_script {
                 read -n 1 -s choice || prompt_aborted
                 if is_yes "$choice"; then
                     printf "y\n\n"
-                    branches_to_delete="$(git branch --merged | grep -E -v "(^\*|master|main|develop|${main_branch})" | xargs)"
-                    IFS=$' ' read -rd '' -a branches <<<"$branches_to_delete"
-                    for index in "${!branches[@]}"
-                    do
-                        branch_to_delete="$(echo "${branches[index]}" | xargs)"
+                    # Plumbing list with EXACT-name exclusions. The old
+                    # human-format grep parsed the "+" worktree prefix as a
+                    # branch named "+", and its unanchored regex spared any
+                    # branch merely CONTAINING main/master/develop. A fresh
+                    # local array too — `branches_to_delete` is reused as an
+                    # ARRAY by the no-remote flow above.
+                    local -a merged_to_delete=()
+                    local _mb
+                    while IFS= read -r _mb; do
+                        [ -z "$_mb" ] && continue
+                        case "$_mb" in
+                            "$main_branch"|"$current_branch"|master|main|develop) continue ;;
+                        esac
+                        merged_to_delete+=("$_mb")
+                    done < <(git branch --merged --format='%(refname:short)')
+
+                    for branch_to_delete in "${merged_to_delete[@]}"; do
                         delete_output=$(git branch -d "$branch_to_delete" 2>&1)
                         delete_code=$?
                         if [ $delete_code == 0 ]; then
@@ -572,8 +586,8 @@ function branch_script {
             exit 1
         fi
 
-        remote_check=$(git --no-pager log "$origin_name/$branch_name..HEAD" 2>&1)
-        if [[ $remote_check != *"unknown revision or path not in the working tree"* ]]; then
+        # Exit-code probe instead of matching git's (localized) error text
+        if git rev-parse --verify --quiet "refs/remotes/$origin_name/$branch_name" >/dev/null 2>&1; then
             echo
             printf "Also delete this branch on ${origin_name} (y/n)? "
 
@@ -583,7 +597,7 @@ function branch_script {
                 echo
                 echo -e "${YELLOW}Deleting from remote...${ENDCOLOR}"
 
-                push_output=$(git push "$origin_name" -d "$branch_name" 2>&1)
+                push_output=$(LC_ALL=C git push "$origin_name" -d "$branch_name" 2>&1)
                 push_code=$?
 
                 echo

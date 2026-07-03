@@ -914,6 +914,11 @@ function get_repo {
         repo="https://${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
     fi
 
+    # Strip embedded credentials (https://user:token@host/...): CI-generated
+    # clones carry access tokens there, and every link gitb prints would
+    # otherwise expose them in terminals, screenshots and logs.
+    repo=$(printf '%s\n' "$repo" | sed -E 's#^(https?://)[^/@]+@#\1#')
+
     # Strip .git suffix if present
     repo="${repo%.git}"
     echo "$repo"
@@ -1591,11 +1596,14 @@ function commit_list {
         if [[ "$3" == *"HEAD"* ]]; then
             ref="$(echo "$3" | sed 's/HEAD..//')"
         else
-            return 
+            return
         fi
     fi
 
-    IFS=$'\n' 
+    # local: leaking IFS=$'\n' into the caller broke every later
+    # space-splitting expansion (e.g. it disabled the push-size warning
+    # after any commit picker ran)
+    local IFS=$'\n'
     read -rd '' -a commits_info <<<"$(git --no-pager log -n $1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} | %s | ${BLUE_ES}%an${ENDCOLOR_ES} | ${GREEN_ES}%cr${ENDCOLOR_ES}" $ref | column -ts'|')" || true
     read -rd '' -a commits_hash <<<"$(git --no-pager log -n $1 --pretty="%h" $ref)" || true
 
@@ -1618,7 +1626,7 @@ function commit_list {
 #     refs_info
 #     refs_hash
 function ref_list {
-    IFS=$'\n' 
+    local IFS=$'\n'
     read -rd '' -a refs_info <<<"$(git --no-pager reflog -n $1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} | ${BLUE_ES}%gd${ENDCOLOR_ES} | %gs | ${GREEN_ES}%cr${ENDCOLOR_ES}" | column -ts'|')" || true
     read -rd '' -a refs_hash <<<"$(git --no-pager reflog -n $1 --pretty="%gd")" || true
 
@@ -1887,9 +1895,14 @@ function list_branches {
     read -rd '' -a branches_info <<< "$branches_info_str" || true
 
     number_of_branches=${#branches[@]}
+    local _head_entries=0
     if [[ "$1" == "remote" ]]; then
-        # There is origin/HEAD
-        ((number_of_branches=number_of_branches-1))
+        # Subtract the symbolic origin/HEAD entry ONLY when it exists —
+        # plain `git remote add` + fetch never creates it (git < 2.47), and
+        # blindly decrementing made a single-branch remote read as "No
+        # branches found".
+        _head_entries=$(printf '%s\n' "$branches_str" | grep -cx "${origin_name}/HEAD" || true)
+        ((number_of_branches=number_of_branches-_head_entries))
     fi
 
     if [[ "$number_of_branches" == 0 ]]; then
@@ -1901,10 +1914,14 @@ function list_branches {
 
     branch_to_check="${branches[0]}"
     if [[ "$1" == "remote" ]]; then
-        # Remove 'origin/'
-        branch_to_check="${branches[1]}"
-        branch_to_check="$(sed "s/remotes\///g" <<< ${branch_to_check})"
-        branch_to_check="$(sed "s/${origin_name}\///g" <<< ${branch_to_check})"
+        # Skip the origin/HEAD slot only when it exists; strip the remote
+        # prefix with parameter expansion (a global sed also mangled branch
+        # names that contain "<origin>/" as a later path segment).
+        if [ "$_head_entries" -gt 0 ]; then
+            branch_to_check="${branches[1]}"
+        fi
+        branch_to_check="${branch_to_check#remotes/}"
+        branch_to_check="${branch_to_check#"$origin_name"/}"
     fi
 
     if [[ "$number_of_branches" == 1 ]] && [[ "${branch_to_check}" == "${current_branch}" ]]; then
@@ -1935,24 +1952,27 @@ function list_branches {
     for index in "${!branches[@]}"
     do
         branch_to_check="${branches[index]}"
-        if [[ "$1" == "delete" ]]; then
-            if [[ "$branch_to_check" == "${current_branch}"* ]] || [[ "$branch_to_check" == "${main_branch}"* ]]; then
-                continue    
-            fi
+        if [[ "$1" == "remote" ]]; then
+            branch_to_check="${branch_to_check#remotes/}"
+            branch_to_check="${branch_to_check#"$origin_name"/}"
         fi
-        if [[ "$1" == "merge" ]]; then
-            if [[ "$branch_to_check" == "${current_branch}"* ]]; then
+        # Exact-name comparisons: the old prefix matches made "main-old"
+        # collide with "main" (wrong info shown, branch unselectable) and
+        # hid every "fix-*" sibling of a branch named "fix".
+        if [[ "$1" == "delete" ]]; then
+            if [[ "$branch_to_check" == "$current_branch" ]] || [[ "$branch_to_check" == "$main_branch" ]]; then
                 continue
             fi
         fi
-        if [[ "$1" == "remote" ]]; then
-            branch_to_check="$(sed "s/remotes\///g" <<< ${branch_to_check})"
-            branch_to_check="$(sed "s/${origin_name}\///g" <<< ${branch_to_check})"
+        if [[ "$1" == "merge" ]]; then
+            if [[ "$branch_to_check" == "$current_branch" ]]; then
+                continue
+            fi
         fi
 
-        if [[ "$branch_to_check" == "${main_branch}"* ]]; then
+        if [[ "$branch_to_check" == "$main_branch" ]]; then
             branches_info_first_main[0]="${branches_info[index]}"
-        elif [[ "$branch_to_check" != "HEAD->"* ]] && [[ "$branch_to_check" != "$origin_name" ]]; then 
+        elif [[ "$branch_to_check" != "HEAD->"* ]] && [[ "$branch_to_check" != "HEAD" ]] && [[ "$branch_to_check" != "$origin_name" ]]; then
             branches_first_main+=(${branches[index]})
             branches_info_first_main+=("${branches_info[index]}")
         fi
@@ -2088,10 +2108,13 @@ function choose_branch {
         fi
     done
 
-    # For remote, ensure branch_name is just the branch part (no origin/ prefix for local creation)
+    # For remote, ensure branch_name is just the branch part (no origin/
+    # prefix for local creation). Prefix-only expansion — a global sed also
+    # stripped "<origin>/" appearing as a LATER path segment, mangling e.g.
+    # "origin/feature/origin/foo" into "feature/foo".
     if [[ "$1" == "remote" ]]; then
-        branch_name=$(sed "s/remotes\///g" <<< ${branch_name})
-        branch_name=$(sed "s/${origin_name}\///g" <<< ${branch_name})
+        branch_name="${branch_name#remotes/}"
+        branch_name="${branch_name#"$origin_name"/}"
     fi
 }
 

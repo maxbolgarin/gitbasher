@@ -856,34 +856,77 @@ function is_network_error {
 }
 
 
-### Run a git (or any) command, streaming its native --progress output live to
-### the terminal when interactive, while still capturing combined stdout+stderr
-### and the exit code for downstream parsing. Falls back to silent capture when
-### there is no TTY (tests/CI) or mktemp fails; in that fallback --progress is
-### stripped from the args so it can't pollute the captured output (matches the
-### fetch() helper's existing behavior).
+### Wait on a background transfer, revealing its captured output live only
+### once it outlives the quiet window. Fast transfers finish inside the window
+### and print nothing; slow ones stream everything captured so far and then
+### follow the file until the command exits. Returns the command's exit code.
+# $1: pid of the background command
+# $2: file capturing the command's combined stdout+stderr
+# $3: quiet window length in ticks of 0.25s (8 = ~2s)
+# $4: name of the variable to receive "true" when output was revealed
+function _stream_transfer_after_delay {
+    local __st_pid="$1" __st_file="$2" __st_quiet="${3:-8}" __st_flag_var="$4"
+    local __st_ticks=0 __st_printed=0 __st_size=0 __st_code=0 __st_revealed=""
+    while kill -0 "$__st_pid" 2>/dev/null; do
+        sleep 0.25
+        __st_ticks=$((__st_ticks + 1))
+        if [ "$__st_ticks" -ge "$__st_quiet" ]; then
+            __st_size=$(wc -c < "$__st_file" 2>/dev/null); __st_size=$((__st_size + 0))
+            if [ "$__st_size" -gt "$__st_printed" ]; then
+                # Raw byte pass-through keeps git's \r-updating progress lines
+                # rendering exactly as they would uncaptured.
+                dd if="$__st_file" bs=1 skip="$__st_printed" count=$((__st_size - __st_printed)) 2>/dev/null
+                __st_printed=$__st_size
+                __st_revealed="true"
+            fi
+        fi
+    done
+    # Reaps the background pid; `if` keeps errexit from firing on failures.
+    if wait "$__st_pid"; then __st_code=0; else __st_code=$?; fi
+    if [ -n "$__st_revealed" ]; then
+        __st_size=$(wc -c < "$__st_file" 2>/dev/null); __st_size=$((__st_size + 0))
+        if [ "$__st_size" -gt "$__st_printed" ]; then
+            dd if="$__st_file" bs=1 skip="$__st_printed" count=$((__st_size - __st_printed)) 2>/dev/null
+        fi
+        # Progress can end on a bare \r line — start the next line clean.
+        if [ -n "$(tail -c 1 "$__st_file" 2>/dev/null)" ]; then echo; fi
+    fi
+    printf -v "$__st_flag_var" '%s' "$__st_revealed"
+    return "$__st_code"
+}
+
+
+### Run a git (or any) transfer command, capturing combined stdout+stderr and
+### the exit code for downstream parsing. Interactive runs start silent and
+### reveal the captured stream live only when the transfer outlives a ~2s
+### quiet window — small pushes/fetches stay noise-free while big ones still
+### show git's native progress. Falls back to silent capture when there is no
+### TTY (tests/CI) or mktemp fails; in that fallback --progress is stripped
+### from the args so it can't pollute the captured output.
 # $1: name of the variable to receive captured output
 # $2: name of the variable to receive the exit code
-# $3: name of the variable to receive "true" when progress was streamed live
+# $3: name of the variable to receive "true" when output was streamed live
+#     (callers use it to avoid re-printing errors the user already saw)
 # $4..: the command and its args (pass --progress; honored only when streaming)
 # Results are written to the CALLER-named vars; those names must not start with
 # "__" (they would collide with this function's locals).
+# GITBASHER_PROGRESS_QUIET_TICKS overrides the quiet window (test knob).
 function stream_or_capture_git {
     local __out_var="$1" __code_var="$2" __shown_var="$3"; shift 3
-    local __output="" __code=0 __shown=""
+    local __output="" __code=0 __shown="" __ran=""
     if [ -t 1 ] && [ -t 2 ]; then
         local __tmp
         __tmp=$(mktemp 2>/dev/null)
         if [ -n "$__tmp" ]; then
-            # `if pipeline` keeps errexit from aborting on a failed push/fetch,
-            # while PIPESTATUS still reflects git's (not tee's) exit code.
-            if "$@" 2>&1 | tee "$__tmp"; then __code=0; else __code=${PIPESTATUS[0]}; fi
+            __ran="true"
+            "$@" >"$__tmp" 2>&1 &
+            _stream_transfer_after_delay $! "$__tmp" "${GITBASHER_PROGRESS_QUIET_TICKS:-8}" __shown
+            __code=$?
             __output=$(cat "$__tmp")
             rm -f "$__tmp"
-            __shown="true"
         fi
     fi
-    if [ -z "$__shown" ]; then
+    if [ -z "$__ran" ]; then
         local __arg __args=()
         for __arg in "$@"; do
             [ "$__arg" = "--progress" ] || __args+=("$__arg")

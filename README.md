@@ -440,7 +440,7 @@ Notes:
 
 </details>
 
-Large pushes stream git's live progress bar (like `clone`/`fetch`), and gitbasher estimates the transfer size first — warning you before you push a stray non-code object (e.g. a build artifact or dataset). Tune the threshold with `gitb cfg push-size` (default 50 MB, `0` disables).
+Quick pushes stay clean — git's live progress bar appears only when a transfer runs long (same for `pull`/`fetch`). gitbasher also estimates the transfer size first, warning you before you push a stray non-code object (e.g. a build artifact or dataset). Tune the threshold with `gitb cfg push-size` (default 50 MB, `0` disables).
 
 ### `gitb pull`
 

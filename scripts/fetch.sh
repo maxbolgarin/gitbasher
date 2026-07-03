@@ -125,11 +125,6 @@ function fetch_script {
     fetch "$current_branch" "$origin_name" "$all"
 
     if [ $fetch_code == 0 ] ; then
-        ### Skip re-echo when progress (and the summary) was already streamed live
-        if [ "$fetch_output" != "" ] && [ -z "$fetch_progress_shown" ]; then
-            echo -e "$fetch_output"
-            echo
-        fi
         fetch_report_incoming
     fi
 

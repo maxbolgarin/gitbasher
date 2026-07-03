@@ -81,6 +81,18 @@ push_from_second_clone() {
     [[ "$output" =~ "Incoming commit from remote" ]]
 }
 
+@test "fetch: does not echo git's raw transfer summary on success" {
+    setup_remote_repo
+    push_from_second_clone
+
+    # The flow prints its own structured summary; git's "From <url> ..
+    # main -> origin/main" block is noise and must stay captured-only.
+    run fetch_script
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "From " ]]
+    [[ ! "$output" =~ "-> origin/main" ]]
+}
+
 # ===== integration: prune =====
 
 @test "fetch prune: reports a branch deleted on the remote" {

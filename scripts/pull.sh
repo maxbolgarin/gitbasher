@@ -176,11 +176,6 @@ function pull_script {
                 else
                     echo -e "${GREEN}✓ Fetched '$origin_name/$current_branch'${ENDCOLOR}"
                 fi
-                ### Skip re-echo when progress (and the summary) was already streamed live
-                if [ "$fetch_output" != "" ] && [ -z "$fetch_progress_shown" ]; then
-                    echo
-                    echo -e "$fetch_output"
-                fi
                 echo
                 count=$(echo -e "$commits" | wc -l | sed 's/^ *//;s/ *$//')
                 echo -e "Your branch is behind ${YELLOW}$origin_name/$current_branch${ENDCOLOR} by ${BOLD}$count${ENDCOLOR} commits"
@@ -203,10 +198,6 @@ function pull_script {
             if git rev-parse --verify --quiet "refs/remotes/$origin_name/$current_branch" >/dev/null 2>&1; then commits=$(commit_list 999 "tab" "HEAD..$origin_name/$current_branch"); else commits=""; fi
             if [ "$commits" != "" ]; then
                 echo -e "${GREEN}✓ Updated all remotes${ENDCOLOR}"
-                if [ "$update_output" != "" ]; then
-                    echo
-                    echo -e "$update_output"
-                fi
                 echo
                 count=$(echo -e "$commits" | wc -l | sed 's/^ *//;s/ *$//')
                 echo -e "Your branch is behind ${YELLOW}$origin_name/$current_branch${ENDCOLOR} by ${BOLD}$count${ENDCOLOR} commits"
@@ -238,37 +229,15 @@ function pull_script {
 #      * fetch_output - captured combined stdout/stderr
 #      * fetch_progress_shown - "true" when git's progress was streamed live to the terminal
 function fetch {
-    fetch_progress_shown=""
-
-    ### Stream git's native progress bar to the terminal when running interactively,
-    ### so the user gets feedback during long fetches. Output is still captured via
-    ### tee so error handling and downstream checks (e.g. "couldn't find remote ref")
-    ### keep working. Fall back to silent capture when there's no TTY (tests, CI).
-    if [ -t 1 ] && [ -t 2 ]; then
-        local tmp_file
-        tmp_file=$(mktemp 2>/dev/null)
-        if [ -n "$tmp_file" ]; then
-            if [ -n "$3" ]; then
-                git fetch --all --progress 2>&1 | tee "$tmp_file"
-                fetch_code=${PIPESTATUS[0]}
-            else
-                git fetch --progress "$2" "$1" 2>&1 | tee "$tmp_file"
-                fetch_code=${PIPESTATUS[0]}
-            fi
-            fetch_output=$(cat "$tmp_file")
-            rm -f "$tmp_file"
-            fetch_progress_shown="true"
-        fi
-    fi
-
-    if [ -z "$fetch_progress_shown" ]; then
-        if [ -n "$3" ]; then
-            fetch_output=$(git fetch --all 2>&1)
-            fetch_code=$?
-        else
-            fetch_output=$(git fetch "$2" "$1" 2>&1)
-            fetch_code=$?
-        fi
+    ### Quiet for quick fetches; reveals git's live progress only when the
+    ### transfer outlives the helper's quiet window. Output/exit code stay
+    ### captured for the checks below (e.g. "couldn't find remote ref").
+    if [ -n "$3" ]; then
+        stream_or_capture_git fetch_output fetch_code fetch_progress_shown \
+            git fetch --all --progress
+    else
+        stream_or_capture_git fetch_output fetch_code fetch_progress_shown \
+            git fetch --progress "$2" "$1"
     fi
 
     if [ $fetch_code == 0 ] ; then

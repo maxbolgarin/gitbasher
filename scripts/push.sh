@@ -29,9 +29,9 @@ function push {
     local push_attempt=0
 
     while true; do
-        # Stream git's native progress to the terminal when interactive so large
-        # pushes show live feedback, while still capturing output+code for the
-        # link/rejection/network parsing below.
+        # Quiet for quick pushes; reveals git's live progress only when the
+        # transfer outlives the helper's quiet window. Output+code stay
+        # captured for the link/rejection/network parsing below.
         stream_or_capture_git push_output push_code push_progress_shown \
             git push --progress "$@" "${origin_name}" "${current_branch}"
 

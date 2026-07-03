@@ -209,7 +209,7 @@ case "$1" in
         diff_script "${@:2}"
     ;;
     status|s)
-        project_status
+        project_status "${@:2}"
     ;;
     prev|-)
         branch_script prev

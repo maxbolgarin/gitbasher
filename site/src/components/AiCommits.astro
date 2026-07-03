@@ -26,9 +26,11 @@ export GITB_AI_API_KEY_OPENROUTER=sk-or-...`;
       <code>gitb commit ai</code> reads your staged diff, asks an LLM to
       write a Conventional Commit message, and lets you confirm before
       committing. Pick a hosted provider — OpenAI or OpenRouter
-      (Gemini, Claude, GPT, DeepSeek, …) — or pick Ollama and keep the
-      entire flow on <code>localhost</code>. Switch providers any time
-      with one command.
+      (Gemini, Claude, GPT, DeepSeek, …) — pick Ollama and keep the
+      entire flow on <code>localhost</code>, or reuse the Claude Code
+      CLI you already have (<code>claude</code> provider — no API key,
+      billed to your Claude account). Set everything up with one
+      command: <code>gitb cfg ai</code>.
     </p>
 
     <h3>Fully local with Ollama</h3>

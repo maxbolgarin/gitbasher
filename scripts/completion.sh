@@ -30,7 +30,9 @@ stash st sta
 worktree wt tree
 hook ho hk
 origin or o remote
+clone cl clo
 init i
+version
 log l lg
 reflog rl rlg
 last-commit lc lastc
@@ -43,7 +45,7 @@ uninstall uns uni
 help man
 "
 _gitb_sub_commit="ai llm i fast f fasts fs sf ff ffp ffpush sff sffp ffst ffstp push pu p fastp fp pf fastsp fsp fps scope s msg m ticket jira j t staged st no-split nosplit nos nsp nsl fixup fix x fixupp fixp xp px fixupst xst stx fastfix fx xf fastfixp fxp xfp amend am a amendst ast sta amendf amf af fa split sp sl splitp spp slp aisplit isplit aispl ispl aisplitp isplitp aisplp isplp llmf aif if llmp aip ip llmst aist ist llmfp aifp ifp ipf llms ais is llmsf aisf isf llmsfp aisfp isfp llmm aim im llmmf aimf imf llmmfp aimfp imfp revert rev revertp revp rp help h"
-_gitb_sub_commit_simple="ai llm i fast f push pu p scope s msg m ticket jira j t staged no-split nosplit nos nsp nsl fixup fix x amend am a split sp sl revert rev help h"
+_gitb_sub_commit_simple="ai llm i fast f push pu p scope s msg m ticket jira j t staged st no-split nosplit nos nsp nsl fixup fix x amend am a split sp sl revert rev help h"
 _gitb_sub_wip_backend="stash s branch b worktree w wt tree nopush np n"
 _gitb_sub_push="yes y force f list log l help h"
 _gitb_sub_pull="fetch fe all fa upd u ffonly ff merge m rebase r interactive ri rs dry d dr help h"
@@ -54,20 +56,21 @@ _gitb_sub_squash="preview p dry show yes y fast push ps help h"
 _gitb_sub_cherry="hash hs range r abort a continue cont c help h"
 _gitb_sub_sync="push p merge m mergep mp pm dry d dr help h"
 _gitb_sub_wip="up u down d help h"
-_gitb_sub_branch="list l remote r re main def m delete del d prev p - recent rc gone g tag t help h"
+_gitb_sub_branch="list l remote r re main def m new n c newd nd cd delete del d prev p - recent rc gone g tag t help h"
 _gitb_sub_tag="annotated a an commit c co cm all al push ps ph p push-all pa delete del d delete-all da list log l remote re r fetch help h"
 _gitb_sub_config="default def d b main separator sep editor ed e ticket jira ti t scopes scope sc s ai llm key provider prov model m proxy prx p history hist diff payload push-size pushsize ps delete unset del user name email u auto completion comp help h"
 _gitb_sub_undo="commit c amend a merge m rebase r stash s help h"
-_gitb_sub_reset="soft s undo u interactive i help h"
+_gitb_sub_reset="soft s undo u interactive i ref r help h"
 _gitb_sub_stash="select sel all list l pop p show s drop d apply a help h"
-_gitb_sub_worktree="list l ls add a new n c addd ad nd cd addb ab from b addr ar remote r remove rm del d prune pr p lock unlock ul move mv path cd switch sw help h"
-_gitb_sub_origin="set add new a change update c u set-url rename mv ren remove delete rm del d help h"
+_gitb_sub_worktree="list l ls add a new n c addd ad nd addb ab from b addr ar remote r remove rm del d prune pr p lock unlock ul move mv manage m path sw goto go g cd switch help h"
+_gitb_sub_origin="show info set add new a change update c u set-url rename mv ren remove delete rm del d help h"
 _gitb_sub_log="branch b compare comp c search s all dump ai help h"
 _gitb_sub_diff="staged s cached all a branch b commit c ai help h"
 _gitb_sub_hook="list create edit toggle test show remove select install help"
 _gitb_sub_log_branch="local l remote r all a help h"
 _gitb_sub_edit="pick p c choose branch b br rename ren help h"
 _gitb_sub_config_auto="up u on install enable down d off uninstall disable remove status st print cat p help h"
+_gitb_sub_update="check c ch force f fo help h"
 _gitb_canonical() {
     case "$1" in
         commit|c|co|com)              echo commit ;;
@@ -90,6 +93,8 @@ _gitb_canonical() {
         worktree|wt|tree)             echo worktree ;;
         hook|ho|hk)                   echo hook ;;
         origin|or|o|remote)           echo origin ;;
+        clone|cl|clo)                 echo clone ;;
+        update|up|upd)                echo update ;;
         log|l|lg)                     echo log ;;
         diff|d|di)                    echo diff ;;
         *)                            echo "" ;;
@@ -167,8 +172,13 @@ _gitb() {
         return 0
     fi
     if [ "$canonical" = "wip" ] && [ "$COMP_CWORD" -ge 3 ]; then
-        if [ "$sub" = "up" ] || [ "$sub" = "u" ] || [ "$sub" = "down" ] || [ "$sub" = "d" ]; then
+        if [ "$sub" = "up" ] || [ "$sub" = "u" ]; then
             COMPREPLY=( $(compgen -W "$_gitb_sub_wip_backend" -- "$cur") )
+            return 0
+        fi
+        # down auto-detects and rejects nopush - offer backends only
+        if [ "$sub" = "down" ] || [ "$sub" = "d" ]; then
+            COMPREPLY=( $(compgen -W "stash s branch b worktree w wt tree" -- "$cur") )
             return 0
         fi
     fi
@@ -176,22 +186,22 @@ _gitb() {
         local subs_var="_gitb_sub_${canonical}"
         local subs="${!subs_var}"
         if [ -n "$subs" ]; then
-            COMPREPLY=( $(compgen -W "$subs" -- "$cur") )
+            if [ "$canonical" = "log" ]; then
+                # gitb log also accepts a branch/ref as a smart positional -
+                # offer branch names alongside the modes (the old separate
+                # branch-name block was unreachable, and merge/rebase/branch
+                # reject bare branch arguments anyway). Filter for
+                # "tab-friendly" names: git permits shell-special characters
+                # inside refs, and unquoted COMPREPLY opens a small
+                # pathological window.
+                local branches
+                branches=$(git for-each-ref --format='%(refname:short)' refs/heads 2>/dev/null | grep -E '^[A-Za-z0-9._/-]+$')
+                COMPREPLY=( $(compgen -W "$subs $branches" -- "$cur") )
+            else
+                COMPREPLY=( $(compgen -W "$subs" -- "$cur") )
+            fi
             return 0
         fi
-        case "$canonical" in
-            branch|merge|rebase|pull|cherry|log)
-                local branches
-                # Filter for "tab-friendly" branch names — git permits some
-                # shell-special characters (e.g. `$`, backticks) inside refs,
-                # and feeding them into `compgen -W` then through unquoted
-                # COMPREPLY=( $(...) ) opens a small pathological window. The
-                # user can still complete weird names by typing them out.
-                branches=$(git for-each-ref --format='%(refname:short)' refs/heads 2>/dev/null | grep -E '^[A-Za-z0-9._/-]+$')
-                COMPREPLY=( $(compgen -W "$branches" -- "$cur") )
-                return 0
-                ;;
-        esac
         return 0
     fi
     if [ "$COMP_CWORD" -eq 3 ]; then
@@ -336,6 +346,7 @@ _gitb() {
                 'worktree:Worktree operations (alias: wt, tree)'
                 'hook:Manage git hooks (alias: ho, hk)'
                 'origin:Manage remote (alias: or, o, remote)'
+                'clone:Clone a repo and set up gitbasher (alias: cl, clo)'
                 'init:Initialize repo (alias: i)'
                 'log:Git log utilities (alias: l, lg)'
                 'diff:Show working-tree, staged, branch & AI diffs (alias: d, di)'
@@ -346,6 +357,7 @@ _gitb() {
                 'prev:Switch to previous branch (alias: -)'
                 'update:Self-update gitbasher (alias: up, upd)'
                 'uninstall:Remove gitbasher config and binary (alias: uns, uni)'
+                'version:Print the installed version (alias: -v)'
                 'help:Show help'
             )
             _describe -t commands 'gitb command' cmds
@@ -375,14 +387,10 @@ _gitb() {
                     _values 'fetch mode' 'all[fetch all remotes]' 'prune[fetch and prune deleted branches]' 'help[show help]'
                     ;;
                 merge|m|me)
-                    local -a branches
-                    branches=( ${(f)"$(git for-each-ref --format='%(refname:short)' refs/heads 2>/dev/null)"} )
-                    _values 'merge target' 'main[merge main into current]' 'to-main[merge current into main]' 'remote[merge a remote branch]' 'push[merge and push]' 'help[show help]' $branches
+                    _values 'merge mode' 'main[merge main into current]' 'to-main[merge current into main]' 'remote[merge a remote branch]' 'push[merge and push]' 'help[show help]'
                     ;;
                 rebase|r|re|base)
-                    local -a branches
-                    branches=( ${(f)"$(git for-each-ref --format='%(refname:short)' refs/heads 2>/dev/null)"} )
-                    _values 'rebase mode' 'main[rebase onto main]' 'interactive[interactive]' 'autosquash[autosquash]' 'fastautosquash[fast autosquash]' 'pull[pull commits]' 'push[rebase and force-push]' 'help[show help]' $branches
+                    _values 'rebase mode' 'main[rebase onto main]' 'interactive[interactive]' 'autosquash[autosquash]' 'fastautosquash[fast autosquash]' 'pull[pull commits]' 'push[rebase and force-push]' 'help[show help]'
                     ;;
                 squash|sq|tidy)
                     _values 'squash mode' 'preview[show plan only]' 'yes[skip confirmation]' 'push[force-push after squash]' 'help[show help]'
@@ -397,9 +405,7 @@ _gitb() {
                     _values 'wip action' 'up[save WIP]' 'down[restore WIP]' 'help[show help]'
                     ;;
                 branch|b|br|bran)
-                    local -a branches
-                    branches=( ${(f)"$(git for-each-ref --format='%(refname:short)' refs/heads 2>/dev/null)"} )
-                    _values 'branch mode or name' 'list[list branches]' 'remote[remote branches]' 'main[switch to main]' 'delete[delete a branch]' 'prev[previous branch]' 'recent[recent branches]' 'gone[branches with gone upstream]' 'tag[tag operations]' 'help[show help]' $branches
+                    _values 'branch mode' 'list[list branches]' 'remote[remote branches]' 'main[switch to main]' 'new[create branch from current]' 'newd[create branch from default]' 'delete[delete a branch]' 'prev[previous branch]' 'recent[recent branches]' 'gone[branches with gone upstream]' 'tag[tag operations]' 'help[show help]'
                     ;;
                 tag|t|tg)
                     _values 'tag mode' 'annotated[create annotated tag]' 'commit[tag a commit]' 'all[tag everything]' 'push[push tag]' 'push-all[push all tags]' 'delete[delete tag]' 'delete-all[delete all]' 'list[list tags]' 'remote[remote tags]' 'help[show help]'
@@ -411,16 +417,19 @@ _gitb() {
                     _values 'undo target' 'commit[undo last commit]' 'amend[undo amend]' 'merge[undo merge]' 'rebase[undo rebase]' 'stash[undo stash]' 'help[show help]'
                     ;;
                 reset|res)
-                    _values 'reset mode' 'soft[soft reset]' 'undo[reset to before last action]' 'interactive[interactive reset]' 'help[show help]'
+                    _values 'reset mode' 'soft[soft reset]' 'undo[reset to before last action]' 'interactive[interactive reset]' 'ref[reset to a ref]' 'help[show help]'
                     ;;
                 stash|st|sta)
                     _values 'stash mode' 'select[select a stash]' 'all[stash everything]' 'list[list stashes]' 'pop[pop a stash]' 'show[show stash]' 'drop[drop a stash]' 'apply[apply a stash]' 'help[show help]'
                     ;;
                 worktree|wt|tree)
-                    _values 'worktree mode' 'list[list worktrees]' 'add[add from current HEAD]' 'addd[add from default branch]' 'addb[add from local branch]' 'addr[add from remote branch]' 'remove[remove a worktree]' 'prune[prune stale records]' 'lock[lock a worktree]' 'unlock[unlock a worktree]' 'move[move a worktree]' 'path[print worktree path]' 'help[show help]'
+                    _values 'worktree mode' 'list[list worktrees]' 'add[add from current HEAD]' 'addd[add from default branch]' 'addb[add from local branch]' 'addr[add from remote branch]' 'manage[pick a worktree to manage]' 'goto[open a shell in a worktree]' 'remove[remove a worktree]' 'prune[prune stale records]' 'lock[lock a worktree]' 'unlock[unlock a worktree]' 'move[move a worktree]' 'path[print worktree path]' 'help[show help]'
                     ;;
                 origin|or|o|remote)
-                    _values 'origin action' 'set[set remote]' 'change[change remote URL]' 'rename[rename remote]' 'remove[remove remote]' 'help[show help]'
+                    _values 'origin action' 'show[show remote info]' 'set[set remote]' 'change[change remote URL]' 'rename[rename remote]' 'remove[remove remote]' 'help[show help]'
+                    ;;
+                update|up|upd)
+                    _values 'update mode' 'check[check for a new version]' 'force[reinstall latest]' 'help[show help]'
                     ;;
                 log|l|lg)
                     _values 'log mode' 'branch[log per branch]' 'compare[compare branches]' 'search[search log]' 'all[full log dump]' 'dump[full log dump]' 'ai[AI summary of a range]' 'help[show help]'
@@ -444,8 +453,11 @@ _gitb() {
                     ;;
                 wip|w)
                     case "$words[3]" in
-                        up|u|down|d)
+                        up|u)
                             _values 'wip backend / flag' 'stash[stash backend]' 'branch[branch backend]' 'worktree[worktree backend]' 'nopush[skip push]'
+                            ;;
+                        down|d)
+                            _values 'wip backend' 'stash[stash backend]' 'branch[branch backend]' 'worktree[worktree backend]'
                             ;;
                     esac
                     ;;
@@ -547,6 +559,8 @@ complete -c gitb -n __gitb_no_subcmd -a ho           -d 'Alias of hook'
 complete -c gitb -n __gitb_no_subcmd -a origin       -d 'Manage remote'
 complete -c gitb -n __gitb_no_subcmd -a o            -d 'Alias of origin'
 complete -c gitb -n __gitb_no_subcmd -a remote       -d 'Alias of origin'
+complete -c gitb -n __gitb_no_subcmd -a clone        -d 'Clone a repo and set up gitbasher'
+complete -c gitb -n __gitb_no_subcmd -a cl           -d 'Alias of clone'
 complete -c gitb -n __gitb_no_subcmd -a init         -d 'Initialize repo'
 complete -c gitb -n __gitb_no_subcmd -a i            -d 'Alias of init'
 complete -c gitb -n __gitb_no_subcmd -a log          -d 'Git log utilities'
@@ -563,6 +577,7 @@ complete -c gitb -n __gitb_no_subcmd -a prev         -d 'Switch to previous bran
 complete -c gitb -n __gitb_no_subcmd -a update       -d 'Self-update gitbasher'
 complete -c gitb -n __gitb_no_subcmd -a uninstall    -d 'Remove gitbasher config and binary'
 complete -c gitb -n __gitb_no_subcmd -a uns          -d 'Alias of uninstall'
+complete -c gitb -n __gitb_no_subcmd -a version      -d 'Print the installed version'
 complete -c gitb -n __gitb_no_subcmd -a help         -d 'Show help'
 function __gitb_at_commit_pos2
     set -l tokens (commandline -opc)
@@ -586,10 +601,8 @@ set -l __gitb_fetch "__gitb_using_cmd fetch fe; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_fetch" -a "all prune help"
 set -l __gitb_merge "__gitb_using_cmd merge m me; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_merge" -a "main to-main remote push help"
-complete -c gitb -n "$__gitb_merge" -a "(__gitb_local_branches)" -d branch
 set -l __gitb_rebase "__gitb_using_cmd rebase r re base; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_rebase" -a "main interactive autosquash fastautosquash pull push help"
-complete -c gitb -n "$__gitb_rebase" -a "(__gitb_local_branches)" -d branch
 set -l __gitb_squash "__gitb_using_cmd squash sq tidy; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_squash" -a "preview yes push help"
 set -l __gitb_cherry "__gitb_using_cmd cherry ch cp; and __gitb_at_position 2"
@@ -599,8 +612,7 @@ complete -c gitb -n "$__gitb_sync" -a "push merge mergep dry help"
 set -l __gitb_wip "__gitb_using_cmd wip w; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_wip" -a "up down help"
 set -l __gitb_branch "__gitb_using_cmd branch b br bran; and __gitb_at_position 2"
-complete -c gitb -n "$__gitb_branch" -a "list remote main delete prev recent gone tag help"
-complete -c gitb -n "$__gitb_branch" -a "(__gitb_local_branches)" -d branch
+complete -c gitb -n "$__gitb_branch" -a "list remote main new newd delete prev recent gone tag help"
 set -l __gitb_tag "__gitb_using_cmd tag t tg; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_tag" -a "annotated commit all push push-all delete delete-all list remote help"
 set -l __gitb_config "__gitb_using_cmd config cf cfg conf; and __gitb_at_position 2"
@@ -608,17 +620,20 @@ complete -c gitb -n "$__gitb_config" -a "default separator editor ticket scopes 
 set -l __gitb_undo "__gitb_using_cmd undo un; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_undo" -a "commit amend merge rebase stash help"
 set -l __gitb_reset "__gitb_using_cmd reset res; and __gitb_at_position 2"
-complete -c gitb -n "$__gitb_reset" -a "soft undo interactive help"
+complete -c gitb -n "$__gitb_reset" -a "soft undo interactive ref help"
 set -l __gitb_stash "__gitb_using_cmd stash st sta; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_stash" -a "select all list pop show drop apply help"
 set -l __gitb_worktree "__gitb_using_cmd worktree wt tree; and __gitb_at_position 2"
-complete -c gitb -n "$__gitb_worktree" -a "list add addd addb addr remove prune lock unlock move path help"
+complete -c gitb -n "$__gitb_worktree" -a "list add addd addb addr manage goto remove prune lock unlock move path help"
 set -l __gitb_origin "__gitb_using_cmd origin or o remote; and __gitb_at_position 2"
-complete -c gitb -n "$__gitb_origin" -a "set change rename remove help"
+complete -c gitb -n "$__gitb_origin" -a "show set change rename remove help"
 set -l __gitb_log "__gitb_using_cmd log l lg; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_log" -a "branch compare search all dump ai help"
+complete -c gitb -n "$__gitb_log" -a "(__gitb_local_branches)" -d branch
 set -l __gitb_diff "__gitb_using_cmd diff d di; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_diff" -a "staged all branch commit ai help"
+set -l __gitb_update "__gitb_using_cmd update up upd; and __gitb_at_position 2"
+complete -c gitb -n "$__gitb_update" -a "check force help"
 set -l __gitb_hook "__gitb_using_cmd hook ho hk; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_hook" -a "list create edit toggle test show remove select install help"
 function __gitb_at_log_branch
@@ -628,13 +643,20 @@ function __gitb_at_log_branch
     contains -- $tokens[3] branch b
 end
 complete -c gitb -n __gitb_at_log_branch -a "local remote all help"
-function __gitb_at_wip_backend
+function __gitb_at_wip_up_backend
     set -l tokens (commandline -opc)
     test (count $tokens) -ge 3; or return 1
     contains -- $tokens[2] wip w; or return 1
-    contains -- $tokens[3] up u down d
+    contains -- $tokens[3] up u
 end
-complete -c gitb -n __gitb_at_wip_backend -a "stash branch worktree nopush"
+complete -c gitb -n __gitb_at_wip_up_backend -a "stash branch worktree nopush"
+function __gitb_at_wip_down_backend
+    set -l tokens (commandline -opc)
+    test (count $tokens) -ge 3; or return 1
+    contains -- $tokens[2] wip w; or return 1
+    contains -- $tokens[3] down d
+end
+complete -c gitb -n __gitb_at_wip_down_backend -a "stash branch worktree"
 function __gitb_at_config_auto
     set -l tokens (commandline -opc)
     test (count $tokens) -eq 3; or return 1

@@ -95,6 +95,39 @@ wizard_script() {
         [ -z "$(GIT_CONFIG_GLOBAL="$BATS_TEST_TMPDIR/gitconfig-global" git config --global --get gitbasher.ai-model)" ]
 }
 
+@test "wizard: existing key offers one-keystroke keep and proceeds" {
+    git config gitbasher.ai-provider openrouter
+    git config gitbasher.ai-api-key-openrouter "sk-test-key-1234567890abcdef"
+    # Enter (keep provider) | Enter (keep key) | Enter (skip model)
+    run with_timeout bash -c "$(wizard_script 'configure_ai_wizard')" <<< $'\n\n\n'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"keep it"* ]]
+    [[ "$output" == *"Keeping the existing key."* ]]
+    [[ "$output" != *"Storage options"* ]]
+    [[ "$output" == *"AI setup complete"* ]]
+    [ "$(git config --get gitbasher.ai-api-key-openrouter)" = "sk-test-key-1234567890abcdef" ]
+}
+
+@test "cfg key: 0 at the keep prompt removes the existing key" {
+    git config gitbasher.ai-provider openrouter
+    git config gitbasher.ai-api-key-openrouter "sk-test-key-1234567890abcdef"
+    run with_timeout bash -c "$(wizard_script 'config_script key')" <<< "0"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Removed AI API key"* ]]
+    [ -z "$(git config --get gitbasher.ai-api-key-openrouter)" ]
+}
+
+@test "cfg key: r at the keep prompt continues into key entry" {
+    git config gitbasher.ai-provider openrouter
+    git config gitbasher.ai-api-key-openrouter "sk-test-key-1234567890abcdef"
+    # r (replace) | n (env-var question, its newline feeds the hidden
+    # input = keep silently) — key must survive since entry was skipped
+    run with_timeout bash -c "$(wizard_script 'config_script key')" <<< $'rn\n'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Storage options"* ]]
+    [ "$(git config --get gitbasher.ai-api-key-openrouter)" = "sk-test-key-1234567890abcdef" ]
+}
+
 # ===== standalone behavior is unchanged =====
 
 @test "standalone cfg provider: Enter exits without running other steps" {

@@ -34,7 +34,7 @@ function set_default_branch {
     echo
 
     [ "$GITBASHER_NO_REPO" = "true" ] && exit
-    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (Y/n)?"
     yes_no_choice "\nSet '${branch_name}' globally" "true"
     main_branch=$(set_config_value gitbasher.branch $branch_name "true")
 }
@@ -85,7 +85,7 @@ function set_sep {
     echo
 
     [ "$GITBASHER_NO_REPO" = "true" ] && exit
-    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (Y/n)?"
     yes_no_choice "\nSet '${sep}' globally" "true"
     sep=$(set_config_value gitbasher.sep "$new_sep" "true")
 }
@@ -128,7 +128,7 @@ function set_editor {
     echo
 
     [ "$GITBASHER_NO_REPO" = "true" ] && exit
-    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (Y/n)?"
     yes_no_choice "\nSet '${editor}' globally" "true"
     editor=$(set_config_value core.editor "$choice" "true")
 }
@@ -176,7 +176,7 @@ function set_ticket {
     echo
 
     [ "$GITBASHER_NO_REPO" = "true" ] && exit
-    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (Y/n)?"
     yes_no_choice "\nSet '${ticket_name}' globally" "true"
     ticket_name=$(set_config_value gitbasher.ticket "$ticket_name" "true")
 }
@@ -221,6 +221,26 @@ function configure_ai_key {
         echo -e "${YELLOW}No AI API key is set for '${provider}'.${ENDCOLOR}"
     else
         echo -e "AI API key for '${provider}' is ${GREEN}configured${ENDCOLOR}: ${BLUE}$(mask_api_key "$ai_api_key")${ENDCOLOR}"
+        echo
+        # Fast path: keeping a working key should be one keystroke, not a
+        # walk through the storage options and a hidden input.
+        echo -e "Press ${YELLOW}Enter${ENDCOLOR} to keep it, ${YELLOW}r${ENDCOLOR} to replace, or ${YELLOW}0${ENDCOLOR} to remove"
+        local _key_action=""
+        read_key _key_action || { if [ -n "$_chained" ]; then return 130; fi; exit; }
+        if [ "$_key_action" = "0" ]; then
+            unset_ai_api_key
+            echo
+            echo -e "${GREEN}✓ Removed AI API key for '${provider}' from '${project_name}'${ENDCOLOR}"
+            if [ -n "$_chained" ]; then return 0; fi
+            exit
+        fi
+        normalize_key "$_key_action"
+        if [ "$normalized_key" != "r" ]; then
+            echo -e "Keeping the existing key."
+            if [ -n "$_chained" ]; then return 0; fi
+            exit
+        fi
+        echo
     fi
     case "$provider" in
         openai)
@@ -251,7 +271,7 @@ function configure_ai_key {
     echo -e "  ${GREEN}env var${ENDCOLOR}    — recommended; the key never touches disk via gitbasher"
     echo -e "  ${BLUE}git config${ENDCOLOR} — convenient, but stored in plaintext under .git/config (or ~/.gitconfig if global)"
     echo
-    read -n 1 -p "Use environment variable (recommended)? (y/n) " ai_storage_choice \
+    read -n 1 -p "Use environment variable (recommended)? (Y/n) " ai_storage_choice \
         || { if [ -n "$_chained" ]; then echo; return 130; fi; ai_storage_choice="n"; }
     echo
     if is_yes "$ai_storage_choice"; then
@@ -296,7 +316,7 @@ function configure_ai_key {
     # Basic validation - check for reasonable API key format
     if [[ ! "$ai_key_input" =~ ^[a-zA-Z0-9._-]{20,}$ ]]; then
         echo -e "${YELLOW}⚠  API key format does not look like a valid ${provider} key.${ENDCOLOR}" >&2
-        read -n 1 -p "Continue anyway? (y/n) " -s choice \
+        read -n 1 -p "Continue anyway? (Y/n) " -s choice \
             || { if [ -n "$_chained" ]; then echo; return 130; fi; choice="n"; }
         echo
         if ! is_yes "$choice"; then
@@ -318,7 +338,7 @@ function configure_ai_key {
         if [ -n "$_chained" ]; then return 0; fi
         exit
     fi
-    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (Y/n)?"
     echo -e "${RED}⚠  Global API keys are stored in plaintext in ~/.gitconfig.${ENDCOLOR}"
     echo -e "${CYAN}💡 For better security, set ${BLUE}GITB_AI_API_KEY_${provider_upper}${CYAN} as an environment variable instead.${ENDCOLOR}"
     # Non-exiting confirm (yes_no_choice exits the process on "no", which
@@ -460,7 +480,7 @@ function configure_ai_provider {
     echo
 
     if [ "$GITBASHER_NO_REPO" != "true" ]; then
-        echo -e "Do you want to set this provider ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+        echo -e "Do you want to set this provider ${YELLOW}globally${ENDCOLOR} for all projects (Y/n)?"
         # Non-exiting confirm: yes_no_choice exits the process on "no",
         # which skipped the missing-key follow-up below — the exact
         # surprise that block exists to prevent.
@@ -485,7 +505,7 @@ function configure_ai_provider {
         echo -e "${YELLOW}No API key is set for '${new_provider}'.${ENDCOLOR}"
         echo -e "${CYAN}AI commands will be blocked until a key is configured.${ENDCOLOR}"
         echo
-        echo -e "Set one now? (y/n)"
+        echo -e "Set one now? (Y/n)"
         if read -n 1 -s key_choice && is_yes "$key_choice"; then
             echo
             configure_ai_key
@@ -527,7 +547,7 @@ function configure_ai_model {
         openai)
             echo -e "  • ${BLUE}gpt-5.4-nano${ENDCOLOR} - Cheapest+fastest, ideal for one-line subjects (~\$0.20/\$1.25 per M)"
             echo -e "  • ${BLUE}gpt-5.4-mini${ENDCOLOR} - Balanced for full-body prose and strict TSV output (~\$0.75/\$4.50 per M)"
-            echo -e "  • ${BLUE}gpt-5.4${ENDCOLOR} - Flagship, only worth it for the hardest grouping cases"
+            echo -e "  • ${BLUE}gpt-5.5${ENDCOLOR} - Flagship, only worth it for the hardest grouping cases"
             ;;
         ollama)
             echo -e "  • ${BLUE}qwen3:8b${ENDCOLOR} - Best small instruction-follower; most stable structured output"
@@ -543,10 +563,10 @@ function configure_ai_model {
             ;;
         *)
             echo -e "  • ${BLUE}openrouter/auto${ENDCOLOR} - Auto-select best available model"
-            echo -e "  • ${BLUE}google/gemini-3.1-flash-lite-preview${ENDCOLOR} - Fastest, cheapest"
-            echo -e "  • ${BLUE}google/gemini-3-flash-preview${ENDCOLOR} - Better body prose"
+            echo -e "  • ${BLUE}google/gemini-3.1-flash-lite${ENDCOLOR} - Fastest, cheapest (~\$0.25/\$1.50 per M)"
+            echo -e "  • ${BLUE}google/gemini-3.5-flash${ENDCOLOR} - Current flash generation, better body prose"
             echo -e "  • ${BLUE}anthropic/claude-haiku-4.5${ENDCOLOR} - Strict instruction following"
-            echo -e "  • ${BLUE}openai/gpt-5.4-mini${ENDCOLOR} - Strong reasoning, low cost"
+            echo -e "  • ${BLUE}anthropic/claude-sonnet-5${ENDCOLOR} - Premium quality for the hardest cases"
             ;;
     esac
     echo
@@ -632,7 +652,7 @@ function configure_ai_model {
         if [ -n "$_chained" ]; then return 0; fi
         exit
     fi
-    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (Y/n)?"
     # Non-exiting confirm (yes_no_choice exits the process on "no", which
     # would kill the wizard's remaining steps). Decline just ends the step.
     local _model_global=""
@@ -740,7 +760,7 @@ function configure_ai_proxy {
     echo
    
     [ "$GITBASHER_NO_REPO" = "true" ] && exit
-    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (Y/n)?"
     yes_no_choice "\nSet AI proxy globally" "true"
     set_ai_proxy "$ai_proxy_input"
     git config --global gitbasher.ai-proxy "$ai_proxy_input"
@@ -785,7 +805,7 @@ function configure_ai_history {
         if [ "$limit_input" -gt 20 ]; then
             echo -e "${YELLOW}High values may exceed token limits and slow down AI responses.${ENDCOLOR}"
         fi
-        read -n 1 -p "Continue anyway? (y/n) " -s choice || choice="n"
+        read -n 1 -p "Continue anyway? (Y/n) " -s choice || choice="n"
         echo
         if ! is_yes "$choice"; then
             exit
@@ -797,7 +817,7 @@ function configure_ai_history {
     echo
 
     [ "$GITBASHER_NO_REPO" = "true" ] && exit
-    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (Y/n)?"
     yes_no_choice "\nSet AI commit history limit globally" "true"
     git config --global gitbasher.ai-commit-history-limit "$limit_input"
 }
@@ -845,7 +865,7 @@ function configure_push_warn_size {
     echo
 
     [ "$GITBASHER_NO_REPO" = "true" ] && exit
-    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (Y/n)?"
     yes_no_choice "\nSet push size warning globally" "true"
     git config --global gitbasher.push-warn-size "$limit_input"
 }
@@ -883,7 +903,7 @@ function configure_ai_diff {
         lines_input="$validated_number"
         if [ "$lines_input" -lt 50 ] || [ "$lines_input" -gt 2000 ]; then
             echo -e "${YELLOW}⚠  Value is outside the recommended range (50-2000).${ENDCOLOR}"
-            read -n 1 -p "Continue anyway? (y/n) " -s choice || choice="n"
+            read -n 1 -p "Continue anyway? (Y/n) " -s choice || choice="n"
             echo
             if ! is_yes "$choice"; then
                 exit
@@ -902,7 +922,7 @@ function configure_ai_diff {
         chars_input="$validated_number"
         if [ "$chars_input" -lt 4000 ] || [ "$chars_input" -gt 100000 ]; then
             echo -e "${YELLOW}⚠  Value is outside the recommended range (4000-100000).${ENDCOLOR}"
-            read -n 1 -p "Continue anyway? (y/n) " -s choice || choice="n"
+            read -n 1 -p "Continue anyway? (Y/n) " -s choice || choice="n"
             echo
             if ! is_yes "$choice"; then
                 exit
@@ -919,7 +939,7 @@ function configure_ai_diff {
 
     echo
     [ "$GITBASHER_NO_REPO" = "true" ] && exit
-    echo -e "Do you want to apply ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+    echo -e "Do you want to apply ${YELLOW}globally${ENDCOLOR} for all projects (Y/n)?"
     yes_no_choice "\nApply AI diff settings globally" "true"
     if [ -n "$lines_input" ]; then
         git config --global gitbasher.ai-diff-limit "$lines_input"
@@ -982,7 +1002,7 @@ function set_scopes {
     echo
 
     [ "$GITBASHER_NO_REPO" = "true" ] && exit
-    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (Y/n)?"
     yes_no_choice "\nSet '${scopes}' globally" "true"
 
     git config --global --replace-all gitbasher.scopes "$scopes_raw"

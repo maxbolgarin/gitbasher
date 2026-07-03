@@ -26,12 +26,139 @@ function project_status {
 # $1: optional branch name
 function gitlog {
     local branch="$1"
+    local format="%C(yellow)%h%C(reset)%C(auto)%d%C(reset) | %s | %C(blue)%an%C(reset) | %C(green)%cr%C(reset)"
     if [ -n "$branch" ]; then
         echo -e "${YELLOW}Git log for branch: ${BLUE}$branch${ENDCOLOR}"
-        git log "$branch" --pretty="%C(Yellow)%h%C(reset) | %C(Cyan)%ad%C(reset) | %C(Blue)%an%C(reset) | %s (%C(Green)%cr%C(reset))"
+        git log "$branch" --pretty="$format"
     else
-        git log --pretty="%C(Yellow)%h%C(reset) | %C(Cyan)%ad%C(reset) | %C(Blue)%an%C(reset) | %s (%C(Green)%cr%C(reset))"
+        git log --pretty="$format"
     fi
+}
+
+
+### Function collects commit hashes for the log browser
+# $1: kind of selection
+#     * head - current HEAD history
+#     * count - last $2 commits
+#     * path - history of file $2 (follows renames)
+#     * ref - history of ref or range $2
+#     * grep - commits with $2 in the message
+# $2: value for the kind (count / path / ref / search term)
+# Returns:
+#     log_browse_hashes - array of short hashes, newest first
+#     log_browse_total - number of collected hashes
+function log_collect_hashes {
+    local kind="$1"
+    local value="$2"
+    local cap=1000
+
+    log_browse_hashes=()
+    log_browse_total=0
+
+    local output
+    case "$kind" in
+        "head")
+            output=$(git --no-pager log -n "$cap" --pretty="%h" 2>/dev/null)
+        ;;
+        "count")
+            if [[ "$value" =~ ^[0-9]+$ ]] && [ "$value" -gt "$cap" ]; then
+                value="$cap"
+            fi
+            output=$(git --no-pager log -n "$value" --pretty="%h" 2>/dev/null)
+        ;;
+        "path")
+            output=$(git --no-pager log --follow -n "$cap" --pretty="%h" -- "$value" 2>/dev/null)
+        ;;
+        "ref")
+            output=$(git --no-pager log -n "$cap" --pretty="%h" "$value" 2>/dev/null)
+        ;;
+        "grep")
+            output=$(git --no-pager log -n "$cap" --pretty="%h" -i --grep="$value" 2>/dev/null)
+        ;;
+    esac
+
+    if [ -z "$output" ]; then
+        return
+    fi
+
+    local line
+    while IFS= read -r line; do
+        if [ -n "$line" ]; then
+            log_browse_hashes+=("$line")
+        fi
+    done <<< "$output"
+    log_browse_total=${#log_browse_hashes[@]}
+}
+
+
+### Function renders one page of the collected commits as a numbered list
+# $1: zero-based index into log_browse_hashes to start from
+# $2: how many commits to render
+# $3: non-empty to mark commits missing from the upstream with ↑
+# Uses log_browse_hashes filled by log_collect_hashes
+function log_commit_list {
+    local start="$1"
+    local count="$2"
+    local mark_unpushed="$3"
+
+    local total=${#log_browse_hashes[@]}
+    if [ "$total" -eq 0 ]; then
+        return
+    fi
+
+    local end=$((start + count))
+    if [ "$end" -gt "$total" ]; then
+        end=$total
+    fi
+
+    local page_hashes=()
+    local i
+    for ((i = start; i < end; i++)); do
+        page_hashes+=("${log_browse_hashes[i]}")
+    done
+    if [ ${#page_hashes[@]} -eq 0 ]; then
+        return
+    fi
+
+    local unpushed=""
+    if [ -n "$mark_unpushed" ] && git rev-parse --verify --quiet "@{u}" >/dev/null 2>&1; then
+        unpushed=$(git --no-pager rev-list --abbrev-commit "@{u}..HEAD" 2>/dev/null | tr '\n' ' ')
+    fi
+
+    # %x1f field separators keep subjects containing '|' from breaking the
+    # columns; awk re-emits '|' only as the column separator.
+    local rows
+    rows=$(git --no-pager log --no-walk=unsorted --pretty="%h%x1f%s%x1f%d%x1f%an%x1f%cr" "${page_hashes[@]}" 2>/dev/null | \
+        awk -v hash_c="$YELLOW_ES" -v deco_c="$YELLOW_ES" -v author_c="$BLUE_ES" -v time_c="$GREEN_ES" -v end_c="$ENDCOLOR_ES" '
+        BEGIN { FS = "\037" }
+        {
+            subj = $2
+            gsub(/\|/, "¦", subj)
+            if (length(subj) > 60) subj = substr(subj, 1, 57) "..."
+            deco = $3
+            gsub(/^[ \t]+|[ \t]+$/, "", deco)
+            if (deco != "") subj = subj " " deco_c deco end_c
+            print hash_c $1 end_c "|" subj "|" author_c $4 end_c "|" time_c $5 end_c
+        }' | column -ts'|')
+
+    local index=$start
+    local row_index=0
+    local line mark hash
+    while IFS= read -r line; do
+        if [ -z "$line" ]; then
+            continue
+        fi
+        hash="${page_hashes[row_index]}"
+        mark=" "
+        if [ -n "$unpushed" ]; then
+            case " $unpushed " in
+                *" $hash "*) mark="↑" ;;
+            esac
+        fi
+        index=$((index + 1))
+        row_index=$((row_index + 1))
+        printf "%2d. %s %s\n" "$index" "$mark" "$line"
+    done <<< "$rows"
 }
 
 
@@ -392,6 +519,9 @@ function gitlog_script {
         "search"|"s")
             gitlog_search "$2"
         ;;
+        "all"|"dump")
+            gitlog "$2"
+        ;;
         "help"|"h")
             echo -e "${YELLOW}gitb log${ENDCOLOR} - Git log utilities"
             echo
@@ -400,6 +530,7 @@ function gitlog_script {
             echo
             echo -e "${YELLOW}Commands:${ENDCOLOR}"
             echo -e "  ${GREEN}(no command)${ENDCOLOR}   Show log for current branch"
+            echo -e "  ${GREEN}all, dump${ENDCOLOR}      Print the full log for the current branch"
             echo -e "  ${GREEN}branch, b${ENDCOLOR}      View log from different branches"
             echo -e "  ${GREEN}compare, c${ENDCOLOR}     Compare log between two branches"
             echo -e "  ${GREEN}search, s${ENDCOLOR}      Search git log with various criteria"
@@ -407,6 +538,7 @@ function gitlog_script {
             echo
             echo -e "${YELLOW}Examples:${ENDCOLOR}"
             echo -e "  gitb log"
+            echo -e "  gitb log all"
             echo -e "  gitb log branch"
             echo -e "  gitb log branch local"
             echo -e "  gitb log compare"

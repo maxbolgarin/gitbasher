@@ -1304,30 +1304,11 @@ function config_source_tag {
 
 
 ### Function prints current config
-function print_configuration {
-    echo -e "${YELLOW}Current configuration:${ENDCOLOR}"
-
-    local user_name=$(get_config_value user.name)
-    if [ -n "$user_name" ]; then
-        echo -e "\tuser.name:\t${YELLOW}$user_name${ENDCOLOR} $(config_source_tag user.name)"
-    else
-        echo -e "\tuser.name:\t${RED}not set${ENDCOLOR}"
-    fi
-    local user_email=$(get_config_value user.email)
-    if [ -n "$user_email" ]; then
-        echo -e "\tuser.email:\t${YELLOW}$user_email${ENDCOLOR} $(config_source_tag user.email)"
-    else
-        echo -e "\tuser.email:\t${RED}not set${ENDCOLOR}"
-    fi
-    echo -e "\tdefault:\t${YELLOW}$main_branch${ENDCOLOR} $(config_source_tag gitbasher.branch)"
-    echo -e "\tseparator:\t${YELLOW}$sep${ENDCOLOR} $(config_source_tag gitbasher.sep)"
-    echo -e "\teditor:\t\t${YELLOW}$editor${ENDCOLOR} $(config_source_tag core.editor)"
-    if [ "$ticket_name" != "" ]; then
-        echo -e "\tticket:\t\t${YELLOW}$ticket_name${ENDCOLOR} $(config_source_tag gitbasher.ticket)"
-    fi
-    if [ "$scopes" != "" ]; then
-        echo -e "\tscopes:\t\t${YELLOW}$scopes${ENDCOLOR} $(config_source_tag gitbasher.scopes)"
-    fi
+### Print the AI rows of the configuration table (provider, base URL, key,
+### other stored keys, model/per-task models). Extracted so the cfg-ai wizard
+### can show a summary of exactly what it configured; print_configuration
+### embeds it for the full table.
+function print_ai_configuration {
     local ai_provider=$(get_ai_provider)
     echo -e "\tAI provider:\t${GREEN}$ai_provider${ENDCOLOR} $(config_source_tag gitbasher.ai-provider)"
     local ai_base_url=$(get_ai_base_url)
@@ -1374,6 +1355,34 @@ function print_configuration {
         echo -e "\t\t\t${GREEN}$(get_ai_model_for full)${ENDCOLOR} ${GRAY}(full)${ENDCOLOR} $(config_source_tag gitbasher.ai-model-full)"
         echo -e "\t\t\t${GREEN}$(get_ai_model_for grouping)${ENDCOLOR} ${GRAY}(grouping)${ENDCOLOR} $(config_source_tag gitbasher.ai-model-grouping)"
     fi
+}
+
+
+function print_configuration {
+    echo -e "${YELLOW}Current configuration:${ENDCOLOR}"
+
+    local user_name=$(get_config_value user.name)
+    if [ -n "$user_name" ]; then
+        echo -e "\tuser.name:\t${YELLOW}$user_name${ENDCOLOR} $(config_source_tag user.name)"
+    else
+        echo -e "\tuser.name:\t${RED}not set${ENDCOLOR}"
+    fi
+    local user_email=$(get_config_value user.email)
+    if [ -n "$user_email" ]; then
+        echo -e "\tuser.email:\t${YELLOW}$user_email${ENDCOLOR} $(config_source_tag user.email)"
+    else
+        echo -e "\tuser.email:\t${RED}not set${ENDCOLOR}"
+    fi
+    echo -e "\tdefault:\t${YELLOW}$main_branch${ENDCOLOR} $(config_source_tag gitbasher.branch)"
+    echo -e "\tseparator:\t${YELLOW}$sep${ENDCOLOR} $(config_source_tag gitbasher.sep)"
+    echo -e "\teditor:\t\t${YELLOW}$editor${ENDCOLOR} $(config_source_tag core.editor)"
+    if [ "$ticket_name" != "" ]; then
+        echo -e "\tticket:\t\t${YELLOW}$ticket_name${ENDCOLOR} $(config_source_tag gitbasher.ticket)"
+    fi
+    if [ "$scopes" != "" ]; then
+        echo -e "\tscopes:\t\t${YELLOW}$scopes${ENDCOLOR} $(config_source_tag gitbasher.scopes)"
+    fi
+    print_ai_configuration
     local ai_proxy=$(get_ai_proxy)
     if [ -n "$ai_proxy" ]; then
         echo -e "\tAI proxy:\t${GREEN}$ai_proxy${ENDCOLOR} $(config_source_tag gitbasher.ai-proxy)"

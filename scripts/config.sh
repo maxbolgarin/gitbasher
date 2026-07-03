@@ -183,11 +183,19 @@ function set_ticket {
 
 
 ### Function asks user to set AI API key
+# $1: optional "--chained" — wizard mode: every exit becomes a return so the
+#     next wizard step still runs (0 = done/skipped, 1 = validation failure,
+#     130 = EOF/closed stdin, which the wizard treats as abort).
 function configure_ai_key {
+    local _chained=""
+    [ "$1" = "--chained" ] && _chained="true"
+
     # Walk the user through provider selection first when no provider is set.
     # Otherwise we'd silently default to openrouter and ask for the wrong key.
     # configure_ai_provider chains into key entry on its own when applicable.
-    if [ -z "$(git config --get gitbasher.ai-provider 2>/dev/null)" ] \
+    # In wizard mode the provider step has just run — skip the redirect.
+    if [ -z "$_chained" ] \
+       && [ -z "$(git config --get gitbasher.ai-provider 2>/dev/null)" ] \
        && [ -z "$(git config --global --get gitbasher.ai-provider 2>/dev/null)" ]; then
         configure_ai_provider
         return
@@ -204,6 +212,7 @@ function configure_ai_key {
     if ! ai_provider_requires_api_key; then
         echo -e "${YELLOW}Provider '${provider}' does not require an API key.${ENDCOLOR}"
         echo -e "Switch providers with ${GREEN}gitb cfg provider${ENDCOLOR} to set one."
+        if [ -n "$_chained" ]; then return 0; fi
         exit
     fi
 
@@ -242,7 +251,8 @@ function configure_ai_key {
     echo -e "  ${GREEN}env var${ENDCOLOR}    — recommended; the key never touches disk via gitbasher"
     echo -e "  ${BLUE}git config${ENDCOLOR} — convenient, but stored in plaintext under .git/config (or ~/.gitconfig if global)"
     echo
-    read -n 1 -p "Use environment variable (recommended)? (y/n) " ai_storage_choice || ai_storage_choice="n"
+    read -n 1 -p "Use environment variable (recommended)? (y/n) " ai_storage_choice \
+        || { if [ -n "$_chained" ]; then echo; return 130; fi; ai_storage_choice="n"; }
     echo
     if is_yes "$ai_storage_choice"; then
         echo
@@ -252,6 +262,7 @@ function configure_ai_key {
         echo -e "${CYAN}gitbasher checks env vars before git config every run, so this takes precedence.${ENDCOLOR}"
         echo -e "Append it now with:"
         echo -e "  ${GREEN}echo \"export GITB_AI_API_KEY_${provider_upper}='your-${provider}-key'\" >> $(printf '%q' "$rc_file")${ENDCOLOR}"
+        if [ -n "$_chained" ]; then return 0; fi
         exit
     fi
 
@@ -268,6 +279,7 @@ function configure_ai_key {
     read_silent_input ai_key_input "API Key: "
 
     if [ "$ai_key_input" == "" ]; then
+        if [ -n "$_chained" ]; then return 0; fi
         exit
     fi
 
@@ -275,6 +287,7 @@ function configure_ai_key {
         unset_ai_api_key
         echo
         echo -e "${GREEN}✓ Removed AI API key for '${provider}' from '${project_name}'${ENDCOLOR}"
+        if [ -n "$_chained" ]; then return 0; fi
         exit
     fi
 
@@ -283,9 +296,11 @@ function configure_ai_key {
     # Basic validation - check for reasonable API key format
     if [[ ! "$ai_key_input" =~ ^[a-zA-Z0-9._-]{20,}$ ]]; then
         echo -e "${YELLOW}⚠  API key format does not look like a valid ${provider} key.${ENDCOLOR}" >&2
-        read -n 1 -p "Continue anyway? (y/n) " -s choice || choice="n"
+        read -n 1 -p "Continue anyway? (y/n) " -s choice \
+            || { if [ -n "$_chained" ]; then echo; return 130; fi; choice="n"; }
         echo
         if ! is_yes "$choice"; then
+            if [ -n "$_chained" ]; then return 1; fi
             exit 1
         fi
     fi
@@ -299,12 +314,22 @@ function configure_ai_key {
     ai_smoke_check || true
     echo
 
-    [ "$GITBASHER_NO_REPO" = "true" ] && exit
+    if [ "$GITBASHER_NO_REPO" = "true" ]; then
+        if [ -n "$_chained" ]; then return 0; fi
+        exit
+    fi
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
     echo -e "${RED}⚠  Global API keys are stored in plaintext in ~/.gitconfig.${ENDCOLOR}"
     echo -e "${CYAN}💡 For better security, set ${BLUE}GITB_AI_API_KEY_${provider_upper}${CYAN} as an environment variable instead.${ENDCOLOR}"
-    yes_no_choice "\nSet AI API key globally" "true"
-    ai_api_key=$(set_ai_api_key "$ai_key_input" "true")
+    # Non-exiting confirm (yes_no_choice exits the process on "no", which
+    # would kill the wizard's remaining steps). Decline just ends the step.
+    local _key_global=""
+    read_key _key_global || { if [ -n "$_chained" ]; then return 130; fi; _key_global="n"; }
+    if is_yes "$_key_global"; then
+        echo -e "${YELLOW}Set AI API key globally${ENDCOLOR}"
+        ai_api_key=$(set_ai_api_key "$ai_key_input" "true")
+    fi
+    return 0
 }
 
 
@@ -312,7 +337,12 @@ function configure_ai_key {
 # Provider determines which API endpoint, auth scheme, and per-task default
 # models are used. Custom OpenAI-compatible gateways can be reached by leaving
 # the provider as openai/openrouter and overriding gitbasher.ai-base-url.
+# $1: optional "--chained" — wizard mode: exits become returns
+#     (0 = done/skipped, 1 = validation failure, 130 = EOF).
 function configure_ai_provider {
+    local _chained=""
+    [ "$1" = "--chained" ] && _chained="true"
+
     echo -e "${YELLOW}Choose AI Provider${ENDCOLOR}"
     echo
 
@@ -333,9 +363,13 @@ function configure_ai_provider {
     echo
     echo -e "Press Enter to keep the current provider, or enter 0 to reset to default (${AI_DEFAULT_PROVIDER})"
 
-    read_editable_input choice "Choice (1-4): "
+    if ! read_editable_input choice "Choice (1-4): "; then
+        if [ -n "$_chained" ]; then return 130; fi
+        exit
+    fi
 
     if [ "$choice" == "" ]; then
+        if [ -n "$_chained" ]; then return 0; fi
         exit
     fi
 
@@ -344,6 +378,7 @@ function configure_ai_provider {
         git config --global --unset gitbasher.ai-provider 2>/dev/null
         echo
         echo -e "${GREEN}✓ Reset provider to default (${AI_DEFAULT_PROVIDER})${ENDCOLOR}"
+        if [ -n "$_chained" ]; then return 0; fi
         exit
     fi
 
@@ -356,6 +391,7 @@ function configure_ai_provider {
         4) new_provider="claude" ;;
         *)
             echo -e "${RED}✗ Invalid choice.${ENDCOLOR}" >&2
+            if [ -n "$_chained" ]; then return 1; fi
             exit 1
             ;;
     esac
@@ -391,6 +427,7 @@ function configure_ai_provider {
                 # be stored unchecked and fail later with opaque curl errors.
                 if ! validate_proxy_url "$host_input"; then
                     echo -e "${RED}✗ '$host_input' does not look like a valid host URL (expected http://host[:port]).${ENDCOLOR}"
+                    if [ -n "$_chained" ]; then return 1; fi
                     exit 1
                 fi
                 set_ai_ollama_host "$host_input" >/dev/null
@@ -428,7 +465,7 @@ function configure_ai_provider {
         # which skipped the missing-key follow-up below — the exact
         # surprise that block exists to prevent.
         local _prov_key=""
-        read_key _prov_key || _prov_key="n"
+        read_key _prov_key || { if [ -n "$_chained" ]; then return 130; fi; _prov_key="n"; }
         if is_yes "$_prov_key"; then
             echo -e "${YELLOW}Set AI provider globally${ENDCOLOR}"
             set_config_value gitbasher.ai-provider "$new_provider" "true"
@@ -442,7 +479,8 @@ function configure_ai_provider {
     # If the new provider needs an API key but none is configured for it,
     # walk the user through setting one now — this is the surprise the user
     # hit when switching from openrouter to openai with a stale legacy key.
-    if ai_provider_requires_api_key && [ -z "$(get_ai_api_key)" ]; then
+    # Skipped in wizard mode: the wizard runs its own key step next.
+    if [ -z "$_chained" ] && ai_provider_requires_api_key && [ -z "$(get_ai_api_key)" ]; then
         echo
         echo -e "${YELLOW}No API key is set for '${new_provider}'.${ENDCOLOR}"
         echo -e "${CYAN}AI commands will be blocked until a key is configured.${ENDCOLOR}"
@@ -460,7 +498,12 @@ function configure_ai_provider {
 
 
 ### Function asks user to configure AI model
+# $1: optional "--chained" — wizard mode: exits become returns
+#     (0 = done/skipped, 1 = validation failure, 130 = EOF).
 function configure_ai_model {
+    local _chained=""
+    [ "$1" = "--chained" ] && _chained="true"
+
     echo -e "${YELLOW}Configure AI Model${ENDCOLOR}"
     echo
 
@@ -538,9 +581,13 @@ function configure_ai_model {
 
     echo -e "Press Enter to exit without changes, or 0 to clear the override (use per-task defaults)"
 
-    read_editable_input model_input "Model ID: "
+    if ! read_editable_input model_input "Model ID: "; then
+        if [ -n "$_chained" ]; then return 130; fi
+        exit
+    fi
 
     if [ "$model_input" == "" ]; then
+        if [ -n "$_chained" ]; then return 0; fi
         exit
     fi
 
@@ -550,6 +597,7 @@ function configure_ai_model {
         git config --global --unset gitbasher.ai-model 2>/dev/null
         echo
         echo -e "${GREEN}✓ Cleared global model override — each task now uses its per-task default${ENDCOLOR}"
+        if [ -n "$_chained" ]; then return 0; fi
         exit
     fi
 
@@ -561,6 +609,7 @@ function configure_ai_model {
             model_input="${ollama_model_list[$((model_input - 1))]}"
         else
             echo -e "${RED}✗ Invalid selection: ${model_input}${ENDCOLOR}" >&2
+            if [ -n "$_chained" ]; then return 1; fi
             exit 1
         fi
     fi
@@ -570,6 +619,7 @@ function configure_ai_model {
     if ! is_valid_model_id "$model_input"; then
         echo -e "${RED}✗ Invalid model ID format.${ENDCOLOR}" >&2
         echo -e "${YELLOW}Use only letters, numbers, dots, dashes, underscores, colons, and slashes.${ENDCOLOR}" >&2
+        if [ -n "$_chained" ]; then return 1; fi
         exit 1
     fi
 
@@ -578,15 +628,63 @@ function configure_ai_model {
     echo -e "${GREEN}✓ Set AI model to '$model_input' for '${project_name}'${ENDCOLOR}"
     echo
 
-    [ "$GITBASHER_NO_REPO" = "true" ] && exit
+    if [ "$GITBASHER_NO_REPO" = "true" ]; then
+        if [ -n "$_chained" ]; then return 0; fi
+        exit
+    fi
     echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (y/n)?"
-    yes_no_choice "\nSet AI model globally" "true"
-    set_config_value gitbasher.ai-model "$model_input" "true"
+    # Non-exiting confirm (yes_no_choice exits the process on "no", which
+    # would kill the wizard's remaining steps). Decline just ends the step.
+    local _model_global=""
+    read_key _model_global || { if [ -n "$_chained" ]; then return 130; fi; _model_global="n"; }
+    if is_yes "$_model_global"; then
+        echo -e "${YELLOW}Set AI model globally${ENDCOLOR}"
+        set_config_value gitbasher.ai-model "$model_input" "true"
+    fi
+    return 0
+}
+
+
+### Multi-step AI setup: provider → API key → model → summary.
+# Chains the standalone configure_* steps in wizard mode (--chained turns
+# their exits into returns): Enter skips a step, a validation failure moves
+# on to the next step without losing earlier answers, EOF aborts the wizard.
+function configure_ai_wizard {
+    local _rc
+
+    echo -e "${YELLOW}Step 1/3 — Provider${ENDCOLOR}"
+    echo
+    configure_ai_provider --chained
+    _rc=$?
+    if [ "$_rc" -eq 130 ]; then prompt_aborted; fi
+
+    echo
+    echo -e "${YELLOW}Step 2/3 — API key${ENDCOLOR}"
+    echo
+    if ai_provider_requires_api_key; then
+        configure_ai_key --chained
+        _rc=$?
+        if [ "$_rc" -eq 130 ]; then prompt_aborted; fi
+    else
+        echo -e "Provider '$(get_ai_provider)' does not require an API key — skipping."
+    fi
+
+    echo
+    echo -e "${YELLOW}Step 3/3 — Model${ENDCOLOR}"
+    echo
+    configure_ai_model --chained
+    _rc=$?
+    if [ "$_rc" -eq 130 ]; then prompt_aborted; fi
+
+    echo
+    echo -e "${GREEN}✓ AI setup complete${ENDCOLOR}"
+    echo
+    print_ai_configuration
 }
 
 
 ### Function asks user to set AI proxy
-function configure_ai_proxy {    
+function configure_ai_proxy {
     echo -e "${YELLOW}Configure AI HTTP/SOCKS Proxy${ENDCOLOR}"
     echo
     
@@ -1091,7 +1189,8 @@ function config_script {
         editor|ed|e)          set_editor_cfg="true";;
         ticket|jira|ti|t)     set_ticket_cfg="true";;
         scopes|scope|sc|s)    set_scopes_cfg="true";;
-        ai|llm|key)           set_ai_cfg="true";;
+        ai|llm)               set_ai_cfg="true";;
+        key)                  set_ai_key_cfg="true";;
         provider|prov)        set_ai_provider_cfg="true";;
         model|m)              set_ai_model_cfg="true";;
         proxy|prx|p)          set_proxy_cfg="true";;
@@ -1118,6 +1217,8 @@ function config_script {
     elif [ -n "${set_scopes_cfg}" ]; then
         header="$header SCOPES LIST"
     elif [ -n "${set_ai_cfg}" ]; then
+        header="$header AI SETUP"
+    elif [ -n "${set_ai_key_cfg}" ]; then
         header="$header AI API KEY"
     elif [ -n "${set_ai_provider_cfg}" ]; then
         header="$header AI PROVIDER"
@@ -1183,6 +1284,11 @@ function config_script {
     fi
 
     if [ "$set_ai_cfg" == "true" ]; then
+        configure_ai_wizard
+        exit
+    fi
+
+    if [ "$set_ai_key_cfg" == "true" ]; then
         configure_ai_key
         exit
     fi
@@ -1239,7 +1345,8 @@ function config_script {
         print_help_row $PAD "editor"    "ed, e"             "Set the editor for commit messages"
         print_help_row $PAD "ticket"    "ti, t, jira"       "Set the ticket prefix used in commits and branches"
         print_help_row $PAD "scopes"    "sc"                "Set the list of suggested commit scopes"
-        print_help_row $PAD "ai"        "llm, key"          "Set the AI API key"
+        print_help_row $PAD "ai"        "llm"               "Set up AI: provider, API key, and model (wizard)"
+        print_help_row $PAD "key"       ""                  "Set the AI API key only"
         print_help_row $PAD "provider"  "prov"              "Choose the AI provider (openrouter, openai, ollama, claude)"
         print_help_row $PAD "model"     "m"                 "Set the AI model override"
         print_help_row $PAD "proxy"     "prx, p"            "Set an HTTP/SOCKS proxy for AI requests"
@@ -1254,7 +1361,7 @@ function config_script {
         echo -e "  ${GREEN}gitb cfg${ENDCOLOR}            Show current configuration"
         echo -e "  ${GREEN}gitb cfg user${ENDCOLOR}       Set user.name and user.email"
         echo -e "  ${GREEN}gitb cfg default${ENDCOLOR}    Choose the default gitbasher branch"
-        echo -e "  ${GREEN}gitb cfg ai${ENDCOLOR}         Set the AI API key (per-repo or globally)"
+        echo -e "  ${GREEN}gitb cfg ai${ENDCOLOR}         Interactive AI setup (provider, key, model)"
         exit
     fi
 

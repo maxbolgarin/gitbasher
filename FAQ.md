@@ -14,7 +14,7 @@ Only if you pick a hosted provider (OpenAI, OpenRouter). Gitbasher sends the sta
 brew install ollama          # or follow https://ollama.com for your OS
 ollama serve                 # daemon, leave running
 ollama pull llama3           # or any model you prefer
-gitb cfg ai                  # choose ollama, pick the pulled model
+gitb cfg ai                  # wizard: choose ollama, pick the pulled model
 ```
 
 After that, `gitb commit ai` runs against `http://localhost:11434` and never makes an outbound call.

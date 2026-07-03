@@ -410,7 +410,7 @@ _gitb() {
                     _values 'tag mode' 'annotated[create annotated tag]' 'commit[tag a commit]' 'all[tag everything]' 'push[push tag]' 'push-all[push all tags]' 'delete[delete tag]' 'delete-all[delete all]' 'list[list tags]' 'remote[remote tags]' 'help[show help]'
                     ;;
                 config|cf|cfg|conf)
-                    _values 'config key' 'default[default branch]' 'separator[separator char]' 'editor[editor]' 'ticket[ticket prefix]' 'scopes[scope list]' 'ai[AI key]' 'provider[AI provider]' 'model[AI model]' 'proxy[AI proxy]' 'history[AI history]' 'diff[AI diff payload]' 'push-size[warn on large pushes]' 'delete[unset a key]' 'user[user name/email]' 'auto[manage tab completion]' 'help[show help]'
+                    _values 'config key' 'default[default branch]' 'separator[separator char]' 'editor[editor]' 'ticket[ticket prefix]' 'scopes[scope list]' 'ai[AI setup wizard]' 'key[AI API key]' 'provider[AI provider]' 'model[AI model]' 'proxy[AI proxy]' 'history[AI history]' 'diff[AI diff payload]' 'push-size[warn on large pushes]' 'delete[unset a key]' 'user[user name/email]' 'auto[manage tab completion]' 'help[show help]'
                     ;;
                 undo|un)
                     _values 'undo target' 'commit[undo last commit]' 'amend[undo amend]' 'merge[undo merge]' 'rebase[undo rebase]' 'stash[undo stash]' 'help[show help]'
@@ -615,7 +615,7 @@ complete -c gitb -n "$__gitb_branch" -a "list remote main new newd delete prev r
 set -l __gitb_tag "__gitb_using_cmd tag t tg; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_tag" -a "annotated commit all push push-all delete delete-all list remote help"
 set -l __gitb_config "__gitb_using_cmd config cf cfg conf; and __gitb_at_position 2"
-complete -c gitb -n "$__gitb_config" -a "default separator editor ticket scopes ai provider model proxy history diff push-size delete user auto help"
+complete -c gitb -n "$__gitb_config" -a "default separator editor ticket scopes ai key provider model proxy history diff push-size delete user auto help"
 set -l __gitb_undo "__gitb_using_cmd undo un; and __gitb_at_position 2"
 complete -c gitb -n "$__gitb_undo" -a "commit amend merge rebase stash help"
 set -l __gitb_reset "__gitb_using_cmd reset res; and __gitb_at_position 2"

@@ -77,7 +77,7 @@ npm install -g gitbasher
 cd your-project
 gitb              # see all commands
 gitb cfg user     # set your name/email once
-gitb cfg ai       # (optional) plug in an AI key for smart commits
+gitb cfg ai       # (optional) set up AI for smart commits (provider, key, model)
 
 gitb status       # what's changed?
 gitb commit       # interactive conventional commit
@@ -820,7 +820,8 @@ gitb origin remove                               # delete the remote
 | `editor` | `ed` `e` | Commit-message editor |
 | `ticket` | `ti` `t` `jira` | Ticket prefix for commits/branches |
 | `scopes` | `sc` `s` | Common scopes |
-| `ai` | `llm` `key` | AI API key |
+| `ai` | `llm` | AI setup wizard: provider, API key, model |
+| `key` | | AI API key only |
 | `provider` | `prov` | AI provider (openrouter, openai, ollama, claude) |
 | `model` | `m` | Default AI model |
 | `proxy` | `prx` `p` | HTTP proxy for AI calls |

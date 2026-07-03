@@ -2,6 +2,17 @@
 
 All notable changes to gitbasher are generated automatically by [semantic-release](https://github.com/semantic-release/semantic-release) from [Conventional Commits](https://www.conventionalcommits.org/) on `main`. The project follows [Semantic Versioning](https://semver.org/).
 
+## [5.0.1](https://github.com/maxbolgarin/gitbasher/compare/v5.0.0...v5.0.1) (2026-07-03)
+
+### 🐛 Bug Fixes
+
+* **base:** render embedded colors in the main help instead of literal escapes ([95ffbc6](https://github.com/maxbolgarin/gitbasher/commit/95ffbc62fab836ea97f9de2bd3c542b5ae659f9a))
+* **push:** widen the transfer quiet window so ordinary pushes stay silent ([fcccb6b](https://github.com/maxbolgarin/gitbasher/commit/fcccb6b8cd941c9e721d9c392d45f351ca4aa924))
+
+### 🛠 Build System
+
+* **deps:** pin conventional-changelog-conventionalcommits to v8 ([b9163f8](https://github.com/maxbolgarin/gitbasher/commit/b9163f8c859e1cb35bbb08a57ce69a374005d3ea))
+
 ## [5.0.0](https://github.com/maxbolgarin/gitbasher/compare/v4.1.0...v5.0.0) (2026-07-03)
 
 ### ⚠ BREAKING CHANGES

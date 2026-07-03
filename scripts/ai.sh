@@ -257,17 +257,19 @@ function set_ai_model {
 }
 
 ### Per-task default model IDs (OpenRouter).
-# Picked May 2026 for the speed / cost / quality balance that fits each task:
+# Picked July 2026 for the speed / cost / quality balance that fits each task:
 #   - simple/subject (short structured output, runs interactively): the cheapest
-#     fast tier with strong format compliance.
-#   - full (header + body): a small step up — body prose quality matters more.
+#     fast tier with strong format compliance — gemini-3.1-flash-lite went GA
+#     at the preview's price ($0.25/$1.50 per M).
+#   - full (header + body): the current flash generation — body prose quality
+#     matters more, and per-commit output is tiny so the higher rate is noise.
 #   - grouping (TSV scope→file mapping, validated downstream): strict instruction
 #     following matters; this only fires when the heuristic is weak so the higher
-#     per-call cost is bounded.
-# Update these when newer GA models supersede the current preview slugs.
-readonly AI_DEFAULT_MODEL_SIMPLE="google/gemini-3.1-flash-lite-preview"
-readonly AI_DEFAULT_MODEL_SUBJECT="google/gemini-3.1-flash-lite-preview"
-readonly AI_DEFAULT_MODEL_FULL="google/gemini-3-flash-preview"
+#     per-call cost is bounded. haiku-4.5 is still the newest haiku.
+# Update these when newer GA models supersede the current slugs.
+readonly AI_DEFAULT_MODEL_SIMPLE="google/gemini-3.1-flash-lite"
+readonly AI_DEFAULT_MODEL_SUBJECT="google/gemini-3.1-flash-lite"
+readonly AI_DEFAULT_MODEL_FULL="google/gemini-3.5-flash"
 readonly AI_DEFAULT_MODEL_GROUPING="anthropic/claude-haiku-4.5"
 
 # OpenAI per-task defaults (May 2026, GPT-5.4 family).

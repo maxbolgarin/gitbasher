@@ -259,9 +259,9 @@ Each task uses a model tuned for speed/cost/quality, picked per provider. Defaul
 
 | Task | Default model | Why |
 |------|---------------|-----|
-| `simple` (one-line message) | `google/gemini-3.1-flash-lite-preview` | Cheapest fast tier |
-| `subject` (after manual type/scope) | `google/gemini-3.1-flash-lite-preview` | Short structured output |
-| `full` (header + body) | `google/gemini-3-flash-preview` | Better prose |
+| `simple` (one-line message) | `google/gemini-3.1-flash-lite` | Cheapest fast tier |
+| `subject` (after manual type/scope) | `google/gemini-3.1-flash-lite` | Short structured output |
+| `full` (header + body) | `google/gemini-3.5-flash` | Better prose |
 | `grouping` (atomic-split mapping) | `anthropic/claude-haiku-4.5` | Strict instruction following |
 
 **OpenAI** — GPT-5.4 family (released March 2026)

@@ -112,6 +112,34 @@ stage_file() {
     [[ " ${split_group_keys[*]} " == *" web "* ]]
 }
 
+@test "feature grouping: full type(scope) prefixes are normalized to the bare scope" {
+    stage_file "content/de.md" "de text"
+    stage_file "content/en.md" "en text"
+    stage_file "misc.txt"      "misc"
+
+    # Some models (observed with gemini-3.5-flash) answer with the full
+    # conventional-commit prefix instead of the bare scope when the repo's
+    # recent commits all look like "docs(reflection): ..." — the parser must
+    # extract the scope token rather than reject every line and fall back.
+    call_ai_api() {
+        printf 'docs(reflection)\tcontent/de.md\ndocs(reflection):\tcontent/en.md\nchore:\tmisc.txt\n'
+    }
+
+    group_files_by_feature_with_ai
+    local rc=$?
+    [ "$rc" -eq 0 ]
+
+    [ "${#split_group_keys[@]}" -eq 2 ]
+    [[ " ${split_group_keys[*]} " == *" reflection "* ]]
+    [[ " ${split_group_keys[*]} " == *" chore "* ]]
+
+    local reflection_files
+    reflection_files=$(gmap_get split_groups "reflection")
+    [[ "$reflection_files" == *"content/de.md"* ]]
+    [[ "$reflection_files" == *"content/en.md"* ]]
+    [[ "$(gmap_get split_groups "chore")" == "misc.txt" ]]
+}
+
 @test "feature grouping: single-feature verdict collapses to one group" {
     stage_file "a.go" "one"
     stage_file "b.go" "feature"

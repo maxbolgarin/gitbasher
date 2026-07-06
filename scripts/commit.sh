@@ -681,7 +681,7 @@ A feature is defined by WHAT the change accomplishes, read from the actual code 
 
 Input arrives in XML tags: a list of staged files, the actual diff, a diff summary, recent commit messages (for scope-naming conventions), and folder-derived candidate scope tokens.
 
-Task: assign EVERY staged file to exactly one feature group. Use 1 group only if all changes truly form a single feature; otherwise use 2 to ${max_groups} groups. Never exceed ${max_groups} groups — prefer a broader feature over several tiny ones. Name each group with a short lowercase conventional-commit scope describing the FEATURE, matching the style of <recent_commits>. <heuristic_candidates> are folder-derived hints — use one only if it happens to match a feature's purpose. Use \"misc\" only for unrelated incidental files with no feature (e.g., README, top-level config).
+Task: assign EVERY staged file to exactly one feature group. Use 1 group only if all changes truly form a single feature; otherwise use 2 to ${max_groups} groups. Never exceed ${max_groups} groups — prefer a broader feature over several tiny ones. Name each group with a short lowercase conventional-commit scope describing the FEATURE — the bare scope token only (e.g. \"auth\", never a full prefix like \"feat(auth)\" or a type like \"docs:\"), matching the scope-naming style of <recent_commits>. <heuristic_candidates> are folder-derived hints — use one only if it happens to match a feature's purpose. Use \"misc\" only for unrelated incidental files with no feature (e.g., README, top-level config).
 
 Output format: TSV only. One line per staged file in the form <scope><TAB><file_path>. No header, no prose, no markdown fences, no surrounding quotes. Every file from <staged_files> MUST appear exactly once. The file paths must be byte-identical to those in <staged_files>."
 
@@ -739,6 +739,17 @@ Read <diff> to decide which files implement the same feature. Output TSV (scope<
 
         scope="${line%%	*}"
         file="${line#*	}"
+
+        # Some models answer with a full conventional-commit prefix instead of
+        # the bare scope the prompt asks for — observed with gemini-3.5-flash
+        # emitting "docs(reflection)" when every recent commit looks like
+        # "docs(reflection): ...". Extract the scope token (and drop a stray
+        # trailing colon) rather than reject the line and lose the grouping.
+        scope="${scope%:}"
+        local type_scope_re='^[a-zA-Z0-9._/-]+\(([a-zA-Z0-9._/-]+)\)$'
+        if [[ "$scope" =~ $type_scope_re ]]; then
+            scope="${BASH_REMATCH[1]}"
+        fi
 
         # Validate scope characters (same charset as sanitize_git_name)
         if ! [[ "$scope" =~ ^[a-zA-Z0-9._/-]+$ ]]; then

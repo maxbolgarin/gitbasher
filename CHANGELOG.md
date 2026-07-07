@@ -2,6 +2,25 @@
 
 All notable changes to gitbasher are generated automatically by [semantic-release](https://github.com/semantic-release/semantic-release) from [Conventional Commits](https://www.conventionalcommits.org/) on `main`. The project follows [Semantic Versioning](https://semver.org/).
 
+## [5.2.0](https://github.com/maxbolgarin/gitbasher/compare/v5.1.0...v5.2.0) (2026-07-07)
+
+### 🚀 Features
+
+* **ai:** one model per provider with live pickers, reasoning control, and setup safety checks ([a9c6935](https://github.com/maxbolgarin/gitbasher/commit/a9c6935297e84b777c8428203dae7003ef93aa38))
+
+### 🐛 Bug Fixes
+
+* **ai:** extract bare scope from full type(scope) prefixes ([18da7e4](https://github.com/maxbolgarin/gitbasher/commit/18da7e4648a0dda2aec2453305bcdf95110feea7))
+* **config:** move values to global scope instead of shadowing them locally ([648ef37](https://github.com/maxbolgarin/gitbasher/commit/648ef3735dfd6c1aa248369d51bdb57ad42c3353))
+
+### 📚 Documentation
+
+* describe per-provider AI models, live model menus, and reasoning behavior ([dab3cef](https://github.com/maxbolgarin/gitbasher/commit/dab3cef479d619e59e69b6d4f3a75514e7b6d00d))
+
+### 🚨 Tests
+
+* keep [@test](https://github.com/test) descriptions ASCII for bats under bash 3.2 ([1e3fb50](https://github.com/maxbolgarin/gitbasher/commit/1e3fb50071d927b8475178ffdae68afcf7ebc19a))
+
 ## [5.1.0](https://github.com/maxbolgarin/gitbasher/compare/v5.0.1...v5.1.0) (2026-07-03)
 
 ### 🚀 Features

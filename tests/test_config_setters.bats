@@ -101,8 +101,25 @@ teardown() {
     [ "$(get_config_value gitbasher.roundtrip)" = "rt-val" ]
 }
 
-@test "round-trip: set local, set global, get returns local" {
-    set_config_value gitbasher.precedence "local-wins" "" >/dev/null
-    set_config_value gitbasher.precedence "global-loses" "true" >/dev/null
-    [ "$(get_config_value gitbasher.precedence)" = "local-wins" ]
+@test "round-trip: set local, then global — the global write is promoted" {
+    # A later global write replaces the local copy (see "clears the local
+    # shadow" below); a raw `git config --local` write afterwards still wins,
+    # which is git's normal precedence for values set outside gitbasher.
+    set_config_value gitbasher.precedence "local-first" "" >/dev/null
+    set_config_value gitbasher.precedence "global-now" "true" >/dev/null
+    [ "$(get_config_value gitbasher.precedence)" = "global-now" ]
+    git config --local gitbasher.precedence "manual-local"
+    [ "$(get_config_value gitbasher.precedence)" = "manual-local" ]
+}
+
+@test "set_config_value: global write clears the local shadow" {
+    # "Set globally for all projects" must leave ONE copy — the global one.
+    # Keeping the earlier local write would shadow the global forever: the
+    # config summary keeps saying "(project)" and later global changes
+    # silently don't apply to this repo (the user-reported confusion).
+    set_config_value gitbasher.promote "local-first" "" >/dev/null
+    set_config_value gitbasher.promote "now-global" "true" >/dev/null
+    [ -z "$(git config --local --get gitbasher.promote)" ]
+    [ "$(git config --global --get gitbasher.promote)" = "now-global" ]
+    [ "$(get_config_value gitbasher.promote)" = "now-global" ]
 }

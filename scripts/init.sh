@@ -68,6 +68,14 @@ function set_config_value {
         git config --local "$1" "$2"
     else
         git config --global "$1" "$2"
+        # Every global-flag caller is a "set globally for all projects?"
+        # flow that has ALREADY written the value locally. Drop that local
+        # copy: git's local-over-global precedence would shadow the global
+        # one forever — the config summary keeps saying "(project)" and a
+        # later global change silently doesn't apply to this repo.
+        if [ "$GITBASHER_NO_REPO" != "true" ]; then
+            git config --local --unset "$1" 2>/dev/null || true
+        fi
     fi
     printf '%s\n' "$2"
 }

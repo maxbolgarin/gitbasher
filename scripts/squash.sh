@@ -221,7 +221,9 @@ Re-do the grouping. Every input hash MUST appear in EXACTLY ONE \"commits\" arra
     [ "$max_out" -lt 2048 ] && max_out=2048
     [ "$max_out" -gt 16384 ] && max_out=16384
 
-    call_ai_api "$system_prompt" "$user_prompt" "$max_out" "$(get_ai_model_for grouping)" '{"type":"json_object"}'
+    # "low" reasoning: planning a squash is a structural decision over the
+    # whole commit range — worth ~1s of thinking (see call_ai_api).
+    call_ai_api "$system_prompt" "$user_prompt" "$max_out" "" '{"type":"json_object"}' "low"
 }
 
 

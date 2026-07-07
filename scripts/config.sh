@@ -354,11 +354,13 @@ function configure_ai_key {
 
 
 ### Function asks user to choose the AI provider.
-# Provider determines which API endpoint, auth scheme, and per-task default
+# Provider determines which API endpoint, auth scheme, and default
 # models are used. Custom OpenAI-compatible gateways can be reached by leaving
 # the provider as openai/openrouter and overriding gitbasher.ai-base-url.
 # $1: optional "--chained" — wizard mode: exits become returns
-#     (0 = done/skipped, 1 = validation failure, 130 = EOF).
+#     (0 = done/skipped, 1 = validation failure, 3 = user declined to keep a
+#     provider that failed its reachability probe — the wizard must STOP,
+#     the remaining steps were opted out of, 130 = EOF).
 function configure_ai_provider {
     local _chained=""
     [ "$1" = "--chained" ] && _chained="true"
@@ -376,10 +378,10 @@ function configure_ai_provider {
     echo
 
     echo -e "Options:"
-    echo -e "  1. ${BLUE}openrouter${ENDCOLOR}  Aggregator with hundreds of models — needs an API key"
-    echo -e "  2. ${BLUE}openai${ENDCOLOR}      OpenAI direct (GPT-5 family) — needs an API key"
-    echo -e "  3. ${BLUE}ollama${ENDCOLOR}      Local or remote models (you'll set the host) — no API key required"
-    echo -e "  4. ${BLUE}claude${ENDCOLOR}      Local Claude Code CLI (claude -p) — uses your Claude account, no API key"
+    echo -e "  1. ${BOLD}openrouter${ENDCOLOR}  Aggregator with hundreds of models — needs an API key"
+    echo -e "  2. ${BOLD}openai${ENDCOLOR}      OpenAI direct (GPT-5 family) — needs an API key"
+    echo -e "  3. ${BOLD}ollama${ENDCOLOR}      Local or remote models (you'll set the host) — no API key required"
+    echo -e "  4. ${BOLD}claude${ENDCOLOR}      Local Claude Code CLI (claude -p) — uses your Claude account, no API key"
     echo
     echo -e "Press Enter to keep the current provider, or enter 0 to reset to default (${AI_DEFAULT_PROVIDER})"
 
@@ -416,10 +418,18 @@ function configure_ai_provider {
             ;;
     esac
 
-    # Before switching, attribute any legacy `gitbasher.ai-api-key` to the
-    # outgoing provider. Otherwise the next AI call would happily send (e.g.)
-    # an OpenRouter key to OpenAI and get a 401.
+    # Before switching, attribute any legacy `gitbasher.ai-api-key` and
+    # `gitbasher.ai-model` to the outgoing provider. Otherwise the next AI
+    # call would happily send (e.g.) an OpenRouter key — or an OpenRouter
+    # model slug — to another provider and fail on every request.
     migrate_legacy_ai_api_key_to "$current_provider"
+    migrate_legacy_ai_model_to "$current_provider"
+
+    # Remember the previous local value so a failed reachability probe below
+    # can revert this write exactly (the previous provider may have lived in
+    # global config or the built-in default — both mean "no local value").
+    local prev_local_provider
+    prev_local_provider=$(git config --local --get gitbasher.ai-provider 2>/dev/null)
 
     set_ai_provider "$new_provider"
     echo -e "${GREEN}✓ Set AI provider to '${new_provider}' for '${project_name}'${ENDCOLOR}"
@@ -427,6 +437,10 @@ function configure_ai_provider {
     # Provider-specific follow-up. Ollama asks where the server lives and probes
     # it; a cloud provider that already has a key gets its key validated. Both
     # run before the "set globally?" prompt because that prompt exits on "no".
+    # A failed CLOUD check does not gate anything — the wizard's key step comes
+    # right after and fixes a bad key. A failed LOCAL check (Ollama down,
+    # claude CLI missing) has no such next step, so it asks before moving on.
+    local local_smoke_failed=""
     case "$new_provider" in
         ollama)
             local current_host
@@ -455,19 +469,26 @@ function configure_ai_provider {
             fi
             echo
             echo -e "${CYAN}💡 Make sure the Ollama daemon is running (${BLUE}ollama serve${CYAN}) and a model is pulled (${BLUE}ollama pull qwen3:8b${CYAN}).${ENDCOLOR}"
-            echo -e "${CYAN}💡 Pick a model with ${GREEN}gitb cfg model${CYAN}.${ENDCOLOR}"
+            # The wizard's own step 3 is the model picker — the standalone
+            # command is the only place this pointer adds anything.
+            if [ -z "$_chained" ]; then
+                echo -e "${CYAN}💡 Pick a model with ${GREEN}gitb cfg model${CYAN}.${ENDCOLOR}"
+            fi
             echo
-            ai_smoke_check || true
+            ai_smoke_check || local_smoke_failed="true"
             ;;
         claude)
             echo
             if command -v claude >/dev/null 2>&1; then
-                ai_smoke_check || true
+                ai_smoke_check || local_smoke_failed="true"
             else
                 echo -e "${RED}✗ claude CLI not found on PATH.${ENDCOLOR}"
                 echo -e "${CYAN}💡 Install it with ${BLUE}npm install -g @anthropic-ai/claude-code${CYAN}, then sign in once.${ENDCOLOR}"
+                local_smoke_failed="true"
             fi
-            echo -e "${CYAN}💡 Pick a model with ${GREEN}gitb cfg model${CYAN} (haiku, sonnet, opus).${ENDCOLOR}"
+            if [ -z "$_chained" ]; then
+                echo -e "${CYAN}💡 Pick a model with ${GREEN}gitb cfg model${CYAN} (haiku, sonnet, opus).${ENDCOLOR}"
+            fi
             ;;
         *)
             # Cloud provider: if a key is already configured for it, validate now.
@@ -478,6 +499,35 @@ function configure_ai_provider {
             ;;
     esac
     echo
+
+    # A local provider that failed its probe would only produce more broken
+    # steps (a global write of a dead provider, a model menu with no models,
+    # failing commits). Offer to revert instead of marching on — keeping it
+    # is still one keystroke away for setup-before-daemon workflows.
+    if [ -n "$local_smoke_failed" ]; then
+        echo -e "Keep '${new_provider}' as the AI provider anyway (y/N)?"
+        # (y/N): only an explicit y keeps the dead provider — Enter/EOF revert
+        # (is_yes would treat Enter as yes; that's for (Y/n) prompts).
+        local _keep_rc=0
+        confirm_destructive || _keep_rc=$?
+        if [ "$_keep_rc" -ne 0 ]; then
+            if [ -n "$prev_local_provider" ]; then
+                git config --local gitbasher.ai-provider "$prev_local_provider"
+            else
+                git config --local --unset gitbasher.ai-provider 2>/dev/null || true
+            fi
+            echo -e "${YELLOW}Provider unchanged — still '$(get_ai_provider)'.${ENDCOLOR}"
+            if [ -n "$_chained" ]; then
+                # EOF aborts the wizard like any other prompt; an explicit
+                # decline returns 3 so the wizard STOPS instead of walking
+                # the remaining steps the user just opted out of.
+                if [ "$_keep_rc" -eq 2 ]; then return 130; fi
+                return 3
+            fi
+            exit 1
+        fi
+        echo
+    fi
 
     if [ "$GITBASHER_NO_REPO" != "true" ]; then
         echo -e "Do you want to set this provider ${YELLOW}globally${ENDCOLOR} for all projects (Y/n)?"
@@ -517,6 +567,21 @@ function configure_ai_provider {
 }
 
 
+### Print one numbered model-menu entry, marking the active model.
+# BOLD for the selectable id, matching the commit-type menu — plain BLUE is
+# near-invisible on dark terminals and is reserved for secondary context.
+# $1: model id, $2: menu index, $3: the model gitb would use right now
+# $4: optional description, printed dimmed after the id
+function _print_model_menu_entry {
+    local _desc=""
+    [ -n "$4" ] && _desc=" ${GRAY}- ${4}${ENDCOLOR}"
+    if [ "$1" = "$3" ]; then
+        echo -e "  ${GREEN}${2}. ${1}${ENDCOLOR}  (current)${_desc}"
+    else
+        echo -e "  ${2}. ${BOLD}${1}${ENDCOLOR}${_desc}"
+    fi
+}
+
 ### Function asks user to configure AI model
 # $1: optional "--chained" — wizard mode: exits become returns
 #     (0 = done/skipped, 1 = validation failure, 130 = EOF).
@@ -527,79 +592,139 @@ function configure_ai_model {
     echo -e "${YELLOW}Configure AI Model${ENDCOLOR}"
     echo
 
+    # One model per provider: the override (if any) or the recommended
+    # default. The stored value is scoped to the active provider, so a model
+    # picked here never leaks into another provider.
     current_model=$(get_ai_model)
     if [ -n "$current_model" ]; then
-        echo -e "Current global override: ${GREEN}$current_model${ENDCOLOR}"
+        echo -e "Current model for provider '${GREEN}$(get_ai_provider)${ENDCOLOR}': ${GREEN}$current_model${ENDCOLOR}"
     else
-        echo -e "No global override set — each task uses its per-task default:"
-        echo -e "  • simple   → ${GREEN}$(get_ai_model_for simple)${ENDCOLOR}"
-        echo -e "  • subject  → ${GREEN}$(get_ai_model_for subject)${ENDCOLOR}"
-        echo -e "  • full     → ${GREEN}$(get_ai_model_for full)${ENDCOLOR}"
-        echo -e "  • grouping → ${GREEN}$(get_ai_model_for grouping)${ENDCOLOR}"
+        echo -e "Provider '${GREEN}$(get_ai_provider)${ENDCOLOR}' uses its default model: ${GREEN}$(get_ai_default_model)${ENDCOLOR}"
     fi
     echo
-    echo -e "Set a single model for all tasks (a global override), or leave empty to keep using the per-task defaults."
-    echo -e "Per-task overrides can be set directly with git config:"
-    echo -e "  ${BLUE}git config gitbasher.ai-model-simple <model_id>${ENDCOLOR}    (and -subject / -full / -grouping)"
-    echo
-    echo -e "Popular models for provider '${GREEN}$(get_ai_provider)${ENDCOLOR}':"
+
+    # Live model menu per provider:
+    #   ollama     — models installed on the host (GET /api/tags);
+    #   openrouter — the week's most-used text models + the newest ones
+    #                (public /models endpoint, server-side sort);
+    #   openai     — newest chat models visible to the account's key.
+    # model_catalog keeps the FULL fetched id list for free-text validation.
+    # Any fetch failure just means no menu and no validation — the static
+    # suggestions below and free-text entry still work (same graceful
+    # degradation the Ollama path always had).
+    local -a model_menu=()
+    local model_catalog=""
+    local _m _i
+    local _resolved_model
+    _resolved_model=$(resolve_ai_model)
+
     case "$(get_ai_provider)" in
-        openai)
-            echo -e "  • ${BLUE}gpt-5.4-mini${ENDCOLOR} - Default: as fast as nano with better quality (~\$0.75/\$4.50 per M)"
-            echo -e "  • ${BLUE}gpt-5.4-nano${ENDCOLOR} - Budget option for high volume (~\$0.20/\$1.25 per M)"
-            echo -e "  • ${BLUE}gpt-5.5${ENDCOLOR} - Flagship, only worth it for the hardest grouping cases"
-            ;;
         ollama)
-            echo -e "  • ${BLUE}qwen3:8b${ENDCOLOR} - Best small instruction-follower; most stable structured output"
-            echo -e "  • ${BLUE}llama3.3:8b${ENDCOLOR} - Solid general-purpose alternative"
-            echo -e "  • ${BLUE}qwen2.5-coder:7b${ENDCOLOR} - Code-focused; good when most diffs are code"
-            echo -e "  Run ${BLUE}ollama list${ENDCOLOR} to see what you have pulled locally."
+            while IFS= read -r _m; do
+                [ -n "$_m" ] && model_menu+=("$_m")
+            done < <(ollama_list_models)
+            if [ ${#model_menu[@]} -gt 0 ]; then
+                echo -e "Installed models on ${BLUE}$(ollama_api_base)${ENDCOLOR}:"
+                _i=1
+                for _m in "${model_menu[@]}"; do
+                    _print_model_menu_entry "$_m" "$_i" "$_resolved_model"
+                    _i=$((_i + 1))
+                done
+            else
+                echo -e "${YELLOW}No models found on $(ollama_api_base) — is the daemon running?${ENDCOLOR}"
+            fi
             ;;
-        claude)
-            echo -e "  • ${BLUE}haiku${ENDCOLOR} - Fastest and cheapest; ideal for one-line messages"
-            echo -e "  • ${BLUE}sonnet${ENDCOLOR} - Best balance for full-body prose and grouping"
-            echo -e "  • ${BLUE}opus${ENDCOLOR} - Strongest, for the hardest cases"
-            echo -e "  Aliases resolve to the current model generation; full ids (${BLUE}claude-haiku-4-5${ENDCOLOR}) also work."
+        openrouter)
+            # One fetch of the popularity-sorted full list doubles as the
+            # validation catalog; a second small fetch adds the newest models.
+            model_catalog=$(openrouter_list_models top-weekly 2>/dev/null)
+            if [ -n "$model_catalog" ]; then
+                _i=1
+                echo -e "Most used on OpenRouter this week:"
+                while IFS= read -r _m; do
+                    model_menu+=("$_m")
+                    _print_model_menu_entry "$_m" "$_i" "$_resolved_model"
+                    _i=$((_i + 1))
+                done < <(printf '%s\n' "$model_catalog" | head -8)
+                local _newest
+                _newest=$(openrouter_list_models newest 2>/dev/null | head -5)
+                if [ -n "$_newest" ]; then
+                    echo -e "Newest:"
+                    while IFS= read -r _m; do
+                        [ -z "$_m" ] && continue
+                        # Skip ids already shown in the popular section
+                        case " ${model_menu[*]} " in *" $_m "*) continue ;; esac
+                        model_menu+=("$_m")
+                        _print_model_menu_entry "$_m" "$_i" "$_resolved_model"
+                        _i=$((_i + 1))
+                    done <<< "$_newest"
+                fi
+            fi
             ;;
-        *)
-            echo -e "  • ${BLUE}openrouter/auto${ENDCOLOR} - Auto-select best available model"
-            echo -e "  • ${BLUE}google/gemini-3.1-flash-lite${ENDCOLOR} - Fastest, cheapest (~\$0.25/\$1.50 per M)"
-            echo -e "  • ${BLUE}google/gemini-3.5-flash${ENDCOLOR} - Current flash generation, better body prose"
-            echo -e "  • ${BLUE}anthropic/claude-haiku-4.5${ENDCOLOR} - Strict instruction following"
-            echo -e "  • ${BLUE}anthropic/claude-sonnet-5${ENDCOLOR} - Premium quality for the hardest cases"
+        openai)
+            model_catalog=$(openai_list_models 2>/dev/null)
+            if [ -n "$model_catalog" ]; then
+                echo -e "Newest chat models on your OpenAI account:"
+                _i=1
+                # Dated snapshots (gpt-5.4-mini-2026-03-17) are aliases of
+                # their base model — noise in a menu. They stay in the
+                # catalog, so typing one by hand still validates.
+                while IFS= read -r _m; do
+                    model_menu+=("$_m")
+                    _print_model_menu_entry "$_m" "$_i" "$_resolved_model"
+                    _i=$((_i + 1))
+                done < <(printf '%s\n' "$model_catalog" \
+                    | LC_ALL=C grep -vE -- '-[0-9]{4}-[0-9]{2}-[0-9]{2}$' | head -12)
+            fi
             ;;
     esac
+
+    # No live list (or a provider that never has one, like claude) — the
+    # static suggestions become the numbered menu, selectable the same way.
+    if [ ${#model_menu[@]} -eq 0 ]; then
+        local -a _menu_desc=()
+        case "$(get_ai_provider)" in
+            openai)
+                echo -e "Popular OpenAI models:"
+                model_menu=("gpt-5.4-mini" "gpt-5.4-nano" "gpt-5.5")
+                _menu_desc=("Default: as fast as nano with better quality (~\$0.75/\$4.50 per M)"
+                            "Budget option for high volume (~\$0.20/\$1.25 per M)"
+                            "Flagship, only worth it for the hardest grouping cases")
+                ;;
+            ollama)
+                echo -e "Suggested models (pull first: ${BLUE}ollama pull <id>${ENDCOLOR}):"
+                model_menu=("qwen3:8b" "llama3.3:8b" "qwen2.5-coder:7b")
+                _menu_desc=("Default: best small instruction-follower; most stable structured output"
+                            "Solid general-purpose alternative"
+                            "Code-focused; good when most diffs are code")
+                ;;
+            claude)
+                echo -e "Model aliases (resolve to the current generation; full ids like ${BLUE}claude-haiku-4-5${ENDCOLOR} also work):"
+                model_menu=("haiku" "sonnet" "opus")
+                _menu_desc=("Default: fastest and cheapest"
+                            "Better prose, noticeably slower"
+                            "Strongest, for the hardest cases")
+                ;;
+            *)
+                echo -e "Popular OpenRouter models:"
+                model_menu=("google/gemini-3.5-flash" "google/gemini-3.1-flash-lite" "openrouter/auto" "anthropic/claude-haiku-4.5" "anthropic/claude-sonnet-5")
+                _menu_desc=("Default: current flash generation, fast with good prose"
+                            "Fastest, cheapest (~\$0.25/\$1.50 per M)"
+                            "Auto-select best available model"
+                            "Strict instruction following"
+                            "Premium quality for the hardest cases")
+                ;;
+        esac
+        _i=0
+        for _m in "${model_menu[@]}"; do
+            _print_model_menu_entry "$_m" "$((_i + 1))" "$_resolved_model" "${_menu_desc[$_i]}"
+            _i=$((_i + 1))
+        done
+    fi
+    echo -e "Enter a number to select, or type a model id."
     echo
 
-    # For Ollama, list the models actually installed on the host as a numbered
-    # menu so the user picks a valid id (and never hits the colon-rejection bug).
-    # Falls back to free-text entry when the host is unreachable or has none.
-    local -a ollama_model_list=()
-    if [ "$(get_ai_provider)" = "ollama" ]; then
-        local _m _i
-        while IFS= read -r _m; do
-            [ -n "$_m" ] && ollama_model_list+=("$_m")
-        done < <(ollama_list_models)
-        if [ ${#ollama_model_list[@]} -gt 0 ]; then
-            echo -e "Installed models on ${BLUE}$(ollama_api_base)${ENDCOLOR}:"
-            _i=1
-            for _m in "${ollama_model_list[@]}"; do
-                if [ "$_m" = "$current_model" ]; then
-                    echo -e "  ${GREEN}${_i}. ${_m}${ENDCOLOR}  (current)"
-                else
-                    echo -e "  ${BLUE}${_i}.${ENDCOLOR} ${_m}"
-                fi
-                _i=$((_i + 1))
-            done
-            echo -e "Enter a number to select, or type a model id."
-        else
-            echo -e "${YELLOW}No models found on $(ollama_api_base) — is the daemon running?${ENDCOLOR}"
-            echo -e "Pull one with ${BLUE}ollama pull qwen3:8b${ENDCOLOR}, or type a model id below."
-        fi
-        echo
-    fi
-
-    echo -e "Press Enter to exit without changes, or 0 to clear the override (use per-task defaults)"
+    echo -e "Press Enter to keep the current model, or 0 to reset to the default (${GREEN}$(get_ai_default_model)${ENDCOLOR})"
 
     if ! read_editable_input model_input "Model ID: "; then
         if [ -n "$_chained" ]; then return 130; fi
@@ -612,21 +737,26 @@ function configure_ai_model {
     fi
 
     if [ "$model_input" == "0" ]; then
-        # Clear both local and global overrides
+        # Clear the provider's slot and the legacy key, local and global —
+        # leaving the legacy key would silently keep the "cleared" model alive.
+        git config --unset "gitbasher.ai-model-$(get_ai_provider)" 2>/dev/null
+        git config --global --unset "gitbasher.ai-model-$(get_ai_provider)" 2>/dev/null
         git config --unset gitbasher.ai-model 2>/dev/null
         git config --global --unset gitbasher.ai-model 2>/dev/null
         echo
-        echo -e "${GREEN}✓ Cleared global model override — each task now uses its per-task default${ENDCOLOR}"
+        echo -e "${GREEN}✓ Cleared model override — provider '$(get_ai_provider)' now uses its default ($(get_ai_default_model))${ENDCOLOR}"
         if [ -n "$_chained" ]; then return 0; fi
         exit
     fi
 
     echo
 
-    # A bare number picks from the Ollama menu shown above.
-    if [ ${#ollama_model_list[@]} -gt 0 ] && [[ "$model_input" =~ ^[0-9]+$ ]]; then
-        if [ "$model_input" -ge 1 ] && [ "$model_input" -le ${#ollama_model_list[@]} ]; then
-            model_input="${ollama_model_list[$((model_input - 1))]}"
+    # A bare number picks from the live menu shown above.
+    local picked_from_menu=""
+    if [ ${#model_menu[@]} -gt 0 ] && [[ "$model_input" =~ ^[0-9]+$ ]]; then
+        if [ "$model_input" -ge 1 ] && [ "$model_input" -le ${#model_menu[@]} ]; then
+            model_input="${model_menu[$((model_input - 1))]}"
+            picked_from_menu="true"
         else
             echo -e "${RED}✗ Invalid selection: ${model_input}${ENDCOLOR}" >&2
             if [ -n "$_chained" ]; then return 1; fi
@@ -643,10 +773,56 @@ function configure_ai_model {
         exit 1
     fi
 
-    # Set the model
+    # A typed id gets checked against the fetched catalog (typos die here,
+    # not on the first commit). The catalog can lag behind brand-new models,
+    # so an unknown id is a warning with an escape hatch, never a hard block.
+    if [ -z "$picked_from_menu" ] && [ -n "$model_catalog" ]; then
+        if ! printf '%s\n' "$model_catalog" | LC_ALL=C grep -qxF "$model_input"; then
+            echo -e "${YELLOW}⚠ '$model_input' is not in $(get_ai_provider)'s current model list.${ENDCOLOR}"
+            echo -e "Save it anyway (y/N)?"
+            # (y/N): saving an unknown id needs an explicit y — Enter declines
+            if ! confirm_destructive; then
+                echo -e "${YELLOW}Not saved. Pick a number from the list or re-check the id.${ENDCOLOR}"
+                if [ -n "$_chained" ]; then return 1; fi
+                exit 1
+            fi
+        fi
+    fi
+
+    # Remember the previous value so a failing live check can restore it.
+    local prev_model
+    prev_model=$(git config --local --get "gitbasher.ai-model-$(get_ai_provider)" 2>/dev/null)
+
+    # Set the model for the active provider only
     set_ai_model "$model_input"
-    echo -e "${GREEN}✓ Set AI model to '$model_input' for '${project_name}'${ENDCOLOR}"
+    echo -e "${GREEN}✓ Set AI model to '$model_input' for provider '$(get_ai_provider)' in '${project_name}'${ENDCOLOR}"
     echo
+
+    # Prove the model actually completes a request before the global prompt —
+    # a wrong id should die here, and never be propagated to all projects.
+    # Ollama is already covered by the installed-models menu; claude aliases
+    # always resolve. Cloud typo'd/unavailable models are the failure mode.
+    case "$(get_ai_provider)" in
+        openrouter|openai)
+            if ! ai_model_smoke_check; then
+                echo -e "Keep '$model_input' anyway (y/N)?"
+                # (y/N): only an explicit y keeps a model that failed the live
+                # check — Enter/EOF restore the previous one.
+                if ! confirm_destructive; then
+                    if [ -n "$prev_model" ]; then
+                        git config "gitbasher.ai-model-$(get_ai_provider)" "$prev_model"
+                        echo -e "${YELLOW}Restored previous model '${prev_model}'.${ENDCOLOR}"
+                    else
+                        git config --unset "gitbasher.ai-model-$(get_ai_provider)" 2>/dev/null
+                        echo -e "${YELLOW}Removed it — provider '$(get_ai_provider)' uses its default ($(get_ai_default_model)).${ENDCOLOR}"
+                    fi
+                    if [ -n "$_chained" ]; then return 1; fi
+                    exit 1
+                fi
+            fi
+            echo
+            ;;
+    esac
 
     if [ "$GITBASHER_NO_REPO" = "true" ]; then
         if [ -n "$_chained" ]; then return 0; fi
@@ -659,7 +835,7 @@ function configure_ai_model {
     read_key _model_global || { if [ -n "$_chained" ]; then return 130; fi; _model_global="n"; }
     if is_yes "$_model_global"; then
         echo -e "${YELLOW}Set AI model globally${ENDCOLOR}"
-        set_config_value gitbasher.ai-model "$model_input" "true"
+        set_ai_model "$model_input" "true"
     fi
     return 0
 }
@@ -677,6 +853,14 @@ function configure_ai_wizard {
     configure_ai_provider --chained
     _rc=$?
     if [ "$_rc" -eq 130 ]; then prompt_aborted; fi
+    if [ "$_rc" -eq 3 ]; then
+        # The user declined to keep a provider that failed its probe —
+        # configuring keys and models for the restored provider was not
+        # what they asked for. Stop here; nothing has changed.
+        echo
+        echo -e "${YELLOW}AI setup stopped — nothing changed.${ENDCOLOR}"
+        return 0
+    fi
 
     echo
     echo -e "${YELLOW}Step 2/3 — API key${ENDCOLOR}"
@@ -718,9 +902,9 @@ function configure_ai_proxy {
     echo -e "Enter proxy URL to route AI requests through (useful for bypassing geo-restrictions)"
     echo -e ""
     echo -e "${BLUE}HTTP proxy formats:${ENDCOLOR}"
-    echo -e "  • ${BLUE}http://proxy.example.com:8080${ENDCOLOR}"
-    echo -e "  • ${BLUE}http://username:password@proxy.example.com:8080${ENDCOLOR}"
-    echo -e "  • ${BLUE}http://[2001:db8::1]:8080${ENDCOLOR} (IPv6)"
+    echo -e "  • ${BOLD}http://proxy.example.com:8080${ENDCOLOR}"
+    echo -e "  • ${BOLD}http://username:password@proxy.example.com:8080${ENDCOLOR}"
+    echo -e "  • ${BOLD}http://[2001:db8::1]:8080${ENDCOLOR} (IPv6)"
     echo -e ""
     echo -e "Press Enter to exit without changes, or 0 to remove the existing proxy"
 
@@ -1060,11 +1244,12 @@ function delete_global {
     local global_base_url=$(git config --global --get gitbasher.ai-base-url)
     _delete_global_add "gitbasher.ai-base-url" "AI base URL" "$global_base_url" "$GREEN"
 
-    local _task_models
-    _task_models=$(git config --global --get-regexp '^gitbasher\.ai-model-' 2>/dev/null | awk '{print $1}' | tr '\n' '+' | sed 's/+$//')
-    if [ -n "$_task_models" ]; then
-        labels+=("AI per-task models: ${GREEN}configured${ENDCOLOR}")
-        actions+=("${_task_models}|AI per-task models")
+    # Covers the per-provider model slots and any stale pre-5.1 per-task keys.
+    local _provider_models
+    _provider_models=$(git config --global --get-regexp '^gitbasher\.ai-model-' 2>/dev/null | awk '{print $1}' | tr '\n' '+' | sed 's/+$//')
+    if [ -n "$_provider_models" ]; then
+        labels+=("AI models (per provider): ${GREEN}configured${ENDCOLOR}")
+        actions+=("${_provider_models}|AI models (per provider)")
     fi
 
     # Per-provider AI keys; one row per provider that has a global key.

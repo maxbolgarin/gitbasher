@@ -1307,7 +1307,7 @@ function config_source_tag {
 
 ### Function prints current config
 ### Print the AI rows of the configuration table (provider, base URL, key,
-### other stored keys, model/per-task models). Extracted so the cfg-ai wizard
+### other stored keys, per-provider model). Extracted so the cfg-ai wizard
 ### can show a summary of exactly what it configured; print_configuration
 ### embeds it for the full table.
 function print_ai_configuration {
@@ -1349,13 +1349,28 @@ function print_ai_configuration {
     if [ -n "$other_keys" ]; then
         echo -e "\t\t\t${GRAY}also stored for: ${other_keys}${ENDCOLOR}"
     fi
+    # One model per provider: show the override with its config source, or
+    # the provider default. Like keys, models set for other providers survive
+    # a switch — list them so that is visible at a glance.
     local ai_model=$(get_ai_model)
     if [ -n "$ai_model" ]; then
-        echo -e "\tAI model:\t${GREEN}$ai_model${ENDCOLOR} ${GRAY}(all tasks)${ENDCOLOR} $(config_source_tag gitbasher.ai-model)"
+        local model_key="gitbasher.ai-model-${ai_provider}"
+        if [ "$(config_source "$model_key")" = "default" ]; then
+            # Per-provider slot unset — the value came from the legacy key.
+            model_key="gitbasher.ai-model"
+        fi
+        echo -e "\tAI model:\t${GREEN}$ai_model${ENDCOLOR} $(config_source_tag "$model_key")"
     else
-        echo -e "\tAI models:\t${GREEN}$(get_ai_model_for simple)${ENDCOLOR} ${GRAY}(simple/subject)${ENDCOLOR} $(config_source_tag gitbasher.ai-model-simple)"
-        echo -e "\t\t\t${GREEN}$(get_ai_model_for full)${ENDCOLOR} ${GRAY}(full)${ENDCOLOR} $(config_source_tag gitbasher.ai-model-full)"
-        echo -e "\t\t\t${GREEN}$(get_ai_model_for grouping)${ENDCOLOR} ${GRAY}(grouping)${ENDCOLOR} $(config_source_tag gitbasher.ai-model-grouping)"
+        echo -e "\tAI model:\t${GREEN}$(get_ai_default_model)${ENDCOLOR} ${GRAY}(default)${ENDCOLOR}"
+    fi
+    local other_models=""
+    while IFS= read -r prov; do
+        [ -z "$prov" ] && continue
+        [ "$prov" = "$ai_provider" ] && continue
+        other_models="${other_models:+${other_models}, }${prov}"
+    done < <(list_providers_with_model)
+    if [ -n "$other_models" ]; then
+        echo -e "\t\t\t${GRAY}also set for: ${other_models}${ENDCOLOR}"
     fi
 }
 

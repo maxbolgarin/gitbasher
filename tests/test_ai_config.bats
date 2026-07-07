@@ -90,53 +90,86 @@ teardown() {
     [ -z "$(git config --local --get gitbasher.ai-api-key)" ]
 }
 
-# ===== get_ai_model / set_ai_model =====
+# ===== get_ai_model / set_ai_model — one model per provider =====
 
 @test "get_ai_model: returns empty when not set" {
     val=$(get_ai_model)
     [ -z "$val" ]
 }
 
-@test "set_ai_model: persists override" {
+@test "set_ai_model: persists override in the active provider's slot" {
+    git config gitbasher.ai-provider openrouter
     set_ai_model "openai/gpt-4o" >/dev/null
-    val=$(get_ai_model)
-    [ "$val" = "openai/gpt-4o" ]
+    [ "$(get_ai_model)" = "openai/gpt-4o" ]
+    [ "$(git config --local --get gitbasher.ai-model-openrouter)" = "openai/gpt-4o" ]
 }
 
-# ===== get_ai_model_for =====
-
-@test "get_ai_model_for: returns simple default when nothing set" {
-    val=$(get_ai_model_for "simple")
-    [ -n "$val" ]
+@test "get_ai_model: legacy gitbasher.ai-model is honored as a fallback" {
+    git config gitbasher.ai-model "legacy-model"
+    [ "$(get_ai_model)" = "legacy-model" ]
 }
 
-@test "get_ai_model_for: returns full default when nothing set" {
-    val=$(get_ai_model_for "full")
-    [ -n "$val" ]
+@test "get_ai_model: per-provider slot beats the legacy key" {
+    git config gitbasher.ai-provider openrouter
+    git config gitbasher.ai-model "legacy-model"
+    git config gitbasher.ai-model-openrouter "provider-model"
+    [ "$(get_ai_model)" = "provider-model" ]
 }
 
-@test "get_ai_model_for: returns grouping default when nothing set" {
-    val=$(get_ai_model_for "grouping")
-    [ -n "$val" ]
+@test "resolve_ai_model: falls back to the provider default when nothing set" {
+    git config gitbasher.ai-provider openrouter
+    [ "$(resolve_ai_model)" = "$AI_DEFAULT_MODEL_OPENROUTER" ]
+    git config gitbasher.ai-provider openai
+    [ "$(resolve_ai_model)" = "$AI_DEFAULT_MODEL_OPENAI" ]
+    git config gitbasher.ai-provider ollama
+    [ "$(resolve_ai_model)" = "$AI_DEFAULT_MODEL_OLLAMA" ]
+    git config gitbasher.ai-provider claude
+    [ "$(resolve_ai_model)" = "$AI_DEFAULT_MODEL_CLAUDE" ]
 }
 
-@test "get_ai_model_for: per-task override beats global" {
-    set_ai_model "global-model" >/dev/null
-    set_ai_model_for "simple" "task-model" >/dev/null
-    val=$(get_ai_model_for "simple")
-    [ "$val" = "task-model" ]
+@test "model per provider: each provider remembers its own model" {
+    git config gitbasher.ai-provider openrouter
+    set_ai_model "google/gemini-3.5-flash" >/dev/null
+    git config gitbasher.ai-provider claude
+    set_ai_model "sonnet" >/dev/null
+    # Switching back restores each provider's own selection
+    git config gitbasher.ai-provider openrouter
+    [ "$(resolve_ai_model)" = "google/gemini-3.5-flash" ]
+    git config gitbasher.ai-provider claude
+    [ "$(resolve_ai_model)" = "sonnet" ]
 }
 
-@test "get_ai_model_for: global override applies when no per-task override" {
-    set_ai_model "global-model" >/dev/null
-    val=$(get_ai_model_for "subject")
-    [ "$val" = "global-model" ]
+@test "regression: model set under openrouter must not leak into claude" {
+    # The exact user-reported break: an OpenRouter model in the legacy key,
+    # then a provider switch to claude — every `claude -p --model <slug>`
+    # call failed. The switch must attribute the legacy model to the
+    # outgoing provider so claude starts on its own default.
+    git config gitbasher.ai-provider openrouter
+    git config gitbasher.ai-model "anthropic/claude-haiku-4.5"
+    migrate_legacy_ai_model_to "openrouter" 2>/dev/null
+    git config gitbasher.ai-provider claude
+    [ "$(resolve_ai_model)" = "$AI_DEFAULT_MODEL_CLAUDE" ]
+    # ... and the OpenRouter selection survives for when the user switches back
+    git config gitbasher.ai-provider openrouter
+    [ "$(resolve_ai_model)" = "anthropic/claude-haiku-4.5" ]
+    [ -z "$(git config --local --get gitbasher.ai-model)" ]
 }
 
-@test "get_ai_model_for: unknown task falls back to simple default" {
-    val=$(get_ai_model_for "unknown")
-    simple_val=$(get_ai_model_for "simple")
-    [ "$val" = "$simple_val" ]
+@test "migrate_legacy_ai_model_to: never clobbers an explicit per-provider model" {
+    git config gitbasher.ai-model "legacy-model"
+    git config gitbasher.ai-model-openrouter "explicit-model"
+    migrate_legacy_ai_model_to "openrouter" 2>/dev/null
+    [ "$(git config --local --get gitbasher.ai-model-openrouter)" = "explicit-model" ]
+    # Legacy must still get cleared so it can't shadow other providers later
+    [ -z "$(git config --local --get gitbasher.ai-model)" ]
+}
+
+@test "list_providers_with_model: ignores stale pre-5.1 per-task keys" {
+    git config gitbasher.ai-model-openrouter "m1"
+    git config gitbasher.ai-model-full "stale-per-task"
+    run list_providers_with_model
+    [[ "$output" == *"openrouter"* ]]
+    [[ "$output" != *"full"* ]]
 }
 
 # ===== get_ai_proxy / set_ai_proxy =====

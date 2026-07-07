@@ -39,6 +39,11 @@ printf '%s' "${FAKE_TAGS_JSON:-}"
 exit 0
 EOF
     chmod +x "${FAKE_BIN}/curl"
+    # Default DEAD ollama CLI: ollama_list_models falls back to `ollama list`
+    # when HTTP fails, and a real ollama on the dev machine would make the
+    # unreachable-host tests flaky. Tests that want a live CLI overwrite this.
+    printf '#!/usr/bin/env bash\nexit 1\n' > "${FAKE_BIN}/ollama"
+    chmod +x "${FAKE_BIN}/ollama"
     PATH="${FAKE_BIN}:$PATH"
     export PATH
 }
@@ -182,4 +187,33 @@ teardown() {
     run ai_smoke_check
     [ "$status" -ne 0 ]
     [[ "$output" == *"key"* ]]
+}
+
+# ===== ollama_list_models CLI fallback =====
+
+@test "ollama_list_models: falls back to the ollama CLI when HTTP fails" {
+    # Empty HTTP response + a working `ollama list` CLI — the second
+    # liveness channel must supply the model names (header row skipped).
+    cat > "${FAKE_BIN}/ollama" <<'EOS'
+#!/usr/bin/env bash
+printf 'NAME              ID          SIZE    MODIFIED\n'
+printf 'qwen3:8b          abc123      5.2 GB  2 days ago\n'
+printf 'llama3.3:8b       def456      4.9 GB  3 weeks ago\n'
+EOS
+    chmod +x "${FAKE_BIN}/ollama"
+    FAKE_TAGS_JSON="" run ollama_list_models
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "qwen3:8b" ]
+    [ "${lines[1]}" = "llama3.3:8b" ]
+}
+
+@test "ollama_list_models: fails when both HTTP and CLI channels are dead" {
+    cat > "${FAKE_BIN}/ollama" <<'EOS'
+#!/usr/bin/env bash
+exit 1
+EOS
+    chmod +x "${FAKE_BIN}/ollama"
+    FAKE_TAGS_JSON="" run ollama_list_models
+    [ "$status" -ne 0 ]
+    [ -z "$output" ]
 }

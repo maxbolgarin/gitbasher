@@ -28,6 +28,7 @@ if [ "$1" = "--version" ]; then echo "9.9.9 (Claude Code)"; exit 0; fi
     echo "ARGV_BEGIN"
     for a in "$@"; do echo "ARG: $a"; done
     echo "ARGV_END"
+    echo "ENV MAX_THINKING_TOKENS: ${MAX_THINKING_TOKENS-unset}"
     echo "STDIN_BEGIN"
     cat
     echo "STDIN_END"
@@ -53,11 +54,8 @@ teardown() {
     ! ai_provider_requires_api_key
 }
 
-@test "claude: per-task model defaults are alias slugs" {
-    [ "$(get_ai_model_for simple)" = "haiku" ]
-    [ "$(get_ai_model_for subject)" = "haiku" ]
-    [ "$(get_ai_model_for full)" = "sonnet" ]
-    [ "$(get_ai_model_for grouping)" = "sonnet" ]
+@test "claude: default model is haiku (speed-first, alias slug)" {
+    [ "$(resolve_ai_model)" = "haiku" ]
 }
 
 @test "claude: default timeout is 300 seconds" {
@@ -77,6 +75,18 @@ teardown() {
     grep -q "SYSTEM-INSTRUCTIONS" "$CLAUDE_LOG"
     grep -q "USER-DATA" "$CLAUDE_LOG"
     # No API key configured anywhere — proves the key guard was skipped
+}
+
+@test "call_ai_api: claude runs isolated — no MCP, no settings, no thinking" {
+    run call_ai_api "sys" "user" 100 "haiku"
+    [ "$status" -eq 0 ]
+    # Skip the user's MCP servers, hooks, plugins, and CLAUDE.md: they add
+    # tens of seconds of startup per call and can contaminate the output.
+    grep -q "ARG: --strict-mcp-config" "$CLAUDE_LOG"
+    grep -q 'ARG: {"mcpServers":{}}' "$CLAUDE_LOG"
+    grep -q "ARG: --setting-sources" "$CLAUDE_LOG"
+    # Extended thinking is disabled — pure latency for commit-sized prompts.
+    grep -q "ENV MAX_THINKING_TOKENS: 0" "$CLAUDE_LOG"
 }
 
 @test "call_ai_api: claude ignores the response_format argument" {

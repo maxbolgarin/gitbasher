@@ -23,11 +23,15 @@ readonly AI_TEMPERATURE="0.3"
 # Per-mode max_tokens caps. These bound runaway output if the model loops or
 # misreads the format; they are NOT a target — the model stops at EOS and only
 # bills for tokens it actually generates. Sized generously so legitimate output
-# never gets truncated mid-message, including code-heavy or non-English content
-# that tokenizes 2-4x worse than plain English.
-readonly AI_MAX_TOKENS_SUBJECT=256
-readonly AI_MAX_TOKENS_SIMPLE=512
-readonly AI_MAX_TOKENS_FULL=1024
+# never gets truncated mid-message: non-English content tokenizes 2-4x worse
+# than plain English, and on OpenRouter a reasoning model's THINKING tokens
+# also count against this cap (observed live: deepseek-v4-flash burned the
+# whole budget thinking and returned a truncated subject). call_ai_api treats
+# a cap-hit (finish_reason=length) as a failure, so these only need to cover
+# honest output + moderate thinking, not pathological cases.
+readonly AI_MAX_TOKENS_SUBJECT=512
+readonly AI_MAX_TOKENS_SIMPLE=1024
+readonly AI_MAX_TOKENS_FULL=2048
 
 ### Function to get AI API key for the active provider.
 # Resolution order — env tier wins over config tier (so a one-shot
@@ -244,132 +248,120 @@ function ai_provider_requires_api_key {
     esac
 }
 
-### Function to get/set AI model — global override.
-# When set, it wins over the per-task defaults below for every task. When unset
-# (the typical case for new users), each task uses its own per-task default.
+### Function to get the AI model override for the active provider.
+# One model per provider, stored in gitbasher.ai-model-<provider> — model ids
+# are provider-specific (google/gemini-3.5-flash means nothing to the claude
+# CLI), so a model chosen for one provider must never leak into another. The
+# legacy provider-agnostic gitbasher.ai-model is kept as a fallback for
+# setups that predate the per-provider slots; on provider switch it is
+# attributed to the outgoing provider (see migrate_legacy_ai_model_to), the
+# same way legacy API keys are handled.
 # Returns: explicit user override or empty when nothing has been set.
 function get_ai_model {
+    local provider=$(get_ai_provider)
+    local provider_model
+    provider_model=$(get_config_value "gitbasher.ai-model-${provider}" "")
+    if [ -n "$provider_model" ]; then
+        echo "$provider_model"
+        return
+    fi
     get_config_value gitbasher.ai-model ""
 }
 
+### Function to set the AI model for the active provider.
+# $1: model id
+# $2: optional "true" to write to global config instead of local
 function set_ai_model {
-    set_config_value gitbasher.ai-model "$1"
+    local provider=$(get_ai_provider)
+    set_config_value "gitbasher.ai-model-${provider}" "$1" "$2"
 }
 
-### Per-task default model IDs (OpenRouter).
-# Picked July 2026, priorities: speed first, quality second, cost third
-# (per-commit spend is fractions of a cent either way). Latencies below are
-# medians measured against the live API with a commit-sized prompt:
-#   - simple/subject (interactive one-liners): gemini-3.1-flash-lite is the
-#     fastest model measured (~0.6s) and the cheapest ($0.25/$1.50 per M).
-#   - full (header + body): gemini-3.5-flash (~0.8s) — current flash
-#     generation, noticeably better prose than lite at the same speed class.
-#   - grouping (TSV scope→file mapping, validated downstream): also
-#     gemini-3.5-flash — claude-haiku-4.5 measured ~1.4s median (2x slower)
-#     for no quality gain the validator would notice.
+### Migrate the legacy `gitbasher.ai-model` to the per-provider slot for the
+# given provider, then drop the legacy entry. Run this on the *outgoing*
+# provider when switching: the legacy value was chosen while that provider
+# was active, so it belongs to it. Without this, switching (e.g.) openrouter
+# → claude kept feeding an OpenRouter slug to `claude -p --model`, and every
+# AI call failed. Operates on whichever scope held the legacy value.
+# $1: provider name to attribute the legacy model to
+function migrate_legacy_ai_model_to {
+    local target_provider="$1"
+    local migrated=""
+
+    local local_legacy=$(git config --local --get gitbasher.ai-model 2>/dev/null)
+    if [ -n "$local_legacy" ]; then
+        if ! git config --local --get "gitbasher.ai-model-${target_provider}" >/dev/null 2>&1; then
+            git config --local "gitbasher.ai-model-${target_provider}" "$local_legacy"
+            migrated="local"
+        fi
+        git config --local --unset gitbasher.ai-model 2>/dev/null || true
+    fi
+
+    local global_legacy=$(git config --global --get gitbasher.ai-model 2>/dev/null)
+    if [ -n "$global_legacy" ]; then
+        if ! git config --global --get "gitbasher.ai-model-${target_provider}" >/dev/null 2>&1; then
+            git config --global "gitbasher.ai-model-${target_provider}" "$global_legacy"
+            migrated="${migrated:+$migrated, }global"
+        fi
+        git config --global --unset gitbasher.ai-model 2>/dev/null || true
+    fi
+
+    if [ -n "$migrated" ]; then
+        echo -e "${GRAY}↻ Kept model for provider '${target_provider}' (${migrated})${ENDCOLOR}" >&2
+    fi
+}
+
+### List providers that currently have a model override configured.
+# Echoes provider names one per line, sorted, deduplicated. Only real
+# provider slots count — pre-5.1 per-task keys (ai-model-simple/-subject/
+# -full/-grouping) may still sit in config and must not show up here.
+function list_providers_with_model {
+    {
+        git config --local --get-regexp '^gitbasher\.ai-model-' 2>/dev/null
+        git config --global --get-regexp '^gitbasher\.ai-model-' 2>/dev/null
+    } | awk '{print $1}' | sed 's/^gitbasher\.ai-model-//' \
+      | grep -E '^(openrouter|openai|ollama|claude)$' | sort -u
+}
+
+### Default model per provider — ONE model for every task. There used to be
+# a per-task matrix (simple/subject/full/grouping each with its own default
+# and override key); it confused users far more than it helped, so it was
+# collapsed. Picked July 2026, priorities: speed first, quality second, cost
+# third (per-commit spend is fractions of a cent either way):
+#   - openrouter: gemini-3.5-flash — current flash generation, ~0.8s median
+#     on a commit-sized prompt with good prose. flash-lite was ~0.2s faster
+#     on one-liners but noticeably worse at full bodies — not worth a matrix.
+#   - openai: gpt-5.4-mini — same measured latency as nano (~0.8s median)
+#     with strictly better quality; nano remains a budget override.
+#   - ollama: qwen3:8b — best small instruction-follower, most stable
+#     structured output among locally-runnable models. ~5 GB on disk.
+#   - claude: haiku — the CLI carries agent-startup overhead on every call,
+#     so latency dominates; the alias resolves to the current generation.
 # Update these when newer GA models supersede the current slugs.
-readonly AI_DEFAULT_MODEL_SIMPLE="google/gemini-3.1-flash-lite"
-readonly AI_DEFAULT_MODEL_SUBJECT="google/gemini-3.1-flash-lite"
-readonly AI_DEFAULT_MODEL_FULL="google/gemini-3.5-flash"
-readonly AI_DEFAULT_MODEL_GROUPING="google/gemini-3.5-flash"
+readonly AI_DEFAULT_MODEL_OPENROUTER="google/gemini-3.5-flash"
+readonly AI_DEFAULT_MODEL_OPENAI="gpt-5.4-mini"
+readonly AI_DEFAULT_MODEL_OLLAMA="qwen3:8b"
+readonly AI_DEFAULT_MODEL_CLAUDE="haiku"
 
-# OpenAI per-task defaults (July 2026, GPT-5.4 family — no 5.5 small tier
-# exists). mini ($0.75/$4.50 per M) measured the same latency as nano
-# (~0.8s median on a commit-sized prompt) with strictly better quality, so
-# with speed>quality>cost priorities every task uses mini; nano remains a
-# budget override for high-volume users (~$0.20/$1.25 per M).
-readonly AI_DEFAULT_MODEL_SIMPLE_OPENAI="gpt-5.4-mini"
-readonly AI_DEFAULT_MODEL_SUBJECT_OPENAI="gpt-5.4-mini"
-readonly AI_DEFAULT_MODEL_FULL_OPENAI="gpt-5.4-mini"
-readonly AI_DEFAULT_MODEL_GROUPING_OPENAI="gpt-5.4-mini"
-
-# Ollama per-task default (May 2026): qwen3:8b leads the 7/8B class on
-# instruction-following benchmarks and produces the most stable structured
-# output among locally-runnable models (it stays in the conventional-commit
-# format and rarely drops fields in TSV output). ~5 GB on disk, ~25 tok/s on a
-# consumer laptop with GPU acceleration. Override with `gitb cfg model` to
-# match what `ollama list` shows on your machine.
-readonly AI_DEFAULT_MODEL_SIMPLE_OLLAMA="qwen3:8b"
-readonly AI_DEFAULT_MODEL_SUBJECT_OLLAMA="qwen3:8b"
-readonly AI_DEFAULT_MODEL_FULL_OLLAMA="qwen3:8b"
-readonly AI_DEFAULT_MODEL_GROUPING_OLLAMA="qwen3:8b"
-
-# Claude Code CLI per-task defaults. The CLI resolves the alias slugs
-# (haiku/sonnet/opus) to the current model generation, so these never go
-# stale: haiku for the short interactive tasks, sonnet where prose quality
-# and strict structured output matter. Full ids (claude-haiku-4-5) work too.
-readonly AI_DEFAULT_MODEL_SIMPLE_CLAUDE="haiku"
-readonly AI_DEFAULT_MODEL_SUBJECT_CLAUDE="haiku"
-readonly AI_DEFAULT_MODEL_FULL_CLAUDE="sonnet"
-readonly AI_DEFAULT_MODEL_GROUPING_CLAUDE="sonnet"
-
-### Resolve the model to use for a specific task.
-# Resolution order:
-#   1. gitbasher.ai-model-<task>  (per-task override, e.g. gitbasher.ai-model-simple)
-#   2. gitbasher.ai-model         (global override, set by `gitb cfg model`)
-#   3. AI_DEFAULT_MODEL_<TASK>    (the recommended default above)
-# $1: task name — one of "simple", "subject", "full", "grouping"
-function get_ai_model_for {
-    local task="$1"
-
-    local task_model
-    task_model=$(get_config_value "gitbasher.ai-model-$task" "")
-    if [ -n "$task_model" ]; then
-        echo "$task_model"
-        return
-    fi
-
-    local global_model
-    global_model=$(get_ai_model)
-    if [ -n "$global_model" ]; then
-        echo "$global_model"
-        return
-    fi
-
+### The recommended default model for the active provider.
+function get_ai_default_model {
     case "$(get_ai_provider)" in
-        openai)
-            case "$task" in
-                simple)   echo "$AI_DEFAULT_MODEL_SIMPLE_OPENAI" ;;
-                subject)  echo "$AI_DEFAULT_MODEL_SUBJECT_OPENAI" ;;
-                full)     echo "$AI_DEFAULT_MODEL_FULL_OPENAI" ;;
-                grouping) echo "$AI_DEFAULT_MODEL_GROUPING_OPENAI" ;;
-                *)        echo "$AI_DEFAULT_MODEL_SIMPLE_OPENAI" ;;
-            esac
-            ;;
-        ollama)
-            case "$task" in
-                simple)   echo "$AI_DEFAULT_MODEL_SIMPLE_OLLAMA" ;;
-                subject)  echo "$AI_DEFAULT_MODEL_SUBJECT_OLLAMA" ;;
-                full)     echo "$AI_DEFAULT_MODEL_FULL_OLLAMA" ;;
-                grouping) echo "$AI_DEFAULT_MODEL_GROUPING_OLLAMA" ;;
-                *)        echo "$AI_DEFAULT_MODEL_SIMPLE_OLLAMA" ;;
-            esac
-            ;;
-        claude)
-            case "$task" in
-                simple)   echo "$AI_DEFAULT_MODEL_SIMPLE_CLAUDE" ;;
-                subject)  echo "$AI_DEFAULT_MODEL_SUBJECT_CLAUDE" ;;
-                full)     echo "$AI_DEFAULT_MODEL_FULL_CLAUDE" ;;
-                grouping) echo "$AI_DEFAULT_MODEL_GROUPING_CLAUDE" ;;
-                *)        echo "$AI_DEFAULT_MODEL_SIMPLE_CLAUDE" ;;
-            esac
-            ;;
-        *)
-            case "$task" in
-                simple)   echo "$AI_DEFAULT_MODEL_SIMPLE" ;;
-                subject)  echo "$AI_DEFAULT_MODEL_SUBJECT" ;;
-                full)     echo "$AI_DEFAULT_MODEL_FULL" ;;
-                grouping) echo "$AI_DEFAULT_MODEL_GROUPING" ;;
-                *)        echo "$AI_DEFAULT_MODEL_SIMPLE" ;;
-            esac
-            ;;
+        openai) echo "$AI_DEFAULT_MODEL_OPENAI" ;;
+        ollama) echo "$AI_DEFAULT_MODEL_OLLAMA" ;;
+        claude) echo "$AI_DEFAULT_MODEL_CLAUDE" ;;
+        *)      echo "$AI_DEFAULT_MODEL_OPENROUTER" ;;
     esac
 }
 
-### Set the model for a specific task (per-task override).
-# $1: task name; $2: model id (empty string clears the override)
-function set_ai_model_for {
-    set_config_value "gitbasher.ai-model-$1" "$2"
+### Resolve the model every AI call uses: the active provider's override
+# (gitb cfg model) when set, its default otherwise.
+function resolve_ai_model {
+    local model
+    model=$(get_ai_model)
+    if [ -n "$model" ]; then
+        echo "$model"
+        return
+    fi
+    get_ai_default_model
 }
 
 ### Function to get AI proxy URL from git config
@@ -779,16 +771,133 @@ function _parse_ollama_model_names {
 }
 
 ### List the models installed on the configured Ollama host.
-# Queries GET {host}/api/tags and prints each model name on its own line.
-# Returns 1 (printing nothing) when the host is unreachable or has no models.
+# Queries GET {host}/api/tags first; when that yields nothing, falls back to
+# the `ollama list` CLI pointed at the same host — a second liveness channel
+# (effectively another smoke check) that can succeed when the HTTP probe
+# doesn't, e.g. a macOS app that spins the server up on CLI use.
+# Prints each model name on its own line. Returns 1 (printing nothing) when
+# both channels fail or no models are installed.
 function ollama_list_models {
     local base resp names
     base=$(ollama_api_base)
     resp=$(curl -s --max-time 5 "${base}/api/tags" 2>/dev/null)
-    [ -z "$resp" ] && return 1
     names=$(printf '%s' "$resp" | _parse_ollama_model_names)
+    if [ -z "$names" ] && command -v ollama >/dev/null 2>&1; then
+        # Skip the NAME/ID/SIZE header row; first column is the model name.
+        names=$(OLLAMA_HOST="$base" ollama list 2>/dev/null \
+            | LC_ALL=C awk 'NR>1 && $1 != "" {print $1}')
+    fi
     [ -z "$names" ] && return 1
     printf '%s\n' "$names"
+}
+
+### GET a URL and print the response body (empty on failure). Same key
+# discipline as secure_curl_status: the Authorization header travels via a
+# --config heredoc so the key never appears in argv.
+# $1: proxy URL or "", $2: api key or "" (skips the header), $3: url
+function secure_curl_get {
+    local proxy_url="$1"
+    local api_key="$2"
+    local url="$3"
+
+    (
+        { set +x; } 2>/dev/null
+        unset HISTFILE
+
+        local curl_cmd=(
+            curl -s
+            --connect-timeout 10
+            --max-time 20
+        )
+        [ -n "$proxy_url" ] && curl_cmd+=(--proxy "$proxy_url")
+        curl_cmd+=("$url")
+
+        if [ -n "$api_key" ]; then
+            local escaped_key="${api_key//\\/\\\\}"
+            escaped_key="${escaped_key//\"/\\\"}"
+            "${curl_cmd[@]}" --config - <<EOF 2>/dev/null
+header = "Authorization: Bearer ${escaped_key}"
+EOF
+        else
+            "${curl_cmd[@]}" 2>/dev/null
+        fi
+    )
+}
+
+### Extract model ids from a provider /models JSON body on stdin, preserving
+# the server's order. Prefers jq; falls back to a grep/sed pass over the
+# top-level "id":"…" values (both OpenRouter and OpenAI nest models under
+# .data[] with flat string ids). Prints one id per line.
+function _parse_model_ids_json {
+    if command -v jq &>/dev/null; then
+        jq -r '.data[]?.id // empty' 2>/dev/null
+    else
+        LC_ALL=C grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' \
+            | LC_ALL=C sed 's/.*"\([^"]*\)"$/\1/'
+    fi
+}
+
+### List OpenRouter text models, server-sorted. The /models endpoint is
+# public (no key) and returns text-output models by default; the sort is
+# done server-side. Prints ALL ids (callers head-limit for menus and use the
+# full list for validation). Honors gitbasher.ai-proxy. Returns 1 (printing
+# nothing) when unreachable or the body has no ids.
+# $1: sort key — "top-weekly" (most tokens processed last week) or "newest"
+function openrouter_list_models {
+    local sort_key="${1:-top-weekly}"
+    local models_url resp ids
+    models_url="${OPENROUTER_API_URL/chat\/completions/models}?sort=${sort_key}"
+    resp=$(secure_curl_get "$(get_ai_proxy)" "" "$models_url")
+    [ -z "$resp" ] && return 1
+    ids=$(printf '%s' "$resp" | _parse_model_ids_json)
+    [ -z "$ids" ] && return 1
+    printf '%s\n' "$ids"
+}
+
+### List OpenAI chat-capable models, newest first (with jq; API order
+# otherwise). Filters out non-chat endpoints (embeddings, audio, images,
+# moderation, …) by id shape. Prints ALL surviving ids. Requires the stored
+# key; returns 1 (printing nothing) without one or when unreachable.
+function openai_list_models {
+    local api_key resp ids
+    api_key=$(get_ai_api_key)
+    [ -z "$api_key" ] && return 1
+
+    local models_url="${OPENAI_API_URL/chat\/completions/models}"
+    resp=$(secure_curl_get "$(get_ai_proxy)" "$api_key" "$models_url")
+    [ -z "$resp" ] && return 1
+
+    if command -v jq &>/dev/null; then
+        ids=$(printf '%s' "$resp" | jq -r '.data // [] | sort_by(-(.created // 0)) | .[].id // empty' 2>/dev/null)
+    else
+        ids=$(printf '%s' "$resp" | _parse_model_ids_json)
+    fi
+    ids=$(printf '%s\n' "$ids" \
+        | LC_ALL=C grep -E '^(gpt-|o[0-9]|chatgpt-)' \
+        | LC_ALL=C grep -vE 'embedding|tts|whisper|audio|realtime|dall-e|image|moderation|transcribe|search|instruct')
+    [ -z "$ids" ] && return 1
+    printf '%s\n' "$ids"
+}
+
+### Live one-shot completion check for the ACTIVE provider + model. Unlike
+# ai_smoke_check (key/reachability probe, no tokens billed), this bills a
+# few tokens and catches a wrong or unavailable MODEL id at config time
+# instead of on the first commit. Reuses call_ai_api, so proxy, retries,
+# key handling, and the reasoning floor behave exactly like production
+# calls. Returns 0 when the model produced any completion.
+function ai_model_smoke_check {
+    local model out rc
+    model=$(resolve_ai_model)
+    echo -e "${YELLOW}Testing model '${model}' with a live request...${ENDCOLOR}"
+    out=$(call_ai_api "Reply with exactly: OK" "ping" 64 "$model" 2>&1)
+    rc=$?
+    if [ "$rc" -eq 0 ] && [ -n "$out" ]; then
+        echo -e "${GREEN}✓ Model '${model}' responded${ENDCOLOR}"
+        return 0
+    fi
+    echo -e "${RED}✗ Model '${model}' did not respond${ENDCOLOR}" >&2
+    [ -n "$out" ] && printf '%s\n' "$out" | head -4 >&2
+    return 1
 }
 
 ### Quick connectivity/auth probe for the active provider, run right after setup
@@ -924,6 +1033,15 @@ function get_ai_timeout {
 # ~25KB and argv would risk E2BIG. perl's alarm survives exec, so it acts as
 # the timeout wrapper (macOS has no `timeout` command); degrades to no
 # wrapper when perl is missing. rc 142 = SIGALRM = timed out.
+# The isolation flags matter: a bare `claude -p` boots the user's full agent
+# environment — every MCP server, plugin, hook, and CLAUDE.md — on EVERY
+# call (measured 21s vs 4s for one haiku prompt on a machine with a few MCP
+# servers), and injected hook/CLAUDE.md context can contaminate structured
+# output. --strict-mcp-config + an empty --mcp-config skip MCP servers;
+# --setting-sources "" skips settings, hooks, plugins, and CLAUDE.md (flag
+# exists since mid-2025; the CLI self-updates, so it's safe to assume).
+# MAX_THINKING_TOKENS=0 disables extended thinking — commit prose never
+# needs it and it only adds latency.
 # $1: system prompt, $2: user prompt, $3: model id or alias (haiku/sonnet/opus)
 # Echoes the raw model text; returns non-zero on failure.
 function _call_claude_cli {
@@ -934,14 +1052,18 @@ function _call_claude_cli {
 
     timeout_s=$(get_ai_timeout)
 
+    local -a claude_args=(-p --model "$model" --output-format text
+        --strict-mcp-config --mcp-config '{"mcpServers":{}}'
+        --setting-sources "")
+
     if command -v perl >/dev/null 2>&1; then
         output=$(printf '%s\n\n%s' "$system_prompt" "$user_prompt" \
-            | perl -e 'alarm shift; exec @ARGV' "$timeout_s" \
-                claude -p --model "$model" --output-format text 2>/dev/null)
+            | MAX_THINKING_TOKENS=0 perl -e 'alarm shift; exec @ARGV' "$timeout_s" \
+                claude "${claude_args[@]}" 2>/dev/null)
         rc=$?
     else
         output=$(printf '%s\n\n%s' "$system_prompt" "$user_prompt" \
-            | claude -p --model "$model" --output-format text 2>/dev/null)
+            | MAX_THINKING_TOKENS=0 claude "${claude_args[@]}" 2>/dev/null)
         rc=$?
     fi
 
@@ -963,10 +1085,19 @@ function _call_claude_cli {
 # $1: system prompt (instructions: role, task, types, rules, examples, output format)
 # $2: user prompt (data: recent commits, staged files, diff, scopes)
 # $3: max_tokens cap on the response (default: AI_MAX_TOKENS_FULL)
-# $4: model id (default: get_ai_model_for "simple" — keeps single-arg legacy callers working)
+# $4: model id (default: resolve_ai_model — override or provider default)
 # $5: optional response_format (JSON string, e.g. '{"type":"json_object"}'). Empty
 #     means free-text. All targeted providers accept the OpenAI /chat/completions
 #     schema, so this passes through untouched.
+# $6: optional reasoning effort ("low" | "medium" | "high"). Empty = the
+#     provider's floor: commit messages need speed, not chain-of-thought.
+#     The default models are hybrid reasoners that think at "medium" effort
+#     out of the box — measured on a commit-sized prompt (July 2026), that
+#     costs ~1s of extra latency (and up to 2.6s tails on gpt-5.4-mini) for
+#     identical one-line output. Structural tasks (feature grouping, squash
+#     planning) pass "low": ~170 tokens of real thinking for ~+1s, useful for
+#     multi-file structure decisions. Ignored by the ollama and claude
+#     transports (claude pins thinking off — CLI startup dominates there).
 # Returns: AI response text
 function call_ai_api {
     # No signal traps here: every return path below calls
@@ -976,8 +1107,9 @@ function call_ai_api {
     local system_prompt="$1"
     local user_prompt="$2"
     local max_tokens="${3:-$AI_MAX_TOKENS_FULL}"
-    local model="${4:-$(get_ai_model_for simple)}"
+    local model="${4:-$(resolve_ai_model)}"
     local response_format="${5:-}"
+    local reasoning_effort="${6:-}"
     local provider=$(get_ai_provider)
     local api_url=$(get_ai_api_url)
     local api_key=$(get_ai_api_key)
@@ -1027,6 +1159,37 @@ function call_ai_api {
         esac
     fi
 
+    # Reasoning control (see $6 above). Field shape diverges by provider:
+    #   - openrouter: nested {"reasoning":{"effort":...}}, sent for every
+    #     model — safe for custom models: the gateway documents that request
+    #     parameters a model doesn't support are silently ignored (API
+    #     reference, "Non-standard parameters"). Floor is "minimal":
+    #     gemini-3.5-flash has mandatory reasoning and rejects "none"
+    #     (live /models metadata: default medium, mandatory true).
+    #   - openai: flat "reasoning_effort", ONLY for reasoning models (same
+    #     gpt-5*/o* gate as temperature) and NOT for the non-reasoning chat
+    #     variants (gpt-5-chat*, chatgpt-*) — those 400 on the field.
+    #     Floor is "none": the GPT-5.4 family rejects "minimal".
+    #   - custom gateway (gitbasher.ai-base-url set): no reasoning fields at
+    #     all — LiteLLM/vLLM/etc. may host any model under any name, and an
+    #     unsupported field would 400 there. Worst case is the pre-feature
+    #     behavior (the model's default effort).
+    case "$reasoning_effort" in
+        low|medium|high|"") : ;;
+        *) reasoning_effort="" ;;   # unknown value → provider floor
+    esac
+    local or_reasoning="" oa_reasoning=""
+    if [ -n "$(get_ai_base_url)" ]; then
+        : # custom endpoint — send nothing
+    elif [ "$provider" = "openrouter" ]; then
+        or_reasoning="${reasoning_effort:-minimal}"
+    elif [ "$provider" = "openai" ]; then
+        case "$model" in
+            gpt-5*chat*|chatgpt-*) : ;;
+            gpt-5*|o[0-9]*) oa_reasoning="${reasoning_effort:-none}" ;;
+        esac
+    fi
+
     # Prefer jq for robust JSON encoding; fall back to sed/awk that preserves newlines as JSON \n.
     local json_payload
     if command -v jq &>/dev/null; then
@@ -1049,6 +1212,17 @@ function call_ai_api {
                 --argjson rf "$response_format" \
                 '$base + {response_format: $rf}')
         fi
+        if [ -n "$or_reasoning" ]; then
+            json_payload=$(jq -nc \
+                --argjson base "$json_payload" \
+                --arg effort "$or_reasoning" \
+                '$base + {reasoning: {effort: $effort}}')
+        elif [ -n "$oa_reasoning" ]; then
+            json_payload=$(jq -nc \
+                --argjson base "$json_payload" \
+                --arg effort "$oa_reasoning" \
+                '$base + {reasoning_effort: $effort}')
+        fi
     else
         local system_escaped=$(_json_escape_for_payload "$system_prompt")
         local user_escaped=$(_json_escape_for_payload "$user_prompt")
@@ -1063,7 +1237,15 @@ function call_ai_api {
         if [ -n "$include_temperature" ]; then
             temp_field=",\"temperature\":$AI_TEMPERATURE"
         fi
-        json_payload="{\"model\":\"$model_escaped\",\"messages\":[{\"role\":\"system\",\"content\":\"$system_escaped\"},{\"role\":\"user\",\"content\":\"$user_escaped\"}]${temp_field},\"${tokens_field}\":$max_tokens${rf_field}}"
+        # Efforts come from the hardcoded map above (never user input), so
+        # plain interpolation is safe here.
+        local reasoning_field=""
+        if [ -n "$or_reasoning" ]; then
+            reasoning_field=",\"reasoning\":{\"effort\":\"$or_reasoning\"}"
+        elif [ -n "$oa_reasoning" ]; then
+            reasoning_field=",\"reasoning_effort\":\"$oa_reasoning\""
+        fi
+        json_payload="{\"model\":\"$model_escaped\",\"messages\":[{\"role\":\"system\",\"content\":\"$system_escaped\"},{\"role\":\"user\",\"content\":\"$user_escaped\"}]${temp_field},\"${tokens_field}\":$max_tokens${rf_field}${reasoning_field}}"
     fi
 
     # Make API request with optional proxy and retry logic
@@ -1310,7 +1492,27 @@ function call_ai_api {
         clear_sensitive_vars
         return 1
     fi
-    
+
+    # A response that hit the max_tokens cap is truncated mid-sentence —
+    # useless for every gitbasher task, and dangerous for commit messages
+    # (observed live: a reasoning model spent the whole budget thinking and
+    # "chore(ref" got committed). Fail instead, so callers run their
+    # fallbacks (manual message entry, folder grouping, squash abort).
+    local finish_reason=""
+    if command -v jq &>/dev/null; then
+        finish_reason=$(echo "$response" | jq -r '.choices[0].finish_reason // empty' 2>/dev/null)
+    else
+        case "$response" in
+            *'"finish_reason":"length"'*|*'"finish_reason": "length"'*) finish_reason="length" ;;
+        esac
+    fi
+    if [ "$finish_reason" = "length" ]; then
+        echo -e "${RED}✗ AI response was cut off by the output-token limit.${ENDCOLOR}" >&2
+        echo -e "${CYAN}💡 The model likely spent the budget on internal reasoning — pick a faster model with ${GREEN}gitb cfg model${ENDCOLOR}${CYAN}, or retry.${ENDCOLOR}" >&2
+        clear_sensitive_vars
+        return 1
+    fi
+
     # Clear sensitive variables before returning success
     clear_sensitive_vars
     echo "$ai_response"
@@ -1596,14 +1798,14 @@ function generate_ai_commit_message {
     system_prompt=$(build_ai_commit_system_prompt "$mode" "$commit_prefix")
     user_prompt=$(build_ai_commit_user_prompt "$mode" "$detected_scopes" "$provided_scopes" "$rejected_messages")
 
-    local max_tokens model
+    local max_tokens
     case "$mode" in
-        subject) max_tokens="$AI_MAX_TOKENS_SUBJECT"; model=$(get_ai_model_for subject) ;;
-        full)    max_tokens="$AI_MAX_TOKENS_FULL";    model=$(get_ai_model_for full) ;;
-        *)       max_tokens="$AI_MAX_TOKENS_SIMPLE";  model=$(get_ai_model_for simple) ;;
+        subject) max_tokens="$AI_MAX_TOKENS_SUBJECT" ;;
+        full)    max_tokens="$AI_MAX_TOKENS_FULL" ;;
+        *)       max_tokens="$AI_MAX_TOKENS_SIMPLE" ;;
     esac
 
-    call_ai_api "$system_prompt" "$user_prompt" "$max_tokens" "$model"
+    call_ai_api "$system_prompt" "$user_prompt" "$max_tokens"
 }
 
 ### Function to securely clear sensitive variables

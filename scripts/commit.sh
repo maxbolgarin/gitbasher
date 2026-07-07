@@ -709,7 +709,9 @@ Read <diff> to decide which files implement the same feature. Output TSV (scope<
     #### bundler-keep-end
 
     local ai_response
-    ai_response=$(call_ai_api "$system_prompt" "$user_prompt" "$AI_MAX_TOKENS_FULL" "$(get_ai_model_for grouping)" 2>/dev/null)
+    # "low" reasoning: grouping is a structural decision over many files —
+    # worth ~1s of thinking, unlike plain message generation (see call_ai_api).
+    ai_response=$(call_ai_api "$system_prompt" "$user_prompt" "$AI_MAX_TOKENS_FULL" "" "" "low" 2>/dev/null)
     if [ $? -ne 0 ] || [ -z "$ai_response" ]; then
         return 1
     fi

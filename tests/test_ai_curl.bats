@@ -36,7 +36,11 @@ setup() {
         echo "STDIN_END"
     fi
 } >> "$AI_CURL_LOG"
-echo '{"choices":[{"message":{"content":"stub-response"}}]}'
+if [ -n "$FAKE_CURL_RESPONSE" ]; then
+    printf '%s' "$FAKE_CURL_RESPONSE"
+else
+    echo '{"choices":[{"message":{"content":"stub-response"}}]}'
+fi
 EOF
     chmod +x "${AI_FAKE_BIN}/curl"
     PATH="${AI_FAKE_BIN}:$PATH"
@@ -168,4 +172,98 @@ teardown() {
     secure_curl_with_api_key "" "k" '{"a":1}' "https://api.test/v1" "openai" >/dev/null
     grep -q "^ARG: --connect-timeout$" "$AI_CURL_LOG"
     grep -q "^ARG: --max-time$" "$AI_CURL_LOG"
+}
+
+# ===== call_ai_api reasoning controls =====
+# The default models are hybrid reasoners that think at "medium" effort out
+# of the box — pure latency for commit messages. call_ai_api floors reasoning
+# per provider (openrouter "minimal" — gemini flash has mandatory reasoning;
+# openai "none" — the GPT-5.4 family rejects "minimal") and raises it to
+# "low" only for structural tasks (grouping, squash) via $6.
+
+@test "call_ai_api: openrouter payload floors reasoning at minimal effort" {
+    unset GITB_AI_API_KEY GITB_AI_API_KEY_OPENROUTER GITB_AI_API_KEY_OPENAI
+    git config gitbasher.ai-provider openrouter
+    git config gitbasher.ai-api-key-openrouter "sk-or-test-1234"
+    run call_ai_api "sys" "user"
+    [ "$status" -eq 0 ]
+    grep -q '"reasoning":{"effort":"minimal"}' "$AI_CURL_LOG"
+}
+
+@test "call_ai_api: openrouter sends low effort when the caller asks for it" {
+    unset GITB_AI_API_KEY GITB_AI_API_KEY_OPENROUTER GITB_AI_API_KEY_OPENAI
+    git config gitbasher.ai-provider openrouter
+    git config gitbasher.ai-api-key-openrouter "sk-or-test-1234"
+    run call_ai_api "sys" "user" 100 "" "" "low"
+    [ "$status" -eq 0 ]
+    grep -q '"reasoning":{"effort":"low"}' "$AI_CURL_LOG"
+}
+
+@test "call_ai_api: openai gpt-5 family gets reasoning_effort none by default" {
+    unset GITB_AI_API_KEY GITB_AI_API_KEY_OPENROUTER GITB_AI_API_KEY_OPENAI
+    git config gitbasher.ai-provider openai
+    git config gitbasher.ai-api-key-openai "sk-test-1234"
+    run call_ai_api "sys" "user" 100 "gpt-5.4-mini"
+    [ "$status" -eq 0 ]
+    grep -q '"reasoning_effort":"none"' "$AI_CURL_LOG"
+}
+
+@test "call_ai_api: openai gpt-5 family gets reasoning_effort low when asked" {
+    unset GITB_AI_API_KEY GITB_AI_API_KEY_OPENROUTER GITB_AI_API_KEY_OPENAI
+    git config gitbasher.ai-provider openai
+    git config gitbasher.ai-api-key-openai "sk-test-1234"
+    run call_ai_api "sys" "user" 100 "gpt-5.4-mini" "" "low"
+    [ "$status" -eq 0 ]
+    grep -q '"reasoning_effort":"low"' "$AI_CURL_LOG"
+}
+
+@test "call_ai_api: non-reasoning openai model gets no reasoning field (400 guard)" {
+    unset GITB_AI_API_KEY GITB_AI_API_KEY_OPENROUTER GITB_AI_API_KEY_OPENAI
+    git config gitbasher.ai-provider openai
+    git config gitbasher.ai-api-key-openai "sk-test-1234"
+    run call_ai_api "sys" "user" 100 "gpt-4o"
+    [ "$status" -eq 0 ]
+    ! grep -q 'reasoning' "$AI_CURL_LOG"
+}
+
+@test "call_ai_api: unknown effort value falls back to the provider floor" {
+    unset GITB_AI_API_KEY GITB_AI_API_KEY_OPENROUTER GITB_AI_API_KEY_OPENAI
+    git config gitbasher.ai-provider openrouter
+    git config gitbasher.ai-api-key-openrouter "sk-or-test-1234"
+    run call_ai_api "sys" "user" 100 "" "" 'evil"}{'
+    [ "$status" -eq 0 ]
+    grep -q '"reasoning":{"effort":"minimal"}' "$AI_CURL_LOG"
+    ! grep -q 'evil' "$AI_CURL_LOG"
+}
+
+@test "call_ai_api: gpt-5 chat variants get no reasoning_effort (they 400 on it)" {
+    unset GITB_AI_API_KEY GITB_AI_API_KEY_OPENROUTER GITB_AI_API_KEY_OPENAI
+    git config gitbasher.ai-provider openai
+    git config gitbasher.ai-api-key-openai "sk-test-1234"
+    run call_ai_api "sys" "user" 100 "gpt-5.4-chat-latest"
+    [ "$status" -eq 0 ]
+    ! grep -q 'reasoning' "$AI_CURL_LOG"
+}
+
+@test "call_ai_api: custom base-url gateway suppresses all reasoning fields" {
+    unset GITB_AI_API_KEY GITB_AI_API_KEY_OPENROUTER GITB_AI_API_KEY_OPENAI
+    git config gitbasher.ai-provider openai
+    git config gitbasher.ai-api-key-openai "sk-test-1234"
+    git config gitbasher.ai-base-url "http://litellm.local:4000/v1/chat/completions"
+    run call_ai_api "sys" "user" 100 "gpt-5.4-mini" "" "low"
+    [ "$status" -eq 0 ]
+    ! grep -q 'reasoning' "$AI_CURL_LOG"
+}
+
+@test "call_ai_api: cap-truncated response (finish_reason=length) is a failure" {
+    unset GITB_AI_API_KEY GITB_AI_API_KEY_OPENROUTER GITB_AI_API_KEY_OPENAI
+    git config gitbasher.ai-provider openrouter
+    git config gitbasher.ai-api-key-openrouter "sk-or-test-1234"
+    # Observed live with a reasoning model: the whole budget went to thinking
+    # and the content arrived cut mid-word — must fail, never be committed.
+    FAKE_CURL_RESPONSE='{"choices":[{"message":{"content":"chore(ref"},"finish_reason":"length"}]}' \
+        run call_ai_api "sys" "user"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"cut off"* ]]
+    [[ "$output" != "chore(ref" ]]
 }

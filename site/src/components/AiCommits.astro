@@ -33,6 +33,16 @@ export GITB_AI_API_KEY_OPENROUTER=sk-or-...`;
       command: <code>gitb cfg ai</code>.
     </p>
 
+    <p>
+      Model picking is guided: the wizard shows a live numbered menu —
+      the week's most-used and newest models on OpenRouter, the newest
+      chat models on your OpenAI account, whatever is pulled on your
+      Ollama host — validates a typed id against the live catalog, and
+      test-drives your pick with one real request before saving. Keys
+      and model choices are remembered per provider, so switching back
+      and forth never mixes them up.
+    </p>
+
     <h3>Fully local with Ollama</h3>
     <p>No key, no network, your diff doesn't leave the machine.</p>
     <div class="copy-block multiline" aria-label="Ollama setup">

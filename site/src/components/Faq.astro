@@ -14,7 +14,7 @@ const faqs = [
   },
   {
     q: 'Where are my settings (and API keys) stored?',
-    a: 'In <code>git config</code> under the <code>gitbasher.*</code> namespace — per-repo by default, and every <code>gitb cfg</code> setter offers to also save the value globally. For shared machines, set API keys via env vars like <code>GITB_AI_API_KEY_OPENAI</code>; gitbasher checks env first.',
+    a: 'In <code>git config</code> under the <code>gitbasher.*</code> namespace — per-repo by default, and every <code>gitb cfg</code> setter offers to save the value globally instead. API keys and model choices are stored per provider, so switching providers never mixes them up. For shared machines, set API keys via env vars like <code>GITB_AI_API_KEY_OPENAI</code>; gitbasher checks env first.',
   },
   {
     q: 'Does it work in CI?',

@@ -13,8 +13,8 @@ Only if you pick a hosted provider (OpenAI, OpenRouter). Gitbasher sends the sta
 ```bash
 brew install ollama          # or follow https://ollama.com for your OS
 ollama serve                 # daemon, leave running
-ollama pull llama3           # or any model you prefer
-gitb cfg ai                  # wizard: choose ollama, pick the pulled model
+ollama pull qwen3:8b         # or any model you prefer
+gitb cfg ai                  # wizard: choose ollama, pick from your pulled models
 ```
 
 After that, `gitb commit ai` runs against `http://localhost:11434` and never makes an outbound call.
@@ -56,13 +56,13 @@ Yes for non-interactive subcommands (`gitb status`, `gitb pull dry`, etc.). Anyt
 
 ### Where does gitbasher store its settings?
 
-In `git config` under the `gitbasher.*` namespace. Per-repo by default (in `.git/config`); after the local write, every `gitb cfg` setter asks whether to also set the value globally (`~/.gitconfig`). The keys you'll see most:
+In `git config` under the `gitbasher.*` namespace. Per-repo by default (in `.git/config`); every `gitb cfg` setter then asks whether to set the value globally — answering yes *moves* it to `~/.gitconfig` (one copy, no local shadow that would hide later global changes). The keys you'll see most:
 
 | Key | What it controls |
 |-----|------------------|
 | `gitbasher.scopes` | Conventional-Commit scope list shown by `gitb commit` |
 | `gitbasher.ai-provider` | `openai`, `openrouter`, `ollama`, `claude` |
-| `gitbasher.ai-model` | Provider-specific model id |
+| `gitbasher.ai-model-<provider>` | Model for that provider — one model for all tasks, remembered per provider |
 | `gitbasher.ai-api-key-<provider>` | Per-provider key |
 | `gitbasher.ai-proxy` | Outbound proxy for AI calls |
 | `gitbasher.worktreebase` | Base directory for worktrees (`gitb worktree`, `gitb wip up worktree`) |

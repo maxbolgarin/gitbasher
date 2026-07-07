@@ -132,7 +132,7 @@ Each script broadly follows that pattern: a `<name>_script` entry function, a fe
 User-visible settings live in `git config` under the `gitbasher.*` namespace, set via `gitb config`:
 
 - `gitbasher.scopes` — comma-separated commit scopes for the picker
-- `gitbasher.ai-provider`, `gitbasher.ai-api-key-<provider>`, `gitbasher.ai-model` — AI client
+- `gitbasher.ai-provider`, `gitbasher.ai-api-key-<provider>`, `gitbasher.ai-model-<provider>` — AI client (keys and models are per provider; the un-suffixed legacy keys are migrated to the outgoing provider on switch)
 - `gitbasher.ai-ollama-host` — Ollama server location (default `http://localhost:11434`)
 - `gitbasher.ai-proxy` — optional HTTPS proxy for restricted regions
 - `gitbasher.worktreebase` — base path for `gitb worktree add` and `wip up worktree`

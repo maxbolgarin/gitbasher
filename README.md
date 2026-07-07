@@ -111,7 +111,7 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 - **AI commit messages** — `gitb c ai` writes the message from your diff. OpenRouter (Gemini/Claude/GPT/…), OpenAI direct, or **fully local via Ollama** — no key, no network, no data leaves your machine.
 - **Safer git** — push/pull detect conflicts up front, `undo` rolls back commit/amend/merge/rebase/stash, `reset` is interactive with a preview.
 - **Whole workflows, not just commands** — `sync`, `wip`, `branch newd`, `merge to-main`, `squash` chain the steps you'd otherwise do by hand.
-- **One file, no deps** — pure bash for every git operation; only the AI features need `jq` and `curl`. Drop the binary anywhere on `PATH` and go. **900+ BATS tests** cover sanitization, git ops, and branch logic.
+- **One file, no deps** — pure bash for every git operation; only the AI features need `jq` and `curl`. Drop the binary anywhere on `PATH` and go. **940+ BATS tests** cover sanitization, git ops, and branch logic.
 
 <p align="center">
   <img src=".github/push.gif" width="640" alt="gitb push demo" />
@@ -253,50 +253,26 @@ export GITB_AI_API_KEY='sk-...'
 <details>
 <summary><b>Default models per provider</b> (click to expand)</summary>
 
-Each task uses a model tuned for speed/cost/quality, picked per provider. Defaults (May 2026):
+One model per provider, used for every task (message generation, subjects, feature grouping). Defaults (July 2026), picked speed-first:
 
-**OpenRouter** (default provider)
+| Provider | Default model | Why |
+|----------|---------------|-----|
+| `openrouter` | `google/gemini-3.5-flash` | Current flash generation, ~0.8s median on a commit-sized prompt, good prose |
+| `openai` | `gpt-5.4-mini` | As fast as nano (~0.8s) with strictly better quality, ~$0.75 / $4.50 per M |
+| `ollama` | `qwen3:8b` | Best small instruction-follower; most stable structured output; ~5 GB on disk |
+| `claude` | `haiku` | CLI startup dominates latency, so the fastest model wins; alias tracks the current generation |
 
-| Task | Default model | Why |
-|------|---------------|-----|
-| `simple` (one-line message) | `google/gemini-3.1-flash-lite` | Fastest model measured (~0.6s), cheapest |
-| `subject` (after manual type/scope) | `google/gemini-3.1-flash-lite` | Short structured output, instant |
-| `full` (header + body) | `google/gemini-3.5-flash` | Same speed class, better prose |
-| `grouping` (atomic-split mapping) | `google/gemini-3.5-flash` | Fast + strict structured output |
+Other good picks: `gpt-5.4-nano` (budget, high volume), `llama3.3:8b` / `qwen2.5-coder:7b` (local), `sonnet` (better prose on the claude provider, noticeably slower).
 
-**OpenAI** — GPT-5.4 family (released March 2026)
+The cloud defaults are hybrid reasoning models that think at "medium" effort out of the box — pure latency for a one-line commit message. gitbasher controls this per request: message generation runs at the provider's reasoning floor (`minimal` on OpenRouter, `none` on OpenAI — measured ~2× faster with identical output), while feature grouping and squash planning run at `low` effort, where a bit of real thinking helps multi-file structure decisions. No configuration needed.
 
-| Task | Default model | Why |
-|------|---------------|-----|
-| All tasks | `gpt-5.4-mini` | Measured as fast as nano (~0.8s) with strictly better quality, ~$0.75 / $4.50 per M |
+`gitb cfg model` shows a **live menu**: the week's most-used and newest text models on OpenRouter (public API, server-side ranking), or the newest chat models visible to your OpenAI key. A typed id is validated against the live catalog (typos die at config time, with an override for brand-new models), and the chosen model is test-driven with one live request before the step completes — a model that can't complete a request never reaches your commits.
 
-`gpt-5.4-nano` (~$0.20 / $1.25 per M) remains a good budget override for high-volume use.
+The model is remembered **per provider** — switching providers never carries a model across (an OpenRouter slug means nothing to the claude CLI), and switching back restores your previous choice, same as API keys:
 
-**Ollama** — fully local
-
-| Task | Default model | Why |
-|------|---------------|-----|
-| All tasks | `qwen3:8b` | Best small instruction-follower among 7/8B models; most stable structured output (rarely drops fields in TSV); ~5 GB on disk, ~25 tok/s on a consumer laptop with GPU |
-
-Other strong local picks: `llama3.3:8b` (general-purpose), `qwen2.5-coder:7b` (code-heavy diffs).
-
-**Claude Code CLI** — local `claude -p`
-
-| Task | Default model | Why |
-|------|---------------|-----|
-| `simple` / `subject` | `haiku` | Fastest and cheapest for one-line output |
-| `full` / `grouping` | `sonnet` | Better prose and strict structured output |
-
-The alias slugs (`haiku`, `sonnet`, `opus`) always resolve to the current model generation; full ids like `claude-haiku-4-5` work too.
-
-Override per task or globally:
 ```bash
-gitb cfg model                                          # interactive
-git config gitbasher.ai-model            <model_id>     # global
-git config gitbasher.ai-model-simple     <model_id>     # per-task
-git config gitbasher.ai-model-subject    <model_id>
-git config gitbasher.ai-model-full       <model_id>
-git config gitbasher.ai-model-grouping   <model_id>
+gitb cfg model                                    # interactive, stores for the active provider
+git config gitbasher.ai-model-<provider> <model_id>   # direct, e.g. gitbasher.ai-model-claude sonnet
 ```
 
 </details>
@@ -905,7 +881,7 @@ Overview-first diffs built for the gitbasher workflow — no flag memorization. 
 | `gitbasher.ai-api-key-<provider>` | `gitb cfg ai` | Per-provider AI API key (or `GITB_AI_API_KEY_<PROVIDER>` env); legacy `gitbasher.ai-api-key` is read as a fallback |
 | `gitbasher.ai-provider` | `gitb cfg provider` | `openrouter` (default), `openai`, `ollama`, or `claude` |
 | `gitbasher.ai-base-url` | `git config` | Custom OpenAI-compatible endpoint (LiteLLM, vLLM, remote Ollama) |
-| `gitbasher.ai-model[-task]` | `gitb cfg model` | AI model overrides (per provider) |
+| `gitbasher.ai-model-<provider>` | `gitb cfg model` | Model for that provider (one model for all tasks); legacy `gitbasher.ai-model` is read as a fallback |
 | `gitbasher.ai-proxy` | `gitb cfg proxy` | HTTP proxy for AI calls |
 | `gitbasher.ai-ollama-host` | `git config gitbasher.ai-ollama-host <url>` | Ollama server URL (default `http://localhost:11434`) |
 | `gitbasher.ai-timeout` | `git config gitbasher.ai-timeout <seconds>` | AI request timeout in seconds (default `60`, `300` for ollama/claude) |
@@ -1095,7 +1071,7 @@ PRs welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for the dev setup, BATS te
 
 ```bash
 make build               # rebuild dist/gitb
-make test                # run all 900+ tests
+make test                # run all 940+ tests
 make test-file FILE=test_sanitization.bats
 ```
 

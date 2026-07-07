@@ -77,7 +77,7 @@ teardown() {
     # No API key configured anywhere — proves the key guard was skipped
 }
 
-@test "call_ai_api: claude runs isolated — no MCP, no settings, no thinking" {
+@test "call_ai_api: claude runs isolated - no MCP, no settings, no thinking" {
     run call_ai_api "sys" "user" 100 "haiku"
     [ "$status" -eq 0 ]
     # Skip the user's MCP servers, hooks, plugins, and CLAUDE.md: they add

@@ -101,7 +101,7 @@ teardown() {
     [ "$(get_config_value gitbasher.roundtrip)" = "rt-val" ]
 }
 
-@test "round-trip: set local, then global — the global write is promoted" {
+@test "round-trip: set local, then global - the global write is promoted" {
     # A later global write replaces the local copy (see "clears the local
     # shadow" below); a raw `git config --local` write afterwards still wins,
     # which is git's normal precedence for values set outside gitbasher.

@@ -468,6 +468,30 @@ function get_max_split_groups {
     printf '%s' "$v"
 }
 
+### Decide whether to attempt AI feature-grouping, given the folder heuristic's
+### result. AI grouping is worth a (slow, occasionally-flaky) model call only when
+### several folders/scopes are touched and the right grouping is non-obvious. For
+### 1-2 scopes the folder heuristic is already correct — 1 scope is a single
+### feature with nothing to split, 2 scopes (e.g. bff + spa) is an obvious folder
+### split — so we skip AI and keep the heuristic groups. Users who set
+### commit-ai-grouping=always force AI regardless of the scope count.
+# $1: number of folder-heuristic scopes (typically ${#split_group_keys[@]})
+# $2: gitbasher.commit-ai-grouping mode (auto|always|never)
+# Returns 0 to attempt AI, 1 to skip.
+function should_attempt_ai_grouping {
+    local scope_count="$1" mode="$2"
+    case "$mode" in
+        always) return 0 ;;
+        never)  return 1 ;;
+    esac
+    # auto (default): only when 3+ distinct folder scopes are involved.
+    case "$scope_count" in
+        ''|*[!0-9]*) return 1 ;;
+    esac
+    [ "$scope_count" -ge 3 ] && return 0
+    return 1
+}
+
 ### Reorder split_group_keys so foundational scopes commit first.
 #
 # Git hands files back alphabetically by path, so the split commits would
@@ -713,6 +737,7 @@ Read <diff> to decide which files implement the same feature. Output TSV (scope<
     # worth ~1s of thinking, unlike plain message generation (see call_ai_api).
     ai_response=$(call_ai_api "$system_prompt" "$user_prompt" "$AI_MAX_TOKENS_FULL" "" "" "low" 2>/dev/null)
     if [ $? -ne 0 ] || [ -z "$ai_response" ]; then
+        ai_grouping_fail_reason="API error"
         return 1
     fi
 
@@ -725,6 +750,19 @@ Read <diff> to decide which files implement the same feature. Output TSV (scope<
         [ -n "$f" ] && gset_add staged_set "$f"
     done <<< "$staged_files"
 
+    # Capture the folder heuristic's file -> scope assignment (from the current
+    # split_groups, populated by build_split_groups_from_staged before this call)
+    # BEFORE we overwrite the globals. Leftover files the model fails to assign
+    # are placed by folder rather than discarding the whole AI grouping.
+    gmap_clear folder_scope_of
+    local _fk _ff
+    for _fk in "${split_group_keys[@]}"; do
+        while IFS= read -r _ff; do
+            [ -n "$_ff" ] && gmap_set folder_scope_of "$_ff" "$_fk"
+        done <<< "$(gmap_get split_groups "$_fk")"
+    done
+
+    gmap_clear assigned_set
     gmap_clear new_groups
     local -a new_keys=()
     local line scope file tab_count
@@ -762,6 +800,12 @@ Read <diff> to decide which files implement the same feature. Output TSV (scope<
         # Reject files the model invented or paraphrased
         gset_has staged_set "$file" || continue
 
+        # Assign each real file once. A model that lists the same path under two
+        # scopes would otherwise inflate the coverage count (and, pre-leniency,
+        # fail the whole grouping); first scope wins.
+        gset_has assigned_set "$file" && continue
+        gset_add assigned_set "$file"
+
         if ! gmap_has new_groups "$scope"; then
             new_keys+=("$scope")
             gmap_set new_groups "$scope" "$file"
@@ -770,15 +814,56 @@ Read <diff> to decide which files implement the same feature. Output TSV (scope<
         fi
     done <<< "$ai_response"
 
-    # Every staged file must be covered — partial output means we fall back
-    local total_assigned=0 total_staged
+    # Coverage check. The model occasionally omits or mangles a path in a large
+    # changeset; rather than discard an otherwise-good grouping over a few missing
+    # files (the old all-or-nothing behaviour, the main cause of spurious
+    # "AI grouping failed" fallbacks), we tolerate a small shortfall and place the
+    # leftovers by folder. A large shortfall still means the output is untrustworthy.
+    local total_assigned=0 total_staged unmatched
     local key
     for key in "${new_keys[@]}"; do
         total_assigned=$((total_assigned + $(printf '%s\n' "$(gmap_get new_groups "$key")" | grep -c .)))
     done
     total_staged=$(printf '%s\n' "$staged_files" | grep -c .)
-    if [ "$total_assigned" -ne "$total_staged" ] || [ ${#new_keys[@]} -lt 1 ]; then
+
+    if [ ${#new_keys[@]} -lt 1 ] || [ "$total_assigned" -eq 0 ]; then
+        ai_grouping_fail_reason="no usable grouping returned"
         return 1
+    fi
+
+    unmatched=$((total_staged - total_assigned))
+    [ "$unmatched" -lt 0 ] && unmatched=0   # dedup should prevent this; be safe
+
+    # More than ~20% missing → don't trust it.
+    if [ "$unmatched" -gt 0 ] && [ $((unmatched * 5)) -gt "$total_staged" ]; then
+        ai_grouping_fail_reason="${unmatched} of ${total_staged} files unassigned"
+        return 1
+    fi
+
+    # Place any leftover (unassigned) staged files. If the model produced a single
+    # group (its "one feature" verdict), leftovers join that group rather than
+    # fabricating a split; otherwise use the folder heuristic's own scope.
+    if [ "$unmatched" -gt 0 ]; then
+        local single_group=""
+        [ ${#new_keys[@]} -eq 1 ] && single_group="${new_keys[0]}"
+        local sf leftover_scope
+        while IFS= read -r sf; do
+            [ -z "$sf" ] && continue
+            gset_has assigned_set "$sf" && continue
+            if [ -n "$single_group" ]; then
+                leftover_scope="$single_group"
+            else
+                leftover_scope=$(gmap_get folder_scope_of "$sf")
+                [ -z "$leftover_scope" ] && leftover_scope="misc"
+            fi
+            if ! gmap_has new_groups "$leftover_scope"; then
+                new_keys+=("$leftover_scope")
+                gmap_set new_groups "$leftover_scope" "$sf"
+            else
+                gmap_set new_groups "$leftover_scope" "$(gmap_get new_groups "$leftover_scope")"$'\n'"$sf"
+            fi
+            gset_add assigned_set "$sf"
+        done <<< "$staged_files"
     fi
 
     # Replace globals with AI grouping
@@ -1335,30 +1420,33 @@ function try_offer_commit_split {
     # fallback grouping and the detected_scopes used as naming hints for the AI.
     build_split_groups_from_staged
 
-    # Decide whether to attempt AI feature-grouping. It is the primary path
-    # whenever the user asked for an AI split; the folder heuristic above stays
-    # as the fallback if AI is off, unavailable, or fails.
+    # Decide whether to attempt AI feature-grouping. It is the primary path when
+    # the user asked for an AI split AND the folder heuristic found enough distinct
+    # scopes to make regrouping worthwhile (see should_attempt_ai_grouping): 1-2
+    # scopes are trusted as-is (single feature / obvious folder split), 3+ get the
+    # AI pass. The folder heuristic groups stay as the fallback if AI is skipped,
+    # unavailable, or fails.
     local ai_grouping
     ai_grouping=$(get_config_value gitbasher.commit-ai-grouping "auto")
-    local should_use_ai="false"
-    case "$ai_grouping" in
-        never)  should_use_ai="false" ;;
-        *)      should_use_ai="true" ;;   # auto + always: attempt AI
-    esac
 
     # AI usage is gated on the user's explicit AI intent (llm flag set by
     # ai/aisplit/aif/ff/etc). Non-AI modes (regular commit, fast, split) never
     # call the model — they keep the folder heuristic grouping as-is.
-    if [ -z "$llm" ]; then
-        should_use_ai="false"
+    local should_use_ai="false"
+    if [ -n "$llm" ] && should_attempt_ai_grouping "${#split_group_keys[@]}" "$ai_grouping"; then
+        should_use_ai="true"
     fi
 
     if [ "$should_use_ai" = "true" ] && check_ai_available 2>/dev/null; then
         echo
         echo -e "${YELLOW}Grouping changes by feature with AI...${ENDCOLOR}"
+        local ai_grouping_fail_reason=""
         if ! group_files_by_feature_with_ai; then
-            # AI failed; keep the folder heuristic groups (may be empty)
-            echo -e "${YELLOW}AI feature grouping failed, falling back to folder-based grouping.${ENDCOLOR}"
+            # AI failed; keep the folder heuristic groups (may be empty). Surface
+            # the specific reason so the fallback is diagnosable, not mysterious.
+            local reason_suffix=""
+            [ -n "$ai_grouping_fail_reason" ] && reason_suffix=" (${ai_grouping_fail_reason})"
+            echo -e "${YELLOW}AI feature grouping failed${reason_suffix}, using folder-based grouping.${ENDCOLOR}"
         fi
         # Safety net: cap AI's grouping too (the heuristic path is already
         # capped inside build_split_groups_from_staged).

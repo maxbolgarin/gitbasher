@@ -159,11 +159,11 @@ stage_file() {
     [[ " ${split_group_keys[*]} " == *" refactor "* ]]
 }
 
-@test "orchestration: AI grouping is primary - runs even when heuristic is strong" {
-    # Two files in two clearly-separated folders → the folder heuristic alone
-    # already yields 2 clean groups (the old code would NOT have consulted AI).
+@test "orchestration: AI grouping runs when 3+ folder scopes are involved" {
+    # Three clearly-separated folders → the gate lets the AI regroup by feature.
     stage_file "api/a.go" "a"
     stage_file "web/b.js" "b"
+    stage_file "cli/c.sh" "c"
 
     git config gitbasher.commit-auto-split "ask"
     git config gitbasher.commit-ai-grouping "auto"
@@ -191,6 +191,127 @@ stage_file() {
     assert_success
     [[ "$output" == *"AI-GROUPING-CALLED"* ]]
     [[ "$output" == *"split-performed"* ]]
+}
+
+@test "orchestration: only 2 folder scopes (auto) skip AI, use folder split" {
+    # Two folders → an obvious folder split; the gate must NOT spend an AI call.
+    stage_file "api/a.go" "a"
+    stage_file "web/b.js" "b"
+
+    git config gitbasher.commit-auto-split "ask"
+    git config gitbasher.commit-ai-grouping "auto"
+    llm="true"
+    current_branch="main"
+    push=""
+
+    check_ai_available() { return 0; }
+    group_files_by_feature_with_ai() {
+        echo "AI-GROUPING-CALLED"
+        return 0
+    }
+    perform_commit_split() {
+        echo "split-performed"
+        return 0
+    }
+
+    run try_offer_commit_split "true" "true"
+
+    assert_success
+    [[ "$output" != *"AI-GROUPING-CALLED"* ]]
+    [[ "$output" == *"split-performed"* ]]
+}
+
+@test "orchestration: commit-ai-grouping=always forces AI even at 2 scopes" {
+    stage_file "api/a.go" "a"
+    stage_file "web/b.js" "b"
+
+    git config gitbasher.commit-auto-split "ask"
+    git config gitbasher.commit-ai-grouping "always"
+    llm="true"
+    current_branch="main"
+    push=""
+
+    check_ai_available() { return 0; }
+    group_files_by_feature_with_ai() {
+        echo "AI-GROUPING-CALLED"
+        gmap_clear split_groups
+        gmap_set split_groups "featA" "api/a.go"
+        gmap_set split_groups "featB" "web/b.js"
+        split_group_keys=(featA featB)
+        return 0
+    }
+    perform_commit_split() {
+        echo "split-performed"
+        return 0
+    }
+
+    run try_offer_commit_split "true" "true"
+
+    assert_success
+    [[ "$output" == *"AI-GROUPING-CALLED"* ]]
+}
+
+@test "feature grouping: a few unassigned files are placed by folder, not discarded" {
+    stage_file "api/login.go"    "auth"
+    stage_file "web/session.js"  "auth"
+    stage_file "api/invoice.go"  "billing"
+    stage_file "web/checkout.js" "billing"
+    stage_file "api/report.go"   "reporting"   # the model will "forget" this one
+
+    # Populate the folder heuristic so leftovers have somewhere to land.
+    build_split_groups_from_staged
+
+    # Model returns only 4 of 5 files (drops api/report.go) — 20%, within budget.
+    call_ai_api() {
+        printf 'auth\tapi/login.go\nauth\tweb/session.js\nbilling\tapi/invoice.go\nbilling\tweb/checkout.js\n'
+    }
+
+    group_files_by_feature_with_ai
+    local rc=$?
+    [ "$rc" -eq 0 ]
+
+    # The AI's feature groups survived...
+    [[ " ${split_group_keys[*]} " == *" auth "* ]]
+    [[ " ${split_group_keys[*]} " == *" billing "* ]]
+    # ...and the dropped file is still assigned somewhere (folder-placed), not lost.
+    local all_files k
+    all_files=""
+    for k in "${split_group_keys[@]}"; do
+        all_files="${all_files}"$'\n'"$(gmap_get split_groups "$k")"
+    done
+    [[ "$all_files" == *"api/report.go"* ]]
+}
+
+@test "feature grouping: dropping many files falls back with a reason" {
+    stage_file "a.go" "a"
+    stage_file "b.go" "b"
+    stage_file "c.go" "c"
+    stage_file "d.go" "d"
+    stage_file "e.go" "e"
+
+    # Root files collapse to a single "misc" group (return 1); we only need the
+    # side effects, so ignore the status.
+    build_split_groups_from_staged || true
+
+    # Model returns only 1 of 5 (drops 4 → 80% unmatched, over the 20% budget).
+    call_ai_api() { printf 'x\ta.go\n'; }
+
+    local ai_grouping_fail_reason=""
+    local rc=0
+    if ! group_files_by_feature_with_ai; then rc=1; fi
+    [ "$rc" -eq 1 ]
+    [[ "$ai_grouping_fail_reason" == *"of 5 files unassigned"* ]]
+}
+
+@test "feature grouping: API error falls back with an API-error reason" {
+    stage_file "a.go" "a"
+    call_ai_api() { return 1; }
+
+    local ai_grouping_fail_reason=""
+    local rc=0
+    if ! group_files_by_feature_with_ai; then rc=1; fi
+    [ "$rc" -eq 1 ]
+    [[ "$ai_grouping_fail_reason" == *"API error"* ]]
 }
 
 @test "orchestration: non-AI split (no llm) never calls the AI grouping" {

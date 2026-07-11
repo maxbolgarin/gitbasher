@@ -2,6 +2,12 @@
 
 All notable changes to gitbasher are generated automatically by [semantic-release](https://github.com/semantic-release/semantic-release) from [Conventional Commits](https://www.conventionalcommits.org/) on `main`. The project follows [Semantic Versioning](https://semver.org/).
 
+## [5.2.1](https://github.com/maxbolgarin/gitbasher/compare/v5.2.0...v5.2.1) (2026-07-11)
+
+### 🐛 Bug Fixes
+
+* **commit:** gate AI split by scope count and stop discarding near-complete groupings ([90becec](https://github.com/maxbolgarin/gitbasher/commit/90becec0f49a7a3e57e57e11a71b6909884ab337))
+
 ## [5.2.0](https://github.com/maxbolgarin/gitbasher/compare/v5.1.0...v5.2.0) (2026-07-07)
 
 ### 🚀 Features

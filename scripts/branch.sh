@@ -448,7 +448,7 @@ function branch_script {
                             "$main_branch"|"$current_branch"|master|main|develop) continue ;;
                         esac
                         merged_to_delete+=("$_mb")
-                    done < <(git branch --merged --format='%(refname:short)')
+                    done < <(git branch --merged HEAD --format='%(refname:short)')
 
                     for branch_to_delete in "${merged_to_delete[@]}"; do
                         delete_output=$(git branch -d "$branch_to_delete" 2>&1)

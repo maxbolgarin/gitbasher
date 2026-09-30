@@ -29,6 +29,7 @@ teardown() {
     [[ "$output" == *"9. ${blue}${bold}plain${endcolor}"* ]]
     [[ "$output" == *"${yellow}${bold}skip${endcolor}"* ]]
     [[ "$output" == *"${red}${bold}abort${endcolor}"* ]]
+    [[ "$output" == *"u. "*"undo"* ]]
 }
 
 @test "regular type menu uses split menu styling" {
@@ -85,7 +86,7 @@ teardown() {
     assert_success
     local use_prompt before_type yellow
     yellow=$(printf '%b' "$YELLOW")
-    use_prompt="Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) "
+    use_prompt="Use it? (y/e to edit/r to regenerate/s to skip group/u to undo split/0 to abort) "
     before_type="${output#*"$use_prompt"}"
     [[ "$before_type" != "$output" ]]
     before_type="${before_type%%What ${yellow}type*}"
@@ -192,10 +193,107 @@ teardown() {
         return 0
     }
 
-    run try_offer_commit_split "" "" <<< "y"
+    # First "y" answers "try to split?", second confirms the previewed groups.
+    run try_offer_commit_split "" "" <<< "yy"
 
     assert_success
+    [[ "$output" == *"Try to split"* ]]
     [[ "$output" == *"split-performed"* ]]
+}
+
+@test "split offer asks before grouping: declining skips AI grouping and preview" {
+    mkdir -p api web cli
+    create_test_file "api/a.go" "a"
+    create_test_file "web/b.js" "b"
+    create_test_file "cli/c.sh" "c"
+    git add api/a.go web/b.js cli/c.sh
+
+    git config gitbasher.commit-auto-split "ask"
+    git config gitbasher.commit-ai-grouping "auto"
+    llm="true"
+
+    check_ai_available() { return 0; }
+    group_files_by_feature_with_ai() { echo "AI-GROUPING-CALLED"; return 0; }
+    perform_commit_split() { echo "split-performed"; return 0; }
+
+    run try_offer_commit_split "" "" <<< "n"
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Try to split"* ]]
+    [[ "$output" != *"AI-GROUPING-CALLED"* ]]
+    [[ "$output" != *"Detected changes across"* ]]
+    [[ "$output" != *"split-performed"* ]]
+}
+
+@test "split offer: yes to the first prompt, no to the groups declines" {
+    mkdir -p docs scripts
+    create_test_file "docs/new.md" "doc"
+    create_test_file "scripts/change.sh" "script"
+    git add docs/new.md scripts/change.sh
+
+    git config gitbasher.commit-auto-split "ask"
+    git config gitbasher.commit-ai-grouping "never"
+    llm=""
+
+    perform_commit_split() { echo "split-performed"; return 0; }
+
+    run try_offer_commit_split "" "" <<< "yn"
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Detected changes across"* ]]
+    [[ "$output" != *"split-performed"* ]]
+}
+
+@test "split offer: auto-yes (fast mode) never prompts" {
+    mkdir -p docs scripts
+    create_test_file "docs/new.md" "doc"
+    create_test_file "scripts/change.sh" "script"
+    git add docs/new.md scripts/change.sh
+
+    git config gitbasher.commit-auto-split "ask"
+    git config gitbasher.commit-ai-grouping "never"
+    llm=""
+
+    perform_commit_split() { echo "split-performed"; return 0; }
+
+    run try_offer_commit_split "" "true" < /dev/null
+
+    assert_success
+    [[ "$output" != *"Try to split"* ]]
+    [[ "$output" == *"split-performed"* ]]
+}
+
+@test "split offer: single scope never prompts" {
+    mkdir -p docs
+    create_test_file "docs/a.md" "a"
+    create_test_file "docs/b.md" "b"
+    git add docs/a.md docs/b.md
+
+    git config gitbasher.commit-auto-split "ask"
+    git config gitbasher.commit-ai-grouping "never"
+    llm=""
+
+    run try_offer_commit_split "" "" < /dev/null
+
+    [ "$status" -eq 1 ]
+    [[ "$output" != *"Try to split"* ]]
+}
+
+@test "split offer: undone split returns 3" {
+    mkdir -p docs scripts
+    create_test_file "docs/new.md" "doc"
+    create_test_file "scripts/change.sh" "script"
+    git add docs/new.md scripts/change.sh
+
+    git config gitbasher.commit-auto-split "ask"
+    git config gitbasher.commit-ai-grouping "never"
+    llm=""
+
+    perform_commit_split() { return 3; }
+
+    run try_offer_commit_split "" "true" < /dev/null
+
+    [ "$status" -eq 3 ]
 }
 
 @test "split group preview colors scopes and files by staged status" {

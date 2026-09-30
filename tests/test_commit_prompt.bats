@@ -32,6 +32,17 @@ teardown() {
     [[ "$output" == *"u. "*"undo"* ]]
 }
 
+@test "split type menu explains undo and counts split commits already made" {
+    run print_split_type_menu "docs" "false" "0"
+    assert_success
+    [[ "$output" == *"to undo the split and commit everything at once"* ]]
+    [[ "$output" != *"split commit(s) made so far"* ]]
+
+    run print_split_type_menu "docs" "false" "2"
+    assert_success
+    [[ "$output" == *"drops the 2 split commit(s) made so far"* ]]
+}
+
 @test "regular type menu uses split menu styling" {
     run print_commit_type_menu "2"
     assert_success

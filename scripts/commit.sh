@@ -980,12 +980,19 @@ function _undo_commit_split {
     fi
 }
 
+# $3: number of split commits already created in this run (for the undo hint)
 function print_split_type_menu {
     local scope="$1"
     local ai_available="$2"
+    local made="${3:-0}"
 
     echo -e "${YELLOW}What type of changes for ${BLUE}${BOLD}${scope}${ENDCOLOR}${YELLOW}?${ENDCOLOR}"
     echo -e "Final message will be ${YELLOW}<type>${ENDCOLOR}(${BLUE}<scope>${ENDCOLOR}): ${BLUE}<summary>${ENDCOLOR}"
+    if [ "$made" -gt 0 ]; then
+        echo -e "${GRAY}Changes were split into groups — press ${ENDCOLOR}${BOLD}u${NORMAL}${GRAY} to undo the split (drops the ${made} split commit(s) made so far) and commit everything at once.${ENDCOLOR}"
+    else
+        echo -e "${GRAY}Changes were split into groups — press ${ENDCOLOR}${BOLD}u${NORMAL}${GRAY} to undo the split and commit everything at once.${ENDCOLOR}"
+    fi
     echo -e "1. ${BOLD}feat${ENDCOLOR}:\tnew feature, logic change or performance improvement"
     echo -e "2. ${BOLD}fix${ENDCOLOR}:\t\tsmall changes, eg. bug fix"
     echo -e "3. ${BOLD}refactor${ENDCOLOR}:\tcode change that neither fixes a bug nor adds a feature, style changes"
@@ -1195,7 +1202,8 @@ function perform_commit_split {
     local scope files_str msg ai_msg choice scope_for_msg prefix manual_input
     local -a files_array
 
-    if [ -z "$auto_accept" ]; then
+    # The AI path has no type menu up front, so announce the undo key once.
+    if [ -z "$auto_accept" ] && [ -n "$llm" ] && [ "$ai_ok" = "true" ]; then
         echo
         echo -e "${GRAY}Tip: press ${ENDCOLOR}${BOLD}u${NORMAL}${GRAY} at a split prompt to undo the split and make a single commit instead.${ENDCOLOR}"
     fi
@@ -1299,7 +1307,7 @@ function perform_commit_split {
             local commit_type=""
             local is_empty_msg=""
             echo
-            print_split_type_menu "$scope" "$ai_ok"
+            print_split_type_menu "$scope" "$ai_ok" "$commit_count"
 
             local tchoice
             while true; do
@@ -1342,7 +1350,7 @@ function perform_commit_split {
                                 ;;
                             *)
                                 echo
-                                print_split_type_menu "$scope" "$ai_ok"
+                                print_split_type_menu "$scope" "$ai_ok" "$commit_count"
                                 ;;
                         esac
                         ;;

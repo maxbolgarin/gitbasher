@@ -99,6 +99,24 @@ teardown() {
     [ "$status" -ne 0 ]
 }
 
+@test "branch deletion: merged-branch listing used by gitb branch delete works" {
+    create_test_branch "feature/merged"
+    make_test_commit "feature.txt" "Feature work"
+    git checkout main
+    git merge feature/merged --no-edit
+
+    run git branch --merged HEAD --format='%(refname:short)'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"feature/merged"* ]]
+}
+
+@test "branch deletion: --merged is never followed directly by another flag" {
+    # `--merged`/`--no-merged` take an optional commit, so git parses a
+    # following `--format=...` as that commit: "malformed object name".
+    run grep -rnE -- '--(no-)?merged +-' "${GITBASHER_ROOT}/scripts"
+    [ "$status" -ne 0 ]
+}
+
 # ===== Remote branch tests =====
 
 @test "remote branches: can fetch from remote" {

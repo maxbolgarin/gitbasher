@@ -383,7 +383,7 @@ gitb commit <combined>       # compact form: ff, aifp, fastsp, ...
 - Word order doesn't matter: `ai fast push` == `push fast ai` == `aifp`.
 - Modifiers stack on actions: `ai+fixup`, `fast+amend`, `split+push`, `ai+staged`, …
 - `fast` and `staged` are mutually exclusive (one stages all, the other uses what's staged).
-- Splitting: a regular commit **asks first** whether to try a split (before any grouping or AI work), then asks again to confirm the resulting groups. Fast modes (`fast`, `ff`, …) split without asking unless `gitbasher.commit-fast-split` is `false`.
+- Splitting: a regular commit **asks first** whether to try a split (before any grouping or AI work), then asks again to confirm the resulting groups. Fast modes (`fast`, `ff`, …) split without asking unless you turn it off with `gitb cfg fast-split`.
 - Press `u` at any split prompt to **undo the split**: commits already made by the split are dropped, staging is restored, and you continue with a single commit. `ff` never stops, so use the setting or `no-split` there.
 - `revert` and `ff` only accept `push` (as `revp` / `ffp`); to rewrite the last commit message use [`gitb edit`](#gitb-edit).
 
@@ -806,6 +806,7 @@ gitb origin remove                               # delete the remote
 | `history` | `hist` | How many recent commits to include in AI prompts |
 | `diff` | `payload` | AI diff payload size (line and character caps) |
 | `push-size` | `ps` `pushsize` | Warn before pushing more than N MB (0 disables) |
+| `fast-split` | `fs` `fastsplit` | Split automatically in fast commit modes (on/off) |
 | `completion` | `comp` | Install / uninstall bash & zsh tab completion |
 | `delete` | `unset` `del` | Remove global config |
 
@@ -893,7 +894,7 @@ Overview-first diffs built for the gitbasher workflow — no flag memorization. 
 | `gitbasher.push-warn-size` | `gitb cfg push-size` | Warn before pushing more than N MB (default `50`, `0` disables) |
 | `gitbasher.worktreebase` | `git config gitbasher.worktreebase <dir>` | Base directory for new worktrees (default `.worktree` under the repo root) |
 | `gitbasher.commit-auto-split` | `git config gitbasher.commit-auto-split <ask\|always\|never>` | Offer to split a commit per scope (default `ask`: ask before splitting, then confirm the groups) |
-| `gitbasher.commit-fast-split` | `git config gitbasher.commit-fast-split <true\|false>` | Fast modes split automatically (default `true`); `false` makes `fast` ask and `ff` commit as one |
+| `gitbasher.commit-fast-split` | `gitb cfg fast-split` | Fast modes split automatically (default `true`); `false` makes `fast` ask and `ff` commit as one |
 | `gitbasher.commit-max-split-groups` | `git config gitbasher.commit-max-split-groups <2..20>` | Cap on split commits per run (default `7`) |
 | `gitbasher.commit-split-order` | `git config gitbasher.commit-split-order <auto\|alpha>` | Order split commits by dependency (`auto`, default) or alphabetically (`alpha`) |
 | `gitbasher.commit-ai-grouping` | `git config gitbasher.commit-ai-grouping <never\|auto\|always>` | AI feature grouping for commit splits (default `auto`) |

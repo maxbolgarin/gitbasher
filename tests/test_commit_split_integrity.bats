@@ -108,3 +108,64 @@ teardown() {
     run commit_script last push
     [ "$status" -ne 0 ]
 }
+
+@test "perform_commit_split: undo after a split commit drops it and restores staging" {
+    mkdir -p docs scripts
+    echo "base" > docs/a.md
+    echo "base" > scripts/b.sh
+    git add docs/a.md scripts/b.sh
+    git commit -q -m "seed"
+    local start_head
+    start_head=$(git rev-parse HEAD)
+
+    echo "changed" > docs/a.md
+    echo "changed" > scripts/b.sh
+    # Partial staging must survive the undo byte-for-byte.
+    git add docs/a.md scripts/b.sh
+    echo "unstaged-extra" >> docs/a.md
+    local orig_tree
+    orig_tree=$(git write-tree)
+
+    gmap_clear split_groups
+    gmap_set split_groups "docs" "docs/a.md"
+    gmap_set split_groups "scripts" "scripts/b.sh"
+    split_group_keys=(docs scripts)
+    llm="true"
+    auto_accept=""
+    push=""
+    current_branch="main"
+    check_ai_available() { return 0; }
+    generate_ai_commit_message() { echo "chore: ai message"; }
+
+    # "y" accepts the AI message for group 1, "u" undoes at group 2.
+    run perform_commit_split <<< "yu"
+
+    [ "$status" -eq 3 ]
+    [[ "$output" == *"Split undone"* ]]
+    [ "$(git rev-parse HEAD)" = "$start_head" ]
+    [ "$(git write-tree)" = "$orig_tree" ]
+}
+
+@test "perform_commit_split: undo from the type menu before any commit" {
+    mkdir -p docs scripts
+    echo "a" > docs/a.md
+    echo "b" > scripts/b.sh
+    git add docs/a.md scripts/b.sh
+    local start_head orig_tree
+    start_head=$(git rev-parse HEAD)
+    orig_tree=$(git write-tree)
+
+    gmap_clear split_groups
+    gmap_set split_groups "docs" "docs/a.md"
+    gmap_set split_groups "scripts" "scripts/b.sh"
+    split_group_keys=(docs scripts)
+    llm=""
+    auto_accept=""
+    check_ai_available() { return 1; }
+
+    run perform_commit_split <<< "u"
+
+    [ "$status" -eq 3 ]
+    [ "$(git rev-parse HEAD)" = "$start_head" ]
+    [ "$(git write-tree)" = "$orig_tree" ]
+}

@@ -953,6 +953,33 @@ function _restore_split_snapshot {
     rm -f "$snapshot"
 }
 
+### Undo an in-progress split: drop the commits it already created and put the
+### index back exactly as it was before the split started.
+# $1: HEAD before the split (empty on an unborn branch)
+# $2: tree of the original index (git write-tree), empty if unavailable
+# $3: snapshot file (fallback restore when the tree is unavailable)
+# $4: number of commits the split already created
+function _undo_commit_split {
+    local start_head="$1"
+    local orig_tree="$2"
+    local snapshot="$3"
+    local made="$4"
+
+    if [ "${made:-0}" -gt 0 ]; then
+        if [ -n "$start_head" ]; then
+            git reset -q --soft "$start_head" >/dev/null 2>&1
+        else
+            git update-ref -d HEAD >/dev/null 2>&1
+        fi
+    fi
+
+    if [ -n "$orig_tree" ] && git read-tree "$orig_tree" >/dev/null 2>&1; then
+        rm -f "$snapshot"
+    else
+        _restore_split_snapshot "$snapshot"
+    fi
+}
+
 function print_split_type_menu {
     local scope="$1"
     local ai_available="$2"
@@ -972,6 +999,7 @@ function print_split_type_menu {
         echo -e "g. ${GREEN}${BOLD}ai${ENDCOLOR}:\t\tgenerate commit message using AI"
     fi
     echo -e "s. ${YELLOW}${BOLD}skip${ENDCOLOR}:\tSkip this group and leave its files unstaged"
+    echo -e "u. ${CYAN}${BOLD}undo${ENDCOLOR}:\tUndo split and commit all changes as a single commit"
     echo -e "0. ${RED}${BOLD}abort${ENDCOLOR}:\tAbort split and restore original staging"
     echo
 }
@@ -1034,7 +1062,7 @@ function print_split_groups_preview {
 # Sets the caller's $msg variable on success (relies on bash dynamic scoping).
 # $1: scope label (used in messages), $2: scope_for_msg (empty -> no scope),
 # $3: files_str (newline-separated; used to unstage on skip)
-# Returns: 0 success, 1 AI failed/declined, 2 skip scope, 3 abort split
+# Returns: 0 success, 1 AI failed/declined, 2 skip scope, 3 abort split, 4 undo split
 function run_split_ai_for_scope {
     local _scope="$1"
     local _scope_for_msg="$2"
@@ -1061,7 +1089,7 @@ function run_split_ai_for_scope {
     echo
     echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
     echo
-    read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) " || choice="0"
+    read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/u to undo split/0 to abort) " || choice="0"
     echo
     normalize_key "$choice"
 
@@ -1082,7 +1110,7 @@ ${ai_msg}"
         echo
         echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
         echo
-        read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/0 to abort) " || choice="0"
+        read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/u to undo split/0 to abort) " || choice="0"
         echo
         normalize_key "$choice"
     done
@@ -1100,6 +1128,8 @@ ${ai_msg}"
             [ -n "$f" ] && git restore --staged -- ":(top,literal)$f" >/dev/null 2>&1
         done <<< "$_files_str"
         return 2
+    elif [ "$normalized_key" = "u" ]; then
+        return 4
     elif [ "$choice" = "0" ]; then
         return 3
     fi
@@ -1111,6 +1141,8 @@ ${ai_msg}"
 # Globals consumed: split_groups, split_group_keys, push, current_branch
 # Exits the script on success (entire commit flow handled).
 # Returns 1 (and restores staging) on failure so caller can fall through.
+# Returns 3 when the user undid the split: split commits are dropped and the
+# original index is restored, so the caller continues with a single commit.
 function perform_commit_split {
     local original_staged
     original_staged=$(git -c core.quotePath=false diff --no-renames --name-only --cached)
@@ -1124,6 +1156,12 @@ function perform_commit_split {
     # into "no change" because plain `git add <path>` re-adds the worktree
     # copy when the file still exists on disk.
     _capture_split_statuses
+
+    # Exact pre-split state, so "undo split" can drop the split commits and
+    # put the index back byte-for-byte (partial hunks included).
+    local start_head orig_tree
+    start_head=$(git rev-parse -q --verify HEAD 2>/dev/null)
+    orig_tree=$(git write-tree 2>/dev/null)
 
     local snapshot_file
     snapshot_file=$(mktemp "${TMPDIR:-/tmp}/gitb-split-snapshot.XXXXXX")
@@ -1156,6 +1194,11 @@ function perform_commit_split {
 
     local scope files_str msg ai_msg choice scope_for_msg prefix manual_input
     local -a files_array
+
+    if [ -z "$auto_accept" ]; then
+        echo
+        echo -e "${GRAY}Tip: press ${ENDCOLOR}${BOLD}u${NORMAL}${GRAY} at a split prompt to undo the split and make a single commit instead.${ENDCOLOR}"
+    fi
 
     for scope in "${split_group_keys[@]}"; do
         idx=$((idx + 1))
@@ -1224,6 +1267,13 @@ function perform_commit_split {
             run_split_ai_for_scope "$scope" "$scope_for_msg" "$files_str"
             case $? in
                 2) continue ;;
+                4)
+                    _undo_commit_split "$start_head" "$orig_tree" "$snapshot_file" "$commit_count"
+                    trap - INT TERM
+                    echo
+                    echo -e "${YELLOW}Split undone, continuing with a single commit.${ENDCOLOR}"
+                    return 3
+                    ;;
                 3)
                     _restore_split_snapshot "$snapshot_file"
                     trap - INT TERM
@@ -1254,7 +1304,7 @@ function perform_commit_split {
             local tchoice
             while true; do
                 read_key tchoice || tchoice="0"
-                if ! sanitize_choice_input "$tchoice" "^[0-9sg]$"; then
+                if ! sanitize_choice_input "$tchoice" "^[0-9sgu]$"; then
                     continue
                 fi
                 tchoice="$sanitized_choice"
@@ -1276,6 +1326,13 @@ function perform_commit_split {
                         case $? in
                             0) break ;;
                             2) continue 2 ;;
+                            4)
+                                _undo_commit_split "$start_head" "$orig_tree" "$snapshot_file" "$commit_count"
+                                trap - INT TERM
+                                echo
+                                echo -e "${YELLOW}Split undone, continuing with a single commit.${ENDCOLOR}"
+                                return 3
+                                ;;
                             3)
                                 _restore_split_snapshot "$snapshot_file"
                                 trap - INT TERM
@@ -1288,6 +1345,13 @@ function perform_commit_split {
                                 print_split_type_menu "$scope" "$ai_ok"
                                 ;;
                         esac
+                        ;;
+                    u)
+                        _undo_commit_split "$start_head" "$orig_tree" "$snapshot_file" "$commit_count"
+                        trap - INT TERM
+                        echo
+                        echo -e "${YELLOW}Split undone, continuing with a single commit.${ENDCOLOR}"
+                        return 3
                         ;;
                     s)
                         echo -e "${YELLOW}Skipping scope '${scope}' (files left unstaged)${ENDCOLOR}"
@@ -1386,7 +1450,7 @@ function perform_commit_split {
 # Skipped silently when:
 #   - gitbasher.commit-auto-split = "never"
 #   - fewer than 2 distinct scopes are detected (after optional AI refinement)
-# Auto-accepts the y/N prompt when:
+# Auto-accepts the y/N prompts when:
 #   - gitbasher.commit-auto-split = "always"
 #   - $1 is non-empty (split mode forced via CLI)
 #   - $2 is non-empty (caller is fast/auto-accept and doesn't want to ask)
@@ -1404,8 +1468,11 @@ function perform_commit_split {
 # gitbasher.commit-split-order = "alpha".
 # Returns to the caller (no exit) when the user declines or the split isn't
 # applicable; perform_commit_split exits the script directly on success.
+# In "ask" mode there are two prompts: one BEFORE any grouping work ("try to
+# split?") and one after, showing the resulting groups ("split into N?").
 # $1: "true" to force the split flow even when the config says "ask"/"never"
-# $2: "true" to skip the y/N prompt and proceed straight to splitting
+# $2: "true" to skip both y/N prompts and proceed straight to splitting
+# Returns 0 split done, 1 declined/not applicable, 2 split failed, 3 split undone
 function try_offer_commit_split {
     local force_split="$1"
     local auto_yes="$2"
@@ -1435,6 +1502,31 @@ function try_offer_commit_split {
     local should_use_ai="false"
     if [ -n "$llm" ] && should_attempt_ai_grouping "${#split_group_keys[@]}" "$ai_grouping"; then
         should_use_ai="true"
+    fi
+
+    # Nothing to split and no AI pass that could find features — stay silent.
+    if [ ${#split_group_keys[@]} -lt 2 ] && [ "$should_use_ai" != "true" ]; then
+        if [ -n "$force_split" ]; then
+            echo -e "${YELLOW}Cannot split: all changes look like a single feature.${ENDCOLOR}"
+        fi
+        return 1
+    fi
+
+    # Ask BEFORE doing any grouping work (AI call, ordering, preview), unless
+    # the caller already decided (forced split, fast/auto-accept) or the config
+    # says "always". The second prompt below confirms the resulting groups.
+    local choice
+    if [ -z "$force_split" ] && [ -z "$auto_yes" ] && [ "$auto_split" != "always" ]; then
+        echo
+        if [ ${#split_group_keys[@]} -ge 2 ]; then
+            echo -e "${YELLOW}Staged changes span ${#split_group_keys[@]} scopes:${ENDCOLOR} ${BLUE}${split_group_keys[*]}${ENDCOLOR}"
+        fi
+        read_key choice "Try to split them into atomic commits? (y/N) " || choice=""
+        echo
+        # Default is No: Enter/EOF must decline (is_yes treats Enter as yes).
+        if [ -z "$choice" ] || ! is_yes "$choice"; then
+            return 1
+        fi
     fi
 
     if [ "$should_use_ai" = "true" ] && check_ai_available 2>/dev/null; then
@@ -1470,7 +1562,6 @@ function try_offer_commit_split {
     print_split_groups_preview
     echo
 
-    local choice
     if [ -n "$force_split" ] || [ -n "$auto_yes" ] || [ "$auto_split" = "always" ]; then
         choice="y"
     else
@@ -1487,8 +1578,15 @@ function try_offer_commit_split {
     # 2 = "split was attempted and failed" (vs 1 = declined/not applicable):
     # the forced-split caller must not treat a failed split as success, and
     # must not unstage the staging the failure path just restored.
-    perform_commit_split || return 2
-    return 0
+    # 3 = the user undid the split: staging is back to the original, continue
+    # with a single regular commit.
+    local split_rc=0
+    perform_commit_split || split_rc=$?
+    case "$split_rc" in
+        0) return 0 ;;
+        3) return 3 ;;
+        *) return 2 ;;
+    esac
 }
 
 ### Function to handle AI commit message generation
@@ -2049,7 +2147,7 @@ function commit_script {
         print_help_row $FPAD "staged"   "st"          "Use already-staged files (skip the add step)"
         print_help_row $FPAD "push"     "p, pu"       "Push after the commit succeeds"
         print_help_row $FPAD "scope"    "s"           "Force a scope: 'type(scope): message' (useful with fast mode)"
-        print_help_row $FPAD "no-split" "nos, nsp, nsl" "Disable automatic split detection for this commit"
+        print_help_row $FPAD "no-split" "nos, nsp, nsl" "Don't offer to split this commit (fast modes split by default)"
         print_help_row $FPAD "ai"       "i, llm"      "Generate the commit message with AI"
         print_help_row $FPAD "msg"      "m"           "Open \$EDITOR for a multiline message body"
         print_help_row $FPAD "ticket"   "t, j, jira"  "Append ticket info to the header"
@@ -2068,6 +2166,8 @@ function commit_script {
         echo -e "  ${BLUE}•${ENDCOLOR} Word order doesn't matter: ${GREEN}ai fast push${ENDCOLOR} == ${GREEN}push fast ai${ENDCOLOR} == ${GREEN}aifp${ENDCOLOR}"
         echo -e "  ${BLUE}•${ENDCOLOR} Modifiers stack on actions: ${GREEN}ai+fixup${ENDCOLOR}, ${GREEN}fast+amend${ENDCOLOR}, ${GREEN}split+push${ENDCOLOR}, ${GREEN}ai+staged${ENDCOLOR}, ..."
         echo -e "  ${BLUE}•${ENDCOLOR} ${BOLD}fast${NORMAL} and ${BOLD}staged${NORMAL} are mutually exclusive (one stages all, the other uses what's staged)"
+        echo -e "  ${BLUE}•${ENDCOLOR} Regular commits ask before splitting; fast modes split by default (off: ${GREEN}git config gitbasher.commit-fast-split false${ENDCOLOR})"
+        echo -e "  ${BLUE}•${ENDCOLOR} Press ${BOLD}u${NORMAL} at a split prompt to undo the split and commit everything as one"
         echo -e "  ${BLUE}•${ENDCOLOR} ${BOLD}revert${NORMAL} and ${BOLD}ff${NORMAL} only accept ${BOLD}push${NORMAL} (as ${BOLD}revp${NORMAL}/${BOLD}ffp${NORMAL}); to rewrite the last message use ${GREEN}gitb edit${ENDCOLOR}"
         # Clean up cached git add on help exit
         git config --unset gitbasher.cached-git-add 2>/dev/null || true
@@ -2283,17 +2383,25 @@ function commit_script {
     # Split runs the entire commit flow itself (one commit per scope) and exits
     # the script on success. Skipped for modes where it doesn't make sense
     # (amend, fixup, multi-line msg, ticket) or when forced off via config.
-    # Fast/auto-accept modes skip the y/N prompt — split silently when applicable.
-    if [ -z "${amend}" ] && [ -z "${fixup}" ] && [ -z "${msg}" ] && [ -z "${ticket}" ] && [ -z "${no_split}" ]; then
-        _split_auto_yes=""
-        if [ -n "$fast" ] || [ -n "$auto_accept" ]; then
+    # Regular mode asks first. Fast/auto-accept modes split silently by default;
+    # gitbasher.commit-fast-split=false turns that off (fast then asks like
+    # regular mode, and prompt-less auto-accept modes such as ff don't split).
+    _split_skip="${no_split}"
+    _split_auto_yes=""
+    if [ -z "$split" ] && { [ -n "$fast" ] || [ -n "$auto_accept" ]; }; then
+        if [ "$(get_config_value gitbasher.commit-fast-split "true")" = "false" ]; then
+            [ -n "$auto_accept" ] && _split_skip="true"
+        else
             _split_auto_yes="true"
         fi
+    fi
+    if [ -z "${amend}" ] && [ -z "${fixup}" ] && [ -z "${msg}" ] && [ -z "${ticket}" ] && [ -z "${_split_skip}" ]; then
         try_offer_commit_split "$split" "$_split_auto_yes"
         _split_rc=$?
         # If the user explicitly asked for split mode but it wasn't applicable,
-        # don't silently fall through to the single-commit flow.
-        if [ -n "$split" ]; then
+        # don't silently fall through to the single-commit flow — unless they
+        # undid the split themselves (rc 3), which means "commit it as one".
+        if [ -n "$split" ] && [ "$_split_rc" -ne 3 ]; then
             if [ "$_split_rc" -ge 2 ]; then
                 # The split ran and failed; its snapshot restore already put
                 # the staging back — don't unstage it again, and report the

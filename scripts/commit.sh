@@ -2166,7 +2166,7 @@ function commit_script {
         echo -e "  ${BLUE}•${ENDCOLOR} Word order doesn't matter: ${GREEN}ai fast push${ENDCOLOR} == ${GREEN}push fast ai${ENDCOLOR} == ${GREEN}aifp${ENDCOLOR}"
         echo -e "  ${BLUE}•${ENDCOLOR} Modifiers stack on actions: ${GREEN}ai+fixup${ENDCOLOR}, ${GREEN}fast+amend${ENDCOLOR}, ${GREEN}split+push${ENDCOLOR}, ${GREEN}ai+staged${ENDCOLOR}, ..."
         echo -e "  ${BLUE}•${ENDCOLOR} ${BOLD}fast${NORMAL} and ${BOLD}staged${NORMAL} are mutually exclusive (one stages all, the other uses what's staged)"
-        echo -e "  ${BLUE}•${ENDCOLOR} Regular commits ask before splitting; fast modes split by default (off: ${GREEN}git config gitbasher.commit-fast-split false${ENDCOLOR})"
+        echo -e "  ${BLUE}•${ENDCOLOR} Regular commits ask before splitting; fast modes split by default (toggle: ${GREEN}gitb cfg fast-split${ENDCOLOR})"
         echo -e "  ${BLUE}•${ENDCOLOR} Press ${BOLD}u${NORMAL} at a split prompt to undo the split and commit everything as one"
         echo -e "  ${BLUE}•${ENDCOLOR} ${BOLD}revert${NORMAL} and ${BOLD}ff${NORMAL} only accept ${BOLD}push${NORMAL} (as ${BOLD}revp${NORMAL}/${BOLD}ffp${NORMAL}); to rewrite the last message use ${GREEN}gitb edit${ENDCOLOR}"
         # Clean up cached git add on help exit
@@ -2389,7 +2389,7 @@ function commit_script {
     _split_skip="${no_split}"
     _split_auto_yes=""
     if [ -z "$split" ] && { [ -n "$fast" ] || [ -n "$auto_accept" ]; }; then
-        if [ "$(get_config_value gitbasher.commit-fast-split "true")" = "false" ]; then
+        if [ "$(get_fast_split)" = "false" ]; then
             [ -n "$auto_accept" ] && _split_skip="true"
         else
             _split_auto_yes="true"

@@ -1435,6 +1435,12 @@ function print_configuration {
         echo -e "\tPush warn:\t${GREEN}${push_warn} MB${ENDCOLOR} $(config_source_tag gitbasher.push-warn-size)"
     fi
 
+    if [ "$(get_fast_split)" = "true" ]; then
+        echo -e "\tFast split:\t${GREEN}auto${ENDCOLOR} $(config_source_tag gitbasher.commit-fast-split)"
+    else
+        echo -e "\tFast split:\t${YELLOW}off${ENDCOLOR} $(config_source_tag gitbasher.commit-fast-split)"
+    fi
+
     echo
     echo -e "${GRAY}Source:${ENDCOLOR} ${BLUE}(project)${ENDCOLOR}${GRAY} this repo,${ENDCOLOR} ${PURPLE}(global)${ENDCOLOR}${GRAY} ~/.gitconfig,${ENDCOLOR} ${GRAY}(default) built-in fallback${ENDCOLOR}"
 }
@@ -1823,6 +1829,18 @@ function get_push_warn_size {
 }
 function set_push_warn_size {
     set_config_value gitbasher.push-warn-size "$1"
+}
+
+
+### Whether fast commit modes (fast, ff, ...) split into atomic commits without
+### asking. "true" (default) or "false"; anything else reads as "true".
+function get_fast_split {
+    local v
+    v=$(get_config_value gitbasher.commit-fast-split "true")
+    if [ "$v" = "false" ]; then echo "false"; else echo "true"; fi
+}
+function set_fast_split {
+    set_config_value gitbasher.commit-fast-split "$1"
 }
 
 

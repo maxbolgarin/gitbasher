@@ -1055,6 +1055,47 @@ function configure_push_warn_size {
 }
 
 
+### Function asks user whether fast commit modes split automatically
+function configure_fast_split {
+    echo -e "${YELLOW}Configure Fast Mode Split${ENDCOLOR}"
+    echo
+
+    if [ "$(get_fast_split)" = "true" ]; then
+        echo -e "Current: ${GREEN}auto${ENDCOLOR} (fast modes split without asking)"
+    else
+        echo -e "Current: ${YELLOW}off${ENDCOLOR} (fast asks first, ff commits everything as one)"
+    fi
+    echo
+    echo -e "When staged changes span several scopes, fast commit modes (${BLUE}fast${ENDCOLOR}, ${BLUE}ff${ENDCOLOR}, ...)"
+    echo -e "split them into atomic commits without asking. Turn it off to have ${BLUE}fast${ENDCOLOR}"
+    echo -e "ask first (like a regular commit) and ${BLUE}ff${ENDCOLOR} make a single commit."
+    echo
+    echo -e "1. ${GREEN}auto${ENDCOLOR}:\tsplit automatically in fast modes"
+    echo -e "2. ${YELLOW}off${ENDCOLOR}:\tdon't split by default in fast modes"
+    echo -e "0. Exit without changes"
+
+    local choice value label
+    while true; do
+        read_key choice || exit
+        case "$choice" in
+            1) value="true";  label="auto"; break ;;
+            2) value="false"; label="off";  break ;;
+            0) exit ;;
+        esac
+    done
+    echo
+
+    set_fast_split "$value" >/dev/null
+    echo -e "${GREEN}✓ Set fast mode split to ${label} for '${project_name}'${ENDCOLOR}"
+    echo
+
+    [ "$GITBASHER_NO_REPO" = "true" ] && exit
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (Y/n)?"
+    yes_no_choice "\nSet fast mode split globally" "true"
+    set_config_value gitbasher.commit-fast-split "$value" "true" >/dev/null
+}
+
+
 ### Function asks user to configure AI diff payload size
 # Controls how much of the staged diff is sent to the model. Two knobs:
 #   - lines: head -n N applied to the diff (primary cap, intuitive for users)
@@ -1275,6 +1316,9 @@ function delete_global {
     local global_push_warn=$(git config --global --get gitbasher.push-warn-size)
     _delete_global_add "gitbasher.push-warn-size" "Push size warning" "${global_push_warn:+${global_push_warn} MB}" "$GREEN"
 
+    local global_fast_split=$(git config --global --get gitbasher.commit-fast-split)
+    _delete_global_add "gitbasher.commit-fast-split" "Fast mode split" "$global_fast_split" "$GREEN"
+
     local global_ai_diff_lines=$(git config --global --get gitbasher.ai-diff-limit)
     local global_ai_diff_chars=$(git config --global --get gitbasher.ai-diff-max-chars)
     if [ -n "$global_ai_diff_lines" ] || [ -n "$global_ai_diff_chars" ]; then
@@ -1402,6 +1446,7 @@ function config_script {
         history|hist)         set_ai_history_cfg="true";;
         diff|payload)         set_ai_diff_cfg="true";;
         push-size|pushsize|ps) set_push_warn_cfg="true";;
+        fast-split|fastsplit|fs) set_fast_split_cfg="true";;
         delete|unset|del)     delete_cfg="true";;
         user|name|email|u)    set_user_cfg="true";;
         auto|completion|comp) auto_cfg="true";;
@@ -1437,6 +1482,8 @@ function config_script {
         header="$header AI DIFF PAYLOAD"
     elif [ -n "${set_push_warn_cfg}" ]; then
         header="$header PUSH SIZE WARNING"
+    elif [ -n "${set_fast_split_cfg}" ]; then
+        header="$header FAST MODE SPLIT"
     elif [ -n "${delete_cfg}" ]; then
         header="$header UNSET GLOBAL CONFIG"
     elif [ -n "${set_user_cfg}" ]; then
@@ -1528,6 +1575,11 @@ function config_script {
         exit
     fi
 
+    if [ "$set_fast_split_cfg" == "true" ]; then
+        configure_fast_split
+        exit
+    fi
+
     if [ "$delete_cfg" == "true" ]; then
         delete_global
         exit
@@ -1558,6 +1610,7 @@ function config_script {
         print_help_row $PAD "history"   "hist"              "Set how many recent commits to include in AI prompts"
         print_help_row $PAD "diff"      "payload"           "Set the diff payload size (lines and char cap) sent to AI"
         print_help_row $PAD "push-size" "ps, pushsize"      "Warn before pushing more than N MB (0 disables)"
+        print_help_row $PAD "fast-split" "fs, fastsplit"    "Split automatically in fast commit modes (on/off)"
         print_help_row $PAD "auto"      "completion, comp"  "Install/remove tab completion for bash, zsh, or fish"
         print_help_row $PAD "delete"    "unset, del"        "Unset a global gitbasher configuration value"
         print_help_row $PAD "help"      "h"                 "Show this help"

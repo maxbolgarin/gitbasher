@@ -2,6 +2,18 @@
 
 All notable changes to gitbasher are generated automatically by [semantic-release](https://github.com/semantic-release/semantic-release) from [Conventional Commits](https://www.conventionalcommits.org/) on `main`. The project follows [Semantic Versioning](https://semver.org/).
 
+## [5.3.0](https://github.com/maxbolgarin/gitbasher/compare/v5.2.1...v5.3.0) (2026-09-30)
+
+### 🚀 Features
+
+* **config:** add `gitb cfg fast-split` to toggle split in fast modes ([c56e173](https://github.com/maxbolgarin/gitbasher/commit/c56e1735efeaea8c71f83e5d983cd24ff26fcd2b))
+* **commit:** ask before splitting, add undo split and fast-split setting ([1de1fcd](https://github.com/maxbolgarin/gitbasher/commit/1de1fcd523b5080da0c8248347558a421c8d72bb))
+* **commit:** show undo-split hint in the split type menu ([520e66a](https://github.com/maxbolgarin/gitbasher/commit/520e66aec25b43b7fb83b27f863cc6af4a0ab0e2))
+
+### 🐛 Bug Fixes
+
+* **branch:** pass HEAD to --merged when deleting merged branches ([2cdaf58](https://github.com/maxbolgarin/gitbasher/commit/2cdaf58c3a92e9f26eba47bd180b582cb9676d04))
+
 ## [5.2.1](https://github.com/maxbolgarin/gitbasher/compare/v5.2.0...v5.2.1) (2026-07-11)
 
 ### 🐛 Bug Fixes

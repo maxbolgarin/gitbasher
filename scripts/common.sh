@@ -1928,18 +1928,21 @@ function get_push_list {
     fi
     
     base_commit=$(diff -u <(git rev-list --first-parent "$1" 2>/dev/null) <(git rev-list --first-parent "$2" 2>/dev/null) | sed -ne 's/^ //p' | head -1 || true)
+    # diff prints no context lines when both histories are identical (a fresh
+    # branch with no commits of its own) — fall back to the merge base
+    if [ -z "$base_commit" ]; then
+        base_commit=$(git merge-base "$1" "$2" 2>/dev/null || true)
+    fi
     if [ -n "$base_commit" ]; then
         push_list=$(commit_list 999 "tab" "$base_commit..HEAD")
         history_from="${base_commit::7}"
+    elif git rev-parse --verify --quiet "$origin/$2" >/dev/null 2>&1; then
+        push_list=$(commit_list 999 "tab" "$origin/$2..HEAD")
+        history_from="$origin/$2"
     else
-        # If no base commit found and origin_name is empty, use HEAD
-        if [ -z "$origin" ]; then
-            push_list=""
-            history_from=""
-        else
-            push_list=$(commit_list 999 "tab" "$origin/$2..HEAD")
-            history_from="$origin/$2"
-        fi
+        # No common base and no remote main branch to compare against
+        push_list=$(commit_list 999 "tab")
+        history_from="HEAD"
     fi
 }
 

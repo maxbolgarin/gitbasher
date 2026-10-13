@@ -113,6 +113,33 @@ teardown() {
     [ -n "$push_list" ]
 }
 
+@test "get_push_list: empty new branch without remote main yields no commits and no errors" {
+    setup_remote_repo
+    git push -q origin --delete main 2>/dev/null || true
+    git update-ref -d refs/remotes/origin/main 2>/dev/null || true
+
+    create_test_branch "develop"
+
+    output=$(get_push_list "develop" "main" "origin" 2>&1)
+    [[ "$output" != *"fatal"* ]]
+    get_push_list "develop" "main" "origin" 2>/dev/null
+    [ -z "$push_list" ]
+}
+
+@test "get_push_list: new branch without remote main lists only its own commits" {
+    setup_remote_repo
+    git update-ref -d refs/remotes/origin/main 2>/dev/null || true
+
+    create_test_branch "develop"
+    make_test_commit "dev.txt" "Dev commit"
+
+    output=$(get_push_list "develop" "main" "origin" 2>&1)
+    [[ "$output" != *"fatal"* ]]
+    get_push_list "develop" "main" "origin" 2>/dev/null
+    count=$(echo -e "$push_list" | wc -l | tr -d ' ')
+    [ "$count" -eq 1 ]
+}
+
 @test "get_push_list: shows multiple unpushed commits" {
     setup_remote_repo
 

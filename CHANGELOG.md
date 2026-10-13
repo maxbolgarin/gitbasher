@@ -2,6 +2,12 @@
 
 All notable changes to gitbasher are generated automatically by [semantic-release](https://github.com/semantic-release/semantic-release) from [Conventional Commits](https://www.conventionalcommits.org/) on `main`. The project follows [Semantic Versioning](https://semver.org/).
 
+## [5.3.1](https://github.com/maxbolgarin/gitbasher/compare/v5.3.0...v5.3.1) (2026-10-13)
+
+### 🐛 Bug Fixes
+
+* **push:** avoid fatal errors when pushing a branch with no own commits ([d8ff3f8](https://github.com/maxbolgarin/gitbasher/commit/d8ff3f83340101f8d4992bcecebac443d5fa8e8e))
+
 ## [5.3.0](https://github.com/maxbolgarin/gitbasher/compare/v5.2.1...v5.3.0) (2026-09-30)
 
 ### 🚀 Features

@@ -58,6 +58,15 @@ Source order is deterministic and lives at `scripts/gitb.sh:105-138`. `common.sh
 
 `init.sh` runs git config / remote probes at source time. Tests that only need the validators / sanitizers can short-circuit those by exporting `GITBASHER_SKIP_INIT_QUERIES=1` before sourcing — that's what the `source_gitbasher_lite` helper in `tests/setup_suite.bash` does. The flag is internal to the test layer; production runs never set it.
 
+### Long-running commands and progress
+
+Anything that can take more than a moment must show that it is alive. Use the helpers in `common.sh` instead of a bare `out=$(git ... 2>&1)`:
+
+- **`stream_or_capture_git out_var code_var shown_var git <cmd> --progress ...`** — for git commands (fetch, push, checkout/switch, merge, stash, worktree add). It captures output and exit code for parsing (progress meters stripped), shows a spinner with elapsed seconds after ~1s, and streams git's native progress if the command outlives a ~10s quiet window. Pass `--progress` only to subcommands that accept it; it is removed automatically when there is no TTY.
+- **`run_with_spinner "Label" cmd args...`** — for anything else (AI requests). stdout passes through, so it works inside `$(...)`. The command runs in the background with stdin detached, so never use it for commands that prompt or open an editor.
+
+Both stay silent without a TTY (tests/CI) and honour `GITBASHER_NO_SPINNER=1`. Network commands skip the spinner when git might prompt for credentials (HTTPS without a credential helper, SSH without an agent) so the prompt is not overwritten.
+
 ### Top-level dispatch
 
 `scripts/base.sh` is the dispatcher: a `case "$1"` block (`base.sh:127-229`) maps each command name and its aliases to the corresponding `*_script` function. The convention: `commit_script`, `push_script`, `branch_script`, etc. — defined in their respective files.

@@ -16,8 +16,9 @@ function set_default_branch {
     echo -e "${YELLOW}Fetching remote branches...${ENDCOLOR}"
     echo
 
-    fetch_output=$(git fetch 2>&1)
-    check_code $? "$fetch_output" "fetch remote"
+    stream_or_capture_git fetch_output fetch_code fetch_progress_shown \
+        git fetch --progress
+    check_code "$fetch_code" "$fetch_output" "fetch remote"
 
     prune_output=$(git remote prune $origin_name 2>&1)
 

@@ -893,9 +893,9 @@ function squash_script {
     ### Optional force-push
     if [ -n "$mode_push" ]; then
         echo -e "${YELLOW}Force-pushing with --force-with-lease...${ENDCOLOR}"
-        local push_output push_code
-        push_output=$(git push --force-with-lease -u "$origin_name" "$current_branch" 2>&1)
-        push_code=$?
+        local push_output push_code push_progress_shown
+        stream_or_capture_git push_output push_code push_progress_shown \
+            git push --progress --force-with-lease -u "$origin_name" "$current_branch"
         if [ "$push_code" -eq 0 ]; then
             echo -e "${GREEN}✓ Pushed${ENDCOLOR}"
             echo "$push_output" | tail -n 5

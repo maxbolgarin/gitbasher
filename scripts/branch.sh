@@ -170,8 +170,9 @@ function branch_script {
         echo -e "${YELLOW}Fetching and pruning remote references...${ENDCOLOR}"
         echo
 
-        fetch_output=$(git fetch --prune 2>&1)
-        check_code $? "$fetch_output" "fetch and prune remote"
+        stream_or_capture_git fetch_output fetch_code fetch_progress_shown \
+            git fetch --progress --prune
+        check_code "$fetch_code" "$fetch_output" "fetch and prune remote"
 
         # Find local branches whose upstream is gone. Plumbing, not
         # `git branch -vv` scraping: the human format prefixes worktree
@@ -229,8 +230,9 @@ function branch_script {
         if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
             echo
             echo -e "${YELLOW}Fetching remote tags...${ENDCOLOR}"
-            fetch_output=$(git fetch --tags 2>&1)
-            check_code $? "$fetch_output" "fetch remote tags"
+            stream_or_capture_git fetch_output fetch_code fetch_progress_shown \
+                git fetch --progress --tags
+            check_code "$fetch_code" "$fetch_output" "fetch remote tags"
         fi
         echo
 
@@ -285,8 +287,8 @@ function branch_script {
             echo -e "${RED}✗ Invalid tag name: ${selected_tag}${ENDCOLOR}"
             exit 1
         fi
-        checkout_output=$(git checkout "$sanitized_git_name" 2>&1)
-        checkout_code=$?
+        stream_or_capture_git checkout_output checkout_code checkout_progress_shown \
+            git checkout --progress "$sanitized_git_name"
 
         if [ $checkout_code -eq 0 ]; then
             echo -e "${GREEN}✓ Checked out tag '${selected_tag}'${ENDCOLOR}"
@@ -319,8 +321,9 @@ function branch_script {
         echo -e "${YELLOW}Fetching remote...${ENDCOLOR}"
         echo
 
-        fetch_output=$(git fetch 2>&1)
-        check_code $? "$fetch_output" "fetch remote"
+        stream_or_capture_git fetch_output fetch_code fetch_progress_shown \
+            git fetch --progress
+        check_code "$fetch_code" "$fetch_output" "fetch remote"
 
         prune_output=$(git remote prune "$origin_name" 2>&1)
 
@@ -350,8 +353,9 @@ function branch_script {
                 echo -e "${YELLOW}Fetching remote and pruning...${ENDCOLOR}"
                 echo
 
-                fetch_output=$(git fetch --prune 2>&1)
-                check_code $? "$fetch_output" "fetch and prune remote"
+                stream_or_capture_git fetch_output fetch_code fetch_progress_shown \
+                    git fetch --progress --prune
+                check_code "$fetch_code" "$fetch_output" "fetch and prune remote"
 
                 # Get all local branches
                 IFS=$'\n' read -rd '' -a local_branches <<<"$(git branch --format='%(refname:short)' | cat 2>&1)"
@@ -597,8 +601,8 @@ function branch_script {
                 echo
                 echo -e "${YELLOW}Deleting from remote...${ENDCOLOR}"
 
-                push_output=$(LC_ALL=C git push "$origin_name" -d "$branch_name" 2>&1)
-                push_code=$?
+                LC_ALL=C stream_or_capture_git push_output push_code push_progress_shown \
+                    git push --progress "$origin_name" -d "$branch_name"
 
                 echo
                 if [ "$push_code" != 0 ]; then

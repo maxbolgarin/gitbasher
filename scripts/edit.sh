@@ -236,9 +236,10 @@ function edit_branch_name {
     yes_no_choice_strict
     echo
 
-    local push_out
-    push_out=$(git push -u "$origin_name" "$new_name" 2>&1)
-    if [ $? -ne 0 ]; then
+    local push_out push_code push_progress_shown
+    stream_or_capture_git push_out push_code push_progress_shown \
+        git push --progress -u "$origin_name" "$new_name"
+    if [ "$push_code" -ne 0 ]; then
         echo -e "${RED}✗ Could not push ${BOLD}${new_name}${NORMAL}${RED} to ${origin_name}.${ENDCOLOR}"
         echo "$push_out"
         echo -e "Old remote branch ${BOLD}${old_name}${NORMAL} left intact."
@@ -246,9 +247,10 @@ function edit_branch_name {
     fi
     echo -e "${GREEN}✓ Pushed ${BOLD}${new_name}${NORMAL}${GREEN} to ${origin_name}${ENDCOLOR}"
 
-    local del_out
-    del_out=$(git push "$origin_name" --delete "$old_name" 2>&1)
-    if [ $? -ne 0 ]; then
+    local del_out del_code del_progress_shown
+    stream_or_capture_git del_out del_code del_progress_shown \
+        git push --progress "$origin_name" --delete "$old_name"
+    if [ "$del_code" -ne 0 ]; then
         echo -e "${YELLOW}⚠  Could not delete ${BOLD}${old_name}${NORMAL}${YELLOW} on ${origin_name}.${ENDCOLOR}"
         echo "$del_out"
         echo -e "Delete it manually with ${YELLOW}git push ${origin_name} --delete ${old_name}${ENDCOLOR} when ready."

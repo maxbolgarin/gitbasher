@@ -858,23 +858,107 @@ function is_network_error {
 }
 
 
+### ===== PROGRESS: spinner + live git progress for long operations =====
+### Every slow action (network transfers, big checkouts, AI requests) shows
+### that it is alive: a spinner with elapsed seconds appears on stderr after
+### ~1s, so quick operations print nothing extra. Disabled when stderr is not
+### a terminal (tests/CI/pipes), for TERM=dumb, or with GITBASHER_NO_SPINNER=1.
+function _spinner_enabled {
+    [ -t 2 ] && [ -z "${GITBASHER_NO_SPINNER:-}" ] && [ "${TERM:-}" != "dumb" ]
+}
+
+### Draw one spinner frame on stderr, overwriting the current line
+# $1: frame counter, $2: label, $3: elapsed seconds
+function _spinner_draw {
+    local frames=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
+    local frame=${frames[$(( $1 % ${#frames[@]} ))]}
+    printf '\r\033[K%b%s%b %s %b(%ss)%b' "${YELLOW}" "$frame" "${ENDCOLOR}" "$2" "${GRAY}" "$3" "${ENDCOLOR}" >&2
+}
+
+### Erase the spinner line
+function _spinner_clear {
+    printf '\r\033[K' >&2
+}
+
+
+### Run a command (or shell function) while showing a spinner on stderr.
+### stdout is passed through unchanged once the command finishes, so it is
+### safe inside $(...): `out=$(run_with_spinner "Waiting for AI" call ...)`.
+### The command runs in the background with stdin detached — do not use it
+### for anything that reads from the user or opens an editor.
+# $1: label shown next to the spinner
+# $2..: the command and its args
+# Returns: the command's exit code
+function run_with_spinner {
+    local __rs_label="$1"; shift
+    if ! _spinner_enabled; then
+        "$@"
+        return
+    fi
+    local __rs_tmp
+    __rs_tmp=$(mktemp 2>/dev/null)
+    if [ -z "$__rs_tmp" ]; then
+        "$@"
+        return
+    fi
+    "$@" >"$__rs_tmp" &
+    local __rs_pid=$! __rs_ticks=0 __rs_start=$SECONDS __rs_shown="" __rs_code=0
+    while kill -0 "$__rs_pid" 2>/dev/null; do
+        sleep 0.1
+        __rs_ticks=$((__rs_ticks + 1))
+        if [ "$__rs_ticks" -ge 8 ]; then
+            _spinner_draw "$__rs_ticks" "$__rs_label" $((SECONDS - __rs_start))
+            __rs_shown="true"
+        fi
+    done
+    # `if` keeps errexit from firing on a failing command.
+    if wait "$__rs_pid"; then __rs_code=0; else __rs_code=$?; fi
+    if [ -n "$__rs_shown" ]; then _spinner_clear; fi
+    cat "$__rs_tmp"
+    rm -f "$__rs_tmp"
+    return "$__rs_code"
+}
+
+
+### Remove git's progress meter lines (\r-updated counters such as
+### "Receiving objects: 45%") from captured output, leaving what a run
+### without --progress would print — messages, refs, errors.
+# $1: captured output
+function strip_git_progress {
+    local cr=$'\r'
+    printf '%s\n' "$1" \
+        | sed -e "s/.*${cr}\(.\)/\1/" -e "s/${cr}\$//" \
+        | grep -vE '^(remote: )?(Enumerating objects|Counting objects|Compressing objects|Writing objects|Receiving objects|Resolving deltas|Unpacking objects|Updating files|Checking out files|Finding sources): ' \
+        || true
+}
+
+
 ### Wait on a background transfer, revealing its captured output live only
 ### once it outlives the quiet window. Fast transfers finish inside the window
 ### and print nothing; slow ones stream everything captured so far and then
-### follow the file until the command exits. Returns the command's exit code.
+### follow the file until the command exits. While the window is still quiet
+### a spinner (when $5 is given) shows the transfer is alive.
+### Returns the command's exit code.
 # $1: pid of the background command
 # $2: file capturing the command's combined stdout+stderr
 # $3: quiet window length in ticks of 0.25s (40 = ~10s)
 # $4: name of the variable to receive "true" when output was revealed
+# $5: optional spinner label shown during the quiet window
 function _stream_transfer_after_delay {
-    local __st_pid="$1" __st_file="$2" __st_quiet="${3:-40}" __st_flag_var="$4"
+    local __st_pid="$1" __st_file="$2" __st_quiet="${3:-40}" __st_flag_var="$4" __st_label="${5:-}"
     local __st_ticks=0 __st_printed=0 __st_size=0 __st_code=0 __st_revealed=""
+    local __st_spin="" __st_drawn="" __st_start=$SECONDS
+    if [ -n "$__st_label" ] && _spinner_enabled; then __st_spin="true"; fi
     while kill -0 "$__st_pid" 2>/dev/null; do
         sleep 0.25
         __st_ticks=$((__st_ticks + 1))
         if [ "$__st_ticks" -ge "$__st_quiet" ]; then
             __st_size=$(wc -c < "$__st_file" 2>/dev/null); __st_size=$((__st_size + 0))
             if [ "$__st_size" -gt "$__st_printed" ]; then
+                if [ -n "$__st_drawn" ]; then
+                    _spinner_clear
+                    __st_drawn=""
+                fi
                 # Raw byte pass-through keeps git's \r-updating progress lines
                 # rendering exactly as they would uncaptured.
                 dd if="$__st_file" bs=1 skip="$__st_printed" count=$((__st_size - __st_printed)) 2>/dev/null
@@ -882,9 +966,18 @@ function _stream_transfer_after_delay {
                 __st_revealed="true"
             fi
         fi
+        # Keep spinning until git's own progress takes over (some commands
+        # print nothing for a long time, e.g. a server-side pack on fetch).
+        if [ -z "$__st_revealed" ] && [ -n "$__st_spin" ] && [ "$__st_ticks" -ge 4 ]; then
+            _spinner_draw "$__st_ticks" "$__st_label" $((SECONDS - __st_start))
+            __st_drawn="true"
+        fi
     done
     # Reaps the background pid; `if` keeps errexit from firing on failures.
     if wait "$__st_pid"; then __st_code=0; else __st_code=$?; fi
+    if [ -n "$__st_drawn" ]; then
+        _spinner_clear
+    fi
     if [ -n "$__st_revealed" ]; then
         __st_size=$(wc -c < "$__st_file" 2>/dev/null); __st_size=$((__st_size + 0))
         if [ "$__st_size" -gt "$__st_printed" ]; then
@@ -898,14 +991,73 @@ function _stream_transfer_after_delay {
 }
 
 
-### Run a git (or any) transfer command, capturing combined stdout+stderr and
-### the exit code for downstream parsing. Interactive runs start silent and
-### reveal the captured stream live only when the transfer outlives a ~10s
-### quiet window — an ordinary network push (2-5s of ssh handshake and pack
-### upload) stays noise-free; only genuinely large transfers show git's
-### native progress. Falls back to silent capture when there is no TTY
-### (tests/CI) or mktemp fails; in that fallback --progress is stripped
-### from the args so it can't pollute the captured output.
+### Human label for the spinner of a git command ("git fetch ..." -> "Fetching")
+# $@: the command and its args
+function _progress_label {
+    if [ "$1" != "git" ]; then
+        printf '%s' "$1"
+        return
+    fi
+    case "$2" in
+        fetch)           printf 'Fetching';;
+        push)            printf 'Pushing';;
+        pull)            printf 'Pulling';;
+        merge)           printf 'Merging';;
+        switch|checkout) printf 'Checking out files';;
+        stash)
+            case "$3" in
+                pop|apply) printf 'Applying stash';;
+                drop)      printf 'Dropping stash';;
+                *)         printf 'Stashing';;
+            esac;;
+        worktree)        printf 'Creating worktree';;
+        remote)          printf 'Updating remotes';;
+        clone)           printf 'Cloning';;
+        *)               printf 'Running git %s' "$2";;
+    esac
+}
+
+
+### Whether a network git command may ask for credentials on the terminal
+### (HTTPS without a credential helper/askpass, SSH without an agent). The
+### spinner redraws its line every tick and would wipe such a prompt, so it
+### stays off then — git's own progress still appears after the quiet window.
+# $@: the command and its args
+# Returns: 0 (true) when a credential prompt is plausible
+function _git_may_prompt_for_credentials {
+    [ "$1" = "git" ] || return 1
+    case "$2" in
+        fetch|push|pull|remote|clone) ;;
+        *) return 1;;
+    esac
+    [ "${GIT_TERMINAL_PROMPT:-}" = "0" ] && return 1
+    local url
+    url=$(git remote get-url "${origin_name:-origin}" 2>/dev/null)
+    case "$url" in
+        http://*|https://*)
+            if [ -z "${GIT_ASKPASS:-}" ] && [ -z "$(git config --get credential.helper 2>/dev/null)" ] \
+                && [ -z "$(git config --get core.askPass 2>/dev/null)" ]; then
+                return 0
+            fi;;
+        ssh://*|*@*:*)
+            if [ -z "${SSH_AUTH_SOCK:-}" ] && [ -z "${SSH_ASKPASS:-}" ]; then
+                return 0
+            fi;;
+    esac
+    return 1
+}
+
+
+### Run a git (or any) long-running command, capturing combined
+### stdout+stderr and the exit code for downstream parsing. Interactive runs
+### show a spinner after ~1s and reveal the captured stream live only when
+### the command outlives a ~10s quiet window — an ordinary network push
+### (2-5s of ssh handshake and pack upload) stays noise-free; only genuinely
+### large transfers/checkouts show git's native progress. Progress meter
+### lines are stripped from the captured output so callers parse the same
+### text as without --progress. Falls back to silent capture when there is
+### no TTY (tests/CI) or mktemp fails; in that fallback --progress is
+### stripped from the args so it can't pollute the captured output.
 # $1: name of the variable to receive captured output
 # $2: name of the variable to receive the exit code
 # $3: name of the variable to receive "true" when output was streamed live
@@ -923,9 +1075,13 @@ function stream_or_capture_git {
         if [ -n "$__tmp" ]; then
             __ran="true"
             "$@" >"$__tmp" 2>&1 &
-            _stream_transfer_after_delay $! "$__tmp" "${GITBASHER_PROGRESS_QUIET_TICKS:-40}" __shown
+            local __label=""
+            if ! _git_may_prompt_for_credentials "$@"; then
+                __label=$(_progress_label "$@")
+            fi
+            _stream_transfer_after_delay $! "$__tmp" "${GITBASHER_PROGRESS_QUIET_TICKS:-40}" __shown "$__label"
             __code=$?
-            __output=$(cat "$__tmp")
+            __output=$(strip_git_progress "$(cat "$__tmp")")
             rm -f "$__tmp"
         fi
     fi
@@ -2273,8 +2429,8 @@ function choose_branch {
 # $1: name of the branch to switch
 # $2: pass it if you want to disable push log and moved changes
 function switch {
-    switch_output=$(git switch "$1" 2>&1)
-    switch_code=$?
+    stream_or_capture_git switch_output switch_code switch_progress_shown \
+        git switch --progress "$1"
 
     ## Switch is OK
     if [ "$switch_code" == 0 ]; then

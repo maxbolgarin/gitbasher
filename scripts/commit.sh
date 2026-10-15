@@ -735,7 +735,9 @@ Read <diff> to decide which files implement the same feature. Output TSV (scope<
     local ai_response
     # "low" reasoning: grouping is a structural decision over many files —
     # worth ~1s of thinking, unlike plain message generation (see call_ai_api).
-    ai_response=$(call_ai_api "$system_prompt" "$user_prompt" "$AI_MAX_TOKENS_FULL" "" "" "low" 2>/dev/null)
+    # The spinner wraps a stderr-silenced call: errors stay hidden (the caller
+    # reports its own fallback reason) while the wait is still visible.
+    ai_response=$(run_with_spinner "Grouping changes with AI" call_ai_api_quiet "$system_prompt" "$user_prompt" "$AI_MAX_TOKENS_FULL" "" "" "low")
     if [ $? -ne 0 ] || [ -z "$ai_response" ]; then
         ai_grouping_fail_reason="API error"
         return 1

@@ -173,12 +173,12 @@ function wip_push_stash_backup {
     local remote_branch
     remote_branch="$(wip_remote_branch)"
     echo -e "${YELLOW}Pushing WIP backup to ${origin_name}/${remote_branch}...${ENDCOLOR}"
-    local push_output push_code
+    local push_output push_code push_progress_shown
     # --force-with-lease refuses to clobber a backup branch someone else may
     # have pushed; falls back to creating it on first run. Strictly safer than
     # bare --force without changing the wip flow's intent.
-    push_output=$(git push --force-with-lease "${origin_name}" "stash@{0}:refs/heads/${remote_branch}" 2>&1)
-    push_code=$?
+    stream_or_capture_git push_output push_code push_progress_shown \
+        git push --progress --force-with-lease "${origin_name}" "stash@{0}:refs/heads/${remote_branch}"
     if [ $push_code -eq 0 ]; then
         echo -e "${GREEN}✓ Pushed WIP backup to ${origin_name}/${remote_branch}${ENDCOLOR}"
     else
@@ -196,11 +196,11 @@ function wip_push_branch {
         return
     fi
     echo -e "${YELLOW}Pushing ${branch} to ${origin_name}...${ENDCOLOR}"
-    local push_output push_code
+    local push_output push_code push_progress_shown
     # See note in wip_push_stash_backup — prefer --force-with-lease so we
     # don't silently overwrite a wip branch updated from another machine.
-    push_output=$(git push --force-with-lease --set-upstream "${origin_name}" "${branch}" 2>&1)
-    push_code=$?
+    stream_or_capture_git push_output push_code push_progress_shown \
+        git push --progress --force-with-lease --set-upstream "${origin_name}" "${branch}"
     if [ $push_code -eq 0 ]; then
         echo -e "${GREEN}✓ Pushed to ${origin_name}/${branch}${ENDCOLOR}"
     else
@@ -220,9 +220,9 @@ function wip_delete_remote_branch {
         return
     fi
     echo -e "${YELLOW}Removing remote WIP backup ${origin_name}/${branch}...${ENDCOLOR}"
-    local out code
-    out=$(git push "$origin_name" --delete "$branch" 2>&1)
-    code=$?
+    local out code out_progress_shown
+    stream_or_capture_git out code out_progress_shown \
+        git push --progress "$origin_name" --delete "$branch"
     if [ $code -eq 0 ]; then
         echo -e "${GREEN}✓ Removed remote WIP backup${ENDCOLOR}"
     else
@@ -245,8 +245,8 @@ function wip_up_stash {
     local message
     message="$(wip_stash_message)"
     local stash_output stash_code
-    stash_output=$(git stash push --include-untracked --message "$message" 2>&1)
-    stash_code=$?
+    stream_or_capture_git stash_output stash_code stash_progress_shown \
+        git stash push --include-untracked --message "$message"
 
     if [ $stash_code -ne 0 ]; then
         echo -e "${RED}✗ Cannot stash changes.${ENDCOLOR}"
@@ -288,9 +288,10 @@ function wip_up_branch {
     wip_branch="$(wip_remote_branch)"
 
     # Stash everything (including untracked) so we can apply onto the wip branch
-    local stash_output
-    stash_output=$(git stash push --include-untracked --message "wip-transfer: ${original_branch}" 2>&1)
-    if [ $? -ne 0 ]; then
+    local stash_output stash_code
+    stream_or_capture_git stash_output stash_code stash_progress_shown \
+        git stash push --include-untracked --message "wip-transfer: ${original_branch}"
+    if [ "$stash_code" -ne 0 ]; then
         echo -e "${RED}✗ Cannot stash changes for transfer.${ENDCOLOR}"
         echo "$stash_output"
         exit 1
@@ -308,9 +309,10 @@ function wip_up_branch {
     fi
 
     # Apply the stash on top of the new branch
-    local pop_output
-    pop_output=$(git stash pop 2>&1)
-    if [ $? -ne 0 ]; then
+    local pop_output pop_code
+    stream_or_capture_git pop_output pop_code pop_progress_shown \
+        git stash pop
+    if [ "$pop_code" -ne 0 ]; then
         echo -e "${RED}✗ Cannot apply WIP onto ${wip_branch}.${ENDCOLOR}"
         echo "$pop_output"
         echo
@@ -383,18 +385,20 @@ function wip_up_worktree {
     echo
 
     # Stash so the worktree-add starts from a clean state
-    local stash_output
-    stash_output=$(git stash push --include-untracked --message "wip-transfer: ${current_branch}" 2>&1)
-    if [ $? -ne 0 ]; then
+    local stash_output stash_code
+    stream_or_capture_git stash_output stash_code stash_progress_shown \
+        git stash push --include-untracked --message "wip-transfer: ${current_branch}"
+    if [ "$stash_code" -ne 0 ]; then
         echo -e "${RED}✗ Cannot stash changes for transfer.${ENDCOLOR}"
         echo "$stash_output"
         exit 1
     fi
 
     echo -e "${YELLOW}Creating worktree at ${BOLD}${wip_path}${NORMAL}${YELLOW} on branch ${BOLD}${wip_branch}${NORMAL}...${ENDCOLOR}"
-    local add_output
-    add_output=$(git worktree add -b "$wip_branch" "$wip_path" HEAD 2>&1)
-    if [ $? -ne 0 ]; then
+    local add_output add_code add_progress_shown
+    stream_or_capture_git add_output add_code add_progress_shown \
+        git worktree add -b "$wip_branch" "$wip_path" HEAD
+    if [ "$add_code" -ne 0 ]; then
         echo -e "${RED}✗ Cannot create worktree.${ENDCOLOR}"
         echo "$add_output"
         # Restore the stash so the user does not lose work
@@ -455,8 +459,8 @@ function wip_down_stash {
     echo
 
     local pop_output pop_code
-    pop_output=$(git stash pop "$wip_stash_ref" 2>&1)
-    pop_code=$?
+    stream_or_capture_git pop_output pop_code pop_progress_shown \
+        git stash pop "$wip_stash_ref"
 
     if [ $pop_code -ne 0 ]; then
         echo -e "${RED}✗ Cannot restore WIP.${ENDCOLOR}"
@@ -489,9 +493,9 @@ function wip_down_branch {
     echo -e "${YELLOW}Restoring WIP from ${BOLD}${wip_branch}${NORMAL}...${ENDCOLOR}"
     echo
 
-    local merge_output merge_code
-    merge_output=$(git merge --squash --no-commit "$wip_branch" 2>&1)
-    merge_code=$?
+    local merge_output merge_code merge_progress_shown
+    stream_or_capture_git merge_output merge_code merge_progress_shown \
+        git merge --progress --squash --no-commit "$wip_branch"
 
     if [ $merge_code -ne 0 ]; then
         echo -e "${RED}✗ Cannot restore WIP — squash-merge failed.${ENDCOLOR}"
@@ -568,9 +572,9 @@ function wip_down_worktree {
     fi
 
     # Squash-merge the wip branch into the current branch as uncommitted changes
-    local merge_output merge_code
-    merge_output=$(git merge --squash --no-commit "$wip_branch" 2>&1)
-    merge_code=$?
+    local merge_output merge_code merge_progress_shown
+    stream_or_capture_git merge_output merge_code merge_progress_shown \
+        git merge --progress --squash --no-commit "$wip_branch"
     if [ $merge_code -ne 0 ]; then
         echo -e "${RED}✗ Cannot restore WIP — squash-merge failed.${ENDCOLOR}"
         echo "$merge_output"

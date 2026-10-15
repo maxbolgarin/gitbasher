@@ -229,7 +229,7 @@ function merge_script {
 
     if [ -n "$changes" ]; then
         echo
-        print_changes_stat "$changes"
+        print_changes_stat "$changes" 100
     fi
 
 

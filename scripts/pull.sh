@@ -271,8 +271,14 @@ function pull {
         return
     fi
 
-    merge_output=$(git merge --ff-only $2/$1 2>&1)
-    merge_code=$?
+    ### A huge fast-forward spends a long time checking out files — let git's
+    ### "Updating files" progress show once it outlives the quiet window.
+    ### --no-stat keeps a streamed run from dumping the whole diffstat live;
+    ### the stat is printed below from old_head..HEAD instead.
+    local old_head
+    old_head=$(git rev-parse HEAD 2>/dev/null)
+    stream_or_capture_git merge_output merge_code merge_progress_shown \
+        git merge --ff-only --no-stat --progress "$2/$1"
     mode="fast-forward"
 
     if [[ $merge_output == *"Already up to date"* ]]; then
@@ -342,7 +348,13 @@ function pull {
 
     echo -e "${GREEN}✓ Pulled using $mode${ENDCOLOR}"
 
-    if [ "$mode" == "merge" ] || [ "$mode" == "fast-forward" ]; then 
+    if [ "$mode" == "fast-forward" ]; then
+        changes=$(git --no-pager diff --stat "$old_head" HEAD 2>/dev/null)
+        if [[ -n "$changes" ]]; then
+            echo
+            print_changes_stat "$changes" 100
+        fi
+    elif [ "$mode" == "merge" ]; then
         ### Merge without conflicts
         if [ $merge_code == 0 ] ; then
             if [[ $merge_output == *"made by the"* ]]; then
@@ -352,7 +364,7 @@ function pull {
             fi
             if [[ -n "$changes" ]]; then
                 echo
-                print_changes_stat "$changes"
+                print_changes_stat "$changes" 100
             fi
 
         ### Merge with conflicts, but they were resolved
@@ -360,7 +372,7 @@ function pull {
             commit_hash="$(git --no-pager log --pretty="%h" -1)"
             changes=$(git --no-pager show $commit_hash --stat --format="")
             if [[ -n "$changes" ]]; then
-                print_changes_stat "$changes"
+                print_changes_stat "$changes" 100
             fi
         fi
     fi

@@ -2,6 +2,13 @@
 
 All notable changes to gitbasher are generated automatically by [semantic-release](https://github.com/semantic-release/semantic-release) from [Conventional Commits](https://www.conventionalcommits.org/) on `main`. The project follows [Semantic Versioning](https://semver.org/).
 
+## [5.4.0](https://github.com/maxbolgarin/gitbasher/compare/v5.3.1...v5.4.0) (2026-10-15)
+
+### 🚀 Features
+
+* show progress for every long-running action ([bb9eec4](https://github.com/maxbolgarin/gitbasher/commit/bb9eec417dd0d523542ad883426cdf745371f49a))
+* **pull:** show progress for large pulls and stop hanging on huge stats ([3b85981](https://github.com/maxbolgarin/gitbasher/commit/3b8598165e87e976968cc74b20181a4c11646c2b))
+
 ## [5.3.1](https://github.com/maxbolgarin/gitbasher/compare/v5.3.0...v5.3.1) (2026-10-13)
 
 ### 🐛 Bug Fixes

@@ -123,3 +123,18 @@ push_from_second_clone() {
     [ "$status" -ne 0 ]
     [[ "$output" =~ "No git remote configured" ]]
 }
+
+# ===== pull (fast-forward) shares the fetch helper =====
+
+@test "pull: fast-forward prints the change stat once, without git's raw output" {
+    setup_remote_repo
+    push_from_second_clone
+
+    run pull "main" "origin" "" "" ""
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Pulled using fast-forward"* ]]
+    [[ "$output" == *"incoming.txt"* ]]
+    [[ "$output" == *"1 file changed"* ]]
+    [[ "$output" != *"Fast-forward"* ]]
+    [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ]
+}

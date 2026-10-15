@@ -1758,25 +1758,80 @@ function choose_commit {
 
 ### Function prints provided stat in a nice format with colors
 # $1: stats after pull or commit like 'README.md | 1 +\n1 file changed, 1 insertion(+)'
+# $2: optional max number of file rows to print (0 or empty = all); the rest
+#     collapse into an "... and N more files" line so huge pulls stay readable
+# Single awk pass: per-line subshells made a 2000-file pull hang for ~20s.
 function print_changes_stat {
-    IFS=$'\n' read -rd '' -a stats <<< "$1" || true
-    result_stat=""
-    bottom_line=""
-    number_of_stats=${#stats[@]}
-    for index in "${!stats[@]}"
-    do
-        s=$(echo ${stats[index]} | sed -e 's/^[[:space:]]*//')
-        s=$(sed "s/+/${GREEN_ES}+${ENDCOLOR_ES}/g" <<< ${s})
-        s=$(sed "s/-/${RED_ES}-${ENDCOLOR_ES}/g" <<< ${s})
-        if [ $(($index+1)) == $number_of_stats ]; then
-            #s=$(sed '1 s/,/|/' <<< ${s})
-            bottom_line="${s}"
-            break
+    local input limit="${2:-0}" files bottom total more=0
+    input=$(printf '%s\n' "$1" | sed '/^[[:space:]]*$/d')
+    if [ -z "$input" ]; then
+        return
+    fi
+    ### Summary is the "N files changed" line; git merge may append
+    ### "create mode ..." rows after it, which stay below the summary.
+    local summary_at extra=""
+    summary_at=$(printf '%s\n' "$input" | grep -nE '[0-9]+ files? changed' | tail -n 1 | cut -d: -f1)
+    if [ -z "$summary_at" ]; then
+        summary_at=$(printf '%s\n' "$input" | wc -l | tr -d ' ')
+    fi
+    bottom=$(printf '%s\n' "$input" | sed -n "${summary_at}p")
+    files=""
+    if [ "$summary_at" -gt 1 ]; then
+        files=$(printf '%s\n' "$input" | head -n $((summary_at - 1)))
+    fi
+    extra=$(printf '%s\n' "$input" | tail -n +$((summary_at + 1)))
+    if [ -n "$files" ] && [ "$limit" -gt 0 ] 2>/dev/null; then
+        total=$(printf '%s\n' "$files" | wc -l | tr -d ' ')
+        if [ "$total" -gt "$limit" ]; then
+            more=$((total - limit))
+            files=$(printf '%s\n' "$files" | head -n "$limit")
         fi
-        result_stat="${result_stat}\n${s}"
-    done
-    echo -e "$(echo -e "${result_stat}" | column -ts'|')"
-    echo -e "$bottom_line"
+    fi
+
+    if [ -n "$files" ]; then
+        local aligned
+        aligned=$(printf '%s\n' "$files" | _colorize_stat_lines "file")
+        if command -v column >/dev/null 2>&1; then
+            aligned=$(printf '%s\n' "$aligned" | column -ts'|')
+        fi
+        echo -e "$aligned"
+    fi
+    if [ "$more" -gt 0 ]; then
+        echo -e "${GRAY}... and ${more} more files${ENDCOLOR}"
+    fi
+    echo -e "$(printf '%s\n' "$bottom" | _colorize_stat_lines "summary")"
+    if [ -n "$extra" ] && [ "$more" -eq 0 ]; then
+        printf '%s\n' "$extra"
+    fi
+}
+
+
+### Colorize +/- runs of git --stat lines read from stdin (helper for print_changes_stat)
+# $1: "file" - trim, collapse spaces and color only the graph after the last '|'
+#     (so hyphens in file names stay plain); "summary" - color the whole line
+# Colors come in via ENVIRON so awk never reinterprets the \x1b escapes;
+# the caller's echo -e turns them into real escape codes.
+function _colorize_stat_lines {
+    __G="$GREEN_ES" __R="$RED_ES" __E="$ENDCOLOR_ES" awk -v mode="$1" '
+    function paint(str,    out, ch) {
+        out = ""
+        while (match(str, /[+]+|-+/)) {
+            ch = substr(str, RSTART, 1)
+            out = out substr(str, 1, RSTART - 1) (ch == "+" ? ENVIRON["__G"] : ENVIRON["__R"]) substr(str, RSTART, RLENGTH) ENVIRON["__E"]
+            str = substr(str, RSTART + RLENGTH)
+        }
+        return out str
+    }
+    {
+        s = $0
+        gsub(/^[ \t]+|[ \t]+$/, "", s)
+        gsub(/[ \t]+/, " ", s)
+        if (mode == "file" && match(s, /[|][^|]*$/)) {
+            print substr(s, 1, RSTART) paint(substr(s, RSTART + 1))
+        } else {
+            print paint(s)
+        }
+    }'
 }
 
 

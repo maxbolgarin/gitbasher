@@ -234,3 +234,49 @@ teardown() {
     run is_network_error "error: failed to push some refs to 'origin'"
     [ "$status" -ne 0 ]
 }
+
+# ===== print_changes_stat =====
+
+@test "print_changes_stat: prints file rows and summary" {
+    run print_changes_stat " a.txt | 3 ++-
+ b-c.txt | 1 -
+ 2 files changed, 2 insertions(+), 2 deletions(-)"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"a.txt"* ]]
+    [[ "$output" == *"b-c.txt"* ]]
+    [[ "${lines[${#lines[@]}-1]}" == "2 files changed, 2 insertions(+), 2 deletions(-)" ]]
+}
+
+@test "print_changes_stat: limit collapses extra rows into a count" {
+    stat=""
+    for i in 1 2 3 4 5; do stat="${stat} f$i.txt | 1 +"$'\n'; done
+    stat="${stat} 5 files changed, 5 insertions(+)"
+    run print_changes_stat "$stat" 2
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"f2.txt"* ]]
+    [[ "$output" != *"f3.txt"* ]]
+    [[ "$output" == *"... and 3 more files"* ]]
+    [[ "$output" == *"5 files changed"* ]]
+}
+
+@test "print_changes_stat: create mode rows stay after the summary" {
+    run print_changes_stat " new.txt | 1 +
+ 1 file changed, 1 insertion(+)
+ create mode 100644 new.txt"
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" == "1 file changed, 1 insertion(+)" ]]
+    [[ "${lines[2]}" == *"create mode 100644 new.txt"* ]]
+}
+
+@test "print_changes_stat: does not color hyphens in file names" {
+    GREEN_ES="<G>" RED_ES="<R>" ENDCOLOR_ES="<E>" run print_changes_stat " my-file.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)"
+    [[ "$output" == *"my-file.txt"* ]]
+    [[ "$output" == *"<G>+<E><R>-<E>"* ]]
+}
+
+@test "print_changes_stat: empty input prints nothing" {
+    run print_changes_stat ""
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}

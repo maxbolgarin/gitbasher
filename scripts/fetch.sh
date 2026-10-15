@@ -94,8 +94,9 @@ function fetch_script {
         echo -e "${YELLOW}Fetching and pruning '$origin_name'...${ENDCOLOR}"
         echo
 
-        fetch_output=$(git fetch --prune "$origin_name" 2>&1)
-        check_code $? "$fetch_output" "fetch and prune remote"
+        stream_or_capture_git fetch_output fetch_code fetch_progress_shown \
+            git fetch --progress --prune "$origin_name"
+        check_code "$fetch_code" "$fetch_output" "fetch and prune remote"
 
         pruned=$(pruned_branch_names "$fetch_output")
         if [ -n "$pruned" ]; then

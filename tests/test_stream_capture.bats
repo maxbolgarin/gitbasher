@@ -88,3 +88,65 @@ setup() {
     [ ! -s "$shown_out" ]
     grep -q "fatal" "$capture"
 }
+
+# ===== spinner / progress helpers =====
+
+@test "strip_git_progress: drops \\r-updated progress meters, keeps messages" {
+    local cr=$'\r'
+    out=$(strip_git_progress "remote: Counting objects:  50% (1/2)${cr}remote: Counting objects: 100% (2/2), done.
+Receiving objects: 100% (2/2), done.
+From /tmp/remote
+ * branch            main       -> FETCH_HEAD
+Updating files: 100% (3/3), done.")
+    [ "$out" = "From /tmp/remote
+ * branch            main       -> FETCH_HEAD" ]
+}
+
+@test "strip_git_progress: keeps errors and remote messages" {
+    out=$(strip_git_progress "remote: Create a pull request for 'feat':
+error: failed to push some refs")
+    [[ "$out" == *"Create a pull request"* ]]
+    [[ "$out" == *"failed to push some refs"* ]]
+}
+
+@test "_progress_label: maps git commands to readable labels" {
+    [ "$(_progress_label git fetch --progress origin)" = "Fetching" ]
+    [ "$(_progress_label git push --progress)" = "Pushing" ]
+    [ "$(_progress_label git switch --progress main)" = "Checking out files" ]
+    [ "$(_progress_label git stash pop)" = "Applying stash" ]
+    [ "$(_progress_label git stash push -m x)" = "Stashing" ]
+    [ "$(_progress_label git gc)" = "Running git gc" ]
+}
+
+@test "run_with_spinner: without a TTY passes stdout and exit code through" {
+    slow_fn() { echo "result"; return 4; }
+    code=0
+    out=$(run_with_spinner "Waiting" slow_fn) || code=$?
+    [ "$out" = "result" ]
+    [ "$code" = "4" ]
+}
+
+@test "quiet window: label without a TTY draws no spinner" {
+    capture="$BATS_TEST_TMPDIR/capture"
+    err_out="$BATS_TEST_TMPDIR/err"
+    bash -c 'sleep 1.2; echo done' >"$capture" 2>&1 &
+    revealed=""
+    _stream_transfer_after_delay $! "$capture" 100 revealed "Fetching" 2> "$err_out" >/dev/null
+    [ -z "$revealed" ]
+    [ ! -s "$err_out" ]
+}
+
+@test "_git_may_prompt_for_credentials: https remote without a helper may prompt" {
+    repo="$BATS_TEST_TMPDIR/repo"
+    git init -q "$repo"
+    cd "$repo"
+    git remote add origin https://example.com/x/y.git
+    export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
+    unset GIT_ASKPASS GIT_TERMINAL_PROMPT
+    origin_name=origin
+    _git_may_prompt_for_credentials git fetch --progress origin
+    ! GIT_TERMINAL_PROMPT=0 _git_may_prompt_for_credentials git fetch origin
+    ! _git_may_prompt_for_credentials git switch main
+    git config credential.helper store
+    ! _git_may_prompt_for_credentials git push --progress origin main
+}

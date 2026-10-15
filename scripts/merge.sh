@@ -125,8 +125,9 @@ function merge_script {
         echo -e "${YELLOW}Fetching remote...${ENDCOLOR}"
         echo
 
-        fetch_output=$(git fetch 2>&1)
-        check_code $? "$fetch_output" "fetch remote"
+        stream_or_capture_git fetch_output fetch_code fetch_progress_shown \
+            git fetch --progress
+        check_code "$fetch_code" "$fetch_output" "fetch remote"
 
         prune_output=$(git remote prune "$origin_name" 2>&1)
 
@@ -257,11 +258,12 @@ function merge {
         args="--ff-only"
     fi
     if [ "$5" == "true" ]; then
-        merge_output=$(LC_ALL=C git merge $args "$2/$1" 2>&1)
+        LC_ALL=C stream_or_capture_git merge_output merge_code merge_progress_shown \
+            git merge --progress $args "$2/$1"
     else
-        merge_output=$(LC_ALL=C git merge $args "$1" 2>&1)
+        LC_ALL=C stream_or_capture_git merge_output merge_code merge_progress_shown \
+            git merge --progress $args "$1"
     fi
-    merge_code=$?
 
     if [ $merge_code == 0 ] ; then
         return

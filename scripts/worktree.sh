@@ -407,9 +407,10 @@ function worktree_add {
     if [ "$source_mode" == "default" ]; then
         if [ -n "$origin_name" ]; then
             echo -e "${YELLOW}Fetching ${origin_name}/${main_branch}...${ENDCOLOR}"
-            local fetch_output
-            fetch_output=$(git fetch "$origin_name" "$main_branch" 2>&1)
-            if [ $? -ne 0 ]; then
+            local fetch_output fetch_code fetch_progress_shown
+            stream_or_capture_git fetch_output fetch_code fetch_progress_shown \
+                git fetch --progress "$origin_name" "$main_branch"
+            if [ "$fetch_code" -ne 0 ]; then
                 echo -e "${RED}✗ Cannot fetch ${main_branch}.${ENDCOLOR}"
                 echo "$fetch_output"
                 return 1
@@ -450,9 +451,9 @@ function worktree_add {
         echo
         echo -e "${YELLOW}Creating worktree at ${BOLD}${wt_path}${NORMAL}${YELLOW} with new branch ${BOLD}${wt_branch_name}${NORMAL}${YELLOW} from ${BOLD}${from_label}${NORMAL}${YELLOW}...${ENDCOLOR}"
 
-        local add_output
-        add_output=$(git worktree add -b "$wt_branch_name" "$wt_path" "$from_ref" 2>&1)
-        local add_code=$?
+        local add_output add_code add_progress_shown
+        stream_or_capture_git add_output add_code add_progress_shown \
+            git worktree add -b "$wt_branch_name" "$wt_path" "$from_ref"
 
         echo
         if [ $add_code -eq 0 ]; then
@@ -490,9 +491,9 @@ function worktree_add {
         echo
         echo -e "${YELLOW}Creating worktree at ${BOLD}${wt_path}${NORMAL}${YELLOW} for ${BOLD}${branch_name}${NORMAL}${YELLOW}...${ENDCOLOR}"
 
-        local add_output
-        add_output=$(git worktree add "$wt_path" "$branch_name" 2>&1)
-        local add_code=$?
+        local add_output add_code add_progress_shown
+        stream_or_capture_git add_output add_code add_progress_shown \
+            git worktree add "$wt_path" "$branch_name"
 
         echo
         if [ $add_code -eq 0 ]; then
@@ -521,9 +522,10 @@ function worktree_add {
 
         echo -e "${YELLOW}Fetching ${origin_name}...${ENDCOLOR}"
         echo
-        local fetch_output
-        fetch_output=$(git fetch "$origin_name" 2>&1)
-        if [ $? -ne 0 ]; then
+        local fetch_output fetch_code fetch_progress_shown
+        stream_or_capture_git fetch_output fetch_code fetch_progress_shown \
+            git fetch --progress "$origin_name"
+        if [ "$fetch_code" -ne 0 ]; then
             echo -e "${RED}✗ Cannot fetch remote.${ENDCOLOR}"
             echo "$fetch_output"
             return 1
@@ -543,13 +545,14 @@ function worktree_add {
         echo
         echo -e "${YELLOW}Creating worktree at ${BOLD}${wt_path}${NORMAL}${YELLOW} tracking ${BOLD}${origin_name}/${branch_name}${NORMAL}${YELLOW}...${ENDCOLOR}"
 
-        local add_output
+        local add_output add_code add_progress_shown
         if git show-ref --verify --quiet "refs/heads/$branch_name" 2>/dev/null; then
-            add_output=$(git worktree add "$wt_path" "$branch_name" 2>&1)
+            stream_or_capture_git add_output add_code add_progress_shown \
+                git worktree add "$wt_path" "$branch_name"
         else
-            add_output=$(git worktree add --track -b "$branch_name" "$wt_path" "$origin_name/$branch_name" 2>&1)
+            stream_or_capture_git add_output add_code add_progress_shown \
+                git worktree add --track -b "$branch_name" "$wt_path" "$origin_name/$branch_name"
         fi
-        local add_code=$?
 
         echo
         if [ $add_code -eq 0 ]; then

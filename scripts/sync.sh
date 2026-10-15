@@ -94,8 +94,8 @@ function sync_script {
         remote_tracking_ref="refs/remotes/$origin_name/$main_branch"
         saved_ref=$(git rev-parse --verify --quiet "$remote_tracking_ref")
 
-        dry_output=$(git fetch --no-tags "$origin_name" "$main_branch" 2>&1)
-        dry_code=$?
+        stream_or_capture_git dry_output dry_code dry_progress_shown \
+            git fetch --progress --no-tags "$origin_name" "$main_branch"
 
         if [ -n "$saved_ref" ]; then
             git update-ref "$remote_tracking_ref" "$saved_ref" 2>/dev/null

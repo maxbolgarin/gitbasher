@@ -263,8 +263,8 @@ function stash_script {
             [ -n "$_sp" ] && _stash_paths+=("$_sp")
         done < <( set -f; for _sp in $git_add; do printf '%s\n' "$_sp"; done )
 
-        stash_output=$(git stash push -m "$stash_message" -u -- "${_stash_paths[@]}" 2>&1)
-        stash_code=$?
+        stream_or_capture_git stash_output stash_code stash_progress_shown \
+            git stash push -m "$stash_message" -u -- "${_stash_paths[@]}"
 
         if [ $stash_code -eq 0 ]; then
             echo -e "${GREEN}✓ Stashed selected files${ENDCOLOR}"
@@ -302,8 +302,8 @@ function stash_script {
         echo -e "${YELLOW}Stashing all changes...${ENDCOLOR}"
         echo
 
-        stash_output=$(git stash push -m "$stash_message" --include-untracked 2>&1)
-        stash_code=$?
+        stream_or_capture_git stash_output stash_code stash_progress_shown \
+            git stash push -m "$stash_message" --include-untracked
 
         if [ $stash_code -eq 0 ]; then
             echo -e "${GREEN}✓ Stashed all changes${ENDCOLOR}"
@@ -331,8 +331,8 @@ function stash_script {
         echo -e "${YELLOW}Popping from stash $selected_stash...${ENDCOLOR}"
         echo
 
-        pop_output=$(git stash pop "$selected_stash" 2>&1)
-        pop_code=$?
+        stream_or_capture_git pop_output pop_code pop_progress_shown \
+            git stash pop "$selected_stash"
 
         if [ $pop_code -eq 0 ]; then
             echo -e "${GREEN}✓ Popped stash${ENDCOLOR}"
@@ -362,8 +362,8 @@ function stash_script {
         echo -e "${YELLOW}Applying stash $selected_stash...${ENDCOLOR}"
         echo
 
-        apply_output=$(git stash apply "$selected_stash" 2>&1)
-        apply_code=$?
+        stream_or_capture_git apply_output apply_code apply_progress_shown \
+            git stash apply "$selected_stash"
 
         if [ $apply_code -eq 0 ]; then
             echo -e "${GREEN}✓ Applied stash${ENDCOLOR}"
@@ -386,8 +386,8 @@ function stash_script {
         echo -e "Are you sure you want to drop it (y/N)?"
         yes_no_choice_strict "Dropping stash"
 
-        drop_output=$(git stash drop "$selected_stash" 2>&1)
-        drop_code=$?
+        stream_or_capture_git drop_output drop_code drop_progress_shown \
+            git stash drop "$selected_stash"
 
         if [ $drop_code -eq 0 ]; then
             echo -e "${GREEN}✓ Dropped stash${ENDCOLOR}"

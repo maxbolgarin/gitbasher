@@ -106,8 +106,8 @@ function pull_script {
         remote_tracking_ref="refs/remotes/$origin_name/$current_branch"
         saved_ref=$(git rev-parse --verify --quiet "$remote_tracking_ref")
 
-        dry_output=$(git fetch --no-tags "$origin_name" "$current_branch" 2>&1)
-        dry_code=$?
+        stream_or_capture_git dry_output dry_code dry_progress_shown \
+            git fetch --progress --no-tags "$origin_name" "$current_branch"
 
         ### Restore the remote-tracking ref to its pre-dry-run value
         if [ -n "$saved_ref" ]; then
@@ -191,8 +191,8 @@ function pull_script {
     if [ -n "$update" ]; then
         echo -e "${YELLOW}Updating from remote...${ENDCOLOR}"
         echo
-        update_output=$(git remote update 2>&1)
-        update_code=$?
+        stream_or_capture_git update_output update_code update_progress_shown \
+            git remote update
         
         if [ $update_code == 0 ] ; then
             if git rev-parse --verify --quiet "refs/remotes/$origin_name/$current_branch" >/dev/null 2>&1; then commits=$(commit_list 999 "tab" "HEAD..$origin_name/$current_branch"); else commits=""; fi

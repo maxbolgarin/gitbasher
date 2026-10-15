@@ -1129,7 +1129,7 @@ function call_ai_api {
     # demands bare JSON and squash_parse_ai_plan extracts and validates it.
     if [ "$provider" = "claude" ]; then
         local claude_out
-        claude_out=$(_call_claude_cli "$system_prompt" "$user_prompt" "$model")
+        claude_out=$(run_with_spinner "Waiting for AI response" _call_claude_cli "$system_prompt" "$user_prompt" "$model")
         if [ $? -ne 0 ] || [ -z "$claude_out" ]; then
             clear_sensitive_vars
             return 1
@@ -1272,9 +1272,9 @@ function call_ai_api {
     # Retry logic for server errors
     while [ $retry_count -le $max_retries ]; do
         if [ -n "$safe_proxy_url" ]; then
-            response=$(secure_curl_with_api_key "$safe_proxy_url" "$api_key" "$json_payload" "$api_url" "$provider")
+            response=$(run_with_spinner "Waiting for AI response" secure_curl_with_api_key "$safe_proxy_url" "$api_key" "$json_payload" "$api_url" "$provider")
         else
-            response=$(secure_curl_with_api_key "" "$api_key" "$json_payload" "$api_url" "$provider")
+            response=$(run_with_spinner "Waiting for AI response" secure_curl_with_api_key "" "$api_key" "$json_payload" "$api_url" "$provider")
         fi
         
         curl_exit_code=$?
@@ -1516,6 +1516,14 @@ function call_ai_api {
     # Clear sensitive variables before returning success
     clear_sensitive_vars
     echo "$ai_response"
+}
+
+
+### call_ai_api with its stderr (error messages, inner spinner) silenced,
+### for callers that report failures themselves; wrap it in run_with_spinner
+### to keep the wait visible.
+function call_ai_api_quiet {
+    call_ai_api "$@" 2>/dev/null
 }
 
 

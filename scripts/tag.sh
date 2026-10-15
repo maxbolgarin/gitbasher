@@ -14,13 +14,15 @@
 function push_tag {
     if [ -z "$1" ] || [ "$1" == "" ]; then
         all="true"
-        push_output=$(git push "$origin_name" --tags 2>&1)
+        stream_or_capture_git push_output push_code push_progress_shown \
+            git push --progress "$origin_name" --tags
     elif [ -n "$2" ]; then
-        push_output=$(git push --delete "$origin_name" "$1" 2>&1)
+        stream_or_capture_git push_output push_code push_progress_shown \
+            git push --progress --delete "$origin_name" "$1"
     else
-        push_output=$(git push "$origin_name" "$1" 2>&1)
+        stream_or_capture_git push_output push_code push_progress_shown \
+            git push --progress "$origin_name" "$1"
     fi
-    push_code=$?
 
     # Handle delete case
     if [ -n "$delete" ]; then
@@ -224,8 +226,8 @@ function tag_script {
     ### Fetch tags from the remote
     if [ -n "${remote}" ]; then
         echo -e "${YELLOW}Fetching tags from the remote...${ENDCOLOR}"
-        fetch_output=$(git fetch $origin_name --tags 2>&1)
-        fetch_code=$?
+        stream_or_capture_git fetch_output fetch_code fetch_progress_shown \
+            git fetch --progress $origin_name --tags
         # A non-zero exit caused only by tag-clobber protection is a warning,
         # not a fatal error — still show the tag list. Anything else aborts.
         if [ "$fetch_code" != 0 ] && ! is_tag_clobber_only "$fetch_output"; then

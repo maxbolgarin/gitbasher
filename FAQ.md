@@ -145,6 +145,10 @@ Run `gitb sync`. It shows the divergence and rebases by default (use `gitb sync 
 
 Bare `gitb log` is now an interactive browser: a numbered, paginated commit list where picking a commit shows it and offers actions (diff, stat, copy hash, revert, cherry-pick, fixup, restore a file). The old full dump is still there as `gitb log all` (alias `dump`). Piping still works — non-interactive runs print a plain `git log`-style listing and exit. You can also pass an argument directly: a number (`gitb log 20`), a file path, a ref or range, or words to search commit messages. Page size: `git config gitbasher.log-count 30`.
 
+### What is the spinner on long commands, and can I turn it off?
+
+Fetches, pushes, pulls, branch switches, merges, stashes, worktree creation and AI requests show a spinner with elapsed seconds once they take longer than about a second. If a fetch, push, or checkout runs past ~10s, git's own progress (`Receiving objects: 45%`, `Updating files: 80%`) takes over. Quick commands print nothing extra. Set `GITBASHER_NO_SPINNER=1` to turn the spinner off; it is also off automatically when output is not a terminal, and for network commands where git may ask for a password.
+
 ## Contributing and bugs
 
 ### How do I report a bug?

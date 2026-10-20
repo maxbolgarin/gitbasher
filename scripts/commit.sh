@@ -902,6 +902,23 @@ function _stage_file_by_status {
     esac
 }
 
+### Stage a split group exactly as it was in the original index: each path
+### gets its entry from the pre-split tree (or is removed when the tree has
+### none). Unlike re-adding the worktree copy this keeps partially staged
+### hunks, and works for staged files since deleted from the worktree.
+# $1: tree of the original index (git write-tree)
+# $2..: files of the group
+# Prints git's error on stderr and returns non-zero on failure.
+function _stage_split_group_from_tree {
+    local tree="$1"; shift
+    local -a pathspecs=()
+    local f
+    for f in "$@"; do
+        pathspecs+=(":(top,literal)$f")
+    done
+    git restore --staged --source="$tree" -- "${pathspecs[@]}" 2>&1 >/dev/null
+}
+
 ### Capture the change type for each currently-staged file into a map.
 # Sets the global associative array `_split_status_by_file` (file → A/M/D/...).
 # For renames/copies (R, C), git emits the new path as the second field — we
@@ -1238,18 +1255,31 @@ function perform_commit_split {
         # Stage each file using the original change type so deletions stay
         # deletions (otherwise `git add` would re-add the worktree copy and
         # the index ends up empty for that scope, breaking AI generation).
-        local stage_failed=0
+        # Prefer the original index tree: it is exact (partial hunks, staged
+        # files since removed from the worktree). The per-file replay is the
+        # fallback when the tree could not be captured.
+        local stage_failed=0 stage_err=""
         local _stage_status
-        for f in "${files_array[@]}"; do
-            _stage_status=$(gmap_get _split_status_by_file "$f"); [ -z "$_stage_status" ] && _stage_status="M"
-            if ! _stage_file_by_status "$f" "$_stage_status"; then
-                stage_failed=1
-                break
-            fi
-        done
+        if [ -n "$orig_tree" ]; then
+            stage_err=$(_stage_split_group_from_tree "$orig_tree" "${files_array[@]}") || stage_failed=1
+        else
+            for f in "${files_array[@]}"; do
+                _stage_status=$(gmap_get _split_status_by_file "$f"); [ -z "$_stage_status" ] && _stage_status="M"
+                if ! stage_err=$(_stage_file_by_status "$f" "$_stage_status" 2>&1); then
+                    stage_failed=1
+                    break
+                fi
+            done
+        fi
         if [ "$stage_failed" = "1" ]; then
             echo -e "${RED}✗ Cannot stage files for scope '${scope}'.${ENDCOLOR}"
-            _restore_split_snapshot "$snapshot_file"
+            [ -n "$stage_err" ] && echo -e "${GRAY}${stage_err}${ENDCOLOR}"
+            if [ -n "$orig_tree" ] && git read-tree "$orig_tree" >/dev/null 2>&1; then
+                rm -f "$snapshot_file"
+            else
+                _restore_split_snapshot "$snapshot_file"
+            fi
+            echo -e "${YELLOW}Original staging restored.${ENDCOLOR}"
             trap - INT TERM
             return 1
         fi

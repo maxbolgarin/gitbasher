@@ -169,3 +169,40 @@ teardown() {
     [ "$(git rev-parse HEAD)" = "$start_head" ]
     [ "$(git write-tree)" = "$orig_tree" ]
 }
+
+@test "perform_commit_split: commits the staged content, even for files gone from the worktree" {
+    mkdir -p docs scripts
+    echo "base" > docs/a.md
+    echo "base" > scripts/b.sh
+    git add docs/a.md scripts/b.sh
+    git commit -q -m "seed"
+
+    echo "staged" > docs/a.md
+    echo "new" > docs/new.md
+    echo "changed" > scripts/b.sh
+    git add docs/a.md docs/new.md scripts/b.sh
+    # Unstaged edits and a staged file deleted from the worktree: re-adding
+    # the worktree copy would commit the wrong content or fail outright.
+    echo "unstaged-extra" >> docs/a.md
+    rm docs/new.md
+
+    gmap_clear split_groups
+    gmap_set split_groups "docs" "docs/a.md"$'\n'"docs/new.md"
+    gmap_set split_groups "scripts" "scripts/b.sh"
+    split_group_keys=(docs scripts)
+    llm="true"
+    auto_accept="true"
+    push=""
+    current_branch="main"
+    check_ai_available() { return 0; }
+    generate_ai_commit_message() { echo "chore: ai message"; }
+
+    run perform_commit_split
+
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"Cannot stage files"* ]]
+    [ "$(git show HEAD~1:docs/a.md)" = "staged" ]
+    [ "$(git show HEAD~1:docs/new.md)" = "new" ]
+    [ "$(git show HEAD:scripts/b.sh)" = "changed" ]
+    [ -z "$(git diff --cached --name-only)" ]
+}

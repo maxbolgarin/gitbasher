@@ -2,6 +2,13 @@
 
 All notable changes to gitbasher are generated automatically by [semantic-release](https://github.com/semantic-release/semantic-release) from [Conventional Commits](https://www.conventionalcommits.org/) on `main`. The project follows [Semantic Versioning](https://semver.org/).
 
+## [5.4.1](https://github.com/maxbolgarin/gitbasher/compare/v5.4.0...v5.4.1) (2026-10-20)
+
+### 🐛 Bug Fixes
+
+* **commit:** put the AI grouping spinner on its own line ([17271af](https://github.com/maxbolgarin/gitbasher/commit/17271aff7fe9bc42d2a368d64d97d608222980a5))
+* **commit:** stage split groups from the original index ([ef8b291](https://github.com/maxbolgarin/gitbasher/commit/ef8b291750c672e7a54f34a88bd12dcdcb0808a9))
+
 ## [5.4.0](https://github.com/maxbolgarin/gitbasher/compare/v5.3.1...v5.4.0) (2026-10-15)
 
 ### 🚀 Features

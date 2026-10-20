@@ -1539,9 +1539,13 @@ function try_offer_commit_split {
         fi
     fi
 
+    local grouped_with_ai=""
     if [ "$should_use_ai" = "true" ] && check_ai_available 2>/dev/null; then
         echo
         echo -e "${YELLOW}Grouping changes by feature with AI...${ENDCOLOR}"
+        # Keep the spinner off the header line, like the other progress views.
+        echo
+        grouped_with_ai="true"
         local ai_grouping_fail_reason=""
         if ! group_files_by_feature_with_ai; then
             # AI failed; keep the folder heuristic groups (may be empty). Surface
@@ -1568,7 +1572,8 @@ function try_offer_commit_split {
     # split commits don't reference code that history hasn't introduced yet.
     order_split_groups_by_dependency
 
-    echo
+    # The AI grouping header already left a blank line.
+    if [ -z "$grouped_with_ai" ]; then echo; fi
     print_split_groups_preview
     echo
 

@@ -149,6 +149,17 @@ Bare `gitb log` is now an interactive browser: a numbered, paginated commit list
 
 Fetches, pushes, pulls, branch switches, merges, stashes, worktree creation and AI requests show a spinner with elapsed seconds once they take longer than about a second. If a fetch, push, or checkout runs past ~10s, git's own progress (`Receiving objects: 45%`, `Updating files: 80%`) takes over. Quick commands print nothing extra. Set `GITBASHER_NO_SPINNER=1` to turn the spinner off; it is also off automatically when output is not a terminal, and for network commands where git may ask for a password.
 
+### My SSH key has a passphrase — does gitbasher handle it?
+
+Yes. When a network command needs a key that is locked (and not loaded in ssh-agent), gitbasher asks for the passphrase and retries — instead of the old behavior of `Fetching (21s)` spinning forever over ssh's hidden prompt. Keys that are already unlocked, or have no passphrase, are never asked about. Run `gitb cfg ssh` to see which keys a remote uses and whether they are locked, and to choose what happens after you type the passphrase:
+
+- `agent` (default) — the key goes into your ssh-agent for a while (`1h` by default; `0` = no limit), so git, ssh and your IDE can use it too. Without a running ssh-agent, gitbasher keeps it in its own agent instead.
+- `gitb` — the key stays unlocked for gitbasher only, for a while; other tools still ask.
+- `command` — the key is unlocked for one gitb command and forgotten when it finishes.
+- `off` — gitbasher never unlocks keys; ssh asks for the passphrase on every connection (the spinner stays off so you can see its prompt).
+
+`gitb cfg ssh` can also unlock a remote's keys ahead of time, or lock them again. gitbasher never sees the passphrase: `ssh-add` reads it from the terminal.
+
 ## Contributing and bugs
 
 ### How do I report a bug?

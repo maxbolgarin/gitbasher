@@ -216,7 +216,9 @@ function wip_delete_remote_branch {
     if [ -z "$origin_name" ]; then
         return
     fi
-    if ! git ls-remote --exit-code --heads "$origin_name" "$branch" >/dev/null 2>&1; then
+    local remote_commit
+    remote_branch_commit remote_commit "$branch"
+    if [ -z "$remote_commit" ]; then
         return
     fi
     echo -e "${YELLOW}Removing remote WIP backup ${origin_name}/${branch}...${ENDCOLOR}"

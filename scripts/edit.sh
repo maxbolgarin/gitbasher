@@ -222,7 +222,9 @@ function edit_branch_name {
     if [ -z "$origin_name" ]; then
         return
     fi
-    if ! git ls-remote --exit-code --heads "$origin_name" "$old_name" >/dev/null 2>&1; then
+    local old_remote_commit
+    remote_branch_commit old_remote_commit "$old_name"
+    if [ -z "$old_remote_commit" ]; then
         # Old name never existed on the remote — nothing to clean up there.
         # Just hint how to publish the renamed branch.
         echo -e "Push the renamed branch when ready: ${YELLOW}gitb push${ENDCOLOR}"

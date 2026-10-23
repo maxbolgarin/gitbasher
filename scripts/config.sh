@@ -20,7 +20,8 @@ function set_default_branch {
         git fetch --progress
     check_code "$fetch_code" "$fetch_output" "fetch remote"
 
-    prune_output=$(git remote prune $origin_name 2>&1)
+    stream_or_capture_git prune_output prune_code prune_progress_shown \
+        git remote prune "$origin_name"
 
     echo -e "Current gitbasher default branch: ${YELLOW}$main_branch${ENDCOLOR}"
     echo
@@ -1097,6 +1098,90 @@ function configure_fast_split {
 }
 
 
+### Function asks user how gitbasher unlocks passphrase-protected SSH keys
+function configure_ssh_unlock {
+    echo -e "${YELLOW}Configure SSH Key Unlocking${ENDCOLOR}"
+    echo
+
+    if [ "$GITBASHER_NO_REPO" != "true" ] && [ -n "$origin_name" ]; then
+        print_ssh_key_status "$origin_name"
+        echo
+    fi
+
+    local mode ttl
+    mode=$(get_ssh_unlock_mode)
+    ttl=$(get_ssh_unlock_ttl)
+    echo -e "Current: ${GREEN}$(ssh_unlock_summary "$mode" "$ttl")${ENDCOLOR} $(config_source_tag gitbasher.ssh-unlock)"
+    echo
+    echo -e "A key locked with a passphrase can't be used until it is unlocked. When a"
+    echo -e "network command needs one, gitbasher asks for the passphrase once and keeps"
+    echo -e "the key unlocked — choose where, and for how long."
+    echo
+    echo -e "1. ${GREEN}agent${ENDCOLOR}:\tin your ssh-agent for a while (git, ssh and IDEs can use it)"
+    echo -e "2. ${GREEN}gitb${ENDCOLOR}:\tfor gitbasher only, for a while (other tools still ask)"
+    echo -e "3. ${GREEN}command${ENDCOLOR}:\tfor one gitb command, then forgotten"
+    echo -e "4. ${YELLOW}off${ENDCOLOR}:\tnever — ssh asks for the passphrase on every connection"
+    if [ "$GITBASHER_NO_REPO" != "true" ] && [ -n "$origin_name" ]; then
+        echo -e "u. Unlock the keys of ${origin_name} now"
+        echo -e "l. Lock the keys of ${origin_name} now"
+    fi
+    echo -e "0. Exit without changes"
+
+    local choice value
+    while true; do
+        read_key choice || exit
+        normalize_key "$choice"
+        case "$normalized_key" in
+            1) value="agent";   break ;;
+            2) value="gitb";    break ;;
+            3) value="command"; break ;;
+            4) value="off";     break ;;
+            u|l)
+                [ "$GITBASHER_NO_REPO" != "true" ] && [ -n "$origin_name" ] || continue
+                echo
+                if [ "$normalized_key" = "u" ]; then
+                    ssh_unlock_remote_keys "$origin_name"
+                else
+                    ssh_lock_remote_keys "$origin_name"
+                fi
+                exit ;;
+            0) exit ;;
+        esac
+    done
+    echo
+
+    if [ "$value" = "agent" ] || [ "$value" = "gitb" ]; then
+        echo -e "How long should a key stay unlocked? Use ${BLUE}30m${ENDCOLOR}, ${BLUE}1h${ENDCOLOR}, ${BLUE}8h${ENDCOLOR}, ${BLUE}1d${ENDCOLOR}, ... or ${BLUE}0${ENDCOLOR} for no time limit"
+        local ttl_input=""
+        read_editable_input ttl_input "Lifetime: " "$ttl"
+        ttl_input="${ttl_input// /}"
+        [ -z "$ttl_input" ] && ttl_input="$ttl"
+        if ! is_valid_ssh_ttl "$ttl_input"; then
+            show_sanitization_error "lifetime" "Use a number with an optional unit: 90, 30m, 1h, 1h30m, 1d (0 = no limit)."
+            exit 1
+        fi
+        ssh_ttl_unlimited "$ttl_input" && ttl_input="0"
+        ttl="$ttl_input"
+        echo
+    fi
+
+    set_ssh_unlock_mode "$value" >/dev/null
+    if [ "$value" = "agent" ] || [ "$value" = "gitb" ]; then
+        set_ssh_unlock_ttl "$ttl" >/dev/null
+    fi
+    echo -e "${GREEN}✓ Set SSH unlocking to $(ssh_unlock_short "$value" "$ttl") for '${project_name}'${ENDCOLOR}"
+    echo
+
+    [ "$GITBASHER_NO_REPO" = "true" ] && exit
+    echo -e "Do you want to set it ${YELLOW}globally${ENDCOLOR} for all projects (Y/n)?"
+    yes_no_choice "\nSet SSH unlocking globally" "true"
+    set_config_value gitbasher.ssh-unlock "$value" "true" >/dev/null
+    if [ "$value" = "agent" ] || [ "$value" = "gitb" ]; then
+        set_config_value gitbasher.ssh-unlock-ttl "$ttl" "true" >/dev/null
+    fi
+}
+
+
 ### Function asks user to configure AI diff payload size
 # Controls how much of the staged diff is sent to the model. Two knobs:
 #   - lines: head -n N applied to the diff (primary cap, intuitive for users)
@@ -1448,6 +1533,7 @@ function config_script {
         diff|payload)         set_ai_diff_cfg="true";;
         push-size|pushsize|ps) set_push_warn_cfg="true";;
         fast-split|fastsplit|fs) set_fast_split_cfg="true";;
+        ssh|passphrase|unlock) set_ssh_cfg="true";;
         delete|unset|del)     delete_cfg="true";;
         user|name|email|u)    set_user_cfg="true";;
         auto|completion|comp) auto_cfg="true";;
@@ -1485,6 +1571,8 @@ function config_script {
         header="$header PUSH SIZE WARNING"
     elif [ -n "${set_fast_split_cfg}" ]; then
         header="$header FAST MODE SPLIT"
+    elif [ -n "${set_ssh_cfg}" ]; then
+        header="$header SSH KEY UNLOCKING"
     elif [ -n "${delete_cfg}" ]; then
         header="$header UNSET GLOBAL CONFIG"
     elif [ -n "${set_user_cfg}" ]; then
@@ -1581,6 +1669,11 @@ function config_script {
         exit
     fi
 
+    if [ "$set_ssh_cfg" == "true" ]; then
+        configure_ssh_unlock
+        exit
+    fi
+
     if [ "$delete_cfg" == "true" ]; then
         delete_global
         exit
@@ -1612,6 +1705,7 @@ function config_script {
         print_help_row $PAD "diff"      "payload"           "Set the diff payload size (lines and char cap) sent to AI"
         print_help_row $PAD "push-size" "ps, pushsize"      "Warn before pushing more than N MB (0 disables)"
         print_help_row $PAD "fast-split" "fs, fastsplit"    "Split automatically in fast commit modes (on/off)"
+        print_help_row $PAD "ssh"       "passphrase, unlock" "How long a passphrase-protected SSH key stays unlocked"
         print_help_row $PAD "auto"      "completion, comp"  "Install/remove tab completion for bash, zsh, or fish"
         print_help_row $PAD "delete"    "unset, del"        "Unset a global gitbasher configuration value"
         print_help_row $PAD "help"      "h"                 "Show this help"

@@ -65,6 +65,8 @@ source_gitbasher() {
     # order silently 127'd them, masking real behavior.
     source "${GITBASHER_ROOT}/scripts/common.sh"
     source "${GITBASHER_ROOT}/scripts/init.sh"
+    # stream_or_capture_git hands SSH network commands to ssh.sh
+    source "${GITBASHER_ROOT}/scripts/ssh.sh"
 }
 
 # Source gitbasher helper functions only, skipping the git config queries at the
@@ -74,6 +76,7 @@ source_gitbasher() {
 source_gitbasher_lite() {
     source "${GITBASHER_ROOT}/scripts/common.sh"
     GITBASHER_SKIP_INIT_QUERIES=1 source "${GITBASHER_ROOT}/scripts/init.sh"
+    source "${GITBASHER_ROOT}/scripts/ssh.sh"
 }
 
 # Create a test file with content

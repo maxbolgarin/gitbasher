@@ -108,6 +108,7 @@ source scripts/init.sh || { echo "gitbasher: failed to load scripts/init.sh" >&2
 
 ### Include all scripts
 source scripts/ai.sh || { echo "gitbasher: failed to load scripts/ai.sh" >&2; exit 1; }
+source scripts/ssh.sh || { echo "gitbasher: failed to load scripts/ssh.sh" >&2; exit 1; }
 source scripts/config.sh || { echo "gitbasher: failed to load scripts/config.sh" >&2; exit 1; }
 source scripts/merge.sh || { echo "gitbasher: failed to load scripts/merge.sh" >&2; exit 1; }
 source scripts/rebase.sh || { echo "gitbasher: failed to load scripts/rebase.sh" >&2; exit 1; }

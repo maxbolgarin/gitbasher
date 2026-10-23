@@ -853,8 +853,22 @@ function wrong_mode {
 # Returns: 0 (true) if the output looks like a transient network failure
 function is_network_error {
     local output="$1"
+    # git adds "Could not read from remote repository" to every ssh failure,
+    # including a denied key — that is not something a retry can fix.
+    if is_auth_error "$output"; then
+        return 1
+    fi
     echo "$output" | grep -qiE \
         "Could not read from remote repository|Could not resolve host|Connection timed out|Operation timed out|connect to host|Connection refused|Connection reset|Network is unreachable|kex_exchange_identification|remote end hung up unexpectedly|unable to access|Failed to connect|early EOF|RPC failed|timed out|ssh: connect|Temporary failure in name resolution|[Bb]roken pipe|[Rr]ecv failure|[Ss]end failure|TLS connection|SSL connection|no route to host"
+}
+
+
+### Detect ssh authentication and host-key failures in git network output
+# $1: combined stdout+stderr of a failed git network command
+# Returns: 0 (true) if ssh refused the key, the login or the host key
+function is_auth_error {
+    printf '%s\n' "$1" | grep -qE \
+        "Permission denied \(|Too many authentication failures|Host key verification failed|sign_and_send_pubkey"
 }
 
 
@@ -1011,7 +1025,12 @@ function _progress_label {
                 *)         printf 'Stashing';;
             esac;;
         worktree)        printf 'Creating worktree';;
-        remote)          printf 'Updating remotes';;
+        remote)
+            case "$3" in
+                prune) printf 'Pruning remote branches';;
+                *)     printf 'Updating remotes';;
+            esac;;
+        ls-remote)       printf 'Checking remote';;
         clone)           printf 'Cloning';;
         *)               printf 'Running git %s' "$2";;
     esac
@@ -1019,32 +1038,61 @@ function _progress_label {
 
 
 ### Whether a network git command may ask for credentials on the terminal
-### (HTTPS without a credential helper/askpass, SSH without an agent). The
-### spinner redraws its line every tick and would wipe such a prompt, so it
-### stays off then — git's own progress still appears after the quiet window.
+### (HTTPS without a credential helper/askpass, or SSH that ssh_stream_git
+### does not handle: mode off, a non-OpenSSH client). The spinner redraws its
+### line every tick and would wipe such a prompt, so it stays off then —
+### git's own progress still appears after the quiet window.
 # $@: the command and its args
 # Returns: 0 (true) when a credential prompt is plausible
 function _git_may_prompt_for_credentials {
-    [ "$1" = "git" ] || return 1
-    case "$2" in
-        fetch|push|pull|remote|clone) ;;
-        *) return 1;;
-    esac
-    [ "${GIT_TERMINAL_PROMPT:-}" = "0" ] && return 1
-    local url
-    url=$(git remote get-url "${origin_name:-origin}" 2>/dev/null)
-    case "$url" in
-        http://*|https://*)
-            if [ -z "${GIT_ASKPASS:-}" ] && [ -z "$(git config --get credential.helper 2>/dev/null)" ] \
-                && [ -z "$(git config --get core.askPass 2>/dev/null)" ]; then
-                return 0
-            fi;;
-        ssh://*|*@*:*)
-            if [ -z "${SSH_AUTH_SOCK:-}" ] && [ -z "${SSH_ASKPASS:-}" ]; then
-                return 0
-            fi;;
-    esac
+    local urls url
+    urls=$(git_network_urls "$@") || return 1
+    while IFS= read -r url; do
+        case "$url" in
+            http://*|https://*)
+                [ "${GIT_TERMINAL_PROMPT:-}" = "0" ] && continue
+                if [ -z "${GIT_ASKPASS:-}" ] && [ -z "$(git config --get credential.helper 2>/dev/null)" ] \
+                    && [ -z "$(git config --get core.askPass 2>/dev/null)" ]; then
+                    return 0
+                fi;;
+            *)
+                # A running ssh-agent proves nothing: it may not hold the
+                # key, and ssh then asks for the passphrase.
+                if ssh_url_target "$url" >/dev/null; then
+                    return 0
+                fi;;
+        esac
+    done <<< "$urls"
     return 1
+}
+
+
+### One run of a command for stream_or_capture_git's terminal path: in the
+### background, captured to a file, with a spinner while it is quiet.
+### Writes the caller's __output, __code and __shown (dynamic scope).
+# $1: spinner label ("" = no spinner, e.g. while ssh may prompt)
+# $2: SSH_AUTH_SOCK for the command ("" = inherit)
+# $3: GIT_SSH_COMMAND for the command ("" = inherit)
+# $4..: the command and its args
+# Returns: 1 when nothing ran (mktemp failed)
+function _stream_git_once {
+    local __label="$1" __sock="$2" __sshcmd="$3"; shift 3
+    local __tmp
+    __tmp=$(mktemp 2>/dev/null)
+    [ -n "$__tmp" ] || return 1
+    if [ -n "$__sock" ] || [ -n "$__sshcmd" ]; then
+        (
+            if [ -n "$__sock" ]; then export SSH_AUTH_SOCK="$__sock"; fi
+            if [ -n "$__sshcmd" ]; then export GIT_SSH_COMMAND="$__sshcmd"; fi
+            "$@"
+        ) >"$__tmp" 2>&1 &
+    else
+        "$@" >"$__tmp" 2>&1 &
+    fi
+    _stream_transfer_after_delay $! "$__tmp" "${GITBASHER_PROGRESS_QUIET_TICKS:-40}" __shown "$__label"
+    __code=$?
+    __output=$(strip_git_progress "$(cat "$__tmp")")
+    rm -f "$__tmp"
 }
 
 
@@ -1058,6 +1106,9 @@ function _git_may_prompt_for_credentials {
 ### text as without --progress. Falls back to silent capture when there is
 ### no TTY (tests/CI) or mktemp fails; in that fallback --progress is
 ### stripped from the args so it can't pollute the captured output.
+### Network commands to OpenSSH remotes go through ssh_stream_git (ssh.sh),
+### which unlocks passphrase-protected keys instead of letting ssh prompt
+### under the spinner.
 # $1: name of the variable to receive captured output
 # $2: name of the variable to receive the exit code
 # $3: name of the variable to receive "true" when output was streamed live
@@ -1070,19 +1121,16 @@ function stream_or_capture_git {
     local __out_var="$1" __code_var="$2" __shown_var="$3"; shift 3
     local __output="" __code=0 __shown="" __ran=""
     if [ -t 1 ] && [ -t 2 ]; then
-        local __tmp
-        __tmp=$(mktemp 2>/dev/null)
-        if [ -n "$__tmp" ]; then
+        if ssh_stream_git "$@"; then
             __ran="true"
-            "$@" >"$__tmp" 2>&1 &
+        else
             local __label=""
             if ! _git_may_prompt_for_credentials "$@"; then
                 __label=$(_progress_label "$@")
             fi
-            _stream_transfer_after_delay $! "$__tmp" "${GITBASHER_PROGRESS_QUIET_TICKS:-40}" __shown "$__label"
-            __code=$?
-            __output=$(strip_git_progress "$(cat "$__tmp")")
-            rm -f "$__tmp"
+            if _stream_git_once "$__label" "" "" "$@"; then
+                __ran="true"
+            fi
         fi
     fi
     if [ -z "$__ran" ]; then
@@ -1096,6 +1144,24 @@ function stream_or_capture_git {
     printf -v "$__out_var" '%s' "$__output"
     printf -v "$__code_var" '%s' "$__code"
     printf -v "$__shown_var" '%s' "$__shown"
+}
+
+
+### Commit a branch points to on the remote (empty when the branch is missing
+### or the remote cannot be reached). Runs through stream_or_capture_git, so
+### a locked SSH key gets unlocked instead of prompted for out of sight.
+# $1: name of the variable to receive the commit hash
+# $2: branch name
+# Using of global:
+#     * origin_name
+function remote_branch_commit {
+    local _rbc_out _rbc_code _rbc_shown _rbc_sha=""
+    stream_or_capture_git _rbc_out _rbc_code _rbc_shown \
+        git ls-remote "${origin_name:-origin}" "refs/heads/$2"
+    if [ "$_rbc_code" = "0" ]; then
+        _rbc_sha=$(printf '%s\n' "$_rbc_out" | awk -v ref="refs/heads/$2" '$2 == ref { print $1; exit }')
+    fi
+    printf -v "$1" '%s' "$_rbc_sha"
 }
 
 
@@ -1596,6 +1662,13 @@ function print_configuration {
     else
         echo -e "\tFast split:\t${YELLOW}off${ENDCOLOR} $(config_source_tag gitbasher.commit-fast-split)"
     fi
+
+    # Mode and lifetime share one row: tag it with the more specific source
+    local ssh_tag_key="gitbasher.ssh-unlock"
+    case "$(config_source gitbasher.ssh-unlock):$(config_source gitbasher.ssh-unlock-ttl)" in
+        default:*|global:local) ssh_tag_key="gitbasher.ssh-unlock-ttl" ;;
+    esac
+    echo -e "\tSSH unlock:\t${GREEN}$(ssh_unlock_short "$(get_ssh_unlock_mode)" "$(get_ssh_unlock_ttl)")${ENDCOLOR} $(config_source_tag "$ssh_tag_key")"
 
     echo
     echo -e "${GRAY}Source:${ENDCOLOR} ${BLUE}(project)${ENDCOLOR}${GRAY} this repo,${ENDCOLOR} ${PURPLE}(global)${ENDCOLOR}${GRAY} ~/.gitconfig,${ENDCOLOR} ${GRAY}(default) built-in fallback${ENDCOLOR}"

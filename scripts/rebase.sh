@@ -88,7 +88,7 @@ function rebase_script {
         current_local_commit=$(git rev-parse HEAD 2>/dev/null)
         
         # Get the remote commit hash for current branch
-        current_remote_commit=$(git ls-remote "$origin_name" "refs/heads/$current_branch" 2>/dev/null | cut -f1)
+        remote_branch_commit current_remote_commit "$current_branch"
         
         if [ -z "$current_remote_commit" ]; then
             echo -e "${YELLOW}Remote branch ${origin_name}/${current_branch} not found — proceeding with local rebase.${ENDCOLOR}"
@@ -221,7 +221,7 @@ function rebase_script {
         fi
         
         # Get the remote commit hash for target branch
-        remote_commit=$(git ls-remote "$origin_name" "refs/heads/$new_base_branch" 2>/dev/null | cut -f1)
+        remote_branch_commit remote_commit "$new_base_branch"
         
         if [ -z "$remote_commit" ]; then
             echo -e "${YELLOW}Remote branch ${origin_name}/${new_base_branch} not found - proceeding with local rebase${ENDCOLOR}"

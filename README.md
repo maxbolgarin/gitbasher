@@ -433,6 +433,8 @@ Notes:
 
 Quick pushes stay clean — git's live progress bar appears only when a transfer runs long (same for `pull`/`fetch`). gitbasher also estimates the transfer size first, warning you before you push a stray non-code object (e.g. a build artifact or dataset). Tune the threshold with `gitb cfg push-size` (default 50 MB, `0` disables).
 
+**SSH keys with a passphrase.** When a push, pull or fetch needs an SSH key that is locked and not loaded in ssh-agent, gitbasher asks for the passphrase instead of waiting on a hidden prompt, then keeps the key unlocked — in your ssh-agent for 1h by default. `gitb cfg ssh` shows which keys are locked and picks where an unlocked key lives (`agent`, `gitb` for gitbasher only, `command` for a single command, or `off`) and for how long.
+
 ### `gitb pull`
 
 <details>
@@ -807,6 +809,7 @@ gitb origin remove                               # delete the remote
 | `diff` | `payload` | AI diff payload size (line and character caps) |
 | `push-size` | `ps` `pushsize` | Warn before pushing more than N MB (0 disables) |
 | `fast-split` | `fs` `fastsplit` | Split automatically in fast commit modes (on/off) |
+| `ssh` | `passphrase` `unlock` | Where and how long a passphrase-protected SSH key stays unlocked |
 | `completion` | `comp` | Install / uninstall bash & zsh tab completion |
 | `delete` | `unset` `del` | Remove global config |
 
@@ -895,6 +898,8 @@ Overview-first diffs built for the gitbasher workflow — no flag memorization. 
 | `gitbasher.worktreebase` | `git config gitbasher.worktreebase <dir>` | Base directory for new worktrees (default `.worktree` under the repo root) |
 | `gitbasher.commit-auto-split` | `git config gitbasher.commit-auto-split <ask\|always\|never>` | Offer to split a commit per scope (default `ask`: ask before splitting, then confirm the groups) |
 | `gitbasher.commit-fast-split` | `gitb cfg fast-split` | Fast modes split automatically (default `true`); `false` makes `fast` ask and `ff` commit as one |
+| `gitbasher.ssh-unlock` | `gitb cfg ssh` | How a locked SSH key is unlocked: `agent` (default, your ssh-agent), `gitb` (gitbasher only), `command` (one command), `off` (ssh asks every time) |
+| `gitbasher.ssh-unlock-ttl` | `gitb cfg ssh` | How long an unlocked key stays unlocked in modes `agent` and `gitb`: `30m`, `1h` (default), `8h`, `1d`, … `0` = no limit |
 | `gitbasher.commit-max-split-groups` | `git config gitbasher.commit-max-split-groups <2..20>` | Cap on split commits per run (default `7`) |
 | `gitbasher.commit-split-order` | `git config gitbasher.commit-split-order <auto\|alpha>` | Order split commits by dependency (`auto`, default) or alphabetically (`alpha`) |
 | `gitbasher.commit-ai-grouping` | `git config gitbasher.commit-ai-grouping <never\|auto\|always>` | AI feature grouping for commit splits (default `auto`) |

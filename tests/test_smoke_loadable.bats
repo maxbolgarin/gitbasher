@@ -49,6 +49,10 @@ teardown() {
     source "${GITBASHER_ROOT}/scripts/ai.sh"
 }
 
+@test "smoke: ssh.sh sources cleanly" {
+    source "${GITBASHER_ROOT}/scripts/ssh.sh"
+}
+
 @test "smoke: branch.sh: source + dispatch help" {
     source "${GITBASHER_ROOT}/scripts/branch.sh"
     run branch_script help

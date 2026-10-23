@@ -15,6 +15,7 @@ It targets contributors. If you only want to use gitbasher, the [README](./READM
 │   ├── common.sh           # shared helpers (colors, prompts, git wrappers, validators)
 │   ├── base.sh             # `print_help`, first-run banner, top-level dispatch
 │   ├── ai.sh               # AI client (OpenRouter / OpenAI / Ollama) + key/proxy handling
+│   ├── ssh.sh              # unlocking passphrase-protected SSH keys for network commands
 │   ├── config.sh           # `gitb config` — stores prefs in git config (gitbasher.*)
 │   ├── init.sh             # interactive remote setup on first run
 │   ├── commit.sh           # `gitb commit` — interactive, AI, split, amend, revert
@@ -65,7 +66,12 @@ Anything that can take more than a moment must show that it is alive. Use the he
 - **`stream_or_capture_git out_var code_var shown_var git <cmd> --progress ...`** — for git commands (fetch, push, checkout/switch, merge, stash, worktree add). It captures output and exit code for parsing (progress meters stripped), shows a spinner with elapsed seconds after ~1s, and streams git's native progress if the command outlives a ~10s quiet window. Pass `--progress` only to subcommands that accept it; it is removed automatically when there is no TTY.
 - **`run_with_spinner "Label" cmd args...`** — for anything else (AI requests). stdout passes through, so it works inside `$(...)`. The command runs in the background with stdin detached, so never use it for commands that prompt or open an editor.
 
-Both stay silent without a TTY (tests/CI) and honour `GITBASHER_NO_SPINNER=1`. Network commands skip the spinner when git might prompt for credentials (HTTPS without a credential helper, SSH without an agent) so the prompt is not overwritten.
+Both stay silent without a TTY (tests/CI) and honour `GITBASHER_NO_SPINNER=1`. A prompt printed under the spinner would be overwritten on the next frame, so:
+
+- **SSH remotes** (OpenSSH) go through `ssh_stream_git` in `ssh.sh`: the command runs with `BatchMode=yes`, so ssh fails fast instead of prompting. On an authentication failure, a key that needs its passphrase is unlocked (`ssh-add` asks for it, into the agent `gitb cfg ssh` picks) and the command is retried; an unknown host key, or a password/PIN gitbasher cannot supply, is retried as a plain run without the spinner so ssh can ask itself. BatchMode does not reach a ProxyJump/ProxyCommand hop, so such hosts run without the spinner.
+- **Everything else that may prompt** — HTTPS without a credential helper, `gitb cfg ssh` set to `off`, non-OpenSSH clients — runs without the spinner.
+
+Direct network calls (`ls-remote`, `remote prune`) go through `stream_or_capture_git` too (see `remote_branch_commit`), so they get the same handling.
 
 ### Top-level dispatch
 
@@ -145,6 +151,7 @@ User-visible settings live in `git config` under the `gitbasher.*` namespace, se
 - `gitbasher.ai-ollama-host` — Ollama server location (default `http://localhost:11434`)
 - `gitbasher.ai-proxy` — optional HTTPS proxy for restricted regions
 - `gitbasher.worktreebase` — base path for `gitb worktree add` and `wip up worktree`
+- `gitbasher.ssh-unlock`, `gitbasher.ssh-unlock-ttl` — how a passphrase-protected SSH key is unlocked (`agent`, `gitb`, `command`, `off`) and for how long
 - behavior tuning (`gitbasher.push-warn-size`, `gitbasher.log-count`, `gitbasher.ai-timeout`, …)
 
 `get_config_value` and `set_config_value` in `common.sh` are the only paths that should touch these. Per-repo by default; after the local write, each `gitb cfg` setter interactively asks whether to also set the value globally.

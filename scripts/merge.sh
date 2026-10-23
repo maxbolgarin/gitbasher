@@ -79,7 +79,7 @@ function merge_script {
         current_local_commit=$(git rev-parse HEAD 2>/dev/null)
         
         # Get the remote commit hash for current branch
-        current_remote_commit=$(git ls-remote "$origin_name" "refs/heads/$current_branch" 2>/dev/null | cut -f1)
+        remote_branch_commit current_remote_commit "$current_branch"
         
         if [ -z "$current_remote_commit" ]; then
             echo -e "${YELLOW}Remote branch ${origin_name}/${current_branch} not found — proceeding with local merge.${ENDCOLOR}"
@@ -129,7 +129,8 @@ function merge_script {
             git fetch --progress
         check_code "$fetch_code" "$fetch_output" "fetch remote"
 
-        prune_output=$(git remote prune "$origin_name" 2>&1)
+        stream_or_capture_git prune_output prune_code prune_progress_shown \
+            git remote prune "$origin_name"
 
         echo -e "${YELLOW}Select which remote branch to merge into '${current_branch}'${ENDCOLOR}"
         
@@ -158,7 +159,7 @@ function merge_script {
         fi
         
         # Get the remote commit hash
-        remote_commit=$(git ls-remote "$origin_name" "refs/heads/$merge_branch" 2>/dev/null | cut -f1)
+        remote_branch_commit remote_commit "$merge_branch"
         
         if [ -z "$remote_commit" ]; then
             echo -e "${YELLOW}Remote branch ${origin_name}/${merge_branch} not found — proceeding with local merge.${ENDCOLOR}"

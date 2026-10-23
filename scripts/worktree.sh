@@ -532,7 +532,8 @@ function worktree_add {
             echo "$fetch_output"
             return 1
         fi
-        git remote prune "$origin_name" >/dev/null 2>&1
+        stream_or_capture_git prune_output prune_code prune_progress_shown \
+            git remote prune "$origin_name"
 
         echo -e "${YELLOW}Pick a remote branch to check out into a new worktree${ENDCOLOR}"
         choose_branch "remote"

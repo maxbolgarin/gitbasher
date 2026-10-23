@@ -327,7 +327,8 @@ function branch_script {
             git fetch --progress
         check_code "$fetch_code" "$fetch_output" "fetch remote"
 
-        prune_output=$(git remote prune "$origin_name" 2>&1)
+        stream_or_capture_git prune_output prune_code prune_progress_shown \
+            git remote prune "$origin_name"
 
         echo -e "${YELLOW}Switch from '${current_branch}' to the remote branch${ENDCOLOR}"
         

@@ -42,6 +42,7 @@ wizard_script() {
         source '$GITBASHER_ROOT/scripts/common.sh' 2>/dev/null
         GITBASHER_SKIP_INIT_QUERIES=1 source '$GITBASHER_ROOT/scripts/init.sh' 2>/dev/null
         source '$GITBASHER_ROOT/scripts/ai.sh'
+        source '$GITBASHER_ROOT/scripts/ssh.sh'
         source '$GITBASHER_ROOT/scripts/config.sh'
         cd '$TEST_REPO'
         project_name=test

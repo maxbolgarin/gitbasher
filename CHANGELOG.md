@@ -2,6 +2,22 @@
 
 All notable changes to gitbasher are generated automatically by [semantic-release](https://github.com/semantic-release/semantic-release) from [Conventional Commits](https://www.conventionalcommits.org/) on `main`. The project follows [Semantic Versioning](https://semver.org/).
 
+## [5.6.0](https://github.com/maxbolgarin/gitbasher/compare/v5.5.0...v5.6.0) (2026-10-23)
+
+### 🚀 Features
+
+* **install:** Homebrew tap support ([2754d78](https://github.com/maxbolgarin/gitbasher/commit/2754d78df807960b2fb2c3782d31981af933d0de))
+* **version:** show install location; add v/ver aliases; refresh README ([bf37a78](https://github.com/maxbolgarin/gitbasher/commit/bf37a786fc998293942a1038e68cf93d3e229d6a))
+
+### 🐛 Bug Fixes
+
+* **ui:** align list columns on visible width, drop the column(1) dependency ([ffc5a8c](https://github.com/maxbolgarin/gitbasher/commit/ffc5a8cbfa9697dd6ee3598830339724a3398df4))
+
+### 📚 Documentation
+
+* **readme:** re-record demo GIF with vhs (64 MB -> 1.5 MB) ([e7a91c6](https://github.com/maxbolgarin/gitbasher/commit/e7a91c677420f14a1ec024b35a55273b76ec8d08))
+* **readme:** sync command docs with code; fix cfg help aliases ([891905b](https://github.com/maxbolgarin/gitbasher/commit/891905b095d225f52c0354f5f98b5c19da06ea4b))
+
 ## [5.5.0](https://github.com/maxbolgarin/gitbasher/compare/v5.4.1...v5.5.0) (2026-10-23)
 
 ### 🚀 Features

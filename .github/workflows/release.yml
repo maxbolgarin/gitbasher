@@ -62,3 +62,49 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npx semantic-release
+
+      # Bump the Homebrew formula in maxbolgarin/homebrew-tap. dist/gitb.sha256
+      # only exists when semantic-release actually cut a release (prepareCmd), so
+      # a no-op run skips this. Needs a HOMEBREW_TAP_TOKEN secret with contents:write
+      # on the tap repo — the default GITHUB_TOKEN can't push to another repo.
+      - name: Update Homebrew tap
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ ! -f dist/gitb.sha256 ]; then
+            echo "No new release — skipping Homebrew tap update"
+            exit 0
+          fi
+          if [ -z "$HOMEBREW_TAP_TOKEN" ]; then
+            echo "::warning::HOMEBREW_TAP_TOKEN is not set — skipping Homebrew tap update"
+            exit 0
+          fi
+          version=$(node -p "require('./package.json').version")
+          sha256=$(awk '{print $1}' dist/gitb.sha256)
+
+          # Hash the asset GitHub actually serves, so the formula can never
+          # point at a checksum that doesn't match the download.
+          curl -fsSL --retry 5 --retry-delay 5 -o /tmp/gitb-release \
+            "https://github.com/${GITHUB_REPOSITORY}/releases/download/v${version}/gitb"
+          served=$(sha256sum /tmp/gitb-release | awk '{print $1}')
+          if [ "$served" != "$sha256" ]; then
+            echo "::error::Release asset SHA-256 ($served) does not match dist/gitb.sha256 ($sha256)"
+            exit 1
+          fi
+
+          git clone --depth 1 \
+            "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/maxbolgarin/homebrew-tap.git" /tmp/homebrew-tap
+          mkdir -p /tmp/homebrew-tap/Formula
+          sed -e "s/@VERSION@/${version}/g" -e "s/@SHA256@/${sha256}/g" \
+            packaging/homebrew/gitbasher.rb.tmpl > /tmp/homebrew-tap/Formula/gitbasher.rb
+
+          cd /tmp/homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/gitbasher.rb
+          if git diff --cached --quiet; then
+            echo "Formula already at ${version}"
+            exit 0
+          fi
+          git commit -m "gitbasher ${version}"
+          git push origin HEAD

@@ -64,6 +64,11 @@ curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.
 The installer drops `gitb` into `~/.local/bin` by default — no `sudo`, no password prompt. It downloads the latest release, verifies its SHA-256, and prints a PATH hint if needed.
 
 
+### Homebrew (macOS & Linux)
+```bash
+brew install maxbolgarin/tap/gitbasher
+```
+
 ### npm (easy to remember)
 ```bash
 npm install -g gitbasher
@@ -948,7 +953,7 @@ GITB_VERSION=v5.0.0 curl -fsSL https://raw.githubusercontent.com/maxbolgarin/git
 ```bash
 gitb uninstall
 ```
-Lists every `gitbasher.*` key it will remove from your local + global git config and the binary path it will delete, then asks for confirmation. Detects npm installs and prints the right `npm uninstall -g gitbasher` command instead of touching `node_modules`.
+Lists every `gitbasher.*` key it will remove from your local + global git config and the binary path it will delete, then asks for confirmation. Detects npm and Homebrew installs and prints the right `npm uninstall -g gitbasher` / `brew uninstall gitbasher` command instead of touching files the package manager owns.
 
 ### Manual
 If `gitb` is already gone from PATH:
@@ -956,6 +961,7 @@ If `gitb` is already gone from PATH:
 rm -f ~/.local/bin/gitb                # default install location
 sudo rm -f /usr/local/bin/gitb         # if installed with --sudo
 npm uninstall -g gitbasher             # if installed via npm
+brew uninstall gitbasher               # if installed via Homebrew
 
 # Wipe leftover gitbasher.* keys from git config
 git config --global --remove-section gitbasher 2>/dev/null
@@ -1065,6 +1071,7 @@ If you hit a confusing git error not listed here, run the same flow with `git` d
 
 ```bash
 npm uninstall -g gitbasher           # if installed via npm
+brew uninstall gitbasher             # if installed via Homebrew
 sudo rm /usr/local/bin/gitb          # if installed system-wide
 rm -f ~/.local/bin/gitb              # if installed per-user
 ```

@@ -59,7 +59,7 @@ function uninstall_script {
         print_help_row $PAD "help"    "h" "Show this help"
         echo
         echo -e "${YELLOW}Notes${ENDCOLOR}"
-        echo -e "  - npm-installed gitb is detected and the npm command is shown instead."
+        echo -e "  - npm- and Homebrew-installed gitb is detected and the package manager command is shown instead."
         echo -e "  - Dev runs (from ${BLUE}scripts/gitb.sh${ENDCOLOR}) only clean config; the source tree is left alone."
         exit
     fi
@@ -94,6 +94,9 @@ function uninstall_script {
         if _gitb_is_npm_install "$binary_path"; then
             echo -e "  ${BOLD}•${ENDCOLOR} ${YELLOW}gitb${ENDCOLOR} is installed via npm at ${BLUE}${binary_path}${ENDCOLOR}"
             echo -e "    ${GRAY}Run ${GREEN}npm uninstall -g gitbasher${GRAY} after this to finish removing it.${ENDCOLOR}"
+        elif _gitb_is_brew_install "$binary_path"; then
+            echo -e "  ${BOLD}•${ENDCOLOR} ${YELLOW}gitb${ENDCOLOR} is installed via Homebrew at ${BLUE}${binary_path}${ENDCOLOR}"
+            echo -e "    ${GRAY}Run ${GREEN}brew uninstall gitbasher${GRAY} after this to finish removing it.${ENDCOLOR}"
         else
             echo -e "  ${BOLD}•${ENDCOLOR} Delete the ${YELLOW}gitb${ENDCOLOR} binary at ${BLUE}${binary_path}${ENDCOLOR}"
         fi
@@ -136,6 +139,10 @@ function uninstall_script {
             echo
             echo -e "${YELLOW}⚠  Finish removing the binary with:${ENDCOLOR}"
             echo -e "  ${GREEN}npm uninstall -g gitbasher${ENDCOLOR}"
+        elif _gitb_is_brew_install "$binary_path"; then
+            echo
+            echo -e "${YELLOW}⚠  Finish removing the binary with:${ENDCOLOR}"
+            echo -e "  ${GREEN}brew uninstall gitbasher${ENDCOLOR}"
         elif _gitb_uninstall_remove_binary "$binary_path"; then
             echo -e "${GREEN}✓ Deleted ${BLUE}${binary_path}${ENDCOLOR}"
         else

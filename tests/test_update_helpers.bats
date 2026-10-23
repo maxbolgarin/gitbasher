@@ -114,3 +114,30 @@ teardown() {
     run _gitb_is_npm_install ""
     [ "$status" -eq 1 ]
 }
+
+# ===== _gitb_is_brew_install =====
+
+@test "_gitb_is_brew_install: returns 0 for Apple Silicon Cellar path" {
+    run _gitb_is_brew_install "/opt/homebrew/Cellar/gitbasher/5.5.0/bin/gitb"
+    [ "$status" -eq 0 ]
+}
+
+@test "_gitb_is_brew_install: returns 0 for Linuxbrew Cellar path" {
+    run _gitb_is_brew_install "/home/linuxbrew/.linuxbrew/Cellar/gitbasher/5.5.0/bin/gitb"
+    [ "$status" -eq 0 ]
+}
+
+@test "_gitb_is_brew_install: returns 0 for path under custom HOMEBREW_CELLAR" {
+    HOMEBREW_CELLAR="/custom/cellar" run _gitb_is_brew_install "/custom/cellar/gitb/5.5.0/bin/gitb"
+    [ "$status" -eq 0 ]
+}
+
+@test "_gitb_is_brew_install: returns 1 for plain ~/.local/bin path" {
+    HOMEBREW_CELLAR="" run _gitb_is_brew_install "/Users/me/.local/bin/gitb"
+    [ "$status" -eq 1 ]
+}
+
+@test "_gitb_is_brew_install: returns 1 for empty input" {
+    run _gitb_is_brew_install ""
+    [ "$status" -eq 1 ]
+}

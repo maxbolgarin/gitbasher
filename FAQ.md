@@ -97,7 +97,7 @@ gitb uninstall              # removes the binary and local + global gitbasher.* 
 git config --global --remove-section gitbasher 2>/dev/null   # only if you skipped gitb uninstall
 ```
 
-For npm installs: `npm uninstall -g gitbasher`. For system-wide installs: `sudo rm /usr/local/bin/gitb`.
+For npm installs: `npm uninstall -g gitbasher`. For Homebrew installs: `brew uninstall gitbasher`. For system-wide installs: `sudo rm /usr/local/bin/gitb`.
 
 ### What is in the npm package, and do I need Node.js?
 

@@ -134,7 +134,7 @@ function choose_worktree {
     fi
 
     local lines_str
-    lines_str=$(printf '%s\n' "${display_lines[@]}" | column -ts'|')
+    lines_str=$(printf '%s\n' "${display_lines[@]}" | align_columns)
     local IFS_OLD="$IFS"
     IFS=$'\n' read -rd '' -a aligned_lines <<< "$lines_str" || true
     IFS="$IFS_OLD"
@@ -285,7 +285,7 @@ function prompt_worktree_branch {
         local no_prefix_option=$((${#prefixes_array[@]}+1))
         prefixes_map[$no_prefix_option]=""
 
-        echo -e "You can select one of the ${YELLOW}detected prefixes${ENDCOLOR}: $(echo $res | column -ts'|')"
+        echo -e "You can select one of the ${YELLOW}detected prefixes${ENDCOLOR}: $(echo $res | align_columns)"
 
         while [ true ]; do
             read_editable_input choice "<prefix>: "
@@ -993,7 +993,7 @@ function worktree_script {
                 echo -e "${YELLOW}Existing worktrees:${ENDCOLOR}"
                 echo
                 local lines_str
-                lines_str=$(printf '%s\n' "${worktrees_info[@]}" | column -ts'|')
+                lines_str=$(printf '%s\n' "${worktrees_info[@]}" | align_columns)
                 echo -e "$lines_str"
                 echo
             fi
@@ -1056,7 +1056,7 @@ function worktree_script {
             exit
         fi
         local lines_str
-        lines_str=$(printf '%s\n' "${worktrees_info[@]}" | column -ts'|')
+        lines_str=$(printf '%s\n' "${worktrees_info[@]}" | align_columns)
         echo -e "$lines_str"
         exit
     fi

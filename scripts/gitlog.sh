@@ -384,8 +384,9 @@ function log_commit_list {
     local rows
     # ctrl strips ANSI/OSC bytes a fetched commit subject could inject into
     # the terminal; torn repairs a trailing UTF-8 sequence cut mid-character
-    # (length/substr are byte-based on macOS awk, and one torn byte makes
-    # BSD column silently drop that row and every row after it).
+    # (length/substr are byte-based on macOS awk, so a cut could leave an
+    # invalid byte). align_columns pads on visible width, so the escape
+    # bytes around colored cells no longer widen the columns.
     rows=$(git --no-pager log --no-walk=unsorted --pretty="%h%x1f%s%x1f%d%x1f%an%x1f%cr" "${page_hashes[@]}" 2>/dev/null | \
         LC_ALL=C awk -v hash_c="$hash_color" -v deco_c="$deco_color" -v author_c="$author_color" -v time_c="$time_color" -v end_c="$end_color" \
             -v ctrl='[\001-\010\013-\037\177]' -v torn='[\300-\367][\200-\277]*$' '
@@ -406,7 +407,7 @@ function log_commit_list {
             an = $4
             gsub(ctrl, "", an)
             print hash_c $1 end_c "|" subj "|" author_c an end_c "|" time_c $5 end_c
-        }' | column -ts'|')
+        }' | align_columns)
 
     local index=$start
     local row_index=0

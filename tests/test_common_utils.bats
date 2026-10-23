@@ -280,3 +280,39 @@ teardown() {
     [ "$status" -eq 0 ]
     [ -z "$output" ]
 }
+
+# ===== align_columns tests =====
+
+@test "align_columns: color escapes (real and literal) take no width" {
+    local esc
+    esc=$(printf '\033')
+    run align_columns <<EOF2
+${esc}[33mabc${esc}[0m|x|end
+\\x1b[34mde\\x1b[0m|yy|end
+f|zzz|end
+EOF2
+    [ "$status" -eq 0 ]
+    local plain
+    plain=$(printf '%s\n' "$output" | sed -e "s/${esc}\[[0-9;]*m//g" -e 's/\\x1b\[[0-9;]*m//g')
+    [ "$plain" = "$(printf 'abc  x    end\nde   yy   end\nf    zzz  end')" ]
+}
+
+@test "align_columns: multibyte and wide characters pad by display width" {
+    run align_columns <<EOF2
+é|a
+日本|b
+abcd|c
+EOF2
+    [ "$status" -eq 0 ]
+    [ "$output" = "$(printf 'é     a\n日本  b\nabcd  c')" ]
+}
+
+@test "align_columns: drops empty lines and leaves the last cell unpadded" {
+    run align_columns <<EOF2
+a|b
+
+long|c|tail
+EOF2
+    [ "$status" -eq 0 ]
+    [ "$output" = "$(printf 'a     b\nlong  c  tail')" ]
+}

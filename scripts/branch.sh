@@ -241,7 +241,7 @@ function branch_script {
         echo -e "${YELLOW}Select a tag to checkout:${ENDCOLOR}"
         
         # Get all tags sorted by version
-        tags_info_str=$(git for-each-ref --count=999  --sort=-creatordate refs/tags --format="${BLUE_ES}%(refname:short)${ENDCOLOR_ES} | %(contents:subject) | ${YELLOW_ES}%(objectname:short)${ENDCOLOR_ES} | ${CYAN_ES}%(creatordate:human)${ENDCOLOR_ES}" | column -ts'|' )
+        tags_info_str=$(git for-each-ref --count=999  --sort=-creatordate refs/tags --format="${BLUE_ES}%(refname:short)${ENDCOLOR_ES} | %(contents:subject) | ${YELLOW_ES}%(objectname:short)${ENDCOLOR_ES} | ${CYAN_ES}%(creatordate:human)${ENDCOLOR_ES}" | align_columns )
         IFS=$'\n' read -rd '' -a tags_info <<<"$tags_info_str"
 
         if [ -z "$tags_info" ]; then
@@ -729,7 +729,7 @@ function branch_script {
         no_prefix_option=$((${#prefixes_array[@]}+1))
         prefixes_map[$no_prefix_option]=""
         
-        echo -e "You can select one of the ${YELLOW}detected prefixes${ENDCOLOR}: $(echo $res | column -ts'|')"
+        echo -e "You can select one of the ${YELLOW}detected prefixes${ENDCOLOR}: $(echo $res | align_columns)"
 
         while [ true ]; do
             read_editable_input choice "<prefix>: "

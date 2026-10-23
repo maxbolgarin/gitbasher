@@ -2,6 +2,20 @@
 
 All notable changes to gitbasher are generated automatically by [semantic-release](https://github.com/semantic-release/semantic-release) from [Conventional Commits](https://www.conventionalcommits.org/) on `main`. The project follows [Semantic Versioning](https://semver.org/).
 
+## [5.5.0](https://github.com/maxbolgarin/gitbasher/compare/v5.4.1...v5.5.0) (2026-10-23)
+
+### 🚀 Features
+
+* **ssh:** ask for a locked key's passphrase instead of hanging ([ae378de](https://github.com/maxbolgarin/gitbasher/commit/ae378de5a316f8290c910a9eeab092a892a93b48))
+
+### 🐛 Bug Fixes
+
+* **ui:** blank line between every 'Fetching...' header and the spinner ([0a9c401](https://github.com/maxbolgarin/gitbasher/commit/0a9c401ef59f432f551e910fc2b48b9f8446913b))
+
+### ⚙️ Continuous Integration
+
+* **security:** ignore historical test-fixture key in gitleaks scan ([6cad64d](https://github.com/maxbolgarin/gitbasher/commit/6cad64d00f51f4f7fcf883e704e0aa753e4d8bcb))
+
 ## [5.4.1](https://github.com/maxbolgarin/gitbasher/compare/v5.4.0...v5.4.1) (2026-10-20)
 
 ### 🐛 Bug Fixes

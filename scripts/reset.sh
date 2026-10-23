@@ -133,7 +133,7 @@ function reset_script {
     if [ -n "$ref" ] || [ -n "$undo" ]; then
         msg="${msg}\n${RED}Cancelled action:${ENDCOLOR}|${cancelled_action}"
     fi
-    msg=$(echo -e "$msg" | column -ts'|')
+    msg=$(echo -e "$msg" | align_columns)
     echo -e "$msg"
     echo
 

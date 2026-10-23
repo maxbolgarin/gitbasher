@@ -2680,7 +2680,7 @@ function commit_script {
                 scope_display="${scopes_array[$i]}"
                 res="$res$((i+1)). ${BOLD}${scope_display}${ENDCOLOR}|"
            done
-           echo -e "You can select one of the ${YELLOW}detected scopes${ENDCOLOR}: $(echo $res | column -ts'|')"            
+           echo -e "You can select one of the ${YELLOW}detected scopes${ENDCOLOR}: $(echo $res | align_columns)"            
         fi
 
         while [ true ]; do

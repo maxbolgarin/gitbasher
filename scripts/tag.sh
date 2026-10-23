@@ -268,7 +268,7 @@ function tag_script {
         count=999  # Show all tags
     fi
 
-    tags_info_str=$(git for-each-ref --count=$count  --sort=-creatordate refs/tags --format="${BLUE_ES}%(refname:short)${ENDCOLOR_ES} | %(contents:subject) | ${YELLOW_ES}%(objectname:short)${ENDCOLOR_ES} | ${CYAN_ES}%(creatordate:human)${ENDCOLOR_ES}" | column -ts'|' )
+    tags_info_str=$(git for-each-ref --count=$count  --sort=-creatordate refs/tags --format="${BLUE_ES}%(refname:short)${ENDCOLOR_ES} | %(contents:subject) | ${YELLOW_ES}%(objectname:short)${ENDCOLOR_ES} | ${CYAN_ES}%(creatordate:human)${ENDCOLOR_ES}" | align_columns )
     IFS=$'\n' read -rd '' -a tags_info <<<"$tags_info_str"
    
     number_of_tags=${#tags_info[@]}

@@ -565,3 +565,33 @@ teardown() {
     [[ "$output" == *"diverged"* ]]
     [[ "$output" == *"pull"* ]]
 }
+
+@test "log_commit_list: columns align on visible width with colors and decorations on" {
+    # column(1) counted escape bytes as width, padding every colored cell and
+    # skewing rows that carry a colored (HEAD -> ..., tag: ...) decoration.
+    YELLOW_ES="\x1b[33m"; BLUE_ES="\x1b[34m"; GREEN_ES="\x1b[32m"; ENDCOLOR_ES="\x1b[0m"
+    make_test_commit one.txt "feat: short"
+    make_test_commit two.txt "feat: a noticeably longer subject"
+    git tag v1.2.3
+    log_collect_hashes head
+    run log_commit_list 0 10
+    assert_success
+    printf '%s' "$output" | LC_ALL=C /usr/bin/grep -q "$(printf '\033')\[33m" || {
+        echo "expected colored output: $output"; return 1; }
+
+    local plain widest hash_w expected
+    plain=$(printf '%s\n' "$output" | sed "s/$(printf '\033')\[[0-9;]*m//g")
+    # Subject cell = subject plus " (decoration)"; %d carries the leading space
+    widest=$(git log --pretty='%s%d' | awk '{ if (length($0) > w) w = length($0) } END { print w }')
+    hash_w=$(git log -n 1 --pretty='%h' | awk '{ print length($0) }')
+    # " 1. " + mark + " " + hash + gap + widest subject + gap, 1-based
+    expected=$((4 + 1 + 1 + hash_w + 2 + widest + 2 + 1))
+    local cols
+    cols=$(printf '%s\n' "$plain" | awk '/Test User/ { print index($0, "Test User") }' | sort -u)
+    [ "$(printf '%s\n' "$plain" | /usr/bin/grep -c 'Test User')" -eq 3 ]
+    if [ "$cols" != "$expected" ]; then
+        echo "author column starts at '$cols', expected $expected"
+        printf '%s\n' "$plain"
+        return 1
+    fi
+}

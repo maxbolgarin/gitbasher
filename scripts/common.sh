@@ -526,6 +526,53 @@ function print_help_row {
 ### ===== END HELP TABLE FORMATTERS =====
 
 
+### Align '|'-separated rows from stdin into columns (replacement for `column -ts'|'`)
+### Widths are measured on the *visible* text: ANSI color codes, as real ESC
+### bytes or as the literal \x1b[..m / \e[..m / \033[..m text the color vars
+### carry until `echo -e`, count as zero width — `column` counted them, so
+### every colored cell was padded by its escape length. UTF-8 continuation
+### bytes count as zero and common East Asian wide/emoji ranges as two, since
+### awk under LC_ALL=C is byte-based (also on macOS). Columns are joined by two
+### spaces, the last cell of a row is never padded and empty lines are
+### dropped, as with `column -t`. Pure awk, so the `column` binary
+### (bsdextrautils/util-linux, missing on minimal Linux images) is not needed.
+function align_columns {
+    LC_ALL=C awk '
+    function vwidth(s,    n) {
+        gsub(/\033\[[0-9;]*[A-Za-z]/, "", s)
+        gsub(/\\(x1[bB]|e|E|033)\[[0-9;]*[A-Za-z]/, "", s)
+        if (!bytemode) return length(s)
+        n = gsub(wide, "&", s)
+        gsub(/[\200-\277]/, "", s)
+        return length(s) + n
+    }
+    BEGIN {
+        FS = "|"
+        bytemode = (length("\303\251") == 2)
+        # Lead bytes of double-width chars: CJK radicals..Yi, Hangul,
+        # CJK compatibility, vertical/fullwidth forms, emoji, CJK ext B+
+        wide = "\342[\272-\277]|[\343-\351]|\352[\200-\223]|\352[\260-\277]|[\353\354]|\355[\200-\236]|\357[\244-\253]|\357\270[\260-\277]|\357\271[\200-\217]|\357\274|\357\275[\200-\240]|\357\277[\240-\246]|\360\237[\214-\233]|\360\237[\244-\253]|\360[\240-\277]"
+    }
+    $0 != "" {
+        rows[++nrows] = $0
+        for (i = 1; i < NF; i++) {
+            w = vwidth($i)
+            if (w > width[i]) width[i] = w
+        }
+    }
+    END {
+        for (r = 1; r <= nrows; r++) {
+            nf = split(rows[r], cell, "|")
+            line = ""
+            for (i = 1; i < nf; i++) {
+                line = line cell[i] sprintf("%" (width[i] - vwidth(cell[i]) + 2) "s", "")
+            }
+            print line cell[nf]
+        }
+    }'
+}
+
+
 ### ===== KEYBOARD INPUT HELPERS =====
 ### Handle case-insensitive input and alternative keyboard layouts (e.g. Russian)
 
@@ -1913,7 +1960,7 @@ function commit_list {
     # space-splitting expansion (e.g. it disabled the push-size warning
     # after any commit picker ran)
     local IFS=$'\n'
-    read -rd '' -a commits_info <<<"$(git --no-pager log -n $1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} | %s | ${BLUE_ES}%an${ENDCOLOR_ES} | ${GREEN_ES}%cr${ENDCOLOR_ES}" $ref | column -ts'|')" || true
+    read -rd '' -a commits_info <<<"$(git --no-pager log -n $1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} | %s | ${BLUE_ES}%an${ENDCOLOR_ES} | ${GREEN_ES}%cr${ENDCOLOR_ES}" $ref | align_columns)" || true
     read -rd '' -a commits_hash <<<"$(git --no-pager log -n $1 --pretty="%h" $ref)" || true
 
     for index in "${!commits_info[@]}"
@@ -1936,7 +1983,7 @@ function commit_list {
 #     refs_hash
 function ref_list {
     local IFS=$'\n'
-    read -rd '' -a refs_info <<<"$(git --no-pager reflog -n $1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} | ${BLUE_ES}%gd${ENDCOLOR_ES} | %gs | ${GREEN_ES}%cr${ENDCOLOR_ES}" | column -ts'|')" || true
+    read -rd '' -a refs_info <<<"$(git --no-pager reflog -n $1 --pretty="${YELLOW_ES}%h${ENDCOLOR_ES} | ${BLUE_ES}%gd${ENDCOLOR_ES} | %gs | ${GREEN_ES}%cr${ENDCOLOR_ES}" | align_columns)" || true
     read -rd '' -a refs_hash <<<"$(git --no-pager reflog -n $1 --pretty="%gd")" || true
 
     # Remove HEAD@{0}
@@ -2019,10 +2066,7 @@ function print_changes_stat {
 
     if [ -n "$files" ]; then
         local aligned
-        aligned=$(printf '%s\n' "$files" | _colorize_stat_lines "file")
-        if command -v column >/dev/null 2>&1; then
-            aligned=$(printf '%s\n' "$aligned" | column -ts'|')
-        fi
+        aligned=$(printf '%s\n' "$files" | _colorize_stat_lines "file" | align_columns)
         echo -e "$aligned"
     fi
     if [ "$more" -gt 0 ]; then
@@ -2254,8 +2298,8 @@ function list_branches {
     branches_str=$(git --no-pager branch $args --format="%(refname:short)")
     branches_info_raw=$(git --no-pager branch $args --format="${BLUE_ES}%(refname:short)${ENDCOLOR_ES} | %(contents:subject) | ${YELLOW_ES}%(objectname:short)${ENDCOLOR_ES}  | ${GREEN_ES}%(committerdate:relative)${ENDCOLOR_ES}")
     # ctrl/torn: strip terminal-control bytes from subjects and repair a
-    # trailing UTF-8 sequence cut mid-character (byte-based awk on macOS) —
-    # one torn byte makes BSD column silently drop the row and all after it.
+    # trailing UTF-8 sequence cut mid-character (byte-based awk on macOS) so
+    # the row never ends in an invalid byte.
     branches_info_str=$(echo "$branches_info_raw" | LC_ALL=C awk -v max=60 \
         -v ctrl='[\001-\010\013-\037\177]' -v torn='[\300-\367][\200-\277]*$' -F'\\|' '{
         subject=$2
@@ -2267,7 +2311,7 @@ function list_branches {
             subject=subject "..."
         }
         print $1 " | " subject " | " $3 " | " $4
-    }' | column -ts'|' )
+    }' | align_columns )
 
     local IFS=$'\n'
     read -rd '' -a branches <<< "$branches_str" || true

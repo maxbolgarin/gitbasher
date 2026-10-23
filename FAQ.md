@@ -77,8 +77,13 @@ For per-repo settings, copy `.git/config` (or just the `[gitbasher]` section). F
 
 ### How do I upgrade?
 
+Use the tool you installed with. Not sure which? `gitb version` shows the install method and the matching update command.
+
 ```bash
-# self-update (recommended)
+brew upgrade gitbasher          # Homebrew
+npm update -g gitbasher         # npm
+
+# install script: self-update
 gitb update
 
 # or rerun the installer
@@ -164,7 +169,7 @@ Yes. When a network command needs a key that is locked (and not loaded in ssh-ag
 
 ### How do I report a bug?
 
-Open an issue from the `Bug Report` template at <https://github.com/maxbolgarin/gitbasher/issues>. Include `gitb --version`, the exact command, and the output. For security-sensitive issues, see [SECURITY.md](./SECURITY.md) — there's a private reporting path.
+Open an issue from the `Bug Report` template at <https://github.com/maxbolgarin/gitbasher/issues>. Include the output of `gitb version` (version, install path and method), the exact command, and the output. For security-sensitive issues, see [SECURITY.md](./SECURITY.md) — there's a private reporting path.
 
 ### Where do I learn how the codebase works?
 

@@ -5,14 +5,16 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/maxbolgarin/gitbasher/releases/latest"><img src="https://img.shields.io/github/v/release/maxbolgarin/gitbasher.svg?style=flat-square" alt="Latest Release"></a>
-  <a href="https://github.com/maxbolgarin/gitbasher/blob/main/LICENSE"><img src="https://img.shields.io/github/license/maxbolgarin/gitbasher.svg" alt="License"></a>
-  <a href="https://github.com/maxbolgarin/gitbasher/actions"><img src="https://github.com/maxbolgarin/gitbasher/actions/workflows/build.yml/badge.svg" alt="Build Status"></a>
+  <a href="https://github.com/maxbolgarin/gitbasher/releases/latest"><img src="https://img.shields.io/github/v/release/maxbolgarin/gitbasher?style=flat-square" alt="Latest release"></a>
+  <a href="https://www.npmjs.com/package/gitbasher"><img src="https://img.shields.io/npm/v/gitbasher?style=flat-square" alt="npm"></a>
+  <a href="https://github.com/maxbolgarin/gitbasher/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/maxbolgarin/gitbasher/build.yml?branch=main&style=flat-square" alt="Build status"></a>
+  <a href="https://github.com/maxbolgarin/gitbasher/blob/main/LICENSE"><img src="https://img.shields.io/github/license/maxbolgarin/gitbasher?style=flat-square" alt="MIT license"></a>
 </p>
 
 <p align="center">
   <a href="https://maxbolgarin.github.io/gitbasher/"><strong>Website</strong></a> ·
-  <a href="#install-in-10-seconds">Install</a> ·
+  <a href="#install">Install</a> ·
+  <a href="#quick-start">Quick start</a> ·
   <a href="#all-features-at-a-glance">Features</a> ·
   <a href="./FAQ.md">FAQ</a>
 </p>
@@ -39,44 +41,34 @@ gitb undo              # roll back your last commit / amend / merge / rebase / s
 
 ---
 
-## Before & after
+## Install
 
-You just write what you want to do, and gitbasher will do it for you. All commands have a short alias, for example `gitb c` is equivalent to `gitb commit`. 
+Pick one — all three install the same single `gitb` file.
 
-| Task | Plain `git` | With `gitb` |
-|------|-------------|-------------|
-| Start a feature off updated main | `git fetch && git checkout main && git pull --ff-only && git checkout -b feat/x` | `gitb branch newd` |
-| Conventional commit + push | `git add -A && git commit -m "feat(x): …" && git push -u origin HEAD` | `gitb commit ai fast push` |
-| Sync your branch with main | `git fetch && git rebase origin/main && git push --force-with-lease` | `gitb sync push` |
-| Save WIP & clean tree across machines | `git stash -u && git push origin "HEAD:wip/$(git symbolic-ref --short HEAD)"` | `gitb wip up` |
-| Undo last commit (keep changes staged) | `git reset --soft HEAD~1` | `gitb undo` |
-| Tidy a messy branch into clean commits | (interactive rebase, fold by hand) | `gitb squash` |
-
----
-
-## Install in 10 seconds
-
-### One-liner
-```bash
-curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash
-```
-
-The installer drops `gitb` into `~/.local/bin` by default — no `sudo`, no password prompt. It downloads the latest release, verifies its SHA-256, and prints a PATH hint if needed.
-
-
-### Homebrew (macOS & Linux)
+**Homebrew** (macOS, Linux)
 ```bash
 brew install maxbolgarin/tap/gitbasher
 ```
 
-### npm (easy to remember)
+**Install script** — puts `gitb` in `~/.local/bin`, no `sudo`. Downloads the latest release, verifies its SHA-256, and prints a PATH hint if needed.
+```bash
+curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash
+```
+
+**npm** — Node is only needed for the install; `gitb` itself is pure bash.
 ```bash
 npm install -g gitbasher
 ```
 
+System-wide installs, custom locations and pinned versions: [More install options](#more-install-options). How to upgrade each one: [Updating](#updating).
+
+**Check what you have:** `gitb version` prints the version, the path of the binary that ran, how it was installed, and the right update command. It also warns when two copies are installed and a different one wins on your `PATH`. `gitb -v` prints just the version line, for scripts.
+
+**Requirements:** bash 3.2+ (the macOS system bash is fine) and git 2.23+. AI features also need `jq`. On Windows, use WSL.
+
 ---
 
-## 60-second quick start
+## Quick start
 
 ```bash
 cd your-project
@@ -95,14 +87,33 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 
 ---
 
+## Before & after
+
+You just write what you want to do, and gitbasher will do it for you. All commands have a short alias, for example `gitb c` is equivalent to `gitb commit`. 
+
+| Task | Plain `git` | With `gitb` |
+|------|-------------|-------------|
+| Start a feature off updated main | `git fetch && git checkout main && git pull --ff-only && git checkout -b feat/x` | `gitb branch newd` |
+| Conventional commit + push | `git add -A && git commit -m "feat(x): …" && git push -u origin HEAD` | `gitb commit ai fast push` |
+| Sync your branch with main | `git fetch && git rebase origin/main && git push --force-with-lease` | `gitb sync push` |
+| Save WIP & clean tree across machines | `git stash -u && git push origin "HEAD:wip/$(git symbolic-ref --short HEAD)"` | `gitb wip up` |
+| Undo last commit (keep changes staged) | `git reset --soft HEAD~1` | `gitb undo` |
+| Tidy a messy branch into clean commits | (interactive rebase, fold by hand) | `gitb squash` |
+
+---
+
 ## Table of contents
+- [Install](#install)
+- [Quick start](#quick-start)
+- [Before & after](#before--after)
 - [Why gitbasher](#why-gitbasher)
 - [All features at a glance](#all-features-at-a-glance)
 - [Common workflows](#common-workflows)
 - [AI-powered commits](#ai-powered-commits)
 - [Command reference](#command-reference)
 - [Configuration](#configuration)
-- [Other install paths](#other-install-paths)
+- [More install options](#more-install-options)
+- [Updating](#updating)
 - [Uninstall](#uninstall)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
@@ -116,7 +127,7 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 - **AI commit messages** — `gitb c ai` writes the message from your diff. OpenRouter (Gemini/Claude/GPT/…), OpenAI direct, or **fully local via Ollama** — no key, no network, no data leaves your machine.
 - **Safer git** — push/pull detect conflicts up front, `undo` rolls back commit/amend/merge/rebase/stash, `reset` is interactive with a preview.
 - **Whole workflows, not just commands** — `sync`, `wip`, `branch newd`, `merge to-main`, `squash` chain the steps you'd otherwise do by hand.
-- **One file, no deps** — pure bash for every git operation; only the AI features need `jq` and `curl`. Drop the binary anywhere on `PATH` and go. **940+ BATS tests** cover sanitization, git ops, and branch logic.
+- **One file, no deps** — pure bash for every git operation; only the AI features need `jq` and `curl`. Drop the binary anywhere on `PATH` and go. **1,000+ BATS tests** run on Linux, macOS and bash 3.2 in CI.
 
 <p align="center">
   <img src=".github/push.gif" width="640" alt="gitb push demo" />
@@ -139,7 +150,7 @@ Every command has a short alias (`gitb c`, `gitb p`, `gitb pu`, `gitb b`, `gitb 
 | **Hooks** | `hook` (`ho`) | List / create from templates / edit / toggle / remove / test / show — for every git hook |
 | **Repo setup** | `init` (`i`), `origin` (`or`, `o`, `remote`) | `git init` from gitbasher · add/change/rename/remove the remote origin |
 | **Config** | `config` (`cfg`) | User, default branch, separator, editor, ticket prefix, scopes, AI provider/key/model, proxy, completion |
-| **Lifecycle** | `update` (`up`), `uninstall` (`uns`) | Self-update from latest GitHub release · one-shot uninstall (config + binary) |
+| **Lifecycle** | `version` (`v`), `update` (`up`), `uninstall` (`uns`) | Version and install location · self-update from the latest GitHub release · one-shot uninstall (config + binary) |
 
 Total: **31 top-level commands**, **60+ aliases**, **100+ modes**.
 
@@ -322,7 +333,8 @@ git config gitbasher.ai-base-url http://my-gateway:4000/v1/chat/completions
 | [`origin`](#gitb-origin) | `or` `o` `remote` | Add, change, rename, or remove the remote origin |
 | [`init`](#gitb-init) | `i` | `git init` + optional origin setup prompt |
 | `clone` | `cl` `clo` | Clone a repository and set up gitbasher in it |
-| `update` | `up` `upd` | Self-update gitb to the latest release |
+| [`update`](#updating) | `up` `upd` | Self-update gitb to the latest release |
+| `version` | `v` `ver` | Version, binary path, install method, and how to update (`-v` / `--version` print one line) |
 | [`uninstall`](#uninstall) | `uns` `uni` | Remove the binary and `gitbasher.*` config keys |
 | [`config`](#gitb-config) | `cf` `cfg` `conf` | Configure user, branch, AI, scopes, ticket prefix, etc. |
 | [`log`](#gitb-log) | `l` `lg` | Interactive commit browser; also branch, compare, search, and full-dump modes |
@@ -928,24 +940,42 @@ echo 'alias gb="gitb b"'   >> ~/.bashrc
 
 ---
 
-## Other install paths
+## More install options
 
-### System-wide install
+All of these use the install script.
+
 ```bash
-# system-wide install (sudo, /usr/local/bin)
+# System-wide, for all users (/usr/local/bin, asks for sudo)
 curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash -s -- --sudo
-```
 
-### Custom location
-```bash
+# Any directory on your PATH
 GITB_DIR=/opt/bin curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash
-```
 
-
-### Pin a release
-```bash
+# A specific release (CI, locked environments)
 GITB_VERSION=v5.0.0 curl -fsSL https://raw.githubusercontent.com/maxbolgarin/gitbasher/main/install.sh | bash
 ```
+
+**From source** (for development):
+```bash
+git clone https://github.com/maxbolgarin/gitbasher.git && cd gitbasher
+make install             # builds dist/gitb and copies it to ~/.local/bin
+```
+
+---
+
+## Updating
+
+Update with the same tool you installed with — `gitb version` tells you which one that was.
+
+| Installed with | Update with |
+|----------------|-------------|
+| Homebrew | `brew upgrade gitbasher` |
+| Install script | `gitb update` (`gitb update check` only checks) |
+| npm | `npm update -g gitbasher` |
+
+`gitb update` detects Homebrew and npm installs and prints the right command instead of overwriting files the package manager owns.
+
+---
 
 ## Uninstall
 
@@ -976,10 +1006,22 @@ git config --local  --remove-section gitbasher 2>/dev/null   # per repo
 <summary><b>Command not found: gitb</b></summary>
 
 ```bash
-which gitb                    # check install location
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc   # if installed to ~/.local/bin
+which gitb                    # is it on PATH at all?
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc   # install script's default location
 ```
-Reinstall via npm (`npm install -g gitbasher`) or curl (see [install](#install-in-10-seconds)).
+Open a new terminal afterwards, or reinstall with any method from [Install](#install).
+</details>
+
+<details>
+<summary><b>Updated, but <code>gitb</code> still runs the old version</b></summary>
+
+You probably have two copies — for example one from the install script in `~/.local/bin` and one from Homebrew — and the old one comes first on your `PATH`. Run:
+
+```bash
+gitb version
+```
+
+If it warns that `gitb` on your PATH is a different copy, delete the one you don't use (for example `rm ~/.local/bin/gitb`), then run `hash -r` or open a new terminal. Don't use `gitb uninstall` for this — it also removes your gitbasher settings.
 </details>
 
 <details>
@@ -1041,7 +1083,7 @@ Per-repo settings live in `.git/config` and need write access to that file (`chm
 | OS | Bash | Git | Install |
 |----|------|-----|---------|
 | Linux | 3.2+ | 2.23+ | `apt install bash git` |
-| macOS | 3.2+ (system) | 2.23+ | `brew install git` |
+| macOS | 3.2+ (system) | 2.23+ | `brew install git` (or Xcode Command Line Tools) |
 | Windows | WSL | WSL | `wsl --install` then Linux steps |
 
 AI features additionally require `jq` (`brew install jq` / `apt install jq`); core git commands don't.
@@ -1066,17 +1108,6 @@ AI features additionally require `jq` (`brew install jq` / `apt install jq`); co
 If you hit a confusing git error not listed here, run the same flow with `git` directly first — gitbasher passes git's stderr through unchanged, so the underlying message is the source of truth.
 </details>
 
-<details>
-<summary><b>Uninstall</b></summary>
-
-```bash
-npm uninstall -g gitbasher           # if installed via npm
-brew uninstall gitbasher             # if installed via Homebrew
-sudo rm /usr/local/bin/gitb          # if installed system-wide
-rm -f ~/.local/bin/gitb              # if installed per-user
-```
-</details>
-
 **Still stuck?** [Open an issue](https://github.com/maxbolgarin/gitbasher/issues) or ping [@maxbolgarin](https://t.me/maxbolgarin) on Telegram.
 
 ---
@@ -1087,7 +1118,7 @@ PRs welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for the dev setup, BATS te
 
 ```bash
 make build               # rebuild dist/gitb
-make test                # run all 940+ tests
+make test                # run the full BATS suite
 make test-file FILE=test_sanitization.bats
 ```
 

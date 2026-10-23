@@ -67,7 +67,7 @@ function print_help {
     echo
 
     echo -e "Run ${YELLOW}gitb <command> help${ENDCOLOR} for modes and examples"
-    echo -e "Run ${YELLOW}gitb version${ENDCOLOR} (or ${YELLOW}-v${ENDCOLOR}) to print the installed version"
+    echo -e "Run ${YELLOW}gitb version${ENDCOLOR} (${YELLOW}v${ENDCOLOR}, ${YELLOW}ver${ENDCOLOR}) to see the version and where gitb is installed"
 
     exit
 }
@@ -84,10 +84,16 @@ fi
 
 ### Version must answer before any first-run side effects: scripts parse
 ### `gitb --version`, so it has to print exactly one line and write nothing.
-if [ "$1" == "--version" ] || [ "$1" == "-v" ] || [ "$1" == "version" ]; then
-    echo "gitbasher v${GITBASHER_VERSION}"
-    exit
-fi
+### The word forms are for people and also show where gitb is installed.
+case "$1" in
+    --version|-v)
+        echo "gitbasher v${GITBASHER_VERSION}"
+        exit
+    ;;
+    version|ver|v)
+        print_version_info
+    ;;
+esac
 
 ### Print settings if this is first run. Terminal-only: with redirected
 ### stdout the banner would corrupt machine-read output (e.g. the first

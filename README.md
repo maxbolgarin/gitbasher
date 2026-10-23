@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <img src=".github/commit.gif" width="640" alt="gitb commit demo" />
+  <img src=".github/commit.gif" width="800" alt="gitb demo: start a branch, split changes into two conventional commits, push, browse the log" />
 </p>
 
 ---

@@ -1,0 +1,3 @@
+# Fake API key in a test fixture (mask_api_key test), committed before the
+# inline "gitleaks:allow" marker was added. Full-history scans still see it.
+811ce74a9e29f130e59872e4d01b77e694f089c5:tests/test_url_validation.bats:generic-api-key:167

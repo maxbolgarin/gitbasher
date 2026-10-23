@@ -181,6 +181,23 @@ function _gitb_is_npm_install {
 }
 
 
+### Detect whether the gitb binary was installed via Homebrew. _gitb_install_path
+### resolves the bin/ symlink, so a brew install lands under .../Cellar/gitbasher/.
+# $1: install path
+# Returns: 0 if installed via Homebrew, 1 otherwise
+function _gitb_is_brew_install {
+    local path="$1"
+    [ -z "$path" ] && return 1
+    case "$path" in
+        */Cellar/gitbasher/*) return 0 ;;
+    esac
+    if [ -n "$HOMEBREW_CELLAR" ] && [[ "$path" == "$HOMEBREW_CELLAR"/* ]]; then
+        return 0
+    fi
+    return 1
+}
+
+
 ### Verify the SHA-256 of a downloaded gitb binary against the .sha256 asset
 ### published alongside it. Mirrors install.sh: refuses on mismatch; warns and
 ### allows when the .sha256 asset can't be fetched (older or hand-rolled
@@ -460,6 +477,17 @@ function update_script {
         echo -e "${YELLOW}⚠  gitb is installed via npm at ${install_path}.${ENDCOLOR}"
         echo -e "Update with npm so the package metadata stays in sync:"
         echo -e "  ${GREEN}npm update -g gitbasher${ENDCOLOR}"
+        if [ -n "$latest_url" ]; then
+            echo
+            print_link "Release" "$latest_url"
+        fi
+        exit
+    fi
+
+    if _gitb_is_brew_install "$install_path"; then
+        echo -e "${YELLOW}⚠  gitb is installed via Homebrew at ${install_path}.${ENDCOLOR}"
+        echo -e "Update with brew so the formula stays in sync:"
+        echo -e "  ${GREEN}brew upgrade gitbasher${ENDCOLOR}"
         if [ -n "$latest_url" ]; then
             echo
             print_link "Release" "$latest_url"

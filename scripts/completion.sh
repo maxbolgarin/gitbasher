@@ -32,7 +32,7 @@ hook ho hk
 origin or o remote
 clone cl clo
 init i
-version
+version ver v
 log l lg
 reflog rl rlg
 last-commit lc lastc
@@ -356,7 +356,7 @@ _gitb() {
                 'prev:Switch to previous branch (alias: -)'
                 'update:Self-update gitbasher (alias: up, upd)'
                 'uninstall:Remove gitbasher config and binary (alias: uns, uni)'
-                'version:Print the installed version (alias: -v)'
+                'version:Show version and install location (alias: v, ver)'
                 'help:Show help'
             )
             _describe -t commands 'gitb command' cmds
@@ -576,7 +576,7 @@ complete -c gitb -n __gitb_no_subcmd -a prev         -d 'Switch to previous bran
 complete -c gitb -n __gitb_no_subcmd -a update       -d 'Self-update gitbasher'
 complete -c gitb -n __gitb_no_subcmd -a uninstall    -d 'Remove gitbasher config and binary'
 complete -c gitb -n __gitb_no_subcmd -a uns          -d 'Alias of uninstall'
-complete -c gitb -n __gitb_no_subcmd -a version      -d 'Print the installed version'
+complete -c gitb -n __gitb_no_subcmd -a version      -d 'Show version and install location'
 complete -c gitb -n __gitb_no_subcmd -a help         -d 'Show help'
 function __gitb_at_commit_pos2
     set -l tokens (commandline -opc)

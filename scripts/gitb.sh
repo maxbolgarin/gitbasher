@@ -26,7 +26,7 @@ GITBASHER_NO_REPO=""
 ### repository", so string checks silently fail on non-English systems.
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     case "${1:-}" in
-        ""|help|man|--help|-h|version|--version|-v|\
+        ""|help|man|--help|-h|version|ver|v|--version|-v|\
         config|cf|cfg|conf|\
         update|up|upd|\
         uninstall|uns|uni|\

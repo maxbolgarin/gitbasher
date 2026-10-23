@@ -129,13 +129,21 @@ function _extract_release_date {
 }
 
 
-### Resolve where the running gitb binary lives on disk.
+### Resolve where the gitb on PATH lives on disk.
 # Echoes an absolute path or empty when gitb is not on PATH (dev runs from
 # scripts/gitb.sh fall into this case).
 function _gitb_install_path {
     local path
     path=$(command -v gitb 2>/dev/null) || return 1
     [ -z "$path" ] && return 1
+    _gitb_resolve_path "$path"
+}
+
+
+### Resolve a path through symlinks to the real file.
+# $1: path
+function _gitb_resolve_path {
+    local path="$1"
     # Resolve symlinks where possible so we update the real file, not a shim.
     # `realpath` is the most portable (POSIX-2024, also macOS 10.13+, Linux);
     # `readlink -f` is GNU-only and silently does nothing on BSD (where the
@@ -195,6 +203,75 @@ function _gitb_is_brew_install {
         return 0
     fi
     return 1
+}
+
+
+### Resolve the gitb file that is running right now. Unlike _gitb_install_path
+### this follows $0, so it stays correct when another gitb shadows it on PATH.
+# Echoes an absolute path, or empty when it can't be determined.
+function _gitb_running_path {
+    local path="$0"
+    case "$path" in
+        */*) ;;
+        *)   path=$(command -v "$path" 2>/dev/null) || return 1 ;;
+    esac
+    [ -z "$path" ] && return 1
+    case "$path" in
+        /*) ;;
+        *)  path="$(pwd)/${path#./}" ;;
+    esac
+    _gitb_resolve_path "$path"
+}
+
+
+### Name how a gitb binary was installed, for `gitb version`.
+# $1: resolved binary path
+function _gitb_install_method {
+    if [ "$GITBASHER_VERSION" = "dev" ]; then
+        echo "source checkout"
+    elif _gitb_is_brew_install "$1"; then
+        echo "Homebrew"
+    elif _gitb_is_npm_install "$1"; then
+        echo "npm"
+    else
+        echo "standalone (install.sh)"
+    fi
+}
+
+
+### Print version, install location and how to update — `gitb version`.
+### `gitb -v` / `--version` stay a single line for scripts; see base.sh.
+function print_version_info {
+    local running path_gitb method
+    running=$(_gitb_running_path)
+    path_gitb=$(_gitb_install_path)
+    method=$(_gitb_install_method "$running")
+
+    echo -e "${BOLD}gitbasher${NORMAL} v${GITBASHER_VERSION}"
+    echo
+    echo -e "\tbinary:\t\t${BLUE}${running:-unknown}${ENDCOLOR}"
+    echo -e "\tinstalled via:\t${YELLOW}${method}${ENDCOLOR}"
+    echo -e "\tbash:\t\t${YELLOW}${BASH_VERSION}${ENDCOLOR}"
+    echo -e "\tgit:\t\t${YELLOW}$(git --version 2>/dev/null | sed 's/^git version //')${ENDCOLOR}"
+
+    # Two installs side by side (e.g. install.sh + brew): typing `gitb` may
+    # not run this copy, which is exactly what makes "updated but still old"
+    # so confusing. Say which one wins.
+    if [ -n "$path_gitb" ] && [ -n "$running" ] && [ "$path_gitb" != "$running" ] \
+       && [ "$GITBASHER_VERSION" != "dev" ]; then
+        echo
+        echo -e "${YELLOW}⚠  'gitb' on your PATH is a different copy: ${BLUE}${path_gitb}${ENDCOLOR}"
+        echo -e "Remove the one you don't use so 'gitb' always runs the same version."
+    fi
+
+    echo
+    case "$method" in
+        Homebrew) echo -e "Update with ${GREEN}brew upgrade gitbasher${ENDCOLOR}" ;;
+        npm)      echo -e "Update with ${GREEN}npm update -g gitbasher${ENDCOLOR}" ;;
+        "source checkout") echo -e "Running from source — ${GREEN}git pull${ENDCOLOR} to update" ;;
+        *)        echo -e "Update with ${GREEN}gitb update${ENDCOLOR}" ;;
+    esac
+    exit
 }
 
 

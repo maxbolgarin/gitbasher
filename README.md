@@ -152,7 +152,7 @@ You just write what you want to do, and gitbasher will do it for you. All comman
 | **Config** | `config` (`cfg`) | User, default branch, separator, editor, ticket prefix, scopes, AI provider/key/model, proxy, completion |
 | **Lifecycle** | `version` (`v`), `update` (`up`), `uninstall` (`uns`) | Version and install location · self-update from the latest GitHub release · one-shot uninstall (config + binary) |
 
-Total: **31 top-level commands**, **60+ aliases**, **100+ modes**.
+Total: **32 top-level commands**, **60+ aliases**, **100+ modes**.
 
 ---
 
@@ -183,7 +183,7 @@ gitb sync merge      # use merge instead of rebase
 
 ### Save WIP across machines / branches
 ```bash
-gitb wip up          # stash changes + push backup to origin/wip/<branch>
+gitb wip up stash    # stash changes + push backup to origin/wip/<branch>
 # … on another machine: fetch the backup branch and restore it manually …
 git fetch origin wip/<branch>
 git merge --squash --no-commit origin/wip/<branch>
@@ -308,7 +308,7 @@ git config gitbasher.ai-base-url http://my-gateway:4000/v1/chat/completions
 
 ## Command reference
 
-> **Tip:** every command accepts `help` (`h`) for inline help: `gitb commit help`, `gitb sync h`.
+> **Tip:** every command with modes accepts `help` (`h`) for inline help: `gitb commit help`, `gitb sync h`.
 
 | Command | Aliases | Description |
 |---------|---------|-------------|
@@ -324,7 +324,7 @@ git config gitbasher.ai-base-url http://my-gateway:4000/v1/chat/completions
 | [`squash`](#gitb-squash) | `sq` `tidy` | AI groups branch commits into clean, changelog-ready history |
 | [`cherry`](#gitb-cherry) | `ch` `cp` | Cherry-pick by hash, range, or interactive picker |
 | [`sync`](#gitb-sync) | `sy` | Fetch main + rebase (or merge) current branch, optional push |
-| [`wip`](#gitb-wip) | `w` | Stash all + backup to remote (`up`) / restore (`down`) |
+| [`wip`](#gitb-wip) | `w` | Save work in progress (`up`) via stash, branch or worktree, and restore it (`down`) |
 | [`undo`](#gitb-undo) | `un` | Undo last commit / amend / merge / rebase / stash |
 | [`reset`](#gitb-reset) | `res` | Friendly `git reset` with preview, approval, and undo support |
 | [`stash`](#gitb-stash) | `st` `sta` | Full stash menu: select, all, list, pop, apply, show, drop |
@@ -332,8 +332,8 @@ git config gitbasher.ai-base-url http://my-gateway:4000/v1/chat/completions
 | [`hook`](#gitb-hook) | `ho` `hk` | Manage git hooks: list, create, edit, toggle, remove, test, show |
 | [`origin`](#gitb-origin) | `or` `o` `remote` | Add, change, rename, or remove the remote origin |
 | [`init`](#gitb-init) | `i` | `git init` + optional origin setup prompt |
-| `clone` | `cl` `clo` | Clone a repository and set up gitbasher in it |
-| [`update`](#updating) | `up` `upd` | Self-update gitb to the latest release |
+| [`clone`](#gitb-clone) | `cl` `clo` | Clone a repository and set up gitbasher in it |
+| [`update`](#gitb-update) | `up` `upd` | Self-update gitb to the latest release |
 | `version` | `v` `ver` | Version, binary path, install method, and how to update (`-v` / `--version` print one line) |
 | [`uninstall`](#uninstall) | `uns` `uni` | Remove the binary and `gitbasher.*` config keys |
 | [`config`](#gitb-config) | `cf` `cfg` `conf` | Configure user, branch, AI, scopes, ticket prefix, etc. |
@@ -377,7 +377,7 @@ gitb commit <combined>       # compact form: ff, aifp, fastsp, ...
 | `staged` | `st` | Use already-staged files (skip the add step) |
 | `push` | `p` `pu` | Push after the commit succeeds |
 | `scope` | `s` | Force a scope: `type(scope): message` (useful with fast mode) |
-| `no-split` | `nos` `nsp` `nsl` | Don't offer to split this commit (fast modes split by default) |
+| `no-split` | `nosplit` `nos` `nsp` `nsl` | Don't offer to split this commit (fast modes split by default) |
 | `ai` | `i` `llm` | Generate the commit message with AI |
 | `msg` | `m` | Open `$EDITOR` for a multiline message body |
 | `ticket` | `t` `j` `jira` | Append ticket info to the header |
@@ -403,6 +403,41 @@ gitb commit <combined>       # compact form: ff, aifp, fastsp, ...
 - Splitting: a regular commit **asks first** whether to try a split (before any grouping or AI work), then asks again to confirm the resulting groups. Fast modes (`fast`, `ff`, …) split without asking unless you turn it off with `gitb cfg fast-split`.
 - Press `u` at any split prompt to **undo the split**: commits already made by the split are dropped, staging is restored, and you continue with a single commit. `ff` never stops, so use the setting or `no-split` there.
 - `revert` and `ff` only accept `push` (as `revp` / `ffp`); to rewrite the last commit message use [`gitb edit`](#gitb-edit).
+
+<details>
+<summary>All compact tokens</summary>
+
+| Token | Aliases | Same as |
+|-------|---------|---------|
+| `fastp` | `fp` `pf` | `fast push` |
+| `fasts` | `fs` `sf` | `fast scope` |
+| `fastsp` | `fsp` `fps` | `fast scope push` |
+| `splitp` | `spp` `slp` | `split push` |
+| `aisplit` | `isplit` `aispl` `ispl` | `ai split` (AI feature grouping + AI messages) |
+| `aisplitp` | `isplitp` `aisplp` `isplp` | `ai split push` |
+| `ff` | | `ai fast`, no prompts at all |
+| `ffp` | `ffpush` | `ff` + `push` |
+| `sff` | `ffst` | `ff` on already-staged files |
+| `sffp` | `ffstp` | `sff` + `push` |
+| `fixupp` | `fixp` `xp` `px` | `fixup push` |
+| `fixupst` | `xst` `stx` | `fixup staged` |
+| `fastfix` | `fx` `xf` | `fixup fast` |
+| `fastfixp` | `fxp` `xfp` | `fixup fast push` |
+| `amendst` | `ast` `sta` | `amend staged` |
+| `amendf` | `amf` `af` `fa` | `amend fast` |
+| `revertp` | `revp` `rp` | `revert push` |
+| `llmf` | `aif` `if` | `ai fast` |
+| `llmp` | `aip` `ip` | `ai push` |
+| `llmst` | `aist` `ist` | `ai staged` |
+| `llmfp` | `aifp` `ifp` `ipf` | `ai fast push` |
+| `llms` | `ais` `is` | `ai scope` |
+| `llmsf` | `aisf` `isf` | `ai scope fast` |
+| `llmsfp` | `aisfp` `isfp` | `ai scope fast push` |
+| `llmm` | `aim` `im` | `ai msg` |
+| `llmmf` | `aimf` `imf` | `ai msg fast` |
+| `llmmfp` | `aimfp` `imfp` | `ai msg fast push` |
+
+</details>
 
 ### `gitb edit`
 
@@ -443,7 +478,7 @@ Notes:
 |------|---------|-------------|
 | `<empty>` | | Show commits, push with conflict handling |
 | `yes` | `y` | Push without confirmation |
-| `force` | `f` | Force push (use after rebase/amend) |
+| `force` | `f` | Push with `--force-with-lease` (after rebase/amend; refuses if someone else pushed first) |
 | `list` | `log` `l` | List unpushed commits + estimated push size and large-file warnings |
 
 </details>
@@ -521,7 +556,7 @@ Quick pushes stay clean — git's live progress bar appears only when a transfer
 | `delete` | `del` `d` | Delete a local tag |
 | `delete-all` | `da` | Delete all local tags |
 | `list` | `log` `l` | List local tags |
-| `remote` | `fetch` `r` | Fetch and list remote tags |
+| `remote` | `fetch` `re` `r` | Fetch and list remote tags |
 
 </details>
 
@@ -549,7 +584,7 @@ Quick pushes stay clean — git's live progress bar appears only when a transfer
 |------|---------|-------------|
 | `<empty>` | | Pick a base branch |
 | `main` | `master` `m` | Rebase current onto default |
-| `interactive` | `i` | Interactive rebase from picked commit |
+| `interactive` | `i` | Pick a base branch and rebase onto it interactively |
 | `autosquash` | `a` `s` `ia` | Interactive rebase with `--autosquash` |
 | `fastautosquash` | `fast` `sf` `f` | Autosquash without interaction |
 | `pull` | `p` | Take commits from selected branch into current |
@@ -637,13 +672,14 @@ specified, and `wip down` auto-detects which backend was used.
 | `gitb wip up` | `u` | Save WIP — prompts which backend to use |
 | `gitb wip up stash` | `u s` | Stash + push backup branch |
 | `gitb wip up branch` | `u b` | Commit onto `wip/<branch>` + push |
-| `gitb wip up worktree` | `u w` `u wt` | Move WIP into a sibling worktree |
+| `gitb wip up worktree` | `u w` `u wt` `u tree` | Move WIP into a sibling worktree |
 | `gitb wip up <mode> nopush` | `np` `n` | Skip the push step (works with any backend) |
 | `gitb wip up nopush` | `u np` `u n` | Legacy: stash + no push (same as `up stash nopush`) |
 | `gitb wip down` | `d` | Restore — auto-detects backend, prompts if ambiguous |
 | `gitb wip down stash` | `d s` | Restore from the stash |
 | `gitb wip down branch` | `d b` | Restore from `wip/<branch>` (squash-merge into working tree) |
-| `gitb wip down worktree` | `d w` `d wt` | Restore from the wip worktree, then remove it |
+| `gitb wip down worktree` | `d w` `d wt` `d tree` | Restore from the wip worktree, then remove it |
+| `gitb wip help` | `h` | Show inline help (also what bare `gitb wip` prints) |
 
 </details>
 
@@ -748,13 +784,13 @@ git config --global gitbasher.worktreebase ~/code/worktrees
 | Mode | Aliases | Description |
 |------|---------|-------------|
 | `<empty>` | | Interactive action menu |
-| `list` | `l` | All hooks with status |
+| `list` | `l` | All hooks with status (`list samples` also shows available samples) |
 | `select` | `sel` | Browse hook types with descriptions |
 | `create` | `new` `c` | New hook from templates |
 | `edit` | `e` | Edit existing hook |
 | `toggle` | `t` | Enable/disable hook (`enable` / `disable` force that state) |
 | `install` | `samples` | Install all available sample hooks |
-| `remove` | `rm` `r` | Delete hook(s) |
+| `remove` | `rm` `r` `delete` | Delete hook(s) |
 | `test` | `run` `check` | Test hook execution |
 | `show` | `cat` `view` `s` | Display hook contents |
 
@@ -787,7 +823,7 @@ without a remote, rename the repo on GitHub/GitLab, or move it to a new host.
 | `set` | `add` `new` `a` | Add a new origin (errors if origin already set) |
 | `change` | `update` `c` `u` `set-url` | Change the existing origin URL (after rename/move) |
 | `rename` | `mv` `ren` | Rename a remote (e.g. `origin` → `upstream`) |
-| `remove` | `rm` `del` `d` | Remove the remote |
+| `remove` | `rm` `del` `d` `delete` | Remove the remote |
 | `help` | `h` | Show help |
 
 </details>
@@ -803,6 +839,25 @@ gitb origin rename upstream                      # origin → upstream
 gitb origin remove                               # delete the remote
 ```
 
+### `gitb clone`
+
+Clone a repository and set gitbasher up in it — works outside any repo.
+
+```bash
+gitb clone git@github.com:me/proj.git          # into ./proj
+gitb clone https://github.com/me/proj.git dir  # into ./dir
+```
+
+### `gitb update`
+
+Self-update for install-script installs. Homebrew and npm installs are detected and pointed at `brew upgrade gitbasher` / `npm update -g gitbasher` instead (see [Updating](#updating)).
+
+| Mode | Aliases | Description |
+|------|---------|-------------|
+| `<empty>` | | Check for a newer release and install it after confirmation |
+| `check` | `c` `ch` | Only check, don't install |
+| `force` | `f` `fo` | Reinstall the latest release even if you're up to date |
+
 ### `gitb config`
 
 <details>
@@ -816,18 +871,18 @@ gitb origin remove                               # delete the remote
 | `separator` | `sep` | Branch-name separator |
 | `editor` | `ed` `e` | Commit-message editor |
 | `ticket` | `ti` `t` `jira` | Ticket prefix for commits/branches |
-| `scopes` | `sc` `s` | Common scopes |
+| `scopes` | `scope` `sc` `s` | Common scopes |
 | `ai` | `llm` | AI setup wizard: provider, API key, model |
 | `key` | | AI API key only |
 | `provider` | `prov` | AI provider (openrouter, openai, ollama, claude) |
 | `model` | `m` | Default AI model |
-| `proxy` | `prx` `p` | HTTP proxy for AI calls |
+| `proxy` | `prx` `p` | HTTP/SOCKS proxy for AI calls |
 | `history` | `hist` | How many recent commits to include in AI prompts |
 | `diff` | `payload` | AI diff payload size (line and character caps) |
 | `push-size` | `ps` `pushsize` | Warn before pushing more than N MB (0 disables) |
 | `fast-split` | `fs` `fastsplit` | Split automatically in fast commit modes (on/off) |
 | `ssh` | `passphrase` `unlock` | Where and how long a passphrase-protected SSH key stays unlocked |
-| `completion` | `comp` | Install / uninstall bash & zsh tab completion |
+| `auto` | `completion` `comp` | Install / remove tab completion for bash, zsh or fish (`gitb cfg auto print` writes the script to stdout) |
 | `delete` | `unset` `del` | Remove global config |
 
 </details>
@@ -840,7 +895,7 @@ An interactive commit browser instead of a wall of text. Bare `gitb log` shows a
 |------|---------|-------------|
 | _(none)_ | | Interactive commit browser for the current branch |
 | `all` | `dump` | Classic full log dump through the pager |
-| `branch` | `b` | Pick a branch to log |
+| `branch` | `b` | Pick a branch to log (`local`/`l`, `remote`/`r`, or `all`/`a`, the default) |
 | `compare` | `comp` `c` | Compare two branches |
 | `search` | `s` | Search commits |
 | `ai` | | Summarize a commit range in plain English (needs `gitb cfg ai`) |
@@ -891,7 +946,7 @@ Overview-first diffs built for the gitbasher workflow — no flag memorization. 
 
 ## Configuration
 
-`gitb cfg` (no args) prints the active configuration. Settings live in standard `git config`, so they're per-repo by default — use `--global` for everywhere.
+`gitb cfg` (no args) prints the active configuration. Settings live in standard `git config`. `gitb cfg` commands save to the current repo and then offer to apply the value globally; with raw `git config`, add `--global` for every repo.
 
 | Key | Set via | Purpose |
 |-----|---------|---------|
@@ -906,7 +961,7 @@ Overview-first diffs built for the gitbasher workflow — no flag memorization. 
 | `gitbasher.ai-base-url` | `git config` | Custom OpenAI-compatible endpoint (LiteLLM, vLLM, remote Ollama) |
 | `gitbasher.ai-model-<provider>` | `gitb cfg model` | Model for that provider (one model for all tasks); legacy `gitbasher.ai-model` is read as a fallback |
 | `gitbasher.ai-proxy` | `gitb cfg proxy` | HTTP proxy for AI calls |
-| `gitbasher.ai-ollama-host` | `git config gitbasher.ai-ollama-host <url>` | Ollama server URL (default `http://localhost:11434`) |
+| `gitbasher.ai-ollama-host` | `gitb cfg provider` (ollama) or `git config` | Ollama server URL (default `http://localhost:11434`) |
 | `gitbasher.ai-timeout` | `git config gitbasher.ai-timeout <seconds>` | AI request timeout in seconds (default `60`, `300` for ollama/claude) |
 | `gitbasher.ai-diff-limit` | `gitb cfg diff` | Diff lines sent to AI (default `300`) |
 | `gitbasher.ai-diff-max-chars` | `gitb cfg diff` | Character cap on the diff sent to AI (default `20000`) |

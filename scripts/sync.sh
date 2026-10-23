@@ -158,6 +158,7 @@ function sync_script {
 
     ### Fetch default branch
     echo -e "${YELLOW}Fetching ${origin_name}/${main_branch}...${ENDCOLOR}"
+    echo
 
     fetch $main_branch $origin_name
 

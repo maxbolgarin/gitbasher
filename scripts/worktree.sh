@@ -407,6 +407,7 @@ function worktree_add {
     if [ "$source_mode" == "default" ]; then
         if [ -n "$origin_name" ]; then
             echo -e "${YELLOW}Fetching ${origin_name}/${main_branch}...${ENDCOLOR}"
+            echo
             local fetch_output fetch_code fetch_progress_shown
             stream_or_capture_git fetch_output fetch_code fetch_progress_shown \
                 git fetch --progress "$origin_name" "$main_branch"
@@ -415,6 +416,7 @@ function worktree_add {
                 echo "$fetch_output"
                 return 1
             fi
+            echo -e "${GREEN}✓ Fetched ${origin_name}/${main_branch}${ENDCOLOR}"
             echo
         fi
     fi

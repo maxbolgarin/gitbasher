@@ -236,8 +236,12 @@ function rebase_script {
             if is_yes "$choice"; then
                 echo
                 echo -e "${YELLOW}Fetching ${origin_name}/${new_base_branch}...${ENDCOLOR}"
+                echo
 
                 fetch $new_base_branch $origin_name
+                if [ "$fetch_code" == 0 ]; then
+                    echo -e "${GREEN}✓ Fetched ${origin_name}/${new_base_branch}${ENDCOLOR}"
+                fi
                 from_origin=true
             fi
         else

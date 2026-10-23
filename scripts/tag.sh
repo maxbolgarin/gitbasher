@@ -226,6 +226,7 @@ function tag_script {
     ### Fetch tags from the remote
     if [ -n "${remote}" ]; then
         echo -e "${YELLOW}Fetching tags from the remote...${ENDCOLOR}"
+        echo
         stream_or_capture_git fetch_output fetch_code fetch_progress_shown \
             git fetch --progress $origin_name --tags
         # A non-zero exit caused only by tag-clobber protection is a warning,
@@ -233,7 +234,7 @@ function tag_script {
         if [ "$fetch_code" != 0 ] && ! is_tag_clobber_only "$fetch_output"; then
             check_code "$fetch_code" "$fetch_output" "fetch tags"
         fi
-
+        echo -e "${GREEN}✓ Fetched tags from the remote${ENDCOLOR}"
         echo
 
         new_tags=$(sed -n '/\[new tag\]/p' <<< "$fetch_output")

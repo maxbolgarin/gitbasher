@@ -173,8 +173,12 @@ function merge_script {
             if is_yes "$choice"; then
                 echo
                 echo -e "${YELLOW}Fetching ${origin_name}/${merge_branch}...${ENDCOLOR}"
+                echo
 
                 fetch $merge_branch $origin_name
+                if [ "$fetch_code" == 0 ]; then
+                    echo -e "${GREEN}✓ Fetched ${origin_name}/${merge_branch}${ENDCOLOR}"
+                fi
                 merge_from_origin=true
             fi
         else

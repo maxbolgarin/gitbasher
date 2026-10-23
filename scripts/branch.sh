@@ -230,9 +230,11 @@ function branch_script {
         if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
             echo
             echo -e "${YELLOW}Fetching remote tags...${ENDCOLOR}"
+            echo
             stream_or_capture_git fetch_output fetch_code fetch_progress_shown \
                 git fetch --progress --tags
             check_code "$fetch_code" "$fetch_output" "fetch remote tags"
+            echo -e "${GREEN}✓ Fetched remote tags${ENDCOLOR}"
         fi
         echo
 

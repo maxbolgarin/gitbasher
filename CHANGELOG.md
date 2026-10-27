@@ -2,6 +2,12 @@
 
 All notable changes to gitbasher are generated automatically by [semantic-release](https://github.com/semantic-release/semantic-release) from [Conventional Commits](https://www.conventionalcommits.org/) on `main`. The project follows [Semantic Versioning](https://semver.org/).
 
+## [5.6.2](https://github.com/maxbolgarin/gitbasher/compare/v5.6.1...v5.6.2) (2026-10-27)
+
+### 🐛 Bug Fixes
+
+* **ui:** leave a blank line between AI headers and the waiting spinner ([d55e9da](https://github.com/maxbolgarin/gitbasher/commit/d55e9da0e8f69949d6bcbc6cb1d60b099037a424))
+
 ## [5.6.1](https://github.com/maxbolgarin/gitbasher/compare/v5.6.0...v5.6.1) (2026-10-27)
 
 ### 🐛 Bug Fixes

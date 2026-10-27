@@ -127,12 +127,16 @@ function validate_git_url {
     
     # Basic validation for common git URL formats:
     # https://github.com/user/repo.git
+    # https://host:8443/user/repo.git
     # git@github.com:user/repo.git
     # ssh://git@server.com/repo.git
+    # ssh://git@server.com:4022/group/repo.git
     # /path/to/repo.git (local)
-    if [[ "$cleaned" =~ ^https?://[a-zA-Z0-9.-]+/[a-zA-Z0-9._/-]+(\.git)?$ ]] || \
-       [[ "$cleaned" =~ ^git@[a-zA-Z0-9.-]+:[a-zA-Z0-9._/-]+(\.git)?$ ]] || \
-       [[ "$cleaned" =~ ^ssh://[a-zA-Z0-9@.-]+/[a-zA-Z0-9._/-]+(\.git)?$ ]] || \
+    local userinfo='([a-zA-Z0-9._-]+@)?'
+    local host='[a-zA-Z0-9.-]+(:[0-9]{1,5})?'
+    local path='[a-zA-Z0-9._/~-]+'
+    if [[ "$cleaned" =~ ^(https?|ssh|git)://${userinfo}${host}/${path}$ ]] || \
+       [[ "$cleaned" =~ ^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+:${path}$ ]] || \
        [[ "$cleaned" =~ ^[a-zA-Z0-9._/-]+(\.git)?$ ]]; then
         
         # Length check

@@ -51,6 +51,28 @@ setup() {
     [ $? -eq 0 ]
 }
 
+@test "validate_git_url: accepts ssh:// URL with port and nested groups" {
+    validate_git_url "ssh://git@gitlab.example.com:4022/fp/processing/lib/rules-parser.git"
+    [ $? -eq 0 ]
+    [ "$validated_url" = "ssh://git@gitlab.example.com:4022/fp/processing/lib/rules-parser.git" ]
+}
+
+@test "validate_git_url: accepts https URL with port and user" {
+    validate_git_url "https://git.example.com:8443/user/repo.git"
+    [ $? -eq 0 ]
+    validate_git_url "https://user@git.example.com/user/repo.git"
+    [ $? -eq 0 ]
+}
+
+@test "validate_git_url: accepts scp-like URL with non-git user" {
+    validate_git_url "deploy@server.com:repos/app.git"
+    [ $? -eq 0 ]
+}
+
+@test "validate_git_url: rejects non-numeric port" {
+    ! validate_git_url "ssh://git@host.com:abc/repo.git"
+}
+
 @test "validate_git_url: rejects empty input" {
     ! validate_git_url ""
 }

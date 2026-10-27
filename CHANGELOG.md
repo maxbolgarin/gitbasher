@@ -2,6 +2,12 @@
 
 All notable changes to gitbasher are generated automatically by [semantic-release](https://github.com/semantic-release/semantic-release) from [Conventional Commits](https://www.conventionalcommits.org/) on `main`. The project follows [Semantic Versioning](https://semver.org/).
 
+## [5.6.1](https://github.com/maxbolgarin/gitbasher/compare/v5.6.0...v5.6.1) (2026-10-27)
+
+### 🐛 Bug Fixes
+
+* accept ports and custom users in git URL validation ([c0165db](https://github.com/maxbolgarin/gitbasher/commit/c0165db4decba87636bd2d69b1d558202a0ce081))
+
 ## [5.6.0](https://github.com/maxbolgarin/gitbasher/compare/v5.5.0...v5.6.0) (2026-10-23)
 
 ### 🚀 Features

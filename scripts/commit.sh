@@ -1099,6 +1099,8 @@ function run_split_ai_for_scope {
     msg=""
 
     echo -e "${YELLOW}Generating commit message with AI...${ENDCOLOR}"
+    # Blank line keeps the spinner (and then the message) off the header.
+    echo
     ai_msg=$(generate_ai_commit_message "simple" "$_scope_for_msg" "$_scope_for_msg" "")
     if [ $? -ne 0 ] || [ -z "$ai_msg" ]; then
         echo -e "${RED}✗ AI message generation failed.${ENDCOLOR}"
@@ -1112,7 +1114,6 @@ function run_split_ai_for_scope {
         return 0
     fi
 
-    echo
     echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
     echo
     read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/u to undo split/0 to abort) " || choice="0"
@@ -1121,6 +1122,7 @@ function run_split_ai_for_scope {
 
     while [ "$normalized_key" = "r" ]; do
         echo -e "${YELLOW}Regenerating...${ENDCOLOR}"
+        echo
         if [ -n "$rejected_ai_messages" ]; then
             rejected_ai_messages="${rejected_ai_messages}
 ${ai_msg}"
@@ -1133,7 +1135,6 @@ ${ai_msg}"
             return 1
         fi
         ai_msg=$(clean_ai_commit_message "$ai_msg")
-        echo
         echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
         echo
         read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/u to undo split/0 to abort) " || choice="0"
@@ -1651,6 +1652,8 @@ function handle_ai_commit_generation {
     else
         echo -e "${YELLOW}Step ${step}.${ENDCOLOR} Generating ${YELLOW}commit message${ENDCOLOR} using AI..."
     fi
+    # Blank line keeps the spinner (and then the message) off the header.
+    echo
 
     # Check if AI is available
     if ! check_ai_available; then
@@ -1692,7 +1695,6 @@ function handle_ai_commit_generation {
 
         ai_commit_message=$(clean_ai_commit_message "$ai_commit_message")
 
-        echo
         echo -e "${GREEN}AI generated commit message:${ENDCOLOR}"
         echo -e "${BOLD}$ai_commit_message${ENDCOLOR}"
         echo
@@ -1717,6 +1719,7 @@ function handle_ai_commit_generation {
         normalize_key "$choice"
         if [ "$normalized_key" = "r" ]; then
             echo -e "${YELLOW}Regenerating...${ENDCOLOR}"
+            echo
             if [ -n "$rejected_ai_messages" ]; then
                 rejected_ai_messages="${rejected_ai_messages}
 ${ai_commit_message}"

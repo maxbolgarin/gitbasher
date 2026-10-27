@@ -433,6 +433,7 @@ function squash_run_ai_attempt {
             local prefix=""
             [ -n "$chunk_label" ] && prefix="chunk ${chunk_label} "
             echo -e "${YELLOW}AI plan rejected (${prefix}${squash_parse_error}). Retry ${attempt}/${max_attempts}...${ENDCOLOR}"
+            echo
             correction="${squash_parse_error}"
         fi
     done
@@ -467,6 +468,7 @@ function squash_run_ai_grouping {
 
     if [ "$total" -le "$SQUASH_CHUNK_SIZE" ]; then
         echo -e "${YELLOW}Asking AI to group ${total} commits...${ENDCOLOR}"
+        echo
         if squash_run_ai_attempt "$all_hashes" "$expected_all" ""; then
             return 0
         fi
@@ -498,6 +500,7 @@ function squash_run_ai_grouping {
         local label="${chunk_idx}/${num_chunks}"
 
         echo -e "${YELLOW}Asking AI to group chunk ${BOLD}${label}${NORMAL}${YELLOW} (${chunk_count} commits)...${ENDCOLOR}"
+        echo
         if ! squash_run_ai_attempt "$chunk_hashes_input" "$chunk_expected" "$label"; then
             squash_parse_error="chunk ${label}: ${squash_parse_error}"
             return 1
@@ -823,7 +826,7 @@ function squash_script {
         exit 1
     fi
 
-    echo
+    # The "Asking AI..." line already left a blank line under itself.
     if [ "$squash_group_count" -ge "$commit_count" ]; then
         echo -e "${GREEN}✓ AI found no groups to merge — every commit stays as its own change.${ENDCOLOR}"
         echo

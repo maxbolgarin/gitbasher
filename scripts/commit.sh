@@ -1103,7 +1103,10 @@ function run_split_ai_for_scope {
     echo
     ai_msg=$(generate_ai_commit_message "simple" "$_scope_for_msg" "$_scope_for_msg" "")
     if [ $? -ne 0 ] || [ -z "$ai_msg" ]; then
-        echo -e "${RED}✗ AI message generation failed.${ENDCOLOR}"
+        # Auto-accept: the caller prints its own, more specific failure line.
+        if [ -z "$auto_accept" ]; then
+            echo -e "${RED}✗ AI message generation failed.${ENDCOLOR}"
+        fi
         return 1
     fi
     ai_msg=$(clean_ai_commit_message "$ai_msg")

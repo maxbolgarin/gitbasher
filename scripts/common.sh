@@ -947,6 +947,8 @@ function _spinner_clear {
 ### safe inside $(...): `out=$(run_with_spinner "Waiting for AI" call ...)`.
 ### The command runs in the background with stdin detached — do not use it
 ### for anything that reads from the user or opens an editor.
+### The command's stderr is held back and printed after the spinner line is
+### erased, so an error never lands glued to the end of the spinner line.
 # $1: label shown next to the spinner
 # $2..: the command and its args
 # Returns: the command's exit code
@@ -956,13 +958,15 @@ function run_with_spinner {
         "$@"
         return
     fi
-    local __rs_tmp
+    local __rs_tmp __rs_err
     __rs_tmp=$(mktemp 2>/dev/null)
-    if [ -z "$__rs_tmp" ]; then
+    __rs_err=$(mktemp 2>/dev/null)
+    if [ -z "$__rs_tmp" ] || [ -z "$__rs_err" ]; then
+        rm -f "$__rs_tmp" "$__rs_err"
         "$@"
         return
     fi
-    "$@" >"$__rs_tmp" &
+    "$@" >"$__rs_tmp" 2>"$__rs_err" &
     local __rs_pid=$! __rs_ticks=0 __rs_start=$SECONDS __rs_shown="" __rs_code=0
     while kill -0 "$__rs_pid" 2>/dev/null; do
         sleep 0.1
@@ -975,8 +979,9 @@ function run_with_spinner {
     # `if` keeps errexit from firing on a failing command.
     if wait "$__rs_pid"; then __rs_code=0; else __rs_code=$?; fi
     if [ -n "$__rs_shown" ]; then _spinner_clear; fi
+    cat "$__rs_err" >&2
     cat "$__rs_tmp"
-    rm -f "$__rs_tmp"
+    rm -f "$__rs_tmp" "$__rs_err"
     return "$__rs_code"
 }
 

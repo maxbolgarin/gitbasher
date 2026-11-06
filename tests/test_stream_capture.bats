@@ -150,3 +150,30 @@ error: failed to push some refs")
     git config credential.helper store
     ! _git_may_prompt_for_credentials git push --progress origin main
 }
+
+@test "run_with_spinner: command stderr prints only after the spinner line is cleared" {
+    # Force the spinner on (no TTY under BATS).
+    _spinner_enabled() { return 0; }
+    noisy_fn() { sleep 1.2; echo "ERR boom" >&2; echo "result"; return 3; }
+    err_file="$BATS_TEST_TMPDIR/err"
+    code=0
+    out=$(run_with_spinner "Waiting for AI response" noisy_fn 2>"$err_file") || code=$?
+
+    [ "$out" = "result" ]
+    [ "$code" = "3" ]
+    err=$(cat "$err_file")
+    # The spinner was drawn...
+    [[ "$err" == *"Waiting for AI response"* ]]
+    # ...then erased, and only then the error was printed: never glued to it.
+    [[ "$err" == *$'\r\033[KERR boom'* ]]
+    after="${err##*ERR boom}"
+    [[ "$after" != *"Waiting"* ]]
+}
+
+@test "run_with_spinner: without a TTY stderr still passes through" {
+    noisy_fn() { echo "ERR boom" >&2; echo "result"; }
+    err_file="$BATS_TEST_TMPDIR/err"
+    out=$(run_with_spinner "Waiting" noisy_fn 2>"$err_file")
+    [ "$out" = "result" ]
+    [ "$(cat "$err_file")" = "ERR boom" ]
+}

@@ -2,6 +2,18 @@
 
 All notable changes to gitbasher are generated automatically by [semantic-release](https://github.com/semantic-release/semantic-release) from [Conventional Commits](https://www.conventionalcommits.org/) on `main`. The project follows [Semantic Versioning](https://semver.org/).
 
+## [5.6.3](https://github.com/maxbolgarin/gitbasher/compare/v5.6.2...v5.6.3) (2026-11-06)
+
+### 🐛 Bug Fixes
+
+* **ui:** keep the branch name prompt intact when pasting ([4e00c11](https://github.com/maxbolgarin/gitbasher/commit/4e00c11d925a8653cfb2f845d6bda3f9ebc9db64))
+* **commit:** make one commit when a forced split finds a single feature ([bf406ae](https://github.com/maxbolgarin/gitbasher/commit/bf406ae4deeb67cfe4a886e0c17a9e757a293cbf))
+* **ui:** print AI errors below the spinner, not glued to its line ([efe2af6](https://github.com/maxbolgarin/gitbasher/commit/efe2af63d4f0aa78c7c0a2b5bda79ae7eac9f6dd))
+
+### 🚨 Tests
+
+* make the spinner stderr test independent of runner speed ([4a5eac2](https://github.com/maxbolgarin/gitbasher/commit/4a5eac22aaf796ff1bc24e95146f887dbd675d91))
+
 ## [5.6.2](https://github.com/maxbolgarin/gitbasher/compare/v5.6.1...v5.6.2) (2026-10-27)
 
 ### 🐛 Bug Fixes

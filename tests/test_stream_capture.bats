@@ -154,8 +154,20 @@ error: failed to push some refs")
 @test "run_with_spinner: command stderr prints only after the spinner line is cleared" {
     # Force the spinner on (no TTY under BATS).
     _spinner_enabled() { return 0; }
-    noisy_fn() { sleep 1.2; echo "ERR boom" >&2; echo "result"; return 3; }
     err_file="$BATS_TEST_TMPDIR/err"
+    # Print the error only once the spinner is on screen: a fixed sleep is
+    # flaky on slow CI runners (the command can finish before the spinner
+    # shows up). The loop cap keeps a broken spinner from hanging the test.
+    noisy_fn() {
+        local i=0
+        while ! grep -q "Waiting" "$err_file" 2>/dev/null && [ "$i" -lt 150 ]; do
+            sleep 0.1
+            i=$((i + 1))
+        done
+        echo "ERR boom" >&2
+        echo "result"
+        return 3
+    }
     code=0
     out=$(run_with_spinner "Waiting for AI response" noisy_fn 2>"$err_file") || code=$?
 

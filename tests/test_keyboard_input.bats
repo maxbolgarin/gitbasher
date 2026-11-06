@@ -376,3 +376,42 @@ PY
     assert_success
     [[ "$output" == *"<sk-test123>"* ]]
 }
+
+# ===== readline prompt safety =====
+
+@test "readline_safe_prompt: wraps color codes in \\001/\\002 markers" {
+    local p out
+    p=$(printf '%b' "\033[1mgit branch\033[0m feat-")
+    readline_safe_prompt out "$p"
+    [ "$out" = $'\001\033[1m\002git branch\001\033[0m\002 feat-' ]
+}
+
+@test "readline_safe_prompt: plain prompt and trailing spaces stay the same" {
+    local out
+    readline_safe_prompt out "<prefix>: "
+    [ "$out" = "<prefix>: " ]
+    readline_safe_prompt out ""
+    [ "$out" = "" ]
+}
+
+@test "readline_safe_prompt: handles multi-param color codes" {
+    local p out
+    p=$(printf '%b' "\033[1;34mmain\033[0m: ")
+    readline_safe_prompt out "$p"
+    [ "$out" = $'\001\033[1;34m\002main\001\033[0m\002: ' ]
+}
+
+@test "readline prompts: nothing is printed on the prompt line before read -e" {
+    # readline only knows its own prompt. Text printed before it on the same
+    # line shifts every redraw (a paste, an edit) and garbles what you type.
+    run awk '
+        FNR == 1 { prev = "" }
+        /^[[:space:]]*(read_editable_input|read[[:space:]].*-e)/ {
+            if (prev ~ /^[[:space:]]*printf[[:space:]]/ && prev !~ /\\n"[[:space:]]*$/) print FILENAME ":" FNR
+            if (prev ~ /^[[:space:]]*echo[[:space:]]+-n/) print FILENAME ":" FNR
+        }
+        NF { prev = $0 }
+    ' "$GITBASHER_ROOT"/scripts/*.sh
+    assert_success
+    [ -z "$output" ]
+}

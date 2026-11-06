@@ -689,8 +689,7 @@ function branch_script {
         echo -e "${YELLOW}Step 1.${ENDCOLOR} Enter the full name of the branch"
         echo "Press Enter to exit without changes"
 
-        printf "${BOLD}git branch${ENDCOLOR} "
-        read -e branch_name
+        read_editable_input branch_name "$(printf '%b' "${BOLD}git branch${ENDCOLOR}") "
 
         if [ -z "$branch_name" ]; then
             exit
@@ -778,8 +777,7 @@ function branch_script {
         echo -e "${YELLOW}Step 2.${ENDCOLOR} Enter the ${YELLOW}name${ENDCOLOR} of the branch"
         echo "Press Enter to exit without changes"
 
-        printf "${BOLD}git branch${ENDCOLOR}"
-        read_editable_input branch_name " ${branch_type_and_sep}"
+        read_editable_input branch_name "$(printf '%b' "${BOLD}git branch${ENDCOLOR}") ${branch_type_and_sep}"
 
         if [ -z "$branch_name" ]; then
             exit

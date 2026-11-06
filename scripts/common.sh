@@ -793,13 +793,40 @@ function read_key {
     return $_rc
 }
 
+### Wrap ANSI color codes of a readline prompt in \001...\002 markers.
+### readline counts every prompt byte as a visible column unless it is
+### inside these markers; raw color codes shift its cursor math, so a redraw
+### (a paste, an edit) garbles the line.
+# $1: name of the variable to receive the safe prompt
+# $2: prompt text (color codes already expanded to real ESC bytes)
+function readline_safe_prompt {
+    local __rsp_var="$1" __rsp_rest="$2" __rsp_out="" __rsp_seq
+    local __rsp_esc=$'\033'
+    local __rsp_re='^(\[[0-9;]*[A-Za-z])'
+    while [[ "$__rsp_rest" == *"$__rsp_esc"* ]]; do
+        __rsp_out="${__rsp_out}${__rsp_rest%%"$__rsp_esc"*}"
+        __rsp_rest="${__rsp_rest#*"$__rsp_esc"}"
+        if [[ "$__rsp_rest" =~ $__rsp_re ]]; then
+            __rsp_seq="${BASH_REMATCH[1]}"
+            __rsp_out="${__rsp_out}"$'\001'"${__rsp_esc}${__rsp_seq}"$'\002'
+            __rsp_rest="${__rsp_rest#"$__rsp_seq"}"
+        else
+            __rsp_out="${__rsp_out}${__rsp_esc}"
+        fi
+    done
+    printf -v "$__rsp_var" '%s' "${__rsp_out}${__rsp_rest}"
+}
+
 ### Read editable text input, allowing Esc to cancel by submitting empty input.
+### Put ALL text of the input line into $2 — text printed before the call on
+### the same line is unknown to readline and breaks its redraws.
 # $1: variable name to store input (default: REPLY)
-# $2: optional prompt text
+# $2: optional prompt text (may contain expanded color codes)
 # $3: optional initial value for readline
 function read_editable_input {
     local _var="${1:-REPLY}"
-    local _prompt="${2:-}"
+    local _prompt=""
+    readline_safe_prompt _prompt "${2:-}"
 
     # Readline normally treats Esc as a prefix key. For GitBasher prompts, a
     # plain Esc should behave like "clear this prompt and submit empty".

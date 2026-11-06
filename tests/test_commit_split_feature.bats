@@ -340,3 +340,23 @@ stage_file() {
     [[ "$output" != *"AI-GROUPING-CALLED"* ]]
     [[ "$output" == *"split-performed"* ]]
 }
+
+@test "forced split with a single feature says it commits as one" {
+    stage_file "deploy/.gitignore" "x"
+    stage_file "deploy/.gitlab-ci.yml" "y"
+
+    llm=""
+    current_branch="main"
+    push=""
+
+    perform_commit_split() {
+        echo "split-performed"
+        return 0
+    }
+
+    run try_offer_commit_split "true" "true"
+
+    [ "$status" -eq 1 ]
+    [[ "$output" != *"split-performed"* ]]
+    [[ "$output" == *"making a single commit"* ]]
+}

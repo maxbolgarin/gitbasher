@@ -386,3 +386,34 @@ teardown() {
         [[ "$output" == *"  ${blue}${hash}${endcolor} ${subject}"* ]]
     done < <(git log -2 --reverse --format='%h %s')
 }
+
+@test "forced split that cannot split continues with a single commit" {
+    create_test_file "change.txt" "changed"
+    git add change.txt
+
+    # rc 1 = split not applicable (one feature only).
+    try_offer_commit_split() {
+        echo "split-not-applicable"
+        return 1
+    }
+
+    run commit_script split staged <<< "0"
+
+    assert_success
+    [[ "$output" == *"split-not-applicable"* ]]
+    # Reaching the type menu (and aborting there) proves the flow went on.
+    [[ "$output" == *"Aborted."* ]]
+}
+
+@test "forced split that failed stops the commit" {
+    create_test_file "change.txt" "changed"
+    git add change.txt
+
+    # rc 2 = split was attempted and failed.
+    try_offer_commit_split() { return 2; }
+
+    run commit_script split staged <<< "0"
+
+    assert_failure
+    [[ "$output" != *"Aborted."* ]]
+}

@@ -1548,7 +1548,7 @@ function try_offer_commit_split {
     # Nothing to split and no AI pass that could find features — stay silent.
     if [ ${#split_group_keys[@]} -lt 2 ] && [ "$should_use_ai" != "true" ]; then
         if [ -n "$force_split" ]; then
-            echo -e "${YELLOW}Cannot split: all changes look like a single feature.${ENDCOLOR}"
+            echo -e "${YELLOW}Nothing to split: all changes look like a single feature, making a single commit.${ENDCOLOR}"
         fi
         return 1
     fi
@@ -1594,7 +1594,7 @@ function try_offer_commit_split {
     # folder heuristic found one scope) — nothing to split.
     if [ ${#split_group_keys[@]} -lt 2 ]; then
         if [ -n "$force_split" ]; then
-            echo -e "${YELLOW}Cannot split: all changes look like a single feature.${ENDCOLOR}"
+            echo -e "${YELLOW}Nothing to split: all changes look like a single feature, making a single commit.${ENDCOLOR}"
         fi
         return 1
     fi
@@ -2446,18 +2446,20 @@ function commit_script {
     if [ -z "${amend}" ] && [ -z "${fixup}" ] && [ -z "${msg}" ] && [ -z "${ticket}" ] && [ -z "${_split_skip}" ]; then
         try_offer_commit_split "$split" "$_split_auto_yes"
         _split_rc=$?
-        # If the user explicitly asked for split mode but it wasn't applicable,
-        # don't silently fall through to the single-commit flow — unless they
-        # undid the split themselves (rc 3), which means "commit it as one".
-        if [ -n "$split" ] && [ "$_split_rc" -ne 3 ]; then
-            if [ "$_split_rc" -ge 2 ]; then
-                # The split ran and failed; its snapshot restore already put
-                # the staging back — don't unstage it again, and report the
-                # failure instead of exit 0.
+        # Forced split mode (split/aisplit/ff split ...):
+        #   0 = split done -> stop here;
+        #   1 = nothing to split (one feature) -> continue with one commit;
+        #   2 = split failed -> its snapshot restore already put the staging
+        #       back, so don't unstage it again and report the failure;
+        #   3 = user undid the split -> continue with one commit.
+        if [ -n "$split" ]; then
+            if [ "$_split_rc" -eq 0 ]; then
+                cleanup_on_exit "$git_add"
+                exit 0
+            fi
+            if [ "$_split_rc" -eq 2 ]; then
                 exit 1
             fi
-            cleanup_on_exit "$git_add"
-            exit 0
         fi
     fi
 

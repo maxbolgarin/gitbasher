@@ -2,6 +2,16 @@
 
 All notable changes to gitbasher are generated automatically by [semantic-release](https://github.com/semantic-release/semantic-release) from [Conventional Commits](https://www.conventionalcommits.org/) on `main`. The project follows [Semantic Versioning](https://semver.org/).
 
+## [5.7.0](https://github.com/maxbolgarin/gitbasher/compare/v5.6.3...v5.7.0) (2026-11-15)
+
+### 🚀 Features
+
+* **commit:** show the target branch at the start of every commit ([3466cbc](https://github.com/maxbolgarin/gitbasher/commit/3466cbccb25e525a13b6c6178a7af6a8a9898d31))
+
+### 🐛 Bug Fixes
+
+* **ui:** show the Enter default as a capital letter in every prompt ([6cb2ffb](https://github.com/maxbolgarin/gitbasher/commit/6cb2ffb28d7a1e5c08d239bb8063d34dc93db6b1))
+
 ## [5.6.3](https://github.com/maxbolgarin/gitbasher/compare/v5.6.2...v5.6.3) (2026-11-06)
 
 ### 🐛 Bug Fixes

@@ -251,3 +251,30 @@ teardown() {
     run summarize_commit_intent
     [[ "$output" == *"revert a commit"* ]]
 }
+
+
+# ===== print_commit_branch =====
+
+@test "commit branch: shows the current branch name" {
+    git checkout -q -b feature/login
+    run print_commit_branch
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Branch: "*"feature/login"* ]]
+}
+
+@test "commit branch: detached HEAD is shown, not an empty name" {
+    git checkout -q --detach
+    run print_commit_branch
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"detached HEAD"* ]]
+}
+
+@test "commit branch: every commit mode prints the branch before any work" {
+    git checkout -q -b topic
+    local mode
+    for mode in "" fast ai staged fixup amend msg ticket split "ai fast push" ff; do
+        # shellcheck disable=SC2086 # word-split mode tokens on purpose
+        run commit_script $mode < /dev/null
+        [[ "$output" == *"Branch: "*"topic"* ]] || { echo "mode '$mode': $output"; return 1; }
+    done
+}

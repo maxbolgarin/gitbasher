@@ -2031,6 +2031,21 @@ function summarize_commit_intent {
 }
 
 
+### Print the branch the commit will land on, so it is clear before any work runs
+# Reads HEAD directly (not $current_branch) so it is right even if init state is stale.
+function print_commit_branch {
+    local _pcb_branch
+    _pcb_branch=$(git branch --show-current 2>/dev/null)
+    if [ -n "$_pcb_branch" ]; then
+        echo -e "Branch: ${GREEN}${_pcb_branch}${ENDCOLOR}"
+    else
+        local _pcb_sha
+        _pcb_sha=$(git rev-parse --short HEAD 2>/dev/null)
+        echo -e "Branch: ${RED}detached HEAD${ENDCOLOR}${_pcb_sha:+ at ${_pcb_sha}}"
+    fi
+}
+
+
 ### Main function
 # $1...: mode token(s)
     # <empty> - regular commit mode
@@ -2229,6 +2244,7 @@ function commit_script {
     ### Print a one-line summary of how flags were interpreted so users can
     ### catch typos before any work runs.
     summarize_commit_intent
+    print_commit_branch
     echo
 
 

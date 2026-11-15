@@ -227,7 +227,7 @@ function branch_script {
         read -n 1 -p "Fetch remote? (Y/n) " choice || choice="n"
         echo
 
-        if [ "$choice" = "y" ] || [ "$choice" = "Y" ]; then
+        if is_yes "$choice"; then
             echo
             echo -e "${YELLOW}Fetching remote tags...${ENDCOLOR}"
             echo

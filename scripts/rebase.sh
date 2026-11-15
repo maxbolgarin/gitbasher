@@ -175,7 +175,7 @@ function rebase_script {
         echo
 
         # Ask for confirmation
-        echo -e "Proceed with pulling ${commit_count} commits from '${source_branch}' to '${current_branch}' (y/n/0)?"
+        echo -e "Proceed with pulling ${commit_count} commits from '${source_branch}' to '${current_branch}' (Y/n/0)?"
         read -n 1 -s choice || prompt_aborted
         if [ "$choice" == "0" ]; then
             exit
@@ -228,7 +228,7 @@ function rebase_script {
         elif [ "$local_commit" != "$remote_commit" ]; then
             echo -e "${YELLOW}Remote changes detected in target branch!${ENDCOLOR}"
             echo
-            echo -e "Do you want to fetch ${YELLOW}${origin_name}/${new_base_branch}${ENDCOLOR} before rebase (y/n/0)?"
+            echo -e "Do you want to fetch ${YELLOW}${origin_name}/${new_base_branch}${ENDCOLOR} before rebase (Y/n/0)?"
             read -n 1 -s choice || prompt_aborted
             if [ "$choice" == "0" ]; then
                 exit

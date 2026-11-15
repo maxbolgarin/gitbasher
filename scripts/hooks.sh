@@ -706,12 +706,12 @@ function remove_all_hooks {
 
     echo
     echo -e "${RED}⚠  This will permanently delete $hook_count hooks.${ENDCOLOR}"
-    echo -e "${YELLOW}Are you absolutely sure (Y/n)?${ENDCOLOR}"
+    echo -e "${YELLOW}Are you absolutely sure (y/N)?${ENDCOLOR}"
     read -n 1 -p "Your choice: " choice < /dev/tty || choice="0"
     echo
     echo
 
-    if ! is_yes "$choice"; then
+    if [ -z "$choice" ] || ! is_yes "$choice"; then
         echo -e "${YELLOW}Hook removal cancelled.${ENDCOLOR}"
         return
     fi

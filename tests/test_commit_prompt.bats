@@ -70,7 +70,7 @@ teardown() {
     assert_success
     local use_prompt before_type
     yellow=$(printf '%b' "$YELLOW")
-    use_prompt="Use it? (y/e to edit/n) "
+    use_prompt="Use it? (Y/e to edit/n) "
     before_type="${output#*"$use_prompt"}"
     [[ "$before_type" != "$output" ]]
     before_type="${before_type%%What ${yellow}type*}"
@@ -97,7 +97,7 @@ teardown() {
     assert_success
     local use_prompt before_type yellow
     yellow=$(printf '%b' "$YELLOW")
-    use_prompt="Use it? (y/e to edit/r to regenerate/s to skip group/u to undo split/0 to abort) "
+    use_prompt="Use it? (Y/e to edit/r to regenerate/s to skip group/u to undo split/0 to abort) "
     before_type="${output#*"$use_prompt"}"
     [[ "$before_type" != "$output" ]]
     before_type="${before_type%%What ${yellow}type*}"

@@ -1119,7 +1119,7 @@ function run_split_ai_for_scope {
 
     echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
     echo
-    read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/u to undo split/0 to abort) " || choice="0"
+    read_key choice "Use it? (Y/e to edit/r to regenerate/s to skip group/u to undo split/0 to abort) " || choice="0"
     echo
     normalize_key "$choice"
 
@@ -1140,7 +1140,7 @@ ${ai_msg}"
         ai_msg=$(clean_ai_commit_message "$ai_msg")
         echo -e "${GREEN}AI suggestion:${ENDCOLOR} ${BOLD}$ai_msg${ENDCOLOR}"
         echo
-        read_key choice "Use it? (y/e to edit/r to regenerate/s to skip group/u to undo split/0 to abort) " || choice="0"
+        read_key choice "Use it? (Y/e to edit/r to regenerate/s to skip group/u to undo split/0 to abort) " || choice="0"
         echo
         normalize_key "$choice"
     done
@@ -1713,7 +1713,7 @@ function handle_ai_commit_generation {
             break
         fi
 
-        read_key choice "Use this commit message? (y/n/r to regenerate/e to edit/0 to exit) " || choice="0"
+        read_key choice "Use this commit message? (Y/n/r to regenerate/e to edit/0 to exit) " || choice="0"
         echo
         if [ "$ai_mode" != "subject" ] && [ "$choice" != "0" ]; then
             echo
@@ -2473,7 +2473,7 @@ function commit_script {
         echo
         echo -e "${YELLOW}Found previous commit message:${ENDCOLOR} ${BOLD}$saved_commit_message${ENDCOLOR}"
         echo
-        read_key choice "Use it? (y/e to edit/n) " || choice="n"
+        read_key choice "Use it? (Y/e to edit/n) " || choice="n"
         echo
         normalize_key "$choice"
         if [ "$normalized_key" = "y" ] || [ -z "$choice" ]; then
